@@ -1,0 +1,1032 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000368">
+<title confidence="0.90104">
+Instance-based
+Natural Language Generation
+</title>
+<author confidence="0.722219">
+Sebastian Varges and Chris Mellish
+</author>
+<sectionHeader confidence="0.28513" genericHeader="abstract">
+LTG and ICCS
+</sectionHeader>
+<email confidence="0.888756">
+varges@cogsci.ed.ac.uk, chrism@dai.ed.ac.uk
+</email>
+<affiliation confidence="0.9927615">
+Division of Informatics
+University of Edinburgh
+</affiliation>
+<sectionHeader confidence="0.961054" genericHeader="keywords">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999864166666667">
+This paper presents a bottom-up generator that
+makes use of Information Retrieval techniques to
+rank potential generation candidates by compar-
+ing them to a data base of stored instances. We
+introduce two general techniques to address the
+search problem, expectation-driven search and dy-
+namic grammar rule selection, and present the archi-
+tecture of an implemented generation system called
+IGEN. Our approach uses a domain-specific genera-
+tion grammar that is automatically derived from a
+semantically tagged treebank. We then evaluate the
+efficiency of our system.
+</bodyText>
+<sectionHeader confidence="0.9979" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999617322580645">
+In recent years, Machine Learning techniques have
+been introduced into natural language generation
+(NLG) for at least three reasons: First, we often find
+an interaction of decisions at various levels and the
+need to deal with potentially conflicting constraints.
+These are typically difficult to handle in purely sym-
+bolic approaches. Next, the knowledge acquisition
+bottleneck makes it difficult to maintain and extend
+hand-crafted rule systems. This is especially true
+for problems like generating text in a specific style,
+for example. Furthermore, there is the problem of
+specifying the generation input: How can a client
+application possibly know about the feature values
+it has to select in order to drive a surface realizer?
+The most prominent example of statistical NLG is
+NITROGEN, a sentence realizer designed for use in
+general-purpose machine translation (Langkilde and
+Knight, 1998). Further examples are the generation
+systems in (Ratnaparkhi, 2000) and (Bangalore and
+Rambow, 2000) as well as the use of statistical meth-
+ods for more specific tasks, for example the order-
+ing of NP premodifiers (Shaw and Hatzivassiloglou,
+1999).
+Instance-based Learning methods (IBL) (Aha et
+al., 1991) differ from statistical methods in that they
+are lazy learning approaches: they store previously
+encountered instances in memory and use them di-
+rectly to process new input, rather than abstract-
+ing them into some statistical distribution. IBL is
+known to be able to learn exceptions in data well
+and adapt to subregularities. Since this is highly
+desirable for natural language processing in general,
+instance-based methods have been used in NLP un-
+der various names (example-based, memory-based,
+case-based; see Daelemans (1999) for an overview).
+In this paper, we investigate the use of IBL-
+methods for natural language generation. In par-
+ticular, we draw an analogy between IBL and In-
+formation Retrieval by noting that IR methods are
+essentially performing a form of nearest-neighbour
+search when computing the similarity between text
+documents. We believe that instance-based natural
+language generation (IBNLG) can make use of the
+experience in handling language data gained in the
+IR community. The so-called bag-of-words models
+of IR represent natural language texts as multisets
+of words without any linear order and use a distance
+metric such as the classical cosine distance to com-
+pute similarities between texts (Salton, 1989). De-
+spite their simplicity these models have been highly
+successful in many document retrieval applications.
+In contrast to the local ngram models developed for
+speech recognition, for example, bag-of-words mod-
+els reflect global word co-occurrence patterns. Since
+these bags are always treated separately for simi-
+larity computations, co-occurrence patterns in in-
+dividual bags can be learned. Bag-of-words models
+therefore do not &amp;quot;abstract away&amp;quot; exceptions like sta-
+tistical models do, and they are able to consider a
+larger context than many of these. Before one can
+do a comparison of IBNLG and statistical techniques
+for NLG, however, it is necessary to determine how
+IBNLG would work and indeed whether it can be
+made sufficiently efficient for practical use.
+Like any other IBL-approach, instance-based gen-
+eration has to answer the question how to repre-
+sent and retrieve its stored instances and how to
+adapt them to process new inputs. Our proposal
+is to use standard IR techniques for representation
+and retrieval. This leaves us with the adaption task.
+We are basically subscribing to the overgeneration
+and ranking approach of NITROGEN but propose
+to tightly interleave rule-based generation and rank-
+ing rather than employing two separate stages for
+these tasks. This amounts to doing the adaption
+before/during the computation of the nearest neigh-
+bour. Like other machine learning approaches to
+NLG, we are recasting an important part of the
+generation process in terms of disambiguation be-
+tween alternatives. This is in contrast to the tradi-
+tional view of generation as a deterministic, decision-
+making process.
+The structure of the paper is as follows: in the
+next section, we give an overview of our system, fol-
+lowed by our approach to semantically annotating a
+domain corpus (section 3). The issue of automatic
+grammar construction is discussed in section 4. In
+section 5, we introduce the basic generation algo-
+rithm and concepts used for scoring candidates. In
+section 6, we present an expectation-driven ranking
+algorithm and in section 7 we show how grammar
+rules can be selected dynamically. For each of these
+we evaluate the efficiency of the ranker (section 8).
+</bodyText>
+<sectionHeader confidence="0.92306" genericHeader="method">
+2 System Overview
+</sectionHeader>
+<bodyText confidence="0.999962111111111">
+We are interested in developing a corpus-based,
+domain-specific generation component that requires
+significantly less manual development effort than
+current approaches. The generator assumes that
+content determination has already taken place and
+the generation input has been chunked into sentence-
+sized units. This leaves some tasks of sentence plan-
+ning, most notably lexical choice, and sentence re-
+alization to our system called IGEN. However, we
+cannot know whether the generator is actually able
+to express the entire input in a single sentence, and
+we expect our system to robustly handle gaps in ex-
+pressibility.
+Our domain of choice involves texts on manage-
+ment successions that can be found in the Who&apos;s
+News section of the Wall Street Journal. This do-
+main has been used in the information extraction
+(IE) task of MUC-6. Our task is to generate the first
+sentences of these Who&apos;s News texts, effectively re-
+versing the IE process. Following standard method-
+ology we divide the corpus into training and test
+sets. The training set can then serve as an instance
+base for our IBNLG approach and we will use the
+test set to provide inputs to the system for evalua-
+tion. To this end, we add semantic markup to both
+training and test set articles.
+The system consists of a base generator using a
+rule-based grammar to produce candidates, poten-
+tial outputs of the system. The grammar is au-
+tomatically derived from the semantically marked-
+up training set in combination with the correspond-
+ing Penn treebank structures. The ranker scores
+these candidates according to a similarity metric
+which measures their distance to the elements in
+the instance base. The ranks are determined by
+the similarity to the closest instances and the high-
+est ranked sentence is chosen as the final genera-
+tion output. IGEN uses standard chart generation
+techniques (Kay, 1996) in its base generator to ef-
+ficiently produce generation candidates. The set of
+candidates forms a subset of the chart edges in that
+they comprise all edges of syntactic category S. The
+particular advantage of a bottom-up generation al-
+gorithm is that it allows our surface-based ranker to
+score edges as soon as they are built.
+</bodyText>
+<sectionHeader confidence="0.984294" genericHeader="method">
+3 Semantic Annotation
+</sectionHeader>
+<bodyText confidence="0.996255350877193">
+The MUC-6 IE task consisted of extracting infor-
+mation about incoming and outgoing person and the
+post name. Generating the actual texts requires con-
+siderably more input than what was extracted in the
+MUC-6 task. We collected the first sentences of 142
+Who&apos;s News articles of the Penn treebank II and
+developed a tagging scheme that also accounts for
+previous and other posts, dates, descriptions of com-
+panies and others. The overall number of different
+tags is 68. Examples are given in figure 1.
+The input to the system is a set of tags (&amp;quot;slots&amp;quot;)
+and fillers.&apos; For most tags, the fillers are always of
+the same syntactic category, for example a proper
+name, a number expression or simply a noun. These
+can directly be rendered by the generator. However,
+in some cases, there is more variety concerning the
+category of the filler: for example, retirement as the
+reason for leaving a post is expressed as &apos;X, who is
+retiring&apos;, &apos;X, who retired&apos; or &apos;X will retire from his
+post as (see tag PUTEVENT_PRP_(SYNCAT) ...] in
+figure (1)). We added to these tags the syntactic
+category of the filler to allow them to be used only
+in the syntactically correct places by the rule sys-
+tem. This solves the practical problem but results
+in a potentially large number of unique tags and also
+gives the generator a strong hint towards a specific
+syntactic realization.
+We divided the annotated corpus into a random
+selection of 105 articles for the training set and 37
+for the test set. Within the training set, two sets of
+tags occurred 5 times, one set 4 times, 3 sets 3 times,
+5 sets 2 times and 72 sets were singletons. There are
+just 6 bags of tags that occur in both training and
+test set.
+The frequency distribution over individual tags
+is sharper: the most frequent tag in the training
+set is POST (138 occurrences), followed by INPER-
+SON_FULLNAME and COMP_DESCR. There were only
+33 singletons. The relatively low count of OUTPER-
+SON_FULLNAME tags (14 occurrences) indicates that
+the articles tend to start with incoming events. Cru-
+cially, 5 types of tags only occur in the test set.
+&apos;Strictly speaking, we do not need the fillers until gener-
+ation has finished but we use them to obtain a phonological
+string for each phrase (see below).
+tag example frequency (training set)
+INPERSON_FULLNAME [INPERSON_FULLNAME Gordon A. Paris] was elected ... 104
+OUTPERSON_FULLNAME , succeeding [OUTPERSON_FULLNAME David S. Black]. 14
+INPERSON_AGE [INPERSON_AGE 36] years old 38
+POST was named [POST director] 138
+INPERSON_PREVIOUSPOST formerly a [INPERSON_PREVIOUSPOST manager] 16
+COMP_DESCH of this [COMP_DESCH investment-banking company] 88
+BOARD_INCR , expanding the board to 4BOARD_INCR 14] members. 13
+COMP_NATIONALITY [COMP_NATIONALITY US] [COMP_DESCH metals concern] 0
+OUTEVENT_DATE_EFFECTIVE , effective [OUTEVENT_DATE_EFFECTIVE Dec. 31]. 5
+POST_DESCR_(SYNCAT=NN) filling a [POST_DESCH_NN vacancy] 3
+OUTEVENT_PRP(SYNCAT=VBD) , who PUTEVENT_PRP_VBD resigned]. 9
+</bodyText>
+<figureCaption confidence="0.995118">
+Figure 1: Example tags and phrases in management succession texts
+</figureCaption>
+<bodyText confidence="0.52751675">
+****** marked-up sentence:
+[INPERSON_FULLNAME Peter W. Likins], [INPERSON_OTHERPOST president] of [INPERSON_OTHERCOMP Lehigh University],
+[INPERSON_OTHERCOMP_LOC Bethlehem, Pa.], was elected a [POST director] of this [COMP_DESCR maker of industrial
+motion-control parts and systems].
+</bodyText>
+<equation confidence="0.967419615384615">
+***** input rules:
+PP-COMP_DESCR &lt;== of this COMP_DESCR (f=72)
+NP-POST &lt;== a POST (f=22)
+NP-INPERSON_OTHERCOMP_LOC &lt;== INPERSON_OTHERCOMP_LOC (f=2)
+NP-INPERSON_OTHERCOMP &lt;== INPERSON_OTHERCOMP (f=8)
+NP-INPERSON_OTHERPOST &lt;== INPERSON_OTHERPOST (f=39)
+NP-INPERSON_FULLNAME &lt;== INPERSON_FULLNAME (f=100)
+***** phrase combining rules:
+VP-POST &lt;== was elected NP-POST PP-COMP_DESCR (f=4)
+PP-INPERSON_OTHERCOMP &lt;== of NP-INPERSON_OTHERCOMP , NP-INPERSON_OTHERCOMP_LOC (f=2)
+NP-INPERSON_OTHERPOST &lt;== NP-INPERSON_OTHERPOST PP-INPERSON_OTHERCOMP (f=19)
+NP-INPERSON_FULLNAME &lt;== NP-INPERSON_FULLNAME , NP-INPERSON_OTHERPOST , (f=27)
+S-INPERSON_FULLNAME &lt;== NP-INPERSON_FULLNAME VP-POST . (f=77)
+</equation>
+<figureCaption confidence="0.977363">
+Figure 2: cfg rules extracted for example sentence and their training set (instance base) frequency
+</figureCaption>
+<sectionHeader confidence="0.837443333333333" genericHeader="method">
+4 Automatic Grammar Construction
+from Semantically Annotated
+Treebanks
+</sectionHeader>
+<bodyText confidence="0.9877474375">
+After semantic markup has been added to the cor-
+pus, we use the syntactic treebank structure in com-
+bination with the additional markup to automat-
+ically produce a semantic grammar. The system
+needs to accept a set of semantic tags and gener-
+ate initial phrases that can be combined to larger
+ones in a standard chart execution mechanism.
+The basic idea is to identify portions of the tree
+structure around the semantic tags and allow these
+subtrees to be generated whenever the respective tag
+is available in the input. We are looking for the
+largest subtrees that do not overlap with other ones
+so that each corresponding input rule fires when a
+single tag is given. In the next step, we identify
+phrasal rules that combine several phrases and pos-
+sibly some lexical material. The result of this process
+is the context-free backbone of a phrase-based gen-
+eration grammar. There are thus two steps involved:
+1. Input rule identification: recursively extend rule
+areas from input tags outwards, and stop ex-
+tending areas when they are about to overlap
+with others. We only keep the mother node of
+the tree fragment, and ignore any internal struc-
+ture. Furthermore, we omit any traces.
+2. Phrasal rule identification: initially, phrasal
+rules are identified with input rule subtrees.
+These are then recursively extended - overlaps
+allowed - until the entire sentence structure is
+covered by a single rule.
+To restrict rule combinations in a semantically ori-
+ented manner, we introduce new category labels for
+mother nodes of phrases that consist of the syntactic
+category obtained from the treebank plus the seman-
+tic tag of its leftmost daughter (figure 2).
+This grammar construction algorithm has conse-
+quences for the semantic annotation step described
+above. In general, only constituents should be al-
+lowed to be marked up. In some situations however,
+Penn treebank words have to be broken in order to
+identify paths that will correspond to generation in-
+puts (for example: (JJ 54-year-old)).
+Words that are not supposed to be generated
+by a rule are not to be left untagged, even if we
+are unsure about the actual tag, for example &apos;this
+company which also has an interest in book pub-
+lishing&apos;. We tagged these pieces of text as ADDI-
+TIONAL_INFORMATION plus a more specific suffix re-
+ferring to the type of information.
+</bodyText>
+<sectionHeader confidence="0.893994" genericHeader="method">
+5 Basic Generation Algorithm
+</sectionHeader>
+<bodyText confidence="0.999971724137931">
+The grammar construction step outlined above ex-
+tracts 328 rules (148 input rules and 180 phrasal
+rules) from the parse trees of the training set in-
+stances. The frequency distribution over these rules
+is very sharp again: the most frequent rule occurs
+100 times and there are 235 singletons.
+We automatically converted these rules into a no-
+tation that is suitable for use in our generation sys-
+tem. The rule system uses a production system
+based on the Rete algorithm (Forgy, 1982) to han-
+dle the relatively large number of rules. We assume
+a standard bottom-up chart algorithm (Gazdar and
+Mellish, 1989) which is initialized by adding edges
+for individual input tags to the agenda. For each
+new edge added from the agenda to the chart, all
+possible rule applications are computed to guaran-
+tee completeness of the chart. Grammar rules add
+new edges to the agenda and the algorithm stops
+when the agenda is empty. To guarantee seman-
+tic coherence, ie to avoid expressing some input tag
+more than once, a coherence-check is called for all
+non-first daughters of phrasal rules.
+We rank new edges produced by the base gener-
+ator according to their distance to the instances in
+the instance base before adding them to the agenda.
+An edge has as many cosine scores as there are in-
+stances and we use the best score to determine the
+agenda ordering. An example of a slightly simplified
+chart edge is shown below:
+</bodyText>
+<equation confidence="0.895679714285714">
+(VP-POST
+(phon &lt;was elected a director&gt;)
+(terms &lt;was elected a POST&gt;)
+(consumes {POST}) ; covered input tags
+(instances Ext-Addr) ; pointer to instance base
+(idx 67) ; unique identifier
+(deny &lt;3&gt;) (fired-by input-rule-11))
+</equation>
+<bodyText confidence="0.9999823125">
+As in other IR and IBL applications, we need to
+decide on the term representation of instances and
+on the weighting scheme for these terms. Training
+set instances are generally represented as bags of
+terms of the form h = {t,1, where where ti,k is the
+weight of term k in instance i. The term represen-
+tations contain the semantic tags and words outside
+tagged areas but not the fillers. For example, in a
+unigram model, the marked-up string was elected a
+[POST president] is represented as a document with
+weights for the terms was, elected, a and POST.
+To be able to score edges, the ranker needs to ob-
+tain term representations of the edge contents that
+potentially match the index terms used for the rep-
+resentation of instances. The terms slot of the chart
+edges contains a list of surface elements, for example
+&lt;was,elected,a,PosT&gt;. When edges are combined,
+these lists are concatenated and used to compute
+a pseudo-document vector similar to the one for in-
+stances. This allows us to experiment with ngram
+terms (like the bigrams {&apos;was elected&apos;,&apos;elected a&apos;,&apos;a
+POST&apos;}, for example) provided that the instances are
+represented similarly.
+Terms are weighted by the well-known t f idf
+term weighting scheme that assigns highest weights
+to terms that occur frequently (tf-component) in
+few instances (idf-component). Since instances and
+edges contain relatively few terms, t f is less impor-
+tant than idf which serves to discriminate between
+relevant and irrelevant &amp;quot;documents&amp;quot;.
+The definition of cosine distance between a candi-
+date and an instance is
+</bodyText>
+<equation confidence="0.998526333333333">
+cos( c, i ) =
+w2 w2
+Z-/j=1 Lij=1
+</equation>
+<bodyText confidence="0.9999246">
+where wci is the weight of term j for candidate c
+and wii the weight of term j for instance i. We
+need normalization since otherwise ever more non-
+matching words could be added to an edge without
+penalties.
+</bodyText>
+<sectionHeader confidence="0.997249" genericHeader="method">
+6 Expectation-driven Ranking
+</sectionHeader>
+<bodyText confidence="0.983035263157895">
+If we want to avoid the computational cost of com-
+puting the similarity between every new edge and
+the entire instance base, we have to consider two im-
+portant characteristics of the search problem. First,
+edges have a number of cosine scores from different
+instances. If we want to use a Viterbi-style algorithm
+which defines equivalence classes for chart edges and
+only keeps the current best one for each class in a
+table, we need to maintain a separate table for each
+instance. This is because we cannot combine scores
+from different instances. In contrast, a single sta-
+tistical model allows one to maintain a single table
+(Langkilde, 2000).
+Second, the cosine score of an edge can increase
+as well as decrease when it is combined with other
+edges, depending on whether or not the newly added
+terms match the instance terms. Thus, the cosine
+score does not exhibit a monotonic behaviour that
+could be straightforwardly exploited.
+We can, however, define the notion of the expec-
+tation of an edge that is monotonically decreasing.
+This is the potentially best cosine score an edge
+would have with respect to a specific instance if all
+missing matching words are added to it. To see its
+monotonic behaviour consider the following: The ex-
+pectation of an initially empty edge e is 1 since it
+contains no non-matching terms: exp(e empty , i) = 1.
+For each term t that is added to e, two cases can
+arise:
+1. t does not occur in i. This will decrease the
+score as well as the expectation since it only
+increases the denominator of the cosine formula.
+2. t occurs in i. If t has not been present in e
+before, the expectation does not change since
+it already assumes that all correct words have
+been added. Otherwise, the score increases. If t
+occurs in e already, we have to consider the case
+of a tf-component in the edge term weights.2 If
+the number of occurrences of t in e exceeds its
+number in i (tft,e &gt; e is able to neutral-
+ize the effect of its non-matching terms by re-
+peating correct terms. Therefore, we impose an
+upper bound on tft,e in the numerator (but not
+the denominator) of the cosine and restrict it to
+tft,i. As a result, exceeding correct terms in e
+can only lead to an increase of the denominator
+and will decrease the cosine score.
+A monotonically decreasing expectation thus re-
+quires two assumptions: First, edges are always ex-
+tended monotonically. Terms are not allowed to be
+removed.&apos; Second, it requires an upper bound on
+the tf-component of edge term weights. In prac-
+tice, we do not find any noticible difference between
+using the normal cosine or the bounded one. We
+explain this partially by the effect of the coherence
+constraint in the base generator which prevents re-
+peated realizations of the input semantics.
+We can now modify the ranker to take advan-
+tage of the expectation. The main idea is that as
+soon as we have a first candidate and its score, we
+can discard all similarity computations that involve
+an expectation that is lower than this score. Thus,
+the score of already available candidates serves as
+a threshold th that can be dynamically adjusted to
+the current best candidate as more candidates are
+being constructed.
+For each chart edge e we define the notion of rel-
+evant instances rie. This is a table of all instances
+i for which the edge has an expectation higher than
+the score of the current best candidate. Each i
+in rie is associated with the current expectation:
+rie = {i1 : exp(ii,e), : exP(iw, e)}. As long
+as no candidate is available, we assume a threshold
+of 0 to allow all instances to be considered. For each
+en, built by a grammar rule, the ranker performs
+the following steps:
+</bodyText>
+<footnote confidence="0.865746142857143">
+1. Determine rie: For chart edges built from
+scratch, rie„ contains references to the entire
+2We assume that the same weighting scheme applies to
+both candidate and instance terms.
+31n a unigram bag-of-words model, reordering of the sur-
+face string by grammatical operations would still be possible
+since this does not affect the term representation.
+</footnote>
+<bodyText confidence="0.968101727272727">
+instance base with an expectation of 1: rie.=
+fil : 1, ..., in : 11. For chart edges built by com-
+bining existing edges, say el and e2, a cheap
+initial approximation of He_ is obtained by
+intersecting ri„ and rie2 and taking the lower
+expectation of the remaining i. This is justified
+because the resulting edge will contain terms of
+both el and e2. Thus: ri„ = ne1 nrie2 where
+for each i E exp(i, enew) = exp(i, ei)
+if exp(i, ei) &lt; exp(i, e2) and exp(i, enew)=
+exp(i, e2) otherwise.
+</bodyText>
+<listItem confidence="0.969539272727273">
+2. Check the expectations in rie„ against the
+current threshold th. For all i E : if
+exp(i, enew) &gt; th 4 keep i in Hen_ , else remove
+3. Compute the actual exp(i, enew) for all i E
+Hen_ •
+4. Add enew with its updated Hen_ to agenda un-
+less ri I= 0 in which case we can drop enew •
+5. If enew also qualifies as a candidate, compute
+cos(enew, i) for all i E rie, and add it to the
+current list of candidates. If cosmax(enew) &gt; th
+adjust threshold: th= cos,,,,x(enew)•
+</listItem>
+<bodyText confidence="0.999942">
+The algorithm incrementally constrains the set of
+relevant instances ri. It has the advantage of be-
+ing independent of the order in which chart edges
+are combined and it finds a single (or all) glob-
+ally best solutions based on optimistic assumptions
+about best possible scores. It can deliver an output
+as soon as the first candidate is available, and further
+computation can be used to find potentially better
+ones. The performance of the expectation-based al-
+gorithm depends on how quickly a good candidate
+can be constructed since this sets the threshold for
+the remaining edges. If no candidate is available at
+all, no pruning can take place and the algorithm re-
+verts to exhaustive search. However, these seem to
+be rather rare cases in practice (see section 8).
+</bodyText>
+<sectionHeader confidence="0.966039" genericHeader="method">
+7 Dynamic Rule Selection
+</sectionHeader>
+<bodyText confidence="0.999680571428571">
+A further technique to increase the efficiency of the
+system is to reduce the number of grammar rules and
+instances before generation starts. We compute the
+cosine similarity between the semantic input and the
+instances represented by their semantic tags only.
+This only involves a single cycle over the instance
+base. We can then select the n,-best instances for all
+further similarity computations. Furthermore, we
+can characterize each instance by a bitvector rep-
+resentation of the grammar rules derived from it in
+the grammar construction step. We determine the
+rules corresponding to the m semantically closest in-
+stances by the union of their bitvector representa-
+tions. Generation can then proceed as before with
+</bodyText>
+<footnote confidence="0.917499">
+4We can use exp(i, e„,„,) &gt; th to find all best solutions.
+</footnote>
+<table confidence="0.984633958333333">
+**** chosen output candidate - correct:
+1/258) Francis D John , president , was named to the additional post of chief executive officer .
+(exp:5:bigram, cos=1.0)
+(Input: INPERSON_FULLNAME: Francis D John, INPERSON_AGE: 35, INPERSON_OTHERPOST: president,
+POST_DESCR_JJ: additional, POST: chief executive officer)
+1/392) Robert D Paster , 49 years old , Space Shuttle Main Engine program manager , was named
+president of Rocketdyne division , a unit of this aerospace concern . (exhaust:5:unigram, cos=0.86)
+**** chosen output candidate - minor errors:
+1/19) Richard Schwartz resigned of an president of this aerospace concern . (exhaust:20:unigram, cos=0.74)
+1/2469) Steven C Walker , senior vice president , was elected to the president of this bank
+holding company . (exhaust:20:unigram, cos=0.83)
+**** chosen output candidate - semantic problems:
+1/118) C Hyde Tucker was named chief executive officer and president of this company &apos;s Bell Atlantic
+International Inc. (exp:105:unigram, cos=1.0)
+**** some lower ranked candidates:
+580/603) vice president , and a Space Shuttle Main Engine program manager was named to its president .
+(exp:105:unigram, cos=0.46)
+1746/1780) John F Barrett , executive vice president „ 40 , was named chief operating officer , the
+vacant posts (exp:105:unigram, cos=0.39)
+589/676) the senior vice president was named a president of the bank holding company and the director
+(exp:105:unigram, cos=0.43)
+**** edge dropped by expectation-based ranker:
+* Scott C Smith , formerly former vice president finance„ formerly former chief financial officer
+were elected senior vice president of this media concern
+</table>
+<figureCaption confidence="0.997481">
+Figure 3: Rank and cosine score of generation candidates
+</figureCaption>
+<bodyText confidence="0.97831">
+a reduced number of instance tables and grammar
+rules from the beginning of processing.
+</bodyText>
+<sectionHeader confidence="0.989719" genericHeader="evaluation">
+8 Experiments
+</sectionHeader>
+<bodyText confidence="0.97010715625">
+We tested our system with different settings by us-
+ing the semantic tags of the test set as generation
+inputs. Although we focus on efficiency issues in
+this paper, we would like to give some example out-
+puts produced produced by IGEN (figure 3). Different inputs
+and ranking models have been used (the notation
+for the system parameters in figure 3 is described
+below). Note for example, that the system is able to
+produce two uses of named. This is due to high sim-
+ilarity scores with respect to different nearest neigh-
+bours (figure 3, first and second sentence). We also
+give the semantic input for the first output sentence.
+In this case, the highest ranked candidate (of 258)
+expresses 4 out of 5 input tags.5
+preliminary evaluation6 of the quality of the
+highest ranked sentences shows that 48.2% are en-
+tirely grammatical, 22.5% contain minor errors,
+11.7% have problems that make them difficult to in-
+terpret and in 17.6% of the cases there was no or only
+fragmented output. Depending on the application,
+the first one or two categories could be acceptable as
+generation output, the latter two not. Typical minor
+errors involve punctuation, and also the use of filler
+words in incorrect contexts since these are not part
+of the term representation. Some correctable errors
+are the direct result of the semantic annotation. For
+example, was elected to the president (sentence 4 in
+5Lower ranked sentences can contain more semantics.
+eTwo human judges, results averaged over 3 test runs.
+figure 3) can be attributed to the following tagging
+in the original text where no more specific post was
+given: was elected to the [POST board].
+</bodyText>
+<table confidence="0.9987782">
+rankerdrim,A:ngram Iril t oco 1Z1 no c IT1
+exhaust:105:unigram 105 92.6 701 0% 1803
+exhaust:20:unigram 20 32.6 458 2.7% 739
+exhaust:5:unigram 5 5.4 56 8.1% 118
+exp:105:unigram 53.3 18.8 137 0% 495
+exp:20:unigram 9.62 16 194 2.7% 410
+exp:5:unigram 3.7 6.5 32 8.1% 86
+exp:105: bigram 32.5 8.6 81 0% 382
+exp:20:bigram 9.98 8.7 231 2.7% 401
+exp:5:bigram 4.0 2.0 33 5.4% 81
+</table>
+<figureCaption confidence="0.99796">
+Figure 4: Average values for test set inputs
+</figureCaption>
+<bodyText confidence="0.946548375">
+Figure (4) shows the performance of different
+ranking schemes. The system parameters are given
+in the form ranker :nbest-instances :ngram where
+the nbest instances are selected according to their se-
+mantic similarity with the input. The expectation-
+based ranker (ranker=exp) uses the expectation to
+determine the agenda ordering. The average in-
+stance table size HI per test input decreases for the
+expectation-based ranker. In contrast, exhaustive
+search (ranker=exhaust) always has to use the ini-
+tial instance base All experiments were run
+with a 2 minute timeout which mainly affects ex-
+haustive search with a large instance base. Search
+also stopped as soon as a candidate with a cosine
+of 1.0 was found. Restricting and the gram-
+mar from 105 to the 5/20 semantically closest in-
+</bodyText>
+<figure confidence="0.970245153846154">
+7e+05
+6e+05
+exhaust:105:unigram
+exp:105:bigram
+exp:105:unigram
+5e+05
+4e+05
+3e+05
+2e+05
+1e+05
+0
+0 5 10 15 20 25 30
+edge length in number of terms
+</figure>
+<bodyText confidence="0.999759166666667">
+guistic choices made in IGEN empirically, especially
+with respect to term weighting and representation.
+Errors in the output can give us hints as to whether
+more knowledge should be placed in the rule-based
+or the instance-based part of the system.
+We currently consider all sentences as candidates
+and do not require semantic completeness since in
+general we cannot guarantee that the entire set of
+input tags is expressible in a single sentence. As a
+result, the different rankers express only 52-70% of
+the input tags in the best ranked sentence. This
+can be explained by the fact that the cosine simi-
+larity metric measures the distance to any instance
+regardless of the input semantics. In future work,
+we would like to adapt the ranking algorithm to be
+sensitive to the coverage of the input semantics.
+We would also like to investigate the use of style
+in NLG. If we want a NLG system to learn the char-
+acteristics of a corpus of texts that exhibit differ-
+ent author&apos;s styles, it is usually more appropriate
+to generate a text that convincingly fits one specific
+style than one whose characteristics correspond to
+the average of all styles. An instance-based approach
+might be well-suited for this task.
+</bodyText>
+<sectionHeader confidence="0.97425" genericHeader="conclusions">
+11 Summary
+</sectionHeader>
+<bodyText confidence="0.99997995">
+To our knowledge, this paper presents the first in-
+cremental nearest-neighbour algorithm for NLG. We
+introduce the notion of expectation which allows us
+to define an algorithm that finds a globally optimal
+generation candidate since it never prunes promising
+branches of the search tree. The ranking algorithm
+can be used in combination with standard chart-
+generation techniques and does not make strong as-
+sumptions about the nature of the grammar used
+by the base generator. This effectively eliminates
+the need for the rule formalism to maintain special-
+purpose data structures for ranking.
+We show how Information Retrieval methods can
+be used for NLG, opening the way for further use of
+IR techniques for generation. Our general approach
+requires a syntactic treebank of domain texts and -
+as the only manual effort - some semantic annota-
+tion. A particular advantage of the instance-based
+approach is its ability to work with very few example
+texts.
+</bodyText>
+<sectionHeader confidence="0.991138" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.999277">
+This research has been supported in part by EP-
+SRC and the German Academic Exchange Service
+(DAAD), program HSP-III.
+The authors would like to thank Jon Oberlander,
+Chris Brew and the anonymous reviewers of this con-
+ference for valuable suggestions.
+</bodyText>
+<sectionHeader confidence="0.991844" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999964384615385">
+David W. Aha, D. Kibler, and M. Albert. 1991.
+Instance-based Learning Agorithms. Machine
+Learning, 7:37-66.
+Srinivas Bangalore and Owen Rainbow. 2000. Ex-
+ploiting a Probabilistic Hierarchical Model for
+Generation. In Proceedings of COLING-00, pages
+42-48.
+Ralf D. Brown. 1999. Adding Linguistic Knowledge
+to a Lexical Example-based Translation System.
+In Proceedings of the Seventh International Con-
+ference on Theoretical and Methodological Issues
+in Machine Translation (TMI), pages 22-32.
+Walter Daelemans. 1999. Memory-based Lan-
+guage Processing. Introduction to the Special Is-
+sue. Journal of Experimental and Theoretical Al,
+11(3):287-467.
+Charles L. Forgy. 1982. Rete: A Fast Algorithm for
+the Many Pattern/ Many Object Pattern Match
+Problem. Artificial Intelligence, pages 17-37.
+Gerald Gazdar and Chris Mellish. 1989. Natu-
+ral Language Processing in PROLOG. An Intro-
+duction to Computational Linguistics. Addison-
+Wesley, Wokingham.
+Martin Kay. 1996. Chart Generation. In Proceed-
+ings of ACL-96, pages 200-204.
+Irene Langkilde and Kevin Knight. 1998. Gen-
+eration that Exploits Corpus-based Statistical
+Knowledge. In Proceedings of COLING/ACL-98,
+pages 704-710, Montreal, Canada.
+Irene Langkilde. 2000. Forest-based Statistical Sen-
+tence Generation. In Proceedings of NAACL-00,
+pages 170-177.
+Scott Miller, Heidi Fox, Lance Ramshaw, and Ralph
+Weischedel. 2000. A Novel Use of Statistical Pars-
+ing to Extract Information from Text. In Proceed-
+ings of NAACL-00, pages 226-233.
+Adwait Ratnaparkhi. 2000. Trainable Methods for
+Surface Natural Language Generation. In Pro-
+ceedings of NAACL-00, pages 194-201.
+Gerald Salton. 1989. Text Processing: the Trans-
+formation and Retrieval of Information by Com-
+puter. Addison-Wesley, Ca.
+Satoshi Sato and Makoto Nagao. 1990. Towards
+Memory-based Translation. In Proceedings of
+COLING-90.
+James Shaw and Vasileios Hatzivassiloglou. 1999.
+Ordering among Premodifiers. In Proceedings of
+ACL-99, pages 135-143, University of Maryland,
+USA.
+W. A. Woods. 1982. Optimal Search Strategies for
+Speech Understanding Control. Artificial Intelli-
+gence, pages 295-326.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.330722">
+<title confidence="0.980238">Instance-based Natural Language Generation</title>
+<author confidence="0.836195">Sebastian Varges</author>
+<author confidence="0.836195">Chris</author>
+<affiliation confidence="0.77365725">LTG and varges@cogsci.ed.ac.uk, Division of University of Edinburgh</affiliation>
+<abstract confidence="0.999764769230769">This paper presents a bottom-up generator that makes use of Information Retrieval techniques to rank potential generation candidates by comparing them to a data base of stored instances. We introduce two general techniques to address the search problem, expectation-driven search and dynamic grammar rule selection, and present the architecture of an implemented generation system called approach uses a domain-specific generation grammar that is automatically derived from a semantically tagged treebank. We then evaluate the efficiency of our system.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>David W Aha</author>
+<author>D Kibler</author>
+<author>M Albert</author>
+</authors>
+<title>Instance-based Learning Agorithms.</title>
+<date>1991</date>
+<booktitle>Machine Learning,</booktitle>
+<pages>7--37</pages>
+<contexts>
+<context position="1968" citStr="Aha et al., 1991" startWordPosition="285" endWordPosition="288">ying the generation input: How can a client application possibly know about the feature values it has to select in order to drive a surface realizer? The most prominent example of statistical NLG is NITROGEN, a sentence realizer designed for use in general-purpose machine translation (Langkilde and Knight, 1998). Further examples are the generation systems in (Ratnaparkhi, 2000) and (Bangalore and Rambow, 2000) as well as the use of statistical methods for more specific tasks, for example the ordering of NP premodifiers (Shaw and Hatzivassiloglou, 1999). Instance-based Learning methods (IBL) (Aha et al., 1991) differ from statistical methods in that they are lazy learning approaches: they store previously encountered instances in memory and use them directly to process new input, rather than abstracting them into some statistical distribution. IBL is known to be able to learn exceptions in data well and adapt to subregularities. Since this is highly desirable for natural language processing in general, instance-based methods have been used in NLP under various names (example-based, memory-based, case-based; see Daelemans (1999) for an overview). In this paper, we investigate the use of IBLmethods f</context>
+</contexts>
+<marker>Aha, Kibler, Albert, 1991</marker>
+<rawString>David W. Aha, D. Kibler, and M. Albert. 1991. Instance-based Learning Agorithms. Machine Learning, 7:37-66.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Srinivas Bangalore</author>
+<author>Owen Rainbow</author>
+</authors>
+<title>Exploiting a Probabilistic Hierarchical Model for Generation.</title>
+<date>2000</date>
+<booktitle>In Proceedings of COLING-00,</booktitle>
+<pages>42--48</pages>
+<marker>Bangalore, Rainbow, 2000</marker>
+<rawString>Srinivas Bangalore and Owen Rainbow. 2000. Exploiting a Probabilistic Hierarchical Model for Generation. In Proceedings of COLING-00, pages 42-48.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ralf D Brown</author>
+</authors>
+<title>Adding Linguistic Knowledge to a Lexical Example-based Translation System.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the Seventh International Conference on Theoretical and Methodological Issues in Machine Translation (TMI),</booktitle>
+<pages>22--32</pages>
+<marker>Brown, 1999</marker>
+<rawString>Ralf D. Brown. 1999. Adding Linguistic Knowledge to a Lexical Example-based Translation System. In Proceedings of the Seventh International Conference on Theoretical and Methodological Issues in Machine Translation (TMI), pages 22-32.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Walter Daelemans</author>
+</authors>
+<title>Memory-based Language Processing. Introduction to the Special Issue.</title>
+<date>1999</date>
+<journal>Journal of Experimental and Theoretical Al,</journal>
+<pages>11--3</pages>
+<contexts>
+<context position="2496" citStr="Daelemans (1999)" startWordPosition="367" endWordPosition="368">aw and Hatzivassiloglou, 1999). Instance-based Learning methods (IBL) (Aha et al., 1991) differ from statistical methods in that they are lazy learning approaches: they store previously encountered instances in memory and use them directly to process new input, rather than abstracting them into some statistical distribution. IBL is known to be able to learn exceptions in data well and adapt to subregularities. Since this is highly desirable for natural language processing in general, instance-based methods have been used in NLP under various names (example-based, memory-based, case-based; see Daelemans (1999) for an overview). In this paper, we investigate the use of IBLmethods for natural language generation. In particular, we draw an analogy between IBL and Information Retrieval by noting that IR methods are essentially performing a form of nearest-neighbour search when computing the similarity between text documents. We believe that instance-based natural language generation (IBNLG) can make use of the experience in handling language data gained in the IR community. The so-called bag-of-words models of IR represent natural language texts as multisets of words without any linear order and use a </context>
+</contexts>
+<marker>Daelemans, 1999</marker>
+<rawString>Walter Daelemans. 1999. Memory-based Language Processing. Introduction to the Special Issue. Journal of Experimental and Theoretical Al, 11(3):287-467.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Charles L Forgy</author>
+</authors>
+<title>Rete: A Fast Algorithm for the Many Pattern/ Many Object Pattern Match Problem.</title>
+<date>1982</date>
+<journal>Artificial Intelligence,</journal>
+<pages>17--37</pages>
+<contexts>
+<context position="14567" citStr="Forgy, 1982" startWordPosition="2264" endWordPosition="2265">ces of text as ADDITIONAL_INFORMATION plus a more specific suffix referring to the type of information. 5 Basic Generation Algorithm The grammar construction step outlined above extracts 328 rules (148 input rules and 180 phrasal rules) from the parse trees of the training set instances. The frequency distribution over these rules is very sharp again: the most frequent rule occurs 100 times and there are 235 singletons. We automatically converted these rules into a notation that is suitable for use in our generation system. The rule system uses a production system based on the Rete algorithm (Forgy, 1982) to handle the relatively large number of rules. We assume a standard bottom-up chart algorithm (Gazdar and Mellish, 1989) which is initialized by adding edges for individual input tags to the agenda. For each new edge added from the agenda to the chart, all possible rule applications are computed to guarantee completeness of the chart. Grammar rules add new edges to the agenda and the algorithm stops when the agenda is empty. To guarantee semantic coherence, ie to avoid expressing some input tag more than once, a coherence-check is called for all non-first daughters of phrasal rules. We rank </context>
+</contexts>
+<marker>Forgy, 1982</marker>
+<rawString>Charles L. Forgy. 1982. Rete: A Fast Algorithm for the Many Pattern/ Many Object Pattern Match Problem. Artificial Intelligence, pages 17-37.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gerald Gazdar</author>
+<author>Chris Mellish</author>
+</authors>
+<title>Natural Language Processing in PROLOG. An Introduction to Computational Linguistics.</title>
+<date>1989</date>
+<publisher>AddisonWesley,</publisher>
+<location>Wokingham.</location>
+<contexts>
+<context position="14689" citStr="Gazdar and Mellish, 1989" startWordPosition="2282" endWordPosition="2285">ic Generation Algorithm The grammar construction step outlined above extracts 328 rules (148 input rules and 180 phrasal rules) from the parse trees of the training set instances. The frequency distribution over these rules is very sharp again: the most frequent rule occurs 100 times and there are 235 singletons. We automatically converted these rules into a notation that is suitable for use in our generation system. The rule system uses a production system based on the Rete algorithm (Forgy, 1982) to handle the relatively large number of rules. We assume a standard bottom-up chart algorithm (Gazdar and Mellish, 1989) which is initialized by adding edges for individual input tags to the agenda. For each new edge added from the agenda to the chart, all possible rule applications are computed to guarantee completeness of the chart. Grammar rules add new edges to the agenda and the algorithm stops when the agenda is empty. To guarantee semantic coherence, ie to avoid expressing some input tag more than once, a coherence-check is called for all non-first daughters of phrasal rules. We rank new edges produced by the base generator according to their distance to the instances in the instance base before adding t</context>
+</contexts>
+<marker>Gazdar, Mellish, 1989</marker>
+<rawString>Gerald Gazdar and Chris Mellish. 1989. Natural Language Processing in PROLOG. An Introduction to Computational Linguistics. AddisonWesley, Wokingham.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Martin Kay</author>
+</authors>
+<title>Chart Generation.</title>
+<date>1996</date>
+<booktitle>In Proceedings of ACL-96,</booktitle>
+<pages>200--204</pages>
+<contexts>
+<context position="7248" citStr="Kay, 1996" startWordPosition="1129" endWordPosition="1130">cles. The system consists of a base generator using a rule-based grammar to produce candidates, potential outputs of the system. The grammar is automatically derived from the semantically markedup training set in combination with the corresponding Penn treebank structures. The ranker scores these candidates according to a similarity metric which measures their distance to the elements in the instance base. The ranks are determined by the similarity to the closest instances and the highest ranked sentence is chosen as the final generation output. IGEN uses standard chart generation techniques (Kay, 1996) in its base generator to efficiently produce generation candidates. The set of candidates forms a subset of the chart edges in that they comprise all edges of syntactic category S. The particular advantage of a bottom-up generation algorithm is that it allows our surface-based ranker to score edges as soon as they are built. 3 Semantic Annotation The MUC-6 IE task consisted of extracting information about incoming and outgoing person and the post name. Generating the actual texts requires considerably more input than what was extracted in the MUC-6 task. We collected the first sentences of 14</context>
+</contexts>
+<marker>Kay, 1996</marker>
+<rawString>Martin Kay. 1996. Chart Generation. In Proceedings of ACL-96, pages 200-204.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Irene Langkilde</author>
+<author>Kevin Knight</author>
+</authors>
+<title>Generation that Exploits Corpus-based Statistical Knowledge.</title>
+<date>1998</date>
+<booktitle>In Proceedings of COLING/ACL-98,</booktitle>
+<pages>704--710</pages>
+<location>Montreal, Canada.</location>
+<contexts>
+<context position="1664" citStr="Langkilde and Knight, 1998" startWordPosition="238" endWordPosition="241">e are typically difficult to handle in purely symbolic approaches. Next, the knowledge acquisition bottleneck makes it difficult to maintain and extend hand-crafted rule systems. This is especially true for problems like generating text in a specific style, for example. Furthermore, there is the problem of specifying the generation input: How can a client application possibly know about the feature values it has to select in order to drive a surface realizer? The most prominent example of statistical NLG is NITROGEN, a sentence realizer designed for use in general-purpose machine translation (Langkilde and Knight, 1998). Further examples are the generation systems in (Ratnaparkhi, 2000) and (Bangalore and Rambow, 2000) as well as the use of statistical methods for more specific tasks, for example the ordering of NP premodifiers (Shaw and Hatzivassiloglou, 1999). Instance-based Learning methods (IBL) (Aha et al., 1991) differ from statistical methods in that they are lazy learning approaches: they store previously encountered instances in memory and use them directly to process new input, rather than abstracting them into some statistical distribution. IBL is known to be able to learn exceptions in data well </context>
+</contexts>
+<marker>Langkilde, Knight, 1998</marker>
+<rawString>Irene Langkilde and Kevin Knight. 1998. Generation that Exploits Corpus-based Statistical Knowledge. In Proceedings of COLING/ACL-98, pages 704-710, Montreal, Canada.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Irene Langkilde</author>
+</authors>
+<title>Forest-based Statistical Sentence Generation.</title>
+<date>2000</date>
+<booktitle>In Proceedings of NAACL-00,</booktitle>
+<pages>170--177</pages>
+<contexts>
+<context position="18170" citStr="Langkilde, 2000" startWordPosition="2874" endWordPosition="2875">mputational cost of computing the similarity between every new edge and the entire instance base, we have to consider two important characteristics of the search problem. First, edges have a number of cosine scores from different instances. If we want to use a Viterbi-style algorithm which defines equivalence classes for chart edges and only keeps the current best one for each class in a table, we need to maintain a separate table for each instance. This is because we cannot combine scores from different instances. In contrast, a single statistical model allows one to maintain a single table (Langkilde, 2000). Second, the cosine score of an edge can increase as well as decrease when it is combined with other edges, depending on whether or not the newly added terms match the instance terms. Thus, the cosine score does not exhibit a monotonic behaviour that could be straightforwardly exploited. We can, however, define the notion of the expectation of an edge that is monotonically decreasing. This is the potentially best cosine score an edge would have with respect to a specific instance if all missing matching words are added to it. To see its monotonic behaviour consider the following: The expectat</context>
+</contexts>
+<marker>Langkilde, 2000</marker>
+<rawString>Irene Langkilde. 2000. Forest-based Statistical Sentence Generation. In Proceedings of NAACL-00, pages 170-177.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Scott Miller</author>
+<author>Heidi Fox</author>
+<author>Lance Ramshaw</author>
+<author>Ralph Weischedel</author>
+</authors>
+<title>A Novel Use of Statistical Parsing to Extract Information from Text.</title>
+<date>2000</date>
+<booktitle>In Proceedings of NAACL-00,</booktitle>
+<pages>226--233</pages>
+<marker>Miller, Fox, Ramshaw, Weischedel, 2000</marker>
+<rawString>Scott Miller, Heidi Fox, Lance Ramshaw, and Ralph Weischedel. 2000. A Novel Use of Statistical Parsing to Extract Information from Text. In Proceedings of NAACL-00, pages 226-233.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adwait Ratnaparkhi</author>
+</authors>
+<title>Trainable Methods for Surface Natural Language Generation.</title>
+<date>2000</date>
+<booktitle>In Proceedings of NAACL-00,</booktitle>
+<pages>194--201</pages>
+<contexts>
+<context position="1732" citStr="Ratnaparkhi, 2000" startWordPosition="249" endWordPosition="250">knowledge acquisition bottleneck makes it difficult to maintain and extend hand-crafted rule systems. This is especially true for problems like generating text in a specific style, for example. Furthermore, there is the problem of specifying the generation input: How can a client application possibly know about the feature values it has to select in order to drive a surface realizer? The most prominent example of statistical NLG is NITROGEN, a sentence realizer designed for use in general-purpose machine translation (Langkilde and Knight, 1998). Further examples are the generation systems in (Ratnaparkhi, 2000) and (Bangalore and Rambow, 2000) as well as the use of statistical methods for more specific tasks, for example the ordering of NP premodifiers (Shaw and Hatzivassiloglou, 1999). Instance-based Learning methods (IBL) (Aha et al., 1991) differ from statistical methods in that they are lazy learning approaches: they store previously encountered instances in memory and use them directly to process new input, rather than abstracting them into some statistical distribution. IBL is known to be able to learn exceptions in data well and adapt to subregularities. Since this is highly desirable for nat</context>
+</contexts>
+<marker>Ratnaparkhi, 2000</marker>
+<rawString>Adwait Ratnaparkhi. 2000. Trainable Methods for Surface Natural Language Generation. In Proceedings of NAACL-00, pages 194-201.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gerald Salton</author>
+</authors>
+<title>Text Processing: the Transformation and Retrieval of Information by Computer.</title>
+<date>1989</date>
+<publisher>Addison-Wesley, Ca.</publisher>
+<contexts>
+<context position="3202" citStr="Salton, 1989" startWordPosition="477" endWordPosition="478">eneration. In particular, we draw an analogy between IBL and Information Retrieval by noting that IR methods are essentially performing a form of nearest-neighbour search when computing the similarity between text documents. We believe that instance-based natural language generation (IBNLG) can make use of the experience in handling language data gained in the IR community. The so-called bag-of-words models of IR represent natural language texts as multisets of words without any linear order and use a distance metric such as the classical cosine distance to compute similarities between texts (Salton, 1989). Despite their simplicity these models have been highly successful in many document retrieval applications. In contrast to the local ngram models developed for speech recognition, for example, bag-of-words models reflect global word co-occurrence patterns. Since these bags are always treated separately for similarity computations, co-occurrence patterns in individual bags can be learned. Bag-of-words models therefore do not &amp;quot;abstract away&amp;quot; exceptions like statistical models do, and they are able to consider a larger context than many of these. Before one can do a comparison of IBNLG and stati</context>
+</contexts>
+<marker>Salton, 1989</marker>
+<rawString>Gerald Salton. 1989. Text Processing: the Transformation and Retrieval of Information by Computer. Addison-Wesley, Ca.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Satoshi Sato</author>
+<author>Makoto Nagao</author>
+</authors>
+<title>Towards Memory-based Translation.</title>
+<date>1990</date>
+<booktitle>In Proceedings of COLING-90.</booktitle>
+<marker>Sato, Nagao, 1990</marker>
+<rawString>Satoshi Sato and Makoto Nagao. 1990. Towards Memory-based Translation. In Proceedings of COLING-90.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James Shaw</author>
+<author>Vasileios Hatzivassiloglou</author>
+</authors>
+<title>Ordering among Premodifiers.</title>
+<date>1999</date>
+<booktitle>In Proceedings of ACL-99,</booktitle>
+<pages>135--143</pages>
+<institution>University of Maryland, USA.</institution>
+<contexts>
+<context position="1910" citStr="Shaw and Hatzivassiloglou, 1999" startWordPosition="277" endWordPosition="280"> specific style, for example. Furthermore, there is the problem of specifying the generation input: How can a client application possibly know about the feature values it has to select in order to drive a surface realizer? The most prominent example of statistical NLG is NITROGEN, a sentence realizer designed for use in general-purpose machine translation (Langkilde and Knight, 1998). Further examples are the generation systems in (Ratnaparkhi, 2000) and (Bangalore and Rambow, 2000) as well as the use of statistical methods for more specific tasks, for example the ordering of NP premodifiers (Shaw and Hatzivassiloglou, 1999). Instance-based Learning methods (IBL) (Aha et al., 1991) differ from statistical methods in that they are lazy learning approaches: they store previously encountered instances in memory and use them directly to process new input, rather than abstracting them into some statistical distribution. IBL is known to be able to learn exceptions in data well and adapt to subregularities. Since this is highly desirable for natural language processing in general, instance-based methods have been used in NLP under various names (example-based, memory-based, case-based; see Daelemans (1999) for an overvi</context>
+</contexts>
+<marker>Shaw, Hatzivassiloglou, 1999</marker>
+<rawString>James Shaw and Vasileios Hatzivassiloglou. 1999. Ordering among Premodifiers. In Proceedings of ACL-99, pages 135-143, University of Maryland, USA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W A Woods</author>
+</authors>
+<title>Optimal Search Strategies for Speech Understanding Control.</title>
+<date>1982</date>
+<journal>Artificial Intelligence,</journal>
+<pages>295--326</pages>
+<marker>Woods, 1982</marker>
+<rawString>W. A. Woods. 1982. Optimal Search Strategies for Speech Understanding Control. Artificial Intelligence, pages 295-326.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

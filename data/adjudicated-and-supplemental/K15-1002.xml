@@ -1,0 +1,1740 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000090">
+<title confidence="0.986293">
+A Joint Framework for Coreference Resolution and Mention Head Detection
+</title>
+<author confidence="0.996706">
+Haoruo Peng Kai-Wei Chang Dan Roth
+</author>
+<affiliation confidence="0.998814">
+University of Illinois, Urbana-Champaign
+</affiliation>
+<address confidence="0.79128">
+Urbana, IL, 61801
+</address>
+<email confidence="0.98711">
+{hpeng7,kchang10,danr}@illinois.edu
+</email>
+<sectionHeader confidence="0.994556" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.99993647826087">
+In coreference resolution, a fair amount of
+research treats mention detection as a pre-
+processed step and focuses on developing
+algorithms for clustering coreferred men-
+tions. However, there are significant gaps
+between the performance on gold mentions
+and the performance on the real problem,
+when mentions are predicted from raw text
+via an imperfect Mention Detection (MD)
+module. Motivated by the goal of reduc-
+ing such gaps, we develop an ILP-based
+joint coreference resolution and mention
+head formulation that is shown to yield sig-
+nificant improvements on coreference from
+raw text, outperforming existing state-of-
+art systems on both the ACE-2004 and the
+CoNLL-2012 datasets. At the same time,
+our joint approach is shown to improve men-
+tion detection by close to 15% F1. One
+key insight underlying our approach is that
+identifying and co-referring mention heads
+is not only sufficient but is more robust than
+working with complete mentions.
+</bodyText>
+<sectionHeader confidence="0.998882" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999859866666667">
+Mention detection is rarely studied as a stand-alone
+research problem (Recasens et al. (2013) is one
+key exception). Most coreference resolution work
+simply mentions it in passing as a module in the
+pipelined system (Chang et al., 2013; Durrett and
+Klein, 2013; Lee et al., 2011; Bj¨orkelund and Kuhn,
+2014). However, the lack of emphasis is not due to
+this being a minor issue, but rather, we think, its dif-
+ficulty. Indeed, many papers report results in terms
+of gold mentions versus system generated mentions,
+as shown in Table 1. Current state-of-the-art sys-
+tems show a very significant drop in performance
+when running on system generated mentions. These
+performance gaps are worrisome, since the real goal
+of NLP systems is to process raw data.
+</bodyText>
+<table confidence="0.996313166666667">
+System Dataset Gold Predict Gap
+Illinois CoNLL-12 77.05 60.00 17.05
+Illinois CoNLL-11 77.22 60.18 17.04
+Illinois ACE-04 79.42 68.27 11.15
+Berkeley CoNLL-11 76.68 60.42 16.26
+Stanford ACE-04 81.05 70.33 10.72
+</table>
+<tableCaption confidence="0.999768">
+Table 1: Performance gaps between using gold mentions
+</tableCaption>
+<bodyText confidence="0.9474814">
+and predicted mentions for three state-of-the-art corefer-
+ence resolution systems. Performance gaps are always larger
+than 10%. Illinois’s system (Chang et al., 2013) is evaluated
+on CoNLL (2012, 2011) Shared Task and ACE-2004 datasets.
+It reports an average F1 score of MUC, B3 and CEAFe met-
+rics using CoNLL v7.0 scorer. Berkeley’s system (Durrett and
+Klein, 2013) reports the same average score on the CoNLL-
+2011 Shared Task dataset. Results of Stanford’s system (Lee et
+al., 2011) are for B3 metric on ACE-2004 dataset.
+This paper focuses on improving end-to-end
+coreference performance. We do this by: 1) De-
+veloping a new ILP-based joint learning and infer-
+ence formulation for coreference and mention head
+detection. 2) Developing a better mention head can-
+didate generation algorithm. Importantly, we focus
+on heads rather than mention boundaries since those
+can be identified more robustly and used effectively
+in an end-to-end system. As we show, this results
+in a dramatic improvement in the quality of the MD
+component and, consequently, a significant reduc-
+tion in the performance gap between coreference on
+gold mentions and coreference on raw data.
+Existing coreference systems usually consider a
+pipelined system, where the mention detection step
+is followed by that of clustering mentions into coref-
+erence chains. Higher quality mention identification
+naturally leads to better coreference performance.
+Standard methods define mentions as boundaries of
+text, and expect exact boundaries as input in the
+coreference step. However, mentions have an intrin-
+sic structure, in which mention heads carry the cru-
+cial information. Here, we define a mention head as
+the last token of a syntactic head, or the whole syn-
+tactic head for proper names.1 For example, in “the
+1Here, we follow the ACE annotation guideline. Note that
+</bodyText>
+<page confidence="0.978146">
+12
+</page>
+<note confidence="0.9801445">
+Proceedings of the 19th Conference on Computational Language Learning, pages 12–21,
+Beijing, China, July 30-31, 2015. c�2015 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.9997150625">
+incumbent [Barack Obama]” and “[officials] at the
+Pentagon”, “Barack Obama” and “officials” serve
+as mention heads, respectively. Mention heads can
+be used as auxiliary structures for coreference. In
+this paper, we first identify mention heads, and then
+detect mention boundaries based on heads. We rely
+heavily on the first, head identification, step, which
+we show to be sufficient to support coreference deci-
+sions. Moreover, this step also provides enough in-
+formation for “understanding” the coreference out-
+put, and can be evaluated more robustly (since mi-
+nor disagreements on mention boundaries are often
+a reason for evaluation issues when dealing with
+predicted mentions). We only identify the mention
+boundaries at the end, after we make the coreference
+decisions, to be consistent with current evaluation
+standards in the corefernce resolution community.
+Consider the following example2:
+[Multinational companies investing in [China]]
+had become so angry that [they] recently
+set up an anti-piracy league to pressure [the
+[Chinese] government] to take action. [Do-
+mestic manufacturers, [who] are also suffering],
+launched a similar body this month. [They] hope
+[the government] can introduce a new law in-
+creasing fines against [producers of fake goods]
+from the amount of profit made to the value of the
+goods produced.
+Here, phrases in the brackets are mentions and
+the underlined simple phrases are mention heads.
+Moreover, mention boundaries can be nested (the
+boundary of a mention is inside the boundary of
+another mention), but mention heads never overlap.
+This property also simplifies the problem of mention
+head candidate generation. In the example above,
+the first “they” refers to “Multinational companies
+investing in China” and the second “They” refers
+to “Domestic manufacturers, who are also suffer-
+ing”. In both cases, the mention heads are sufficient
+to support the decisions: ”they” refers to ”compa-
+nies”, and ”They” refers to ”manufacturers”. In
+fact, most of the features3 implemented in existing
+coreference resolution systems rely solely on men-
+tion heads (Bengtson and Roth, 2008).
+Furthermore, consider the possible mention can-
+didate “league” (italic in the text). It is not cho-
+sen as a mention because the surrounding context
+is not focused on “anti-piracy league”. So, mention
+</bodyText>
+<footnote confidence="0.998836">
+the CoNLL-2012 dataset is built from OntoNotes-5.0 corpus.
+2This example is chosen from the ACE-2004 corpus.
+3All features except for those that rely on modifiers.
+</footnote>
+<figureCaption confidence="0.993554">
+Figure 1: Comparison between a traditional pipelined sys-
+</figureCaption>
+<bodyText confidence="0.9993085">
+tem and our proposed system. We split up mention detection
+into two steps: mention head candidate generation and (an op-
+tional) mention boundary detection. We feed mention heads
+rather than complete mentions into the coreference model. Dur-
+ing the joint head-coreference process, we reject some mention
+head candidates and then recover complete mention boundaries
+after coreference decisions are made.
+detection can be viewed as a global decision prob-
+lem, which involves considering the relevance of a
+mention to its context. The fact that the coreference
+decision provides a way to represent this relevance,
+further motivates considering mention detection and
+coreference jointly. The insight here is that a men-
+tion candidate will be more likely to be valid when
+it has more high confidence coreference links.
+This paper develops a joint coreference resolution
+and mention head detection framework as an Inte-
+ger Linear Program (ILP) following Roth and Yih
+(2004). Figure 1 compares a traditional pipelined
+system with our proposed system. Our joint for-
+mulation includes decision variables both for coref-
+erence links between pairs of mention heads, and
+for all mention head candidates, and we simultane-
+ously learn the ILP coefficients for all these vari-
+ables. During joint inference, some of the mention
+head candidates will be rejected (that is, the corre-
+sponding variables will be assigned ’0’), contribut-
+ing to improvement both in MD and in coreference
+performance. The aforementioned joint approach
+builds on an algorithm that generates mention head
+candidates. Our candidate generation process con-
+sists of a statistical component and a component that
+makes use of existing resources, and is designed to
+ensure high recall on head candidates.
+Ideally, after making coreference decisions, we
+extend the remaining mention heads to complete
+mentions; we employ a binary classifier, which
+shares all features with the mention head detection
+model in the joint step.
+Our proposed system can work on both ACE and
+OntoNotes datasets, even though their styles of an-
+notation are different. There are two main differ-
+</bodyText>
+<page confidence="0.998337">
+13
+</page>
+<bodyText confidence="0.999491791666666">
+ences to be addressed. First, OntoNotes removes
+singleton mentions, even if they are valid mentions.
+This causes additional difficulty in learning a good
+mention detector in a pipelined framework. How-
+ever, our joint framework can adapt to it by rejecting
+those singleton mentions. More details will be dis-
+cussed in Sec. 2. Second, ACE uses shortest deno-
+tative phrases to identify mentions while OntoNotes
+tends to use long text spans. This makes identifying
+mention boundaries unnecessarily hard. Our system
+focuses on mention heads in the coreference stage to
+ensure robustness. As OntoNotes does not contain
+head annotations, we preprocess the data to extract
+mention heads which conform with the ACE style.
+Results on ACE-2004 and CoNLL-2012 datasets
+show that our system4 reduces the performance gap
+for coreference by around 25% (measured as the ra-
+tio of performance improvement over performance
+gap) and improves the overall mention detection by
+over 10 F1 points. With such significant improve-
+ments, we achieve the best end-to-end coreference
+resolution results reported so far.
+The main contributions of our work can be sum-
+marized as follows:
+</bodyText>
+<listItem confidence="0.9384561">
+1. We develop a new, end-to-end, coreference ap-
+proach that is based on a joint learning and in-
+ference model for mention heads and corefer-
+ence decisions.
+2. We develop an improved mention head candi-
+date generation module and a mention bound-
+ary detection module.
+3. We achieve the best coreference results on pre-
+dicted mentions and reduce the performance
+gap compared to using gold mentions.
+</listItem>
+<bodyText confidence="0.999966142857143">
+The rest of the paper is organized as follows. We
+explain the joint head-coreference learning and in-
+ference framework in Sec. 2. Our mention head
+candidate generation module and mention boundary
+detection module are described in Sec. 3. We report
+our experimental results in Sec. 4, review related
+work in Sec. 5 and conclude in Sec. 6.
+</bodyText>
+<sectionHeader confidence="0.965502" genericHeader="method">
+2 A Joint Head-Coreference Framework
+</sectionHeader>
+<bodyText confidence="0.999846666666667">
+This section describes our joint coreference resolu-
+tion and mention head detection framework. Our
+work is inspired by the latent left-linking model in
+Chang et al. (2013) and the ILP formulation from
+Chang et al. (2011). The joint learning and infer-
+ence model takes as input mention head candidates
+</bodyText>
+<footnote confidence="0.9603875">
+4Available at http://cogcomp.cs.illinois.
+edu/page/software_view/Coref
+</footnote>
+<bodyText confidence="0.9997914375">
+(Sec. 3) and jointly (1) determines if they are indeed
+mention heads and (2) learns a similarity metric be-
+tween mentions. This is done by simultaneously
+learning a binary mention head detection classifier
+and a mention-pair coreference classifier. The men-
+tion head detection model here is mainly trained to
+differentiate valid mention heads from invalid ones.
+By learning and making decisions jointly, it also
+serves as a singleton mention head classifier, build-
+ing on insights from Recasens et al. (2013). This
+joint framework aims to improve performance on
+both mention head detection and on coreference.
+We first describe the formualtion of the men-
+tion head detection and the ILP-based mention-pair
+coreference separately, and then propose the joint
+head-coreference framework.
+</bodyText>
+<subsectionHeader confidence="0.995823">
+2.1 Mention Head Detection
+</subsectionHeader>
+<bodyText confidence="0.999991416666667">
+The mention head detection model is a binary classi-
+fier gm = wl ϕ(m), in which ϕ(m) is a feature vector
+for mention head candidate m and w1 is the corre-
+sponding weight vector. We identify a candidate m
+as a mention head if gm &gt; 0. The features utilized in
+the vector ϕ(m) consist of: 1) Gazetteer features 2)
+Part-Of-Speech features 3) Wordnet features 4) Fea-
+tures from the previous and next tokens 5) Length of
+mention head. 6) Normalized Pointwise Mutual In-
+formation (NPMI) on the tokens across a mention
+head boundary 7) Feature conjunctions. Altogether
+there are hundreds of thousands of sparse features.
+</bodyText>
+<subsectionHeader confidence="0.99564">
+2.2 ILP-based Mention-Pair Coreference
+</subsectionHeader>
+<bodyText confidence="0.999999111111111">
+Let M be the set of all mentions. We train a corefer-
+ence model by learning a pairwise mention scoring
+function. Specifically, given a mention-pair (u,v)
+(u,v E M, u is the antecedent of v), we learn a left-
+linking scoring function fu,v = w2 φ(u,v), where
+φ(u,v) is a pairwise feature vector and w2 is the
+weight vector. The inference algorithm is inspired
+by the best-left-link approach (Chang et al., 2011),
+where they solve the following ILP problem:
+</bodyText>
+<equation confidence="0.9641146">
+argmax ∑
+y u&lt;v,u,vEM
+s.t. ∑ yu,v G 1, bv E M, (1)
+u&lt;v
+yu,v E {0,1} bu,v E M.
+</equation>
+<bodyText confidence="0.962058285714286">
+Here, yu,v = 1 iff mentions u,v are directly linked.
+Thus, we can construct a forest and the mentions
+in the same connected component (i.e., in the same
+tree) are co-referred. For this mention-pair corefer-
+ence model φ(u,v), we use the same set of features
+used in Bengtson and Roth (2008).
+fu,vyu,v,
+</bodyText>
+<page confidence="0.95908">
+14
+</page>
+<subsectionHeader confidence="0.991012">
+2.3 Joint Inference Framework
+</subsectionHeader>
+<bodyText confidence="0.9999855">
+We extend expression (1) to facilitate joint inference
+on mention heads and coreference as follows:
+</bodyText>
+<equation confidence="0.984143571428571">
+argmax ∑ fu,vyu,v + ∑ gmym,
+y u&lt;v,u,v∈M m∈M
+s.t. ∑ yu,v ≤ 1, ∀v ∈ M0,
+u&lt;v
+∑ yu,v ≤ yv, ∀v ∈ M0,
+u&lt;v
+yu,v ∈ {0,1}, ym ∈ {0,1} ∀u,v,m ∈ M0.
+</equation>
+<bodyText confidence="0.997036875">
+Here, M0 is the set of all mention head candidates.
+ym is the decision variable for mention head candi-
+date m. ym = 1 if and only if the mention head m
+is chosen. To consider coreference decisions and
+mention head decisions together, we add the con-
+straint ∑u&lt;v yu,v ≤ yv, which ensures that if a candi-
+date mention head v is not chosen, then it will not
+have coreference links with other mention heads.
+</bodyText>
+<subsectionHeader confidence="0.995979">
+2.4 Joint Learning Framework
+</subsectionHeader>
+<bodyText confidence="0.999815642857143">
+To support joint learning of the parameters w1 and
+w2 described above, we define a joint training objec-
+tive function C(w1,w2) for mention head detection
+and coreference, which uses a max-margin approach
+to learn both weight vectors. Suppose we have a col-
+lection of documents D, and we generate nd men-
+tion head candidates for each document d (d ∈ D).
+We use an indicator function δ(u,m) to represent
+whether mention heads u,m are in the same corefer-
+ence cluster based on gold annotations (δ(u,m) = 1
+iff they are in the same cluster). Similarly, Ω(m) is
+an indicator funtion representing whether mention
+head m is valid in the gold annotations.
+For simplicity, we first define
+</bodyText>
+<equation confidence="0.99753325">
+u0 = argmax (w&gt;2 φ(u,m) − δ(u,m)),
+u&lt;m
+u00 = arg max
+u&lt;m,δ(u,m)=1 w&gt;2 φ(u,m)Ω(m).
+</equation>
+<bodyText confidence="0.9931435">
+We then minimize the following joint training ob-
+jective function C(w1,w2).
+</bodyText>
+<equation confidence="0.989694777777778">
+1 1
+C(w1,w2) = |D |∑ nd ∑(Ccoref,m(w2)
+d∈D m
++Clocal,m(w1) +Ctrans,m(w1)) + R(w1,w2).
+C(w1,w2) is composed of four parts. The first part
+is the loss function for coreference, where we have
+&gt; 00
+Ccoref,m(w2) = −w2 φ (u ,m)Ω(m)
++ (w&gt;2 φ(u0,m) − δ(u0,m))(Ω(m) ∨ Ω(u0)).
+</equation>
+<bodyText confidence="0.99990725">
+It is similar to the loss function for a latent left-
+linking coreference model5. As the second com-
+ponent, we have the quadratic loss for the mention
+head detection model,
+</bodyText>
+<equation confidence="0.995538">
+1
+Clocal,m(w1) = 2(w&gt;1 ϕ(m) − Ω(m))2.
+</equation>
+<bodyText confidence="0.9996494">
+Using the third component, we further maximize the
+margin between valid and invalid mention head can-
+didates when they are selected as the best-left-link
+mention heads for any valid mention head. It can be
+represented as
+</bodyText>
+<equation confidence="0.98097325">
+1
+Ctrans,m(w1) = 2(w&gt;1 ϕ(u0)−Ω(u0))2Ω(m).
+The last part is the regularization term
+λ1 R(w1,w2) = 2 ||w1||2 + λ2 2 ||w2||2.
+</equation>
+<subsectionHeader confidence="0.755618">
+2.5 Stochastic Subgradient Descent for Joint
+Learning
+</subsectionHeader>
+<bodyText confidence="0.999932428571429">
+For joint learning, we choose stochastic subgradi-
+ent descent (SGD) approach to facilitate performing
+SGD on a per mention head basis. Next, we de-
+scribe the weight update algorithm by defining the
+subgradients.
+The partial subgradient w.r.t. mention head m for
+the head weight vector w1 is given by
+</bodyText>
+<equation confidence="0.989563333333333">
+∇w1,mC(w1,w2) =
+|D|nd
+1 (∇Clocal,m(w1)+∇Ctrans,m(w1))+λ1w1, (2)
+</equation>
+<bodyText confidence="0.522129">
+where
+</bodyText>
+<equation confidence="0.996597">
+∇Clocal,m(w1) = (w&gt; 1 ϕ(m) −Ω(m))ϕ(m),
+∇Ctrans,m(w1) = (w&gt; 1 ϕ(u0) − Ω(u0))ϕ(u0)Ω(m).
+</equation>
+<bodyText confidence="0.920963">
+The partial subgradient w.r.t. mention head m for
+the coreference weight vector w2 is given by
+</bodyText>
+<equation confidence="0.999385333333333">
+∇w2,mC(w1,w2) = λ2w2+
+⎨⎪
+⎧
+⎪⎩ 0 if Ω(m) = 0 and Ω(u0) = 0.
+φ(u0,m) − φ(u00,m) if Ω(m) = 1,
+φ(u0,m) if Ω(m) = 0 and Ω(u0) = 1, (3)
+</equation>
+<bodyText confidence="0.9999025">
+Here λ1 and λ2 are regularization coefficients
+which are tuned on the development set. To learn
+the mention head detection model, we consider two
+different parts of the gradient in expression (2).
+∇Clocal,m(w1) is exactly the local gradient of men-
+tion head m while we add ∇Ctrans,m(w1) to represent
+</bodyText>
+<footnote confidence="0.96956">
+5More details can be found in Chang et al. (2013). The
+difference here is that we also consider the validity of mention
+heads using Ω(u),Ω(m)
+</footnote>
+<page confidence="0.996512">
+15
+</page>
+<bodyText confidence="0.999947918367347">
+the gradient for mention head u&apos;, the mention head
+chosen by the current best-left-linking model for m.
+This serves to maximize the margin between valid
+mention heads and invalid ones. As invalid mention
+heads will not be linked to any other mention head,
+∇trans is zero when m is invalid. When training the
+mention-pair coreference model, we only consider
+gradients when at least one of the two mention heads
+m,u&apos; is valid, as shown in expression (3). When
+mention head m is valid (n(m) = 1), the gradient
+is the same as local training for best-left-link of m
+(first condition in expression (3)). When m is not
+valid while u&apos; is valid, we only demote the coref-
+erence link between them (second condition in ex-
+pression (3)). We consider only the gradient from
+the regularization term when both m,u&apos; are invalid.
+As mentioned before, our framework can han-
+dle annotations with or without singletion mentions.
+When the gold data contains no singleton mentions,
+we have n(m) = 0 for all singleton mention heads
+among mention head candidates. Then, our men-
+tion head detection model partly serves as a single-
+ton head detector, and tries to reject singletons in
+the joint decisions with coreference. When the gold
+data contains singleton mentions, we have n(m) = 1
+for all valid singleton mention heads. Our mention
+head detection model then only learns to differenti-
+ate invalid mention heads from valid ones, and thus
+has the ability to preserve valid singleton heads.
+Most of the head mentions proposed by the al-
+gorithms described in Sec. 3 are positive exam-
+ples. We ensure a balanced training of the men-
+tion head detection model by adding sub-sampled
+invalid mention head candidates as negative exam-
+ples. Specifically, after mention head candidate gen-
+eration (described in Sec. 3), we train on a set of
+candidates with precision larger than 50%. We then
+use Illinois Chunker (Punyakanok and Roth, 2001)6
+to extract more noun phrases from the text and em-
+ploy Collins head rules (Collins, 1999) to identify
+their heads. When these extracted heads do not
+overlap with gold mention heads, we treat them as
+negative examples.
+We note that the aforementioned joint framework
+can take as input either complete mention candi-
+dates or mention head candidates. However, in this
+paper we only feed mention heads into it. Our ex-
+perimental results support our intuition that this pro-
+vides better results.
+</bodyText>
+<footnote confidence="0.971528">
+6http://cogcomp.cs.illinois.edu/page/
+software_view/Chunker
+</footnote>
+<sectionHeader confidence="0.778599" genericHeader="method">
+3 Mention Detection Modules
+</sectionHeader>
+<bodyText confidence="0.999980333333333">
+This section describes the module that generates our
+mention head candidates, and then how the mention
+heads are expanded to complete mentions.
+</bodyText>
+<subsectionHeader confidence="0.998285">
+3.1 Mention Head Candidate Generation
+</subsectionHeader>
+<bodyText confidence="0.999984833333333">
+The goal of the mention head candidate genera-
+tion process is to acquire candidates from multiple
+sources to ensure high recall, given that our joint
+framework acts as a filter and increases precision.
+We view the sources as independent components
+and merge all mention heads generated. A sequence
+labelling component and a named entity recogni-
+tion component employ statistical learning methods.
+These are augmented by additional heads that we
+acquire from Wikipedia and a “known heads” re-
+source, which we incorporate utilizing string match-
+ing algorithms.
+</bodyText>
+<subsectionHeader confidence="0.644601">
+3.1.1 Statistical Components
+</subsectionHeader>
+<bodyText confidence="0.999306419354839">
+Sequence Labelling Component We use the fol-
+lowing notations. Let O =&lt; o1,o2,··· ,on &gt; repre-
+sent an input token sequence over an alphabet n. A
+mention is a substring of consecutive input tokens
+mi,j =&lt; oi,oi+1,··· ,oj &gt; for 1 &lt; i &lt; j &lt; n. We
+consider the positions of mentions in the text: two
+mentions with an identical sequence of tokens that
+differ in position are considered different mentions.
+The sequence labeling component builds on the
+following assumption:
+Assumption Different mentions have different
+heads, and heads do not overlap with each other.
+That is, for each mi,j, we have a corresponding
+head ha,b where i &lt; a &lt; b &lt; j. Moreover, for an-
+other head ha&apos;,b&apos;, we have the satisfying condition
+a − b&apos; &gt; 0 or b − a&apos; &lt; 0 bha,b,ha&apos;,b&apos;.
+Based on this assumption, the problem of
+identifying mention heads is a sequential phrase
+identification problem, and we choose to em-
+ploy the BILOU-representation as it has advan-
+tages over traditional BIO-representation, as shown,
+e.g. in Ratinov and Roth (2009). The BILOU-
+representation suggests learning classifiers that
+identify the Beginning, Inside and Last tokens of
+multi-token chunks as well as Unit-length chunks.
+The problem is then transformed into a simple, but
+constrained, 5-class classification problem.
+The BILOU-classifier shares all features with the
+mention head detection model described in Sec. 2.1
+except for two: length of mention heads and NPMI
+over head boundary. For each instance, the feature
+</bodyText>
+<page confidence="0.987038">
+16
+</page>
+<bodyText confidence="0.999682333333333">
+vector is sparse and we use sparse perceptron (Jack-
+son and Craven, 1996) for supervised training. We
+also apply a two layer prediction aggregation. First,
+we apply a baseline BILOU-classifier, and then use
+the resulting predictions as additional features in a
+second level of inference to take interactions into
+account in an efficient manner. A similar technique
+has been applied in Ratinov and Roth (2009), and
+has shown favorable results over other ”standard”
+sequential prediction models.
+Named Entity Recognition Component We use
+existing tools to extract named entities as additional
+mention head candidates. We choose the state-of-
+the-art “Illinois Named Entity Tagger” package7.
+It uses distributional word representations that im-
+prove its generalization. This package gives the
+standard Person/Location/Organization/Misc labels
+and we take all output named entities as candidates.
+</bodyText>
+<subsubsectionHeader confidence="0.615467">
+3.1.2 Resource-Driven Matching Components
+</subsubsectionHeader>
+<bodyText confidence="0.999985892857143">
+Wikipedia Many mention heads can be directly
+matched to a Wikipedia title. We get 4,045,764
+Wikipedia titles from Wikipedia dumps and use all
+of them as potential mention heads. The Wikipedia
+matching component includes an efficient hashing
+algorithm implemented via a DJB2 hash function8.
+One important advantage of using Wikipedia is
+that it keeps updating. This component can con-
+tribute steadily to ensure a good coverage of men-
+tion heads. We first run this matching component
+on training documents and compute the precision of
+entries that appear in the text (the probability of ap-
+pearing as mention heads). We then get the set of en-
+tries with precision higher than a threshold a, which
+is tuned on the development set using F1-score. We
+use them as candidates for mention head matching.
+Known Head Some mention heads appear repeat-
+edly in the text. To fully utilize the training data, we
+construct a known mention head candidate set and
+identify them in the test documents. To balance be-
+tween recall and precision, we set a parameter P &gt; 0
+as a precision threshold and only allow those men-
+tion heads with precision larger than P on the train-
+ing set. Please note that threshold P is also tuned on
+the development set using F1-score.
+We also employ a simple word variation tolerance
+algorithm in our matching components, to general-
+ize over small variations (plural/singular, etc.).
+</bodyText>
+<footnote confidence="0.999833">
+7http://cogcomp.cs.illinois.edu/page/
+software_view/NETagger
+8http://www.cse.yorku.ca/˜oz/hash.html
+</footnote>
+<subsectionHeader confidence="0.999027">
+3.2 Mention Boundary Detection
+</subsectionHeader>
+<bodyText confidence="0.979279192307692">
+Once the joint learning and inference process deter-
+mines the set of mention heads (and their corefer-
+ence chains), we extend the heads to complete men-
+tions. Note that this process may not be necessary,
+since in many applications, the head clusters often
+provide enough information. However, for consis-
+tency with existing coreference resolution systems,
+we describe below how we expand the heads to
+complete mentions.
+We learn a binary classifier to expand mentions,
+which determines if the mention head should in-
+clude the token to its left and to its right. We fol-
+low the notations in Sec. 2.1. We construct pos-
+itive examples as (op,ha,b,dir), bmi,j(ha,b). Here
+p E {i,i + 1,··· ,a _ 1} U {b + 1,b + 2,···, j} and
+when p = i,i + 1,··· ,a _ 1, dir = L; when p =
+b + 1,b + 2,··· , j, dir = R. We construct negative
+examples as (oi_1,ha,b,L) and (oj+1,ha,b,R). Once
+trained, the binary classifier takes in the head, a to-
+ken and the direction of the token relative to the
+head, and decides whether the token is inside or out-
+side the mention corresponding to the head. At test
+time, this classifier is used around each confirmed
+head to determine the mention boundaries. The fea-
+tures used here are similar to the mention head de-
+tection model described in Sec. 2.1.
+</bodyText>
+<sectionHeader confidence="0.999583" genericHeader="method">
+4 Experiments
+</sectionHeader>
+<bodyText confidence="0.999983666666667">
+We present experiments on the two standard coref-
+erence resolution datasets, ACE-2004 (NIST, 2004)
+and OntoNotes-5.0 (Hovy et al., 2006). Our ap-
+proach results in a substantial reduction in the coref-
+erence performance gap between gold and pre-
+dicted mentions, and significantly outperforms ex-
+isting stat-of-the-art results on coreference resolu-
+tion; in addition, it achieves significant performance
+improvement on MD for both datasets.
+</bodyText>
+<subsectionHeader confidence="0.978845">
+4.1 Experimental Setup
+</subsectionHeader>
+<bodyText confidence="0.999842727272727">
+Datasets The ACE-2004 dataset contains 443 doc-
+uments. We use a standard split of 268 training doc-
+uments, 68 development documents, and 106 test-
+ing documents (Culotta et al., 2007; Bengtson and
+Roth, 2008). The OntoNotes-5.0 dataset, which is
+released for the CoNLL-2012 Shared Task (Prad-
+han et al., 2012), contains 3,145 annotated docu-
+ments. These documents come from a wide range of
+sources which include newswire, bible, transcripts,
+magazines, and web blogs. We report results on the
+test documents for both datasets.
+</bodyText>
+<page confidence="0.99672">
+17
+</page>
+<table confidence="0.999596">
+MUC B3 CEAFe AVG
+GoldM/H 78.17 81.64 78.45 79.42
+StanfordM 63.89 70.33 70.21 68.14
+PredictedM 64.28 70.37 70.16 68.27
+H-M-CorefM 65.81 71.97 71.14 69.64
+H-Joint-MM 67.28 73.06 73.25 71.20
+StanfordH 70.28 73.93 73.04 72.42
+PredictedH 71.35 75.33 74.02 73.57
+H-M-CorefH 71.81 75.69 74.45 73.98
+H-Joint-MH 72.74 76.69 75.18 74.87
+</table>
+<tableCaption confidence="0.982279">
+Table 2: Performance of coreference resolution for all sys-
+tems on the ACE-2004 dataset. Subscripts (M, H) indicate
+evaluations on (mentions, mention heads) respectively. For
+gold mentions and mention heads, they yield the same per-
+formance for coreference. Our proposed H-Joint-M system
+achieves the highest performance. Parameters of our proposed
+system are tuned as a = 0.9, fl = 0.8, �1 = 0.2 and I2 = 0.3.
+</tableCaption>
+<bodyText confidence="0.99994903030303">
+The ACE-2004 dataset is annotated with both
+mention and mention heads, while the OntoNotes-
+5.0 dataset only has mention annotations. There-
+fore, we preprocess Ontonote-5.0 to derive men-
+tion heads using Collins head rules (Collins, 1999)
+with gold constituency parsing information and gold
+named entity information. The parsing information9
+is only needed to generate training data for the men-
+tion head candidate generator and named entities are
+directly set as heads. We set these extracted heads
+as gold, which enables us to train the two layer
+BILOU-classifier described in Sec. 3.1.1. The non-
+overlapping mention head assumption in Sec. 3.1.1
+can be verified empirically on both ACE-2004 and
+OntoNotes-5.0 datasets.
+Baseline Systems We choose three publicly avail-
+able state-of-the-art end-to-end coreference systems
+as our baselines: Stanford system (Lee et al., 2011),
+Berkeley system (Durrett and Klein, 2014) and
+HOTCoref system (Bj¨orkelund and Kuhn, 2014).
+Developed Systems Our developed system is built
+on the work by Chang et al. (2013), using Con-
+strained Latent Left-Linking Model (CL3M) as our
+mention-pair coreference model in the joint frame-
+work10. When the CL3M coreference system uses
+gold mentions or heads, we call the system Gold;
+when it uses predicted mentions or heads, we call
+the system Predicted. The mention head candidate
+generation module along with mention boundary
+detection module can be grouped together to form
+a complete mention detection system, and we call
+it H-M-MD. We can feed the predicted mentions
+from H-M-MD directly into the mention-pair coref-
+</bodyText>
+<footnote confidence="0.9420255">
+9No parsing information is needed at evaluation time.
+10We use Gurobi v5.0.1 as our ILP solver.
+</footnote>
+<table confidence="0.999386357142857">
+MUC B3 CEAFe AVG
+GoldM/H 82.03 70.59 66.76 73.12
+StanfordM 64.62 51.89 48.23 54.91
+HotCorefM 70.74 58.37 55.47 61.53
+BerkeleyM 71.24 58.71 55.18 61.71
+PredictedM 69.63 57.46 53.16 60.08
+H-M-CorefM 70.95 59.11 54.98 61.68
+H-Joint-MM 72.22 60.50 56.37 63.03
+StanfordH 68.53 56.68 52.36 59.19
+HotCorefH 72.94 60.27 57.53 63.58
+BerkeleyH 73.05 60.39 57.43 63.62
+PredictedH 72.11 60.12 55.68 62.64
+H-M-CorefH 73.22 61.42 56.21 63.62
+H-Joint-MH 74.83 62.77 57.93 65.18
+</table>
+<tableCaption confidence="0.872638714285714">
+Table 3: Performance of coreference resolution for all sys-
+tems on the CoNLL-2012 dataset. Subscripts (M, H) indi-
+cate evaluations on (mentions, mention heads) respectively. For
+gold mentions and mention heads, they yield the same per-
+formance for coreference. Our proposed H-Joint-M system
+achieves the highest performance. Parameters of our proposed
+system are tuned as a = 0.9, fl = 0.9, �1 = 0.25 and A2 = 0.2.
+</tableCaption>
+<bodyText confidence="0.996479722222222">
+erence model that we implemented, resulting in a
+traditional pipelined end-to-end coreference system,
+namely H-M-Coref. We name our new proposed
+end-to-end coreference resolution system incorpo-
+rating both the mention head candidate generation
+module and the joint framework as H-Joint-M.
+Evaluation Metrics We compare all systems us-
+ing three popular metrics for coreference resolution:
+MUC (Vilain et al., 1995), B3 (Bagga and Bald-
+win, 1998), and Entity-based CEAF (CEAFe) (Luo,
+2005). We use the average F1 scores (AVG) of these
+three metrics as the main metric for comparison.
+We use the v7.0 scorer provided by CoNLL-2012
+Shared Task11. We also evaluate the mention de-
+tection performance based on precision, recall and
+F1 score. As mention heads are important for both
+mention detection and coreference resolution, we
+also report results evaluated on mention heads.
+</bodyText>
+<subsectionHeader confidence="0.973871">
+4.2 Performance for Coreference Resolution
+</subsectionHeader>
+<bodyText confidence="0.99975425">
+Performance of coreference resolution for all sys-
+tems on the ACE-2004 and CoNLL-2012 datasets is
+shown in Table 2 and Table 3 respectively.12 These
+results show that our developed system H-Joint-M
+</bodyText>
+<footnote confidence="0.999004666666667">
+11The latest scorer is version v8.01, but MUC, B3, CEAFe
+and CoNLL average scores are not changed. For evaluation on
+ACE-2004, we convert the system output and gold annotations
+into CoNLL format.
+12We do not provide results from Berkeley and HOTCoref on
+ACE-2004 dataset as they do not directly support ACE input.
+Results for HOTCoref are slightly different from the results re-
+ported in Bj¨orkelund and Kuhn (2014). For Berkeley system,
+we use the reported results from Durrett and Klein (2014).
+</footnote>
+<page confidence="0.998952">
+18
+</page>
+<bodyText confidence="0.999743125">
+shows significant improvement on all metrics for
+both datasets. Existing systems only report results
+on mentions. Here, we also show their performance
+evaluated on mention heads. When evaluated on
+mention heads rather than mentions13, we can al-
+ways expect a performance increase for all systems
+on both datasets. Even though evaluating on men-
+tions is more common in the literature, it is often
+enough to identify just mention heads in corefer-
+ence chains (as shown in the example from Sec.
+1). H-M-Coref can already bring substantial perfor-
+mance improvement, which indicates that it is help-
+ful for coreference to just identify high quality men-
+tion heads. Our proposed H-Joint-M system out-
+performs all baselines and achieves the best results
+reported so far.
+</bodyText>
+<subsectionHeader confidence="0.995045">
+4.3 Performance for Mention Detection
+</subsectionHeader>
+<bodyText confidence="0.999985666666667">
+The performance of mention detection for all sys-
+tems on the ACE-2004 and CoNLL-2012 datasets
+is shown in Table 4. These results show that our
+developed system exhibits significant improvement
+on precision and recall for both datasets. H-M-MD
+mainly improves on recall, indicating, as expected,
+that the mention head candidate generation mod-
+ule ensures high recall on mention heads. H-Joint-
+M mainly improves on precision, indicating, as ex-
+pected, that the joint framework correctly rejects
+many of the invalid mention head candidates during
+joint inference. Our joint model can adapt to anno-
+tations with or without singleton mentions. Based
+on training data, our system has the ability to pre-
+serve true singleton mentions in ACE while reject-
+ing many singleton mentions in OntoNotes14. Note
+that we have better mention detection results on
+ACE-2004 dataset than on OntoNotes-5.0 dataset.
+We believe that this is due to the fact that extract-
+ing mention heads in the OntoNotes dataset is some-
+what noisy.
+</bodyText>
+<subsectionHeader confidence="0.999986">
+4.4 Analysis of Performance Improvement
+</subsectionHeader>
+<bodyText confidence="0.798391714285714">
+The improvement of our H-Joint-M system is due to
+two distinct but related modules: the mention head
+candidate generation module (“Head”) and the joint
+learning and inference framework (“Joint”).15 We
+13Here, we treat mention heads as mentions. Thus, in the
+evaluation script, we set the boundary of a mention to be the
+boundary of its correponding mention head.
+</bodyText>
+<footnote confidence="0.9860144">
+14Please note that when evaluating on OntoNotes, we even-
+tually remove all singleton mentions from the output.
+15“Joint” rows are computed as “H-Joint-M” rows minus
+“Head” rows. They reflect the contribution of the joint frame-
+work to mention detection (by rejecting some mention heads).
+</footnote>
+<table confidence="0.9999486">
+Systems Precision Recall F1-score
+ACE-2004
+PredictedM 75.11 73.03 74.06
+H-M-MDM 77.45 92.97 83.90
+H-Joint-MM 85.34 91.73 88.42
+PredictedH 76.84 86.99 79.87
+H-M-MDH 80.82 93.45 86.68
+H-Joint-MH 88.85 92.27 90.53
+CoNLL-2012
+PredictedM 65.28 63.41 64.33
+H-M-MDM 70.09 76.72 73.26
+H-Joint-MM 78.51 75.52 76.99
+PredictedH 76.38 74.02 75.18
+H-M-MDH 77.73 83.99 80.74
+H-Joint-MH 85.07 82.31 83.67
+</table>
+<tableCaption confidence="0.548806">
+Table 4: Performance of mention detection for all systems
+on the ACE-2004 and CoNLL-2012 datasets. Subscripts (M,
+H) indicate evaluations on (mentions, mention heads) respec-
+tively. Our proposed H-Joint-M system dramatically improves
+the MD performance.
+</tableCaption>
+<bodyText confidence="0.9977064375">
+evaluate the effect of these two modules in terms
+of Mention Detection Error Reduction (MDER) and
+Performance Gap Reduction (PGR) for coreference.
+MDER is computed as the ratio of performance im-
+provement for mention detection over the original
+mention detection error rate, while PGR is com-
+puted as the ratio of performance improvement for
+coreference over the performance gap for corefer-
+ence. Results on the ACE-2004 and CoNLL-2012
+datasets are shown in Table 5.16
+The mention head candidate generation module
+has a bigger impact on MDER compared to the joint
+framework. However, they both have the same level
+of positive effects on PGR for coreference resolu-
+tion. On both datasets, we achieve more than 20%
+performance gap reduction for coreference.
+</bodyText>
+<sectionHeader confidence="0.999962" genericHeader="evaluation">
+5 Related Work
+</sectionHeader>
+<bodyText confidence="0.999815">
+Coreference resolution has been extensively stud-
+ied, with several state-of-the-art approaches ad-
+dressing this task (Lee et al., 2011; Durrett and
+Klein, 2013; Bj¨orkelund and Kuhn, 2014; Song et
+al., 2012). Many of the early rule-based systems
+like Hobbs (1978) and Lappin and Leass (1994)
+gained considerable popularity. The early designs
+were easy to understand and the rules were designed
+manually. Machine learning approaches were intro-
+duced in many works (Connolly et al., 1997; Ng and
+</bodyText>
+<footnote confidence="0.78005">
+16We use bootstrapping resampling (10 times from the test
+data) with signed rank test. All the improvements shown are
+statistically significant.
+</footnote>
+<page confidence="0.990314">
+19
+</page>
+<table confidence="0.998505071428571">
+ACE-2004 MDER PGR(AVG)
+Headx 37.93 12.29
+Jointx 17.43 13.99
+H-Joint-Mx 55.36 26.28
+HeadH 34.00 7.01
+JointH 19.22 15.21
+H-Joint-MH 53.22 22.22
+CoNLL-2012 MDER PGR(AVG)
+Headx 25.04 12.16
+Jointx 10.45 10.44
+H-Joint-Mx 35.49 22.60
+HeadH 22.40 10.58
+JointH 11.81 13.75
+H-Joint-MH 34.21 24.33
+</table>
+<tableCaption confidence="0.997203">
+Table 5: Analysis of performance improvement in terms
+</tableCaption>
+<bodyText confidence="0.972929877192982">
+of Mention Detection Error Reduction (MDER) and Perfor-
+mance Gap Reduction (PGR) for coreference resolution on
+the ACE-2004 and CoNLL-2012 datasets. “Head” represents
+the mention head candidate generation module, “Joint” repre-
+sents the joint learning and inference framework, and “H-Joint-
+M” indicates the end-to-end system.
+Cardie, 2002; Bengtson and Roth, 2008; Soon et al.,
+2001). The introduction of ILP methods has influ-
+enced the coreference area too (Chang et al., 2011;
+Denis and Baldridge, 2007). In this paper, we use
+the Constrained Latent Left-Linking Model (CL3M)
+described in Chang et al. (2013) in our experiments.
+The task of mention detection is closely related
+to Named Entity Recognition (NER). Punyakanok
+and Roth (2001) thoroughly study phrase identifica-
+tion in sentences and propose three different general
+approaches. They aim to learn several different lo-
+cal classifiers and combine them to optimally satisfy
+some global constraints. Cardie and Pierce (1998)
+propose to select certain rules based on a given
+corpus, to identify base noun phrases. However,
+the phrases detected are not necessarily mentions
+that we need to discover. Ratinov and Roth (2009)
+present detailed studies on the task of named entity
+recognition, which discusses and compares different
+methods on multiple aspects including chunk repre-
+sentation, inference method, utility of non-local fea-
+tures, and integration of external knowledge. NER
+can be regarded as a sequential labeling problem,
+which can be modeled by several proposed mod-
+els, e.g. Hidden Markov Model (Rabiner, 1989) or
+Conditional Random Fields (Sarawagi and Cohen,
+2004). The typical BIO representation was intro-
+duced in Ramshaw and Marcus (1995); OC repre-
+sentations were introduced in Church (1988), while
+Finkel and Manning (2009) further study nested
+named entity recognition, which employs a tree
+structure as a representation of identifying named
+entities within other named entities.
+The most relevant study on mentions in the con-
+text of coreference was done in Recasens et al.
+(2013); this work studies distinguishing single men-
+tions from coreferent mentions. Our joint frame-
+work provides similar insights, where the added
+mention decision variable partly reflects if the men-
+tion is singleton or not.
+Several recent works suggest studying corefer-
+ence jointly with other tasks. Lee et al. (2012)
+model entity coreference and event coreference
+jointly; Durrett and Klein (2014) consider joint
+coreference and entity-linking. The work closest
+to ours is that of Lassalle and Denis (2015), which
+studies a joint anaphoricity detection and corefer-
+ence resolution framework. While their inference
+objective is similar, their work assumes gold men-
+tions are given and thus their modeling is very dif-
+ferent.
+</bodyText>
+<sectionHeader confidence="0.999013" genericHeader="conclusions">
+6 Conclusion
+</sectionHeader>
+<bodyText confidence="0.999989357142857">
+This paper proposes a joint inference approach to
+the end-to-end coreference resolution problem. By
+moving to identify mention heads rather than men-
+tions, and by developing an ILP-based, joint, online
+learning and inference approach, we close a signif-
+icant fraction of the existing gap between corefer-
+ence systems’ performance on gold mentions and
+their performance on raw data. At the same time,
+we show substantial improvements in mention de-
+tection. We believe that our approach will gener-
+alize well to many other NLP problems, where the
+performance on raw data (the result that really mat-
+ters) is still significantly lower than the performance
+on gold data.
+</bodyText>
+<sectionHeader confidence="0.998237" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.9999184">
+This work is partly supported by NSF grant #SMA
+12-09359 and by DARPA under agreement number
+FA8750-13-2-0008. The U.S. Government is autho-
+rized to reproduce and distribute reprints for Gov-
+ernmental purposes notwithstanding any copyright
+notation thereon. The views and conclusions con-
+tained herein are those of the authors and should
+not be interpreted as necessarily representing the of-
+ficial policies or endorsements, either expressed or
+implied, of DARPA or the U.S. Government.
+</bodyText>
+<page confidence="0.991489">
+20
+</page>
+<sectionHeader confidence="0.993822" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999868673267327">
+A. Bagga and B. Baldwin. 1998. Algorithms for scoring
+coreference chains. In In The First International Con-
+ference on Language Resources and Evaluation Work-
+shop on Linguistics Coreference.
+E. Bengtson and D. Roth. 2008. Understanding the value
+of features for coreference resolution. In EMNLP.
+A. Bj¨orkelund and J Kuhn. 2014. Learning structured
+Perceptrons for coreference resolution with latent an-
+tecedents and non-local features. In ACL.
+C. Cardie and D. Pierce. 1998. Error-driven pruning of
+Treebanks grammars for base noun phrase identifica-
+tion. In Proceedings of ACL-98.
+K. Chang, R. Samdani, A. Rozovskaya, N. Rizzolo,
+M. Sammons, and D. Roth. 2011. Inference proto-
+cols for coreference resolution. In CoNLL.
+K.-W. Chang, R. Samdani, and D. Roth. 2013. A con-
+strained latent variable model for coreference resolu-
+tion. In EMNLP.
+K. Church. 1988. A stochastic parts program and noun
+phrase parser for unrestricted text. In ANLP.
+M. Collins. 1999. Head-driven Statistical Models for
+Natural Language Parsing. Ph.D. thesis, Computer
+Science Department, University of Pennsylvenia.
+D. Connolly, J. Burger, and D. Day. 1997. A machine
+learning approach to anaphoric reference. In New
+Methods in Language Processing.
+A. Culotta, M. Wick, and A. McCallum. 2007. First-
+order probabilistic models for coreference resolution.
+In NAACL.
+P. Denis and J. Baldridge. 2007. Joint determination of
+anaphoricity and coreference resolution using integer
+programming. In NAACL.
+G. Durrett and D. Klein. 2013. Easy victories and uphill
+battles in coreference resolution. In EMNLP.
+G. Durrett and D. Klein. 2014. A joint model for entity
+analysis: Coreference, typing, and linking.
+J. Finkel and C. Manning. 2009. Nested named entity
+recognition. In EMNLP.
+J. R. Hobbs. 1978. Resolving pronoun references. Lin-
+gua.
+E. Hovy, M. Marcus, M. Palmer, L. Ramshaw, and
+R. Weischedel. 2006. Ontonotes: The 90% solution.
+In Proceedings of HLT/NAACL.
+J. Jackson and M. Craven. 1996. Learning sparse per-
+ceptrons. Proceedings of the 1996Advances in Neural
+Information Processing Systems.
+S. Lappin and H. Leass. 1994. An algorithm for pronom-
+inal anaphora resolution. Computational linguistics.
+E. Lassalle and P. Denis. 2015. Joint anaphoricity detec-
+tion and coreference resolution with constrained latent
+structures.
+H. Lee, Y. Peirsman, A. Chang, N. Chambers, M. Sur-
+deanu, and D. Jurafsky. 2011. Stanford’s multi-
+pass sieve coreference resolution system at the conll-
+2011 shared task. In Proceedings of the CoNLL-2011
+Shared Task.
+H. Lee, M. Recasens, A. Chang, M. Surdeanu, and D. Ju-
+rafsky. 2012. Joint entity and event coreference reso-
+lution across documents. In EMNLP.
+X. Luo. 2005. On coreference resolution performance
+metrics. In EMNLP.
+V. Ng and C. Cardie. 2002. Improving machine learning
+approaches to coreference resolution. In ACL.
+NIST. 2004. The ACE evaluation plan.
+S. Pradhan, A. Moschitti, N. Xue, O. Uryupina, and
+Y. Zhang. 2012. CoNLL-2012 shared task: Modeling
+multilingual unrestricted coreference in OntoNotes.
+In CoNLL.
+V. Punyakanok and D. Roth. 2001. The use of classifiers
+in sequential inference. In NIPS.
+L. R. Rabiner. 1989. A tutorial on hidden Markov mod-
+els and selected applications in speech recognition.
+Proceedings of the IEEE.
+L. A. Ramshaw and M. P. Marcus. 1995. Text chunking
+using transformation-based learning. In Proceedings
+of the Third Annual Workshop on Very Large Corpora.
+L. Ratinov and D. Roth. 2009. Design challenges and
+misconceptions in named entity recognition. In Proc.
+of the Annual Conference on Computational Natural
+Language Learning (CoNLL).
+M. Recasens, M.-C. de Marneffe, and C. Potts. 2013.
+The life and death of discourse entities: Identifying
+singleton mentions. In NAACL.
+D. Roth and W. Yih. 2004. A linear programming
+formulation for global inference in natural language
+tasks. In Hwee Tou Ng and Ellen Riloff, editors,
+CoNLL.
+S. Sarawagi and W. Cohen. 2004. Semi-Markov con-
+ditional random fields for information extraction. In
+NIPS.
+Y. Song, J. Jiang, W.-X. Zhao, S. Li, and H. Wang. 2012.
+Joint learning for coreference resolution with markov
+logic. In Proceedings of the 2012 Joint Conference of
+EMNLP-CoNLL.
+W. M. Soon, H. T. Ng, and D. C. Y. Lim. 2001. A ma-
+chine learning approach to coreference resolution of
+noun phrases. Comput. Linguist.
+M. Vilain, J. Burger, J. Aberdeen, D. Connolly, and
+L. Hirschman. 1995. A model-theoretic coreference
+scoring scheme. In Proceedings of the 6th conference
+on Message understanding.
+</reference>
+<page confidence="0.999437">
+21
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.977002">
+<title confidence="0.999959">A Joint Framework for Coreference Resolution and Mention Head Detection</title>
+<author confidence="0.99846">Haoruo Peng Kai-Wei Chang Dan</author>
+<affiliation confidence="0.999998">University of Illinois,</affiliation>
+<address confidence="0.984512">Urbana, IL,</address>
+<abstract confidence="0.999737708333333">In coreference resolution, a fair amount of research treats mention detection as a preprocessed step and focuses on developing algorithms for clustering coreferred mentions. However, there are significant gaps between the performance on gold mentions and the performance on the real problem, mentions are raw text via an imperfect Mention Detection (MD) module. Motivated by the goal of reducing such gaps, we develop an ILP-based joint coreference resolution and mention head formulation that is shown to yield significant improvements on coreference from raw text, outperforming existing state-ofart systems on both the ACE-2004 and the CoNLL-2012 datasets. At the same time, our joint approach is shown to improve mention detection by close to 15% F1. One key insight underlying our approach is that and co-referring mention is not only sufficient but is more robust than working with complete mentions.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>A Bagga</author>
+<author>B Baldwin</author>
+</authors>
+<title>Algorithms for scoring coreference chains. In</title>
+<date>1998</date>
+<booktitle>In The First International Conference on Language Resources and Evaluation Workshop on Linguistics Coreference.</booktitle>
+<contexts>
+<context position="30059" citStr="Bagga and Baldwin, 1998" startWordPosition="4821" endWordPosition="4825">performance for coreference. Our proposed H-Joint-M system achieves the highest performance. Parameters of our proposed system are tuned as a = 0.9, fl = 0.9, �1 = 0.25 and A2 = 0.2. erence model that we implemented, resulting in a traditional pipelined end-to-end coreference system, namely H-M-Coref. We name our new proposed end-to-end coreference resolution system incorporating both the mention head candidate generation module and the joint framework as H-Joint-M. Evaluation Metrics We compare all systems using three popular metrics for coreference resolution: MUC (Vilain et al., 1995), B3 (Bagga and Baldwin, 1998), and Entity-based CEAF (CEAFe) (Luo, 2005). We use the average F1 scores (AVG) of these three metrics as the main metric for comparison. We use the v7.0 scorer provided by CoNLL-2012 Shared Task11. We also evaluate the mention detection performance based on precision, recall and F1 score. As mention heads are important for both mention detection and coreference resolution, we also report results evaluated on mention heads. 4.2 Performance for Coreference Resolution Performance of coreference resolution for all systems on the ACE-2004 and CoNLL-2012 datasets is shown in Table 2 and Table 3 res</context>
+</contexts>
+<marker>Bagga, Baldwin, 1998</marker>
+<rawString>A. Bagga and B. Baldwin. 1998. Algorithms for scoring coreference chains. In In The First International Conference on Language Resources and Evaluation Workshop on Linguistics Coreference.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Bengtson</author>
+<author>D Roth</author>
+</authors>
+<title>Understanding the value of features for coreference resolution.</title>
+<date>2008</date>
+<booktitle>In EMNLP.</booktitle>
+<contexts>
+<context position="6288" citStr="Bengtson and Roth, 2008" startWordPosition="964" endWordPosition="967"> mention is inside the boundary of another mention), but mention heads never overlap. This property also simplifies the problem of mention head candidate generation. In the example above, the first “they” refers to “Multinational companies investing in China” and the second “They” refers to “Domestic manufacturers, who are also suffering”. In both cases, the mention heads are sufficient to support the decisions: ”they” refers to ”companies”, and ”They” refers to ”manufacturers”. In fact, most of the features3 implemented in existing coreference resolution systems rely solely on mention heads (Bengtson and Roth, 2008). Furthermore, consider the possible mention candidate “league” (italic in the text). It is not chosen as a mention because the surrounding context is not focused on “anti-piracy league”. So, mention the CoNLL-2012 dataset is built from OntoNotes-5.0 corpus. 2This example is chosen from the ACE-2004 corpus. 3All features except for those that rely on modifiers. Figure 1: Comparison between a traditional pipelined system and our proposed system. We split up mention detection into two steps: mention head candidate generation and (an optional) mention boundary detection. We feed mention heads rat</context>
+<context position="13377" citStr="Bengtson and Roth (2008)" startWordPosition="2103" endWordPosition="2106">learn a leftlinking scoring function fu,v = w2 φ(u,v), where φ(u,v) is a pairwise feature vector and w2 is the weight vector. The inference algorithm is inspired by the best-left-link approach (Chang et al., 2011), where they solve the following ILP problem: argmax ∑ y u&lt;v,u,vEM s.t. ∑ yu,v G 1, bv E M, (1) u&lt;v yu,v E {0,1} bu,v E M. Here, yu,v = 1 iff mentions u,v are directly linked. Thus, we can construct a forest and the mentions in the same connected component (i.e., in the same tree) are co-referred. For this mention-pair coreference model φ(u,v), we use the same set of features used in Bengtson and Roth (2008). fu,vyu,v, 14 2.3 Joint Inference Framework We extend expression (1) to facilitate joint inference on mention heads and coreference as follows: argmax ∑ fu,vyu,v + ∑ gmym, y u&lt;v,u,v∈M m∈M s.t. ∑ yu,v ≤ 1, ∀v ∈ M0, u&lt;v ∑ yu,v ≤ yv, ∀v ∈ M0, u&lt;v yu,v ∈ {0,1}, ym ∈ {0,1} ∀u,v,m ∈ M0. Here, M0 is the set of all mention head candidates. ym is the decision variable for mention head candidate m. ym = 1 if and only if the mention head m is chosen. To consider coreference decisions and mention head decisions together, we add the constraint ∑u&lt;v yu,v ≤ yv, which ensures that if a candidate mention head</context>
+<context position="26006" citStr="Bengtson and Roth, 2008" startWordPosition="4195" endWordPosition="4198">andard coreference resolution datasets, ACE-2004 (NIST, 2004) and OntoNotes-5.0 (Hovy et al., 2006). Our approach results in a substantial reduction in the coreference performance gap between gold and predicted mentions, and significantly outperforms existing stat-of-the-art results on coreference resolution; in addition, it achieves significant performance improvement on MD for both datasets. 4.1 Experimental Setup Datasets The ACE-2004 dataset contains 443 documents. We use a standard split of 268 training documents, 68 development documents, and 106 testing documents (Culotta et al., 2007; Bengtson and Roth, 2008). The OntoNotes-5.0 dataset, which is released for the CoNLL-2012 Shared Task (Pradhan et al., 2012), contains 3,145 annotated documents. These documents come from a wide range of sources which include newswire, bible, transcripts, magazines, and web blogs. We report results on the test documents for both datasets. 17 MUC B3 CEAFe AVG GoldM/H 78.17 81.64 78.45 79.42 StanfordM 63.89 70.33 70.21 68.14 PredictedM 64.28 70.37 70.16 68.27 H-M-CorefM 65.81 71.97 71.14 69.64 H-Joint-MM 67.28 73.06 73.25 71.20 StanfordH 70.28 73.93 73.04 72.42 PredictedH 71.35 75.33 74.02 73.57 H-M-CorefH 71.81 75.69 </context>
+<context position="36460" citStr="Bengtson and Roth, 2008" startWordPosition="5813" endWordPosition="5816">6.28 HeadH 34.00 7.01 JointH 19.22 15.21 H-Joint-MH 53.22 22.22 CoNLL-2012 MDER PGR(AVG) Headx 25.04 12.16 Jointx 10.45 10.44 H-Joint-Mx 35.49 22.60 HeadH 22.40 10.58 JointH 11.81 13.75 H-Joint-MH 34.21 24.33 Table 5: Analysis of performance improvement in terms of Mention Detection Error Reduction (MDER) and Performance Gap Reduction (PGR) for coreference resolution on the ACE-2004 and CoNLL-2012 datasets. “Head” represents the mention head candidate generation module, “Joint” represents the joint learning and inference framework, and “H-JointM” indicates the end-to-end system. Cardie, 2002; Bengtson and Roth, 2008; Soon et al., 2001). The introduction of ILP methods has influenced the coreference area too (Chang et al., 2011; Denis and Baldridge, 2007). In this paper, we use the Constrained Latent Left-Linking Model (CL3M) described in Chang et al. (2013) in our experiments. The task of mention detection is closely related to Named Entity Recognition (NER). Punyakanok and Roth (2001) thoroughly study phrase identification in sentences and propose three different general approaches. They aim to learn several different local classifiers and combine them to optimally satisfy some global constraints. Cardi</context>
+</contexts>
+<marker>Bengtson, Roth, 2008</marker>
+<rawString>E. Bengtson and D. Roth. 2008. Understanding the value of features for coreference resolution. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Bj¨orkelund</author>
+<author>J Kuhn</author>
+</authors>
+<title>Learning structured Perceptrons for coreference resolution with latent antecedents and non-local features.</title>
+<date>2014</date>
+<booktitle>In ACL.</booktitle>
+<marker>Bj¨orkelund, Kuhn, 2014</marker>
+<rawString>A. Bj¨orkelund and J Kuhn. 2014. Learning structured Perceptrons for coreference resolution with latent antecedents and non-local features. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Cardie</author>
+<author>D Pierce</author>
+</authors>
+<title>Error-driven pruning of Treebanks grammars for base noun phrase identification.</title>
+<date>1998</date>
+<booktitle>In Proceedings of ACL-98.</booktitle>
+<contexts>
+<context position="37079" citStr="Cardie and Pierce (1998)" startWordPosition="5909" endWordPosition="5912"> 2008; Soon et al., 2001). The introduction of ILP methods has influenced the coreference area too (Chang et al., 2011; Denis and Baldridge, 2007). In this paper, we use the Constrained Latent Left-Linking Model (CL3M) described in Chang et al. (2013) in our experiments. The task of mention detection is closely related to Named Entity Recognition (NER). Punyakanok and Roth (2001) thoroughly study phrase identification in sentences and propose three different general approaches. They aim to learn several different local classifiers and combine them to optimally satisfy some global constraints. Cardie and Pierce (1998) propose to select certain rules based on a given corpus, to identify base noun phrases. However, the phrases detected are not necessarily mentions that we need to discover. Ratinov and Roth (2009) present detailed studies on the task of named entity recognition, which discusses and compares different methods on multiple aspects including chunk representation, inference method, utility of non-local features, and integration of external knowledge. NER can be regarded as a sequential labeling problem, which can be modeled by several proposed models, e.g. Hidden Markov Model (Rabiner, 1989) or Co</context>
+</contexts>
+<marker>Cardie, Pierce, 1998</marker>
+<rawString>C. Cardie and D. Pierce. 1998. Error-driven pruning of Treebanks grammars for base noun phrase identification. In Proceedings of ACL-98.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Chang</author>
+<author>R Samdani</author>
+<author>A Rozovskaya</author>
+<author>N Rizzolo</author>
+<author>M Sammons</author>
+<author>D Roth</author>
+</authors>
+<title>Inference protocols for coreference resolution. In CoNLL.</title>
+<date>2011</date>
+<contexts>
+<context position="10953" citStr="Chang et al. (2011)" startWordPosition="1703" endWordPosition="1706">d to using gold mentions. The rest of the paper is organized as follows. We explain the joint head-coreference learning and inference framework in Sec. 2. Our mention head candidate generation module and mention boundary detection module are described in Sec. 3. We report our experimental results in Sec. 4, review related work in Sec. 5 and conclude in Sec. 6. 2 A Joint Head-Coreference Framework This section describes our joint coreference resolution and mention head detection framework. Our work is inspired by the latent left-linking model in Chang et al. (2013) and the ILP formulation from Chang et al. (2011). The joint learning and inference model takes as input mention head candidates 4Available at http://cogcomp.cs.illinois. edu/page/software_view/Coref (Sec. 3) and jointly (1) determines if they are indeed mention heads and (2) learns a similarity metric between mentions. This is done by simultaneously learning a binary mention head detection classifier and a mention-pair coreference classifier. The mention head detection model here is mainly trained to differentiate valid mention heads from invalid ones. By learning and making decisions jointly, it also serves as a singleton mention head clas</context>
+<context position="12966" citStr="Chang et al., 2011" startWordPosition="2025" endWordPosition="2028">ized Pointwise Mutual Information (NPMI) on the tokens across a mention head boundary 7) Feature conjunctions. Altogether there are hundreds of thousands of sparse features. 2.2 ILP-based Mention-Pair Coreference Let M be the set of all mentions. We train a coreference model by learning a pairwise mention scoring function. Specifically, given a mention-pair (u,v) (u,v E M, u is the antecedent of v), we learn a leftlinking scoring function fu,v = w2 φ(u,v), where φ(u,v) is a pairwise feature vector and w2 is the weight vector. The inference algorithm is inspired by the best-left-link approach (Chang et al., 2011), where they solve the following ILP problem: argmax ∑ y u&lt;v,u,vEM s.t. ∑ yu,v G 1, bv E M, (1) u&lt;v yu,v E {0,1} bu,v E M. Here, yu,v = 1 iff mentions u,v are directly linked. Thus, we can construct a forest and the mentions in the same connected component (i.e., in the same tree) are co-referred. For this mention-pair coreference model φ(u,v), we use the same set of features used in Bengtson and Roth (2008). fu,vyu,v, 14 2.3 Joint Inference Framework We extend expression (1) to facilitate joint inference on mention heads and coreference as follows: argmax ∑ fu,vyu,v + ∑ gmym, y u&lt;v,u,v∈M m∈M </context>
+<context position="36573" citStr="Chang et al., 2011" startWordPosition="5833" endWordPosition="5836">5 10.44 H-Joint-Mx 35.49 22.60 HeadH 22.40 10.58 JointH 11.81 13.75 H-Joint-MH 34.21 24.33 Table 5: Analysis of performance improvement in terms of Mention Detection Error Reduction (MDER) and Performance Gap Reduction (PGR) for coreference resolution on the ACE-2004 and CoNLL-2012 datasets. “Head” represents the mention head candidate generation module, “Joint” represents the joint learning and inference framework, and “H-JointM” indicates the end-to-end system. Cardie, 2002; Bengtson and Roth, 2008; Soon et al., 2001). The introduction of ILP methods has influenced the coreference area too (Chang et al., 2011; Denis and Baldridge, 2007). In this paper, we use the Constrained Latent Left-Linking Model (CL3M) described in Chang et al. (2013) in our experiments. The task of mention detection is closely related to Named Entity Recognition (NER). Punyakanok and Roth (2001) thoroughly study phrase identification in sentences and propose three different general approaches. They aim to learn several different local classifiers and combine them to optimally satisfy some global constraints. Cardie and Pierce (1998) propose to select certain rules based on a given corpus, to identify base noun phrases. Howev</context>
+</contexts>
+<marker>Chang, Samdani, Rozovskaya, Rizzolo, Sammons, Roth, 2011</marker>
+<rawString>K. Chang, R. Samdani, A. Rozovskaya, N. Rizzolo, M. Sammons, and D. Roth. 2011. Inference protocols for coreference resolution. In CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K-W Chang</author>
+<author>R Samdani</author>
+<author>D Roth</author>
+</authors>
+<title>A constrained latent variable model for coreference resolution.</title>
+<date>2013</date>
+<booktitle>In EMNLP.</booktitle>
+<contexts>
+<context position="1406" citStr="Chang et al., 2013" startWordPosition="210" endWordPosition="213">raw text, outperforming existing state-ofart systems on both the ACE-2004 and the CoNLL-2012 datasets. At the same time, our joint approach is shown to improve mention detection by close to 15% F1. One key insight underlying our approach is that identifying and co-referring mention heads is not only sufficient but is more robust than working with complete mentions. 1 Introduction Mention detection is rarely studied as a stand-alone research problem (Recasens et al. (2013) is one key exception). Most coreference resolution work simply mentions it in passing as a module in the pipelined system (Chang et al., 2013; Durrett and Klein, 2013; Lee et al., 2011; Bj¨orkelund and Kuhn, 2014). However, the lack of emphasis is not due to this being a minor issue, but rather, we think, its difficulty. Indeed, many papers report results in terms of gold mentions versus system generated mentions, as shown in Table 1. Current state-of-the-art systems show a very significant drop in performance when running on system generated mentions. These performance gaps are worrisome, since the real goal of NLP systems is to process raw data. System Dataset Gold Predict Gap Illinois CoNLL-12 77.05 60.00 17.05 Illinois CoNLL-11</context>
+<context position="10904" citStr="Chang et al. (2013)" startWordPosition="1694" endWordPosition="1697">d mentions and reduce the performance gap compared to using gold mentions. The rest of the paper is organized as follows. We explain the joint head-coreference learning and inference framework in Sec. 2. Our mention head candidate generation module and mention boundary detection module are described in Sec. 3. We report our experimental results in Sec. 4, review related work in Sec. 5 and conclude in Sec. 6. 2 A Joint Head-Coreference Framework This section describes our joint coreference resolution and mention head detection framework. Our work is inspired by the latent left-linking model in Chang et al. (2013) and the ILP formulation from Chang et al. (2011). The joint learning and inference model takes as input mention head candidates 4Available at http://cogcomp.cs.illinois. edu/page/software_view/Coref (Sec. 3) and jointly (1) determines if they are indeed mention heads and (2) learns a similarity metric between mentions. This is done by simultaneously learning a binary mention head detection classifier and a mention-pair coreference classifier. The mention head detection model here is mainly trained to differentiate valid mention heads from invalid ones. By learning and making decisions jointly</context>
+<context position="16822" citStr="Chang et al. (2013)" startWordPosition="2705" endWordPosition="2708">Ctrans,m(w1) = (w&gt; 1 ϕ(u0) − Ω(u0))ϕ(u0)Ω(m). The partial subgradient w.r.t. mention head m for the coreference weight vector w2 is given by ∇w2,mC(w1,w2) = λ2w2+ ⎨⎪ ⎧ ⎪⎩ 0 if Ω(m) = 0 and Ω(u0) = 0. φ(u0,m) − φ(u00,m) if Ω(m) = 1, φ(u0,m) if Ω(m) = 0 and Ω(u0) = 1, (3) Here λ1 and λ2 are regularization coefficients which are tuned on the development set. To learn the mention head detection model, we consider two different parts of the gradient in expression (2). ∇Clocal,m(w1) is exactly the local gradient of mention head m while we add ∇Ctrans,m(w1) to represent 5More details can be found in Chang et al. (2013). The difference here is that we also consider the validity of mention heads using Ω(u),Ω(m) 15 the gradient for mention head u&apos;, the mention head chosen by the current best-left-linking model for m. This serves to maximize the margin between valid mention heads and invalid ones. As invalid mention heads will not be linked to any other mention head, ∇trans is zero when m is invalid. When training the mention-pair coreference model, we only consider gradients when at least one of the two mention heads m,u&apos; is valid, as shown in expression (3). When mention head m is valid (n(m) = 1), the gradie</context>
+<context position="28106" citStr="Chang et al. (2013)" startWordPosition="4520" endWordPosition="4523">amed entities are directly set as heads. We set these extracted heads as gold, which enables us to train the two layer BILOU-classifier described in Sec. 3.1.1. The nonoverlapping mention head assumption in Sec. 3.1.1 can be verified empirically on both ACE-2004 and OntoNotes-5.0 datasets. Baseline Systems We choose three publicly available state-of-the-art end-to-end coreference systems as our baselines: Stanford system (Lee et al., 2011), Berkeley system (Durrett and Klein, 2014) and HOTCoref system (Bj¨orkelund and Kuhn, 2014). Developed Systems Our developed system is built on the work by Chang et al. (2013), using Constrained Latent Left-Linking Model (CL3M) as our mention-pair coreference model in the joint framework10. When the CL3M coreference system uses gold mentions or heads, we call the system Gold; when it uses predicted mentions or heads, we call the system Predicted. The mention head candidate generation module along with mention boundary detection module can be grouped together to form a complete mention detection system, and we call it H-M-MD. We can feed the predicted mentions from H-M-MD directly into the mention-pair coref9No parsing information is needed at evaluation time. 10We </context>
+<context position="36706" citStr="Chang et al. (2013)" startWordPosition="5854" endWordPosition="5857">ent in terms of Mention Detection Error Reduction (MDER) and Performance Gap Reduction (PGR) for coreference resolution on the ACE-2004 and CoNLL-2012 datasets. “Head” represents the mention head candidate generation module, “Joint” represents the joint learning and inference framework, and “H-JointM” indicates the end-to-end system. Cardie, 2002; Bengtson and Roth, 2008; Soon et al., 2001). The introduction of ILP methods has influenced the coreference area too (Chang et al., 2011; Denis and Baldridge, 2007). In this paper, we use the Constrained Latent Left-Linking Model (CL3M) described in Chang et al. (2013) in our experiments. The task of mention detection is closely related to Named Entity Recognition (NER). Punyakanok and Roth (2001) thoroughly study phrase identification in sentences and propose three different general approaches. They aim to learn several different local classifiers and combine them to optimally satisfy some global constraints. Cardie and Pierce (1998) propose to select certain rules based on a given corpus, to identify base noun phrases. However, the phrases detected are not necessarily mentions that we need to discover. Ratinov and Roth (2009) present detailed studies on t</context>
+</contexts>
+<marker>Chang, Samdani, Roth, 2013</marker>
+<rawString>K.-W. Chang, R. Samdani, and D. Roth. 2013. A constrained latent variable model for coreference resolution. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Church</author>
+</authors>
+<title>A stochastic parts program and noun phrase parser for unrestricted text.</title>
+<date>1988</date>
+<booktitle>In ANLP.</booktitle>
+<contexts>
+<context position="37858" citStr="Church (1988)" startWordPosition="6030" endWordPosition="6031">scover. Ratinov and Roth (2009) present detailed studies on the task of named entity recognition, which discusses and compares different methods on multiple aspects including chunk representation, inference method, utility of non-local features, and integration of external knowledge. NER can be regarded as a sequential labeling problem, which can be modeled by several proposed models, e.g. Hidden Markov Model (Rabiner, 1989) or Conditional Random Fields (Sarawagi and Cohen, 2004). The typical BIO representation was introduced in Ramshaw and Marcus (1995); OC representations were introduced in Church (1988), while Finkel and Manning (2009) further study nested named entity recognition, which employs a tree structure as a representation of identifying named entities within other named entities. The most relevant study on mentions in the context of coreference was done in Recasens et al. (2013); this work studies distinguishing single mentions from coreferent mentions. Our joint framework provides similar insights, where the added mention decision variable partly reflects if the mention is singleton or not. Several recent works suggest studying coreference jointly with other tasks. Lee et al. (201</context>
+</contexts>
+<marker>Church, 1988</marker>
+<rawString>K. Church. 1988. A stochastic parts program and noun phrase parser for unrestricted text. In ANLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Collins</author>
+</authors>
+<title>Head-driven Statistical Models for Natural Language Parsing.</title>
+<date>1999</date>
+<tech>Ph.D. thesis,</tech>
+<institution>Computer Science Department, University of Pennsylvenia.</institution>
+<contexts>
+<context position="18905" citStr="Collins, 1999" startWordPosition="3060" endWordPosition="3061">ntion heads from valid ones, and thus has the ability to preserve valid singleton heads. Most of the head mentions proposed by the algorithms described in Sec. 3 are positive examples. We ensure a balanced training of the mention head detection model by adding sub-sampled invalid mention head candidates as negative examples. Specifically, after mention head candidate generation (described in Sec. 3), we train on a set of candidates with precision larger than 50%. We then use Illinois Chunker (Punyakanok and Roth, 2001)6 to extract more noun phrases from the text and employ Collins head rules (Collins, 1999) to identify their heads. When these extracted heads do not overlap with gold mention heads, we treat them as negative examples. We note that the aforementioned joint framework can take as input either complete mention candidates or mention head candidates. However, in this paper we only feed mention heads into it. Our experimental results support our intuition that this provides better results. 6http://cogcomp.cs.illinois.edu/page/ software_view/Chunker 3 Mention Detection Modules This section describes the module that generates our mention head candidates, and then how the mention heads are </context>
+<context position="27296" citStr="Collins, 1999" startWordPosition="4399" endWordPosition="4400">erence resolution for all systems on the ACE-2004 dataset. Subscripts (M, H) indicate evaluations on (mentions, mention heads) respectively. For gold mentions and mention heads, they yield the same performance for coreference. Our proposed H-Joint-M system achieves the highest performance. Parameters of our proposed system are tuned as a = 0.9, fl = 0.8, �1 = 0.2 and I2 = 0.3. The ACE-2004 dataset is annotated with both mention and mention heads, while the OntoNotes5.0 dataset only has mention annotations. Therefore, we preprocess Ontonote-5.0 to derive mention heads using Collins head rules (Collins, 1999) with gold constituency parsing information and gold named entity information. The parsing information9 is only needed to generate training data for the mention head candidate generator and named entities are directly set as heads. We set these extracted heads as gold, which enables us to train the two layer BILOU-classifier described in Sec. 3.1.1. The nonoverlapping mention head assumption in Sec. 3.1.1 can be verified empirically on both ACE-2004 and OntoNotes-5.0 datasets. Baseline Systems We choose three publicly available state-of-the-art end-to-end coreference systems as our baselines: </context>
+</contexts>
+<marker>Collins, 1999</marker>
+<rawString>M. Collins. 1999. Head-driven Statistical Models for Natural Language Parsing. Ph.D. thesis, Computer Science Department, University of Pennsylvenia.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Connolly</author>
+<author>J Burger</author>
+<author>D Day</author>
+</authors>
+<title>A machine learning approach to anaphoric reference.</title>
+<date>1997</date>
+<booktitle>In New Methods in Language Processing.</booktitle>
+<contexts>
+<context position="35602" citStr="Connolly et al., 1997" startWordPosition="5688" endWordPosition="5691">ts on PGR for coreference resolution. On both datasets, we achieve more than 20% performance gap reduction for coreference. 5 Related Work Coreference resolution has been extensively studied, with several state-of-the-art approaches addressing this task (Lee et al., 2011; Durrett and Klein, 2013; Bj¨orkelund and Kuhn, 2014; Song et al., 2012). Many of the early rule-based systems like Hobbs (1978) and Lappin and Leass (1994) gained considerable popularity. The early designs were easy to understand and the rules were designed manually. Machine learning approaches were introduced in many works (Connolly et al., 1997; Ng and 16We use bootstrapping resampling (10 times from the test data) with signed rank test. All the improvements shown are statistically significant. 19 ACE-2004 MDER PGR(AVG) Headx 37.93 12.29 Jointx 17.43 13.99 H-Joint-Mx 55.36 26.28 HeadH 34.00 7.01 JointH 19.22 15.21 H-Joint-MH 53.22 22.22 CoNLL-2012 MDER PGR(AVG) Headx 25.04 12.16 Jointx 10.45 10.44 H-Joint-Mx 35.49 22.60 HeadH 22.40 10.58 JointH 11.81 13.75 H-Joint-MH 34.21 24.33 Table 5: Analysis of performance improvement in terms of Mention Detection Error Reduction (MDER) and Performance Gap Reduction (PGR) for coreference resolu</context>
+</contexts>
+<marker>Connolly, Burger, Day, 1997</marker>
+<rawString>D. Connolly, J. Burger, and D. Day. 1997. A machine learning approach to anaphoric reference. In New Methods in Language Processing.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Culotta</author>
+<author>M Wick</author>
+<author>A McCallum</author>
+</authors>
+<title>Firstorder probabilistic models for coreference resolution.</title>
+<date>2007</date>
+<booktitle>In NAACL.</booktitle>
+<contexts>
+<context position="25980" citStr="Culotta et al., 2007" startWordPosition="4191" endWordPosition="4194">eriments on the two standard coreference resolution datasets, ACE-2004 (NIST, 2004) and OntoNotes-5.0 (Hovy et al., 2006). Our approach results in a substantial reduction in the coreference performance gap between gold and predicted mentions, and significantly outperforms existing stat-of-the-art results on coreference resolution; in addition, it achieves significant performance improvement on MD for both datasets. 4.1 Experimental Setup Datasets The ACE-2004 dataset contains 443 documents. We use a standard split of 268 training documents, 68 development documents, and 106 testing documents (Culotta et al., 2007; Bengtson and Roth, 2008). The OntoNotes-5.0 dataset, which is released for the CoNLL-2012 Shared Task (Pradhan et al., 2012), contains 3,145 annotated documents. These documents come from a wide range of sources which include newswire, bible, transcripts, magazines, and web blogs. We report results on the test documents for both datasets. 17 MUC B3 CEAFe AVG GoldM/H 78.17 81.64 78.45 79.42 StanfordM 63.89 70.33 70.21 68.14 PredictedM 64.28 70.37 70.16 68.27 H-M-CorefM 65.81 71.97 71.14 69.64 H-Joint-MM 67.28 73.06 73.25 71.20 StanfordH 70.28 73.93 73.04 72.42 PredictedH 71.35 75.33 74.02 73.</context>
+</contexts>
+<marker>Culotta, Wick, McCallum, 2007</marker>
+<rawString>A. Culotta, M. Wick, and A. McCallum. 2007. Firstorder probabilistic models for coreference resolution. In NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Denis</author>
+<author>J Baldridge</author>
+</authors>
+<title>Joint determination of anaphoricity and coreference resolution using integer programming.</title>
+<date>2007</date>
+<booktitle>In NAACL.</booktitle>
+<contexts>
+<context position="36601" citStr="Denis and Baldridge, 2007" startWordPosition="5837" endWordPosition="5840">5.49 22.60 HeadH 22.40 10.58 JointH 11.81 13.75 H-Joint-MH 34.21 24.33 Table 5: Analysis of performance improvement in terms of Mention Detection Error Reduction (MDER) and Performance Gap Reduction (PGR) for coreference resolution on the ACE-2004 and CoNLL-2012 datasets. “Head” represents the mention head candidate generation module, “Joint” represents the joint learning and inference framework, and “H-JointM” indicates the end-to-end system. Cardie, 2002; Bengtson and Roth, 2008; Soon et al., 2001). The introduction of ILP methods has influenced the coreference area too (Chang et al., 2011; Denis and Baldridge, 2007). In this paper, we use the Constrained Latent Left-Linking Model (CL3M) described in Chang et al. (2013) in our experiments. The task of mention detection is closely related to Named Entity Recognition (NER). Punyakanok and Roth (2001) thoroughly study phrase identification in sentences and propose three different general approaches. They aim to learn several different local classifiers and combine them to optimally satisfy some global constraints. Cardie and Pierce (1998) propose to select certain rules based on a given corpus, to identify base noun phrases. However, the phrases detected are</context>
+</contexts>
+<marker>Denis, Baldridge, 2007</marker>
+<rawString>P. Denis and J. Baldridge. 2007. Joint determination of anaphoricity and coreference resolution using integer programming. In NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Durrett</author>
+<author>D Klein</author>
+</authors>
+<title>Easy victories and uphill battles in coreference resolution.</title>
+<date>2013</date>
+<booktitle>In EMNLP.</booktitle>
+<contexts>
+<context position="1431" citStr="Durrett and Klein, 2013" startWordPosition="214" endWordPosition="217">ing existing state-ofart systems on both the ACE-2004 and the CoNLL-2012 datasets. At the same time, our joint approach is shown to improve mention detection by close to 15% F1. One key insight underlying our approach is that identifying and co-referring mention heads is not only sufficient but is more robust than working with complete mentions. 1 Introduction Mention detection is rarely studied as a stand-alone research problem (Recasens et al. (2013) is one key exception). Most coreference resolution work simply mentions it in passing as a module in the pipelined system (Chang et al., 2013; Durrett and Klein, 2013; Lee et al., 2011; Bj¨orkelund and Kuhn, 2014). However, the lack of emphasis is not due to this being a minor issue, but rather, we think, its difficulty. Indeed, many papers report results in terms of gold mentions versus system generated mentions, as shown in Table 1. Current state-of-the-art systems show a very significant drop in performance when running on system generated mentions. These performance gaps are worrisome, since the real goal of NLP systems is to process raw data. System Dataset Gold Predict Gap Illinois CoNLL-12 77.05 60.00 17.05 Illinois CoNLL-11 77.22 60.18 17.04 Illino</context>
+<context position="35277" citStr="Durrett and Klein, 2013" startWordPosition="5637" endWordPosition="5640">e ratio of performance improvement for coreference over the performance gap for coreference. Results on the ACE-2004 and CoNLL-2012 datasets are shown in Table 5.16 The mention head candidate generation module has a bigger impact on MDER compared to the joint framework. However, they both have the same level of positive effects on PGR for coreference resolution. On both datasets, we achieve more than 20% performance gap reduction for coreference. 5 Related Work Coreference resolution has been extensively studied, with several state-of-the-art approaches addressing this task (Lee et al., 2011; Durrett and Klein, 2013; Bj¨orkelund and Kuhn, 2014; Song et al., 2012). Many of the early rule-based systems like Hobbs (1978) and Lappin and Leass (1994) gained considerable popularity. The early designs were easy to understand and the rules were designed manually. Machine learning approaches were introduced in many works (Connolly et al., 1997; Ng and 16We use bootstrapping resampling (10 times from the test data) with signed rank test. All the improvements shown are statistically significant. 19 ACE-2004 MDER PGR(AVG) Headx 37.93 12.29 Jointx 17.43 13.99 H-Joint-Mx 55.36 26.28 HeadH 34.00 7.01 JointH 19.22 15.21</context>
+</contexts>
+<marker>Durrett, Klein, 2013</marker>
+<rawString>G. Durrett and D. Klein. 2013. Easy victories and uphill battles in coreference resolution. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Durrett</author>
+<author>D Klein</author>
+</authors>
+<title>A joint model for entity analysis: Coreference, typing, and linking.</title>
+<date>2014</date>
+<contexts>
+<context position="27973" citStr="Durrett and Klein, 2014" startWordPosition="4498" endWordPosition="4501">named entity information. The parsing information9 is only needed to generate training data for the mention head candidate generator and named entities are directly set as heads. We set these extracted heads as gold, which enables us to train the two layer BILOU-classifier described in Sec. 3.1.1. The nonoverlapping mention head assumption in Sec. 3.1.1 can be verified empirically on both ACE-2004 and OntoNotes-5.0 datasets. Baseline Systems We choose three publicly available state-of-the-art end-to-end coreference systems as our baselines: Stanford system (Lee et al., 2011), Berkeley system (Durrett and Klein, 2014) and HOTCoref system (Bj¨orkelund and Kuhn, 2014). Developed Systems Our developed system is built on the work by Chang et al. (2013), using Constrained Latent Left-Linking Model (CL3M) as our mention-pair coreference model in the joint framework10. When the CL3M coreference system uses gold mentions or heads, we call the system Gold; when it uses predicted mentions or heads, we call the system Predicted. The mention head candidate generation module along with mention boundary detection module can be grouped together to form a complete mention detection system, and we call it H-M-MD. We can fe</context>
+<context position="31221" citStr="Durrett and Klein (2014)" startWordPosition="5007" endWordPosition="5010">04 and CoNLL-2012 datasets is shown in Table 2 and Table 3 respectively.12 These results show that our developed system H-Joint-M 11The latest scorer is version v8.01, but MUC, B3, CEAFe and CoNLL average scores are not changed. For evaluation on ACE-2004, we convert the system output and gold annotations into CoNLL format. 12We do not provide results from Berkeley and HOTCoref on ACE-2004 dataset as they do not directly support ACE input. Results for HOTCoref are slightly different from the results reported in Bj¨orkelund and Kuhn (2014). For Berkeley system, we use the reported results from Durrett and Klein (2014). 18 shows significant improvement on all metrics for both datasets. Existing systems only report results on mentions. Here, we also show their performance evaluated on mention heads. When evaluated on mention heads rather than mentions13, we can always expect a performance increase for all systems on both datasets. Even though evaluating on mentions is more common in the literature, it is often enough to identify just mention heads in coreference chains (as shown in the example from Sec. 1). H-M-Coref can already bring substantial performance improvement, which indicates that it is helpful fo</context>
+<context position="38541" citStr="Durrett and Klein (2014)" startWordPosition="6133" endWordPosition="6136">d entity recognition, which employs a tree structure as a representation of identifying named entities within other named entities. The most relevant study on mentions in the context of coreference was done in Recasens et al. (2013); this work studies distinguishing single mentions from coreferent mentions. Our joint framework provides similar insights, where the added mention decision variable partly reflects if the mention is singleton or not. Several recent works suggest studying coreference jointly with other tasks. Lee et al. (2012) model entity coreference and event coreference jointly; Durrett and Klein (2014) consider joint coreference and entity-linking. The work closest to ours is that of Lassalle and Denis (2015), which studies a joint anaphoricity detection and coreference resolution framework. While their inference objective is similar, their work assumes gold mentions are given and thus their modeling is very different. 6 Conclusion This paper proposes a joint inference approach to the end-to-end coreference resolution problem. By moving to identify mention heads rather than mentions, and by developing an ILP-based, joint, online learning and inference approach, we close a significant fracti</context>
+</contexts>
+<marker>Durrett, Klein, 2014</marker>
+<rawString>G. Durrett and D. Klein. 2014. A joint model for entity analysis: Coreference, typing, and linking.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Finkel</author>
+<author>C Manning</author>
+</authors>
+<title>Nested named entity recognition.</title>
+<date>2009</date>
+<booktitle>In EMNLP.</booktitle>
+<contexts>
+<context position="37891" citStr="Finkel and Manning (2009)" startWordPosition="6033" endWordPosition="6036">oth (2009) present detailed studies on the task of named entity recognition, which discusses and compares different methods on multiple aspects including chunk representation, inference method, utility of non-local features, and integration of external knowledge. NER can be regarded as a sequential labeling problem, which can be modeled by several proposed models, e.g. Hidden Markov Model (Rabiner, 1989) or Conditional Random Fields (Sarawagi and Cohen, 2004). The typical BIO representation was introduced in Ramshaw and Marcus (1995); OC representations were introduced in Church (1988), while Finkel and Manning (2009) further study nested named entity recognition, which employs a tree structure as a representation of identifying named entities within other named entities. The most relevant study on mentions in the context of coreference was done in Recasens et al. (2013); this work studies distinguishing single mentions from coreferent mentions. Our joint framework provides similar insights, where the added mention decision variable partly reflects if the mention is singleton or not. Several recent works suggest studying coreference jointly with other tasks. Lee et al. (2012) model entity coreference and e</context>
+</contexts>
+<marker>Finkel, Manning, 2009</marker>
+<rawString>J. Finkel and C. Manning. 2009. Nested named entity recognition. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J R Hobbs</author>
+</authors>
+<title>Resolving pronoun references.</title>
+<date>1978</date>
+<journal>Lingua.</journal>
+<contexts>
+<context position="35381" citStr="Hobbs (1978)" startWordPosition="5656" endWordPosition="5657">4 and CoNLL-2012 datasets are shown in Table 5.16 The mention head candidate generation module has a bigger impact on MDER compared to the joint framework. However, they both have the same level of positive effects on PGR for coreference resolution. On both datasets, we achieve more than 20% performance gap reduction for coreference. 5 Related Work Coreference resolution has been extensively studied, with several state-of-the-art approaches addressing this task (Lee et al., 2011; Durrett and Klein, 2013; Bj¨orkelund and Kuhn, 2014; Song et al., 2012). Many of the early rule-based systems like Hobbs (1978) and Lappin and Leass (1994) gained considerable popularity. The early designs were easy to understand and the rules were designed manually. Machine learning approaches were introduced in many works (Connolly et al., 1997; Ng and 16We use bootstrapping resampling (10 times from the test data) with signed rank test. All the improvements shown are statistically significant. 19 ACE-2004 MDER PGR(AVG) Headx 37.93 12.29 Jointx 17.43 13.99 H-Joint-Mx 55.36 26.28 HeadH 34.00 7.01 JointH 19.22 15.21 H-Joint-MH 53.22 22.22 CoNLL-2012 MDER PGR(AVG) Headx 25.04 12.16 Jointx 10.45 10.44 H-Joint-Mx 35.49 2</context>
+</contexts>
+<marker>Hobbs, 1978</marker>
+<rawString>J. R. Hobbs. 1978. Resolving pronoun references. Lingua.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Hovy</author>
+<author>M Marcus</author>
+<author>M Palmer</author>
+<author>L Ramshaw</author>
+<author>R Weischedel</author>
+</authors>
+<title>Ontonotes: The 90% solution.</title>
+<date>2006</date>
+<booktitle>In Proceedings of HLT/NAACL.</booktitle>
+<contexts>
+<context position="25481" citStr="Hovy et al., 2006" startWordPosition="4115" endWordPosition="4118">We construct negative examples as (oi_1,ha,b,L) and (oj+1,ha,b,R). Once trained, the binary classifier takes in the head, a token and the direction of the token relative to the head, and decides whether the token is inside or outside the mention corresponding to the head. At test time, this classifier is used around each confirmed head to determine the mention boundaries. The features used here are similar to the mention head detection model described in Sec. 2.1. 4 Experiments We present experiments on the two standard coreference resolution datasets, ACE-2004 (NIST, 2004) and OntoNotes-5.0 (Hovy et al., 2006). Our approach results in a substantial reduction in the coreference performance gap between gold and predicted mentions, and significantly outperforms existing stat-of-the-art results on coreference resolution; in addition, it achieves significant performance improvement on MD for both datasets. 4.1 Experimental Setup Datasets The ACE-2004 dataset contains 443 documents. We use a standard split of 268 training documents, 68 development documents, and 106 testing documents (Culotta et al., 2007; Bengtson and Roth, 2008). The OntoNotes-5.0 dataset, which is released for the CoNLL-2012 Shared Ta</context>
+</contexts>
+<marker>Hovy, Marcus, Palmer, Ramshaw, Weischedel, 2006</marker>
+<rawString>E. Hovy, M. Marcus, M. Palmer, L. Ramshaw, and R. Weischedel. 2006. Ontonotes: The 90% solution. In Proceedings of HLT/NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Jackson</author>
+<author>M Craven</author>
+</authors>
+<title>Learning sparse perceptrons.</title>
+<date>1996</date>
+<booktitle>Proceedings of the 1996Advances in Neural Information Processing Systems.</booktitle>
+<contexts>
+<context position="21699" citStr="Jackson and Craven, 1996" startWordPosition="3502" endWordPosition="3506">as advantages over traditional BIO-representation, as shown, e.g. in Ratinov and Roth (2009). The BILOUrepresentation suggests learning classifiers that identify the Beginning, Inside and Last tokens of multi-token chunks as well as Unit-length chunks. The problem is then transformed into a simple, but constrained, 5-class classification problem. The BILOU-classifier shares all features with the mention head detection model described in Sec. 2.1 except for two: length of mention heads and NPMI over head boundary. For each instance, the feature 16 vector is sparse and we use sparse perceptron (Jackson and Craven, 1996) for supervised training. We also apply a two layer prediction aggregation. First, we apply a baseline BILOU-classifier, and then use the resulting predictions as additional features in a second level of inference to take interactions into account in an efficient manner. A similar technique has been applied in Ratinov and Roth (2009), and has shown favorable results over other ”standard” sequential prediction models. Named Entity Recognition Component We use existing tools to extract named entities as additional mention head candidates. We choose the state-ofthe-art “Illinois Named Entity Tagg</context>
+</contexts>
+<marker>Jackson, Craven, 1996</marker>
+<rawString>J. Jackson and M. Craven. 1996. Learning sparse perceptrons. Proceedings of the 1996Advances in Neural Information Processing Systems.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Lappin</author>
+<author>H Leass</author>
+</authors>
+<title>An algorithm for pronominal anaphora resolution. Computational linguistics.</title>
+<date>1994</date>
+<contexts>
+<context position="35409" citStr="Lappin and Leass (1994)" startWordPosition="5659" endWordPosition="5662">datasets are shown in Table 5.16 The mention head candidate generation module has a bigger impact on MDER compared to the joint framework. However, they both have the same level of positive effects on PGR for coreference resolution. On both datasets, we achieve more than 20% performance gap reduction for coreference. 5 Related Work Coreference resolution has been extensively studied, with several state-of-the-art approaches addressing this task (Lee et al., 2011; Durrett and Klein, 2013; Bj¨orkelund and Kuhn, 2014; Song et al., 2012). Many of the early rule-based systems like Hobbs (1978) and Lappin and Leass (1994) gained considerable popularity. The early designs were easy to understand and the rules were designed manually. Machine learning approaches were introduced in many works (Connolly et al., 1997; Ng and 16We use bootstrapping resampling (10 times from the test data) with signed rank test. All the improvements shown are statistically significant. 19 ACE-2004 MDER PGR(AVG) Headx 37.93 12.29 Jointx 17.43 13.99 H-Joint-Mx 55.36 26.28 HeadH 34.00 7.01 JointH 19.22 15.21 H-Joint-MH 53.22 22.22 CoNLL-2012 MDER PGR(AVG) Headx 25.04 12.16 Jointx 10.45 10.44 H-Joint-Mx 35.49 22.60 HeadH 22.40 10.58 Joint</context>
+</contexts>
+<marker>Lappin, Leass, 1994</marker>
+<rawString>S. Lappin and H. Leass. 1994. An algorithm for pronominal anaphora resolution. Computational linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Lassalle</author>
+<author>P Denis</author>
+</authors>
+<title>Joint anaphoricity detection and coreference resolution with constrained latent structures.</title>
+<date>2015</date>
+<contexts>
+<context position="38650" citStr="Lassalle and Denis (2015)" startWordPosition="6150" endWordPosition="6153">n other named entities. The most relevant study on mentions in the context of coreference was done in Recasens et al. (2013); this work studies distinguishing single mentions from coreferent mentions. Our joint framework provides similar insights, where the added mention decision variable partly reflects if the mention is singleton or not. Several recent works suggest studying coreference jointly with other tasks. Lee et al. (2012) model entity coreference and event coreference jointly; Durrett and Klein (2014) consider joint coreference and entity-linking. The work closest to ours is that of Lassalle and Denis (2015), which studies a joint anaphoricity detection and coreference resolution framework. While their inference objective is similar, their work assumes gold mentions are given and thus their modeling is very different. 6 Conclusion This paper proposes a joint inference approach to the end-to-end coreference resolution problem. By moving to identify mention heads rather than mentions, and by developing an ILP-based, joint, online learning and inference approach, we close a significant fraction of the existing gap between coreference systems’ performance on gold mentions and their performance on raw</context>
+</contexts>
+<marker>Lassalle, Denis, 2015</marker>
+<rawString>E. Lassalle and P. Denis. 2015. Joint anaphoricity detection and coreference resolution with constrained latent structures.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>H Lee</author>
+<author>Y Peirsman</author>
+<author>A Chang</author>
+<author>N Chambers</author>
+<author>M Surdeanu</author>
+<author>D Jurafsky</author>
+</authors>
+<title>Stanford’s multipass sieve coreference resolution system at the conll2011 shared task.</title>
+<date>2011</date>
+<booktitle>In Proceedings of the CoNLL-2011 Shared Task.</booktitle>
+<contexts>
+<context position="1449" citStr="Lee et al., 2011" startWordPosition="218" endWordPosition="221">systems on both the ACE-2004 and the CoNLL-2012 datasets. At the same time, our joint approach is shown to improve mention detection by close to 15% F1. One key insight underlying our approach is that identifying and co-referring mention heads is not only sufficient but is more robust than working with complete mentions. 1 Introduction Mention detection is rarely studied as a stand-alone research problem (Recasens et al. (2013) is one key exception). Most coreference resolution work simply mentions it in passing as a module in the pipelined system (Chang et al., 2013; Durrett and Klein, 2013; Lee et al., 2011; Bj¨orkelund and Kuhn, 2014). However, the lack of emphasis is not due to this being a minor issue, but rather, we think, its difficulty. Indeed, many papers report results in terms of gold mentions versus system generated mentions, as shown in Table 1. Current state-of-the-art systems show a very significant drop in performance when running on system generated mentions. These performance gaps are worrisome, since the real goal of NLP systems is to process raw data. System Dataset Gold Predict Gap Illinois CoNLL-12 77.05 60.00 17.05 Illinois CoNLL-11 77.22 60.18 17.04 Illinois ACE-04 79.42 68</context>
+<context position="27930" citStr="Lee et al., 2011" startWordPosition="4492" endWordPosition="4495">tuency parsing information and gold named entity information. The parsing information9 is only needed to generate training data for the mention head candidate generator and named entities are directly set as heads. We set these extracted heads as gold, which enables us to train the two layer BILOU-classifier described in Sec. 3.1.1. The nonoverlapping mention head assumption in Sec. 3.1.1 can be verified empirically on both ACE-2004 and OntoNotes-5.0 datasets. Baseline Systems We choose three publicly available state-of-the-art end-to-end coreference systems as our baselines: Stanford system (Lee et al., 2011), Berkeley system (Durrett and Klein, 2014) and HOTCoref system (Bj¨orkelund and Kuhn, 2014). Developed Systems Our developed system is built on the work by Chang et al. (2013), using Constrained Latent Left-Linking Model (CL3M) as our mention-pair coreference model in the joint framework10. When the CL3M coreference system uses gold mentions or heads, we call the system Gold; when it uses predicted mentions or heads, we call the system Predicted. The mention head candidate generation module along with mention boundary detection module can be grouped together to form a complete mention detecti</context>
+<context position="35252" citStr="Lee et al., 2011" startWordPosition="5633" endWordPosition="5636"> is computed as the ratio of performance improvement for coreference over the performance gap for coreference. Results on the ACE-2004 and CoNLL-2012 datasets are shown in Table 5.16 The mention head candidate generation module has a bigger impact on MDER compared to the joint framework. However, they both have the same level of positive effects on PGR for coreference resolution. On both datasets, we achieve more than 20% performance gap reduction for coreference. 5 Related Work Coreference resolution has been extensively studied, with several state-of-the-art approaches addressing this task (Lee et al., 2011; Durrett and Klein, 2013; Bj¨orkelund and Kuhn, 2014; Song et al., 2012). Many of the early rule-based systems like Hobbs (1978) and Lappin and Leass (1994) gained considerable popularity. The early designs were easy to understand and the rules were designed manually. Machine learning approaches were introduced in many works (Connolly et al., 1997; Ng and 16We use bootstrapping resampling (10 times from the test data) with signed rank test. All the improvements shown are statistically significant. 19 ACE-2004 MDER PGR(AVG) Headx 37.93 12.29 Jointx 17.43 13.99 H-Joint-Mx 55.36 26.28 HeadH 34.0</context>
+</contexts>
+<marker>Lee, Peirsman, Chang, Chambers, Surdeanu, Jurafsky, 2011</marker>
+<rawString>H. Lee, Y. Peirsman, A. Chang, N. Chambers, M. Surdeanu, and D. Jurafsky. 2011. Stanford’s multipass sieve coreference resolution system at the conll2011 shared task. In Proceedings of the CoNLL-2011 Shared Task.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>H Lee</author>
+<author>M Recasens</author>
+<author>A Chang</author>
+<author>M Surdeanu</author>
+<author>D Jurafsky</author>
+</authors>
+<title>Joint entity and event coreference resolution across documents. In EMNLP.</title>
+<date>2012</date>
+<contexts>
+<context position="38460" citStr="Lee et al. (2012)" startWordPosition="6122" endWordPosition="6125">n Church (1988), while Finkel and Manning (2009) further study nested named entity recognition, which employs a tree structure as a representation of identifying named entities within other named entities. The most relevant study on mentions in the context of coreference was done in Recasens et al. (2013); this work studies distinguishing single mentions from coreferent mentions. Our joint framework provides similar insights, where the added mention decision variable partly reflects if the mention is singleton or not. Several recent works suggest studying coreference jointly with other tasks. Lee et al. (2012) model entity coreference and event coreference jointly; Durrett and Klein (2014) consider joint coreference and entity-linking. The work closest to ours is that of Lassalle and Denis (2015), which studies a joint anaphoricity detection and coreference resolution framework. While their inference objective is similar, their work assumes gold mentions are given and thus their modeling is very different. 6 Conclusion This paper proposes a joint inference approach to the end-to-end coreference resolution problem. By moving to identify mention heads rather than mentions, and by developing an ILP-ba</context>
+</contexts>
+<marker>Lee, Recasens, Chang, Surdeanu, Jurafsky, 2012</marker>
+<rawString>H. Lee, M. Recasens, A. Chang, M. Surdeanu, and D. Jurafsky. 2012. Joint entity and event coreference resolution across documents. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>X Luo</author>
+</authors>
+<title>On coreference resolution performance metrics.</title>
+<date>2005</date>
+<booktitle>In EMNLP.</booktitle>
+<contexts>
+<context position="30102" citStr="Luo, 2005" startWordPosition="4830" endWordPosition="4831">m achieves the highest performance. Parameters of our proposed system are tuned as a = 0.9, fl = 0.9, �1 = 0.25 and A2 = 0.2. erence model that we implemented, resulting in a traditional pipelined end-to-end coreference system, namely H-M-Coref. We name our new proposed end-to-end coreference resolution system incorporating both the mention head candidate generation module and the joint framework as H-Joint-M. Evaluation Metrics We compare all systems using three popular metrics for coreference resolution: MUC (Vilain et al., 1995), B3 (Bagga and Baldwin, 1998), and Entity-based CEAF (CEAFe) (Luo, 2005). We use the average F1 scores (AVG) of these three metrics as the main metric for comparison. We use the v7.0 scorer provided by CoNLL-2012 Shared Task11. We also evaluate the mention detection performance based on precision, recall and F1 score. As mention heads are important for both mention detection and coreference resolution, we also report results evaluated on mention heads. 4.2 Performance for Coreference Resolution Performance of coreference resolution for all systems on the ACE-2004 and CoNLL-2012 datasets is shown in Table 2 and Table 3 respectively.12 These results show that our de</context>
+</contexts>
+<marker>Luo, 2005</marker>
+<rawString>X. Luo. 2005. On coreference resolution performance metrics. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>V Ng</author>
+<author>C Cardie</author>
+</authors>
+<title>Improving machine learning approaches to coreference resolution.</title>
+<date>2002</date>
+<booktitle>In ACL. NIST. 2004. The ACE evaluation plan.</booktitle>
+<marker>Ng, Cardie, 2002</marker>
+<rawString>V. Ng and C. Cardie. 2002. Improving machine learning approaches to coreference resolution. In ACL. NIST. 2004. The ACE evaluation plan.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Pradhan</author>
+<author>A Moschitti</author>
+<author>N Xue</author>
+<author>O Uryupina</author>
+<author>Y Zhang</author>
+</authors>
+<title>CoNLL-2012 shared task: Modeling multilingual unrestricted coreference in OntoNotes.</title>
+<date>2012</date>
+<booktitle>In CoNLL.</booktitle>
+<contexts>
+<context position="26106" citStr="Pradhan et al., 2012" startWordPosition="4210" endWordPosition="4214">r approach results in a substantial reduction in the coreference performance gap between gold and predicted mentions, and significantly outperforms existing stat-of-the-art results on coreference resolution; in addition, it achieves significant performance improvement on MD for both datasets. 4.1 Experimental Setup Datasets The ACE-2004 dataset contains 443 documents. We use a standard split of 268 training documents, 68 development documents, and 106 testing documents (Culotta et al., 2007; Bengtson and Roth, 2008). The OntoNotes-5.0 dataset, which is released for the CoNLL-2012 Shared Task (Pradhan et al., 2012), contains 3,145 annotated documents. These documents come from a wide range of sources which include newswire, bible, transcripts, magazines, and web blogs. We report results on the test documents for both datasets. 17 MUC B3 CEAFe AVG GoldM/H 78.17 81.64 78.45 79.42 StanfordM 63.89 70.33 70.21 68.14 PredictedM 64.28 70.37 70.16 68.27 H-M-CorefM 65.81 71.97 71.14 69.64 H-Joint-MM 67.28 73.06 73.25 71.20 StanfordH 70.28 73.93 73.04 72.42 PredictedH 71.35 75.33 74.02 73.57 H-M-CorefH 71.81 75.69 74.45 73.98 H-Joint-MH 72.74 76.69 75.18 74.87 Table 2: Performance of coreference resolution for al</context>
+</contexts>
+<marker>Pradhan, Moschitti, Xue, Uryupina, Zhang, 2012</marker>
+<rawString>S. Pradhan, A. Moschitti, N. Xue, O. Uryupina, and Y. Zhang. 2012. CoNLL-2012 shared task: Modeling multilingual unrestricted coreference in OntoNotes. In CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>V Punyakanok</author>
+<author>D Roth</author>
+</authors>
+<title>The use of classifiers in sequential inference.</title>
+<date>2001</date>
+<booktitle>In NIPS.</booktitle>
+<contexts>
+<context position="18815" citStr="Punyakanok and Roth, 2001" startWordPosition="3042" endWordPosition="3045">singleton mention heads. Our mention head detection model then only learns to differentiate invalid mention heads from valid ones, and thus has the ability to preserve valid singleton heads. Most of the head mentions proposed by the algorithms described in Sec. 3 are positive examples. We ensure a balanced training of the mention head detection model by adding sub-sampled invalid mention head candidates as negative examples. Specifically, after mention head candidate generation (described in Sec. 3), we train on a set of candidates with precision larger than 50%. We then use Illinois Chunker (Punyakanok and Roth, 2001)6 to extract more noun phrases from the text and employ Collins head rules (Collins, 1999) to identify their heads. When these extracted heads do not overlap with gold mention heads, we treat them as negative examples. We note that the aforementioned joint framework can take as input either complete mention candidates or mention head candidates. However, in this paper we only feed mention heads into it. Our experimental results support our intuition that this provides better results. 6http://cogcomp.cs.illinois.edu/page/ software_view/Chunker 3 Mention Detection Modules This section describes </context>
+<context position="36837" citStr="Punyakanok and Roth (2001)" startWordPosition="5874" endWordPosition="5877">he ACE-2004 and CoNLL-2012 datasets. “Head” represents the mention head candidate generation module, “Joint” represents the joint learning and inference framework, and “H-JointM” indicates the end-to-end system. Cardie, 2002; Bengtson and Roth, 2008; Soon et al., 2001). The introduction of ILP methods has influenced the coreference area too (Chang et al., 2011; Denis and Baldridge, 2007). In this paper, we use the Constrained Latent Left-Linking Model (CL3M) described in Chang et al. (2013) in our experiments. The task of mention detection is closely related to Named Entity Recognition (NER). Punyakanok and Roth (2001) thoroughly study phrase identification in sentences and propose three different general approaches. They aim to learn several different local classifiers and combine them to optimally satisfy some global constraints. Cardie and Pierce (1998) propose to select certain rules based on a given corpus, to identify base noun phrases. However, the phrases detected are not necessarily mentions that we need to discover. Ratinov and Roth (2009) present detailed studies on the task of named entity recognition, which discusses and compares different methods on multiple aspects including chunk representat</context>
+</contexts>
+<marker>Punyakanok, Roth, 2001</marker>
+<rawString>V. Punyakanok and D. Roth. 2001. The use of classifiers in sequential inference. In NIPS.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L R Rabiner</author>
+</authors>
+<title>A tutorial on hidden Markov models and selected applications in speech recognition.</title>
+<date>1989</date>
+<booktitle>Proceedings of the IEEE.</booktitle>
+<contexts>
+<context position="37673" citStr="Rabiner, 1989" startWordPosition="6002" endWordPosition="6003">ie and Pierce (1998) propose to select certain rules based on a given corpus, to identify base noun phrases. However, the phrases detected are not necessarily mentions that we need to discover. Ratinov and Roth (2009) present detailed studies on the task of named entity recognition, which discusses and compares different methods on multiple aspects including chunk representation, inference method, utility of non-local features, and integration of external knowledge. NER can be regarded as a sequential labeling problem, which can be modeled by several proposed models, e.g. Hidden Markov Model (Rabiner, 1989) or Conditional Random Fields (Sarawagi and Cohen, 2004). The typical BIO representation was introduced in Ramshaw and Marcus (1995); OC representations were introduced in Church (1988), while Finkel and Manning (2009) further study nested named entity recognition, which employs a tree structure as a representation of identifying named entities within other named entities. The most relevant study on mentions in the context of coreference was done in Recasens et al. (2013); this work studies distinguishing single mentions from coreferent mentions. Our joint framework provides similar insights, </context>
+</contexts>
+<marker>Rabiner, 1989</marker>
+<rawString>L. R. Rabiner. 1989. A tutorial on hidden Markov models and selected applications in speech recognition. Proceedings of the IEEE.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L A Ramshaw</author>
+<author>M P Marcus</author>
+</authors>
+<title>Text chunking using transformation-based learning.</title>
+<date>1995</date>
+<booktitle>In Proceedings of the Third Annual Workshop on Very Large Corpora.</booktitle>
+<contexts>
+<context position="37805" citStr="Ramshaw and Marcus (1995)" startWordPosition="6020" endWordPosition="6023"> phrases detected are not necessarily mentions that we need to discover. Ratinov and Roth (2009) present detailed studies on the task of named entity recognition, which discusses and compares different methods on multiple aspects including chunk representation, inference method, utility of non-local features, and integration of external knowledge. NER can be regarded as a sequential labeling problem, which can be modeled by several proposed models, e.g. Hidden Markov Model (Rabiner, 1989) or Conditional Random Fields (Sarawagi and Cohen, 2004). The typical BIO representation was introduced in Ramshaw and Marcus (1995); OC representations were introduced in Church (1988), while Finkel and Manning (2009) further study nested named entity recognition, which employs a tree structure as a representation of identifying named entities within other named entities. The most relevant study on mentions in the context of coreference was done in Recasens et al. (2013); this work studies distinguishing single mentions from coreferent mentions. Our joint framework provides similar insights, where the added mention decision variable partly reflects if the mention is singleton or not. Several recent works suggest studying </context>
+</contexts>
+<marker>Ramshaw, Marcus, 1995</marker>
+<rawString>L. A. Ramshaw and M. P. Marcus. 1995. Text chunking using transformation-based learning. In Proceedings of the Third Annual Workshop on Very Large Corpora.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Ratinov</author>
+<author>D Roth</author>
+</authors>
+<title>Design challenges and misconceptions in named entity recognition.</title>
+<date>2009</date>
+<booktitle>In Proc. of the Annual Conference on Computational Natural Language Learning (CoNLL).</booktitle>
+<contexts>
+<context position="21166" citStr="Ratinov and Roth (2009)" startWordPosition="3422" endWordPosition="3425">nt mentions. The sequence labeling component builds on the following assumption: Assumption Different mentions have different heads, and heads do not overlap with each other. That is, for each mi,j, we have a corresponding head ha,b where i &lt; a &lt; b &lt; j. Moreover, for another head ha&apos;,b&apos;, we have the satisfying condition a − b&apos; &gt; 0 or b − a&apos; &lt; 0 bha,b,ha&apos;,b&apos;. Based on this assumption, the problem of identifying mention heads is a sequential phrase identification problem, and we choose to employ the BILOU-representation as it has advantages over traditional BIO-representation, as shown, e.g. in Ratinov and Roth (2009). The BILOUrepresentation suggests learning classifiers that identify the Beginning, Inside and Last tokens of multi-token chunks as well as Unit-length chunks. The problem is then transformed into a simple, but constrained, 5-class classification problem. The BILOU-classifier shares all features with the mention head detection model described in Sec. 2.1 except for two: length of mention heads and NPMI over head boundary. For each instance, the feature 16 vector is sparse and we use sparse perceptron (Jackson and Craven, 1996) for supervised training. We also apply a two layer prediction aggr</context>
+<context position="37276" citStr="Ratinov and Roth (2009)" startWordPosition="5941" endWordPosition="5944">Linking Model (CL3M) described in Chang et al. (2013) in our experiments. The task of mention detection is closely related to Named Entity Recognition (NER). Punyakanok and Roth (2001) thoroughly study phrase identification in sentences and propose three different general approaches. They aim to learn several different local classifiers and combine them to optimally satisfy some global constraints. Cardie and Pierce (1998) propose to select certain rules based on a given corpus, to identify base noun phrases. However, the phrases detected are not necessarily mentions that we need to discover. Ratinov and Roth (2009) present detailed studies on the task of named entity recognition, which discusses and compares different methods on multiple aspects including chunk representation, inference method, utility of non-local features, and integration of external knowledge. NER can be regarded as a sequential labeling problem, which can be modeled by several proposed models, e.g. Hidden Markov Model (Rabiner, 1989) or Conditional Random Fields (Sarawagi and Cohen, 2004). The typical BIO representation was introduced in Ramshaw and Marcus (1995); OC representations were introduced in Church (1988), while Finkel and</context>
+</contexts>
+<marker>Ratinov, Roth, 2009</marker>
+<rawString>L. Ratinov and D. Roth. 2009. Design challenges and misconceptions in named entity recognition. In Proc. of the Annual Conference on Computational Natural Language Learning (CoNLL).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Recasens</author>
+<author>M-C de Marneffe</author>
+<author>C Potts</author>
+</authors>
+<title>The life and death of discourse entities: Identifying singleton mentions.</title>
+<date>2013</date>
+<booktitle>In NAACL.</booktitle>
+<marker>Recasens, de Marneffe, Potts, 2013</marker>
+<rawString>M. Recasens, M.-C. de Marneffe, and C. Potts. 2013. The life and death of discourse entities: Identifying singleton mentions. In NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Roth</author>
+<author>W Yih</author>
+</authors>
+<title>A linear programming formulation for global inference in natural language tasks.</title>
+<date>2004</date>
+<booktitle>In Hwee Tou Ng</booktitle>
+<editor>and Ellen Riloff, editors, CoNLL.</editor>
+<contexts>
+<context position="7669" citStr="Roth and Yih (2004)" startWordPosition="1178" endWordPosition="1181"> mention boundaries after coreference decisions are made. detection can be viewed as a global decision problem, which involves considering the relevance of a mention to its context. The fact that the coreference decision provides a way to represent this relevance, further motivates considering mention detection and coreference jointly. The insight here is that a mention candidate will be more likely to be valid when it has more high confidence coreference links. This paper develops a joint coreference resolution and mention head detection framework as an Integer Linear Program (ILP) following Roth and Yih (2004). Figure 1 compares a traditional pipelined system with our proposed system. Our joint formulation includes decision variables both for coreference links between pairs of mention heads, and for all mention head candidates, and we simultaneously learn the ILP coefficients for all these variables. During joint inference, some of the mention head candidates will be rejected (that is, the corresponding variables will be assigned ’0’), contributing to improvement both in MD and in coreference performance. The aforementioned joint approach builds on an algorithm that generates mention head candidate</context>
+</contexts>
+<marker>Roth, Yih, 2004</marker>
+<rawString>D. Roth and W. Yih. 2004. A linear programming formulation for global inference in natural language tasks. In Hwee Tou Ng and Ellen Riloff, editors, CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Sarawagi</author>
+<author>W Cohen</author>
+</authors>
+<title>Semi-Markov conditional random fields for information extraction.</title>
+<date>2004</date>
+<booktitle>In NIPS.</booktitle>
+<contexts>
+<context position="37729" citStr="Sarawagi and Cohen, 2004" startWordPosition="6008" endWordPosition="6011">n rules based on a given corpus, to identify base noun phrases. However, the phrases detected are not necessarily mentions that we need to discover. Ratinov and Roth (2009) present detailed studies on the task of named entity recognition, which discusses and compares different methods on multiple aspects including chunk representation, inference method, utility of non-local features, and integration of external knowledge. NER can be regarded as a sequential labeling problem, which can be modeled by several proposed models, e.g. Hidden Markov Model (Rabiner, 1989) or Conditional Random Fields (Sarawagi and Cohen, 2004). The typical BIO representation was introduced in Ramshaw and Marcus (1995); OC representations were introduced in Church (1988), while Finkel and Manning (2009) further study nested named entity recognition, which employs a tree structure as a representation of identifying named entities within other named entities. The most relevant study on mentions in the context of coreference was done in Recasens et al. (2013); this work studies distinguishing single mentions from coreferent mentions. Our joint framework provides similar insights, where the added mention decision variable partly reflect</context>
+</contexts>
+<marker>Sarawagi, Cohen, 2004</marker>
+<rawString>S. Sarawagi and W. Cohen. 2004. Semi-Markov conditional random fields for information extraction. In NIPS.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Song</author>
+<author>J Jiang</author>
+<author>W-X Zhao</author>
+<author>S Li</author>
+<author>H Wang</author>
+</authors>
+<title>Joint learning for coreference resolution with markov logic.</title>
+<date>2012</date>
+<booktitle>In Proceedings of the 2012 Joint Conference of EMNLP-CoNLL.</booktitle>
+<contexts>
+<context position="35325" citStr="Song et al., 2012" startWordPosition="5645" endWordPosition="5648">er the performance gap for coreference. Results on the ACE-2004 and CoNLL-2012 datasets are shown in Table 5.16 The mention head candidate generation module has a bigger impact on MDER compared to the joint framework. However, they both have the same level of positive effects on PGR for coreference resolution. On both datasets, we achieve more than 20% performance gap reduction for coreference. 5 Related Work Coreference resolution has been extensively studied, with several state-of-the-art approaches addressing this task (Lee et al., 2011; Durrett and Klein, 2013; Bj¨orkelund and Kuhn, 2014; Song et al., 2012). Many of the early rule-based systems like Hobbs (1978) and Lappin and Leass (1994) gained considerable popularity. The early designs were easy to understand and the rules were designed manually. Machine learning approaches were introduced in many works (Connolly et al., 1997; Ng and 16We use bootstrapping resampling (10 times from the test data) with signed rank test. All the improvements shown are statistically significant. 19 ACE-2004 MDER PGR(AVG) Headx 37.93 12.29 Jointx 17.43 13.99 H-Joint-Mx 55.36 26.28 HeadH 34.00 7.01 JointH 19.22 15.21 H-Joint-MH 53.22 22.22 CoNLL-2012 MDER PGR(AVG)</context>
+</contexts>
+<marker>Song, Jiang, Zhao, Li, Wang, 2012</marker>
+<rawString>Y. Song, J. Jiang, W.-X. Zhao, S. Li, and H. Wang. 2012. Joint learning for coreference resolution with markov logic. In Proceedings of the 2012 Joint Conference of EMNLP-CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W M Soon</author>
+<author>H T Ng</author>
+<author>D C Y Lim</author>
+</authors>
+<title>A machine learning approach to coreference resolution of noun phrases.</title>
+<date>2001</date>
+<journal>Comput. Linguist.</journal>
+<contexts>
+<context position="36480" citStr="Soon et al., 2001" startWordPosition="5817" endWordPosition="5820">ntH 19.22 15.21 H-Joint-MH 53.22 22.22 CoNLL-2012 MDER PGR(AVG) Headx 25.04 12.16 Jointx 10.45 10.44 H-Joint-Mx 35.49 22.60 HeadH 22.40 10.58 JointH 11.81 13.75 H-Joint-MH 34.21 24.33 Table 5: Analysis of performance improvement in terms of Mention Detection Error Reduction (MDER) and Performance Gap Reduction (PGR) for coreference resolution on the ACE-2004 and CoNLL-2012 datasets. “Head” represents the mention head candidate generation module, “Joint” represents the joint learning and inference framework, and “H-JointM” indicates the end-to-end system. Cardie, 2002; Bengtson and Roth, 2008; Soon et al., 2001). The introduction of ILP methods has influenced the coreference area too (Chang et al., 2011; Denis and Baldridge, 2007). In this paper, we use the Constrained Latent Left-Linking Model (CL3M) described in Chang et al. (2013) in our experiments. The task of mention detection is closely related to Named Entity Recognition (NER). Punyakanok and Roth (2001) thoroughly study phrase identification in sentences and propose three different general approaches. They aim to learn several different local classifiers and combine them to optimally satisfy some global constraints. Cardie and Pierce (1998) </context>
+</contexts>
+<marker>Soon, Ng, Lim, 2001</marker>
+<rawString>W. M. Soon, H. T. Ng, and D. C. Y. Lim. 2001. A machine learning approach to coreference resolution of noun phrases. Comput. Linguist.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Vilain</author>
+<author>J Burger</author>
+<author>J Aberdeen</author>
+<author>D Connolly</author>
+<author>L Hirschman</author>
+</authors>
+<title>A model-theoretic coreference scoring scheme.</title>
+<date>1995</date>
+<booktitle>In Proceedings of the 6th conference on Message understanding.</booktitle>
+<contexts>
+<context position="30029" citStr="Vilain et al., 1995" startWordPosition="4816" endWordPosition="4819">eads, they yield the same performance for coreference. Our proposed H-Joint-M system achieves the highest performance. Parameters of our proposed system are tuned as a = 0.9, fl = 0.9, �1 = 0.25 and A2 = 0.2. erence model that we implemented, resulting in a traditional pipelined end-to-end coreference system, namely H-M-Coref. We name our new proposed end-to-end coreference resolution system incorporating both the mention head candidate generation module and the joint framework as H-Joint-M. Evaluation Metrics We compare all systems using three popular metrics for coreference resolution: MUC (Vilain et al., 1995), B3 (Bagga and Baldwin, 1998), and Entity-based CEAF (CEAFe) (Luo, 2005). We use the average F1 scores (AVG) of these three metrics as the main metric for comparison. We use the v7.0 scorer provided by CoNLL-2012 Shared Task11. We also evaluate the mention detection performance based on precision, recall and F1 score. As mention heads are important for both mention detection and coreference resolution, we also report results evaluated on mention heads. 4.2 Performance for Coreference Resolution Performance of coreference resolution for all systems on the ACE-2004 and CoNLL-2012 datasets is sh</context>
+</contexts>
+<marker>Vilain, Burger, Aberdeen, Connolly, Hirschman, 1995</marker>
+<rawString>M. Vilain, J. Burger, J. Aberdeen, D. Connolly, and L. Hirschman. 1995. A model-theoretic coreference scoring scheme. In Proceedings of the 6th conference on Message understanding.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

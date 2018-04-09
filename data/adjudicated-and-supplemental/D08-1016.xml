@@ -1,0 +1,1850 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.982844">
+Dependency Parsing by Belief Propagation*
+</title>
+<author confidence="0.917163">
+David A. Smith and Jason Eisner
+</author>
+<affiliation confidence="0.944057">
+Dept. of Computer Science, Johns Hopkins University
+</affiliation>
+<address confidence="0.53321">
+Balitmore, MD 21218, USA
+</address>
+<email confidence="0.994412">
+{dasmith,eisner}@jhu.edu
+</email>
+<sectionHeader confidence="0.994666" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999860583333333">
+We formulate dependency parsing as a graphical model
+with the novel ingredient of global constraints. We show
+how to apply loopy belief propagation (BP), a simple and
+effective tool for approximate learning and inference. As
+a parsing algorithm, BP is both asymptotically and em-
+pirically efficient. Even with second-order features or la-
+tent variables, which would make exact parsing consider-
+ably slower or NP-hard, BP needs only O(n3) time with
+a small constant factor. Furthermore, such features sig-
+nificantly improve parse accuracy over exact first-order
+methods. Incorporating additional features would in-
+crease the runtime additively rather than multiplicatively.
+</bodyText>
+<sectionHeader confidence="0.998426" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999905235294118">
+Computational linguists worry constantly about run-
+time. Sometimes we oversimplify our models, trad-
+ing linguistic nuance for fast dynamic programming.
+Alternatively, we write down a better but intractable
+model and then use approximations. The CL com-
+munity has often approximated using heavy pruning
+or reranking, but is beginning to adopt other meth-
+ods from the machine learning community, such
+as Gibbs sampling, rejection sampling, and certain
+variational approximations.
+We propose borrowing a different approximation
+technique from machine learning, namely, loopy be-
+lief propagation (BP). In this paper, we show that
+BP can be used to train and decode complex pars-
+ing models. Our approach calls a simpler parser as a
+subroutine, so it still exploits the useful, well-studied
+combinatorial structure of the parsing problem.1
+</bodyText>
+<sectionHeader confidence="0.976959" genericHeader="introduction">
+2 Overview and Related Work
+</sectionHeader>
+<bodyText confidence="0.9999315">
+We wish to make a dependency parse’s score de-
+pend on higher-order features, which consider ar-
+</bodyText>
+<footnote confidence="0.887522833333333">
+*This work was supported by the Human Language Tech-
+nology Center of Excellence.
+1As do constraint relaxation (Tromble and Eisner, 2006) and
+forest reranking (Huang, 2008). In contrast, generic NP-hard
+solution techniques like Integer Linear Programming (Riedel
+and Clarke, 2006) know nothing about optimal substructure.
+</footnote>
+<bodyText confidence="0.999877692307692">
+bitrary interactions among two or more edges in the
+parse (and perhaps also other latent variables such
+as part-of-speech tags or edge labels). Such features
+can help accuracy—as we show. Alas, they raise the
+polynomial runtime of projective parsing, and ren-
+der non-projective parsing NP-hard. Hence we seek
+approximations.
+We will show how BP’s “message-passing” disci-
+pline offers a principled way for higher-order fea-
+tures to incrementally adjust the numerical edge
+weights that are fed to a fast first-order parser. Thus
+the first-order parser is influenced by higher-order
+interactions among edges—but not asymptotically
+slowed down by considering the interactions itself.
+BP’s behavior in our setup can be understood intu-
+itively as follows. Inasmuch as the first-order parser
+finds that edge e is probable, the higher-order fea-
+tures will kick in and discourage other edges e&apos; to the
+extent that they prefer not to coexist with e.2 Thus,
+the next call to the first-order parser assigns lower
+probabilities to parses that contain these e&apos;. (The
+method is approximate because a first-order parser
+must equally penalize all parses containing e&apos;, even
+those that do not in fact contain e.)
+This behavior is somewhat similar to parser stack-
+ing (Nivre and McDonald, 2008; Martins et al.,
+2008), in which a first-order parser derives some of
+its input features from the full 1-best output of an-
+other parser. In our method, a first-order parser de-
+rives such input features from its own previous full
+output (but probabilistic output rather than just 1-
+best). This circular process is iterated to conver-
+gence. Our method also permits the parse to in-
+teract cheaply with other variables. Thus first-order
+parsing, part-of-speech tagging, and other tasks on a
+common input could mutually influence one another.
+Our method and its numerical details emerge nat-
+urally as an instance of the well-studied loopy BP
+algorithm, suggesting several potential future im-
+</bodyText>
+<footnote confidence="0.6490545">
+2This may be reminiscent of adjusting a Lagrange multiplier
+on e&apos; until some (hard) constraint is satisfied.
+</footnote>
+<page confidence="0.950129">
+145
+</page>
+<note confidence="0.968639">
+Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 145–156,
+Honolulu, October 2008.c�2008 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.944945769230769">
+provements to accuracy (Yedidia et al., 2004; Braun-
+stein et al., 2005) and efficiency (Sutton and McCal-
+lum, 2007).
+Loopy BP has occasionally been used before in
+NLP, with good results, to handle non-local fea-
+tures (Sutton and McCallum, 2004) or joint decod-
+ing (Sutton et al., 2004). However, our application
+to parsing requires an innovation to BP that we ex-
+plain in §5—a global constraint to enforce that the
+parse is a tree. The tractability of some such global
+constraints points the way toward applying BP to
+other computationally intensive NLP problems, such
+as syntax-based alignment of parallel text.
+</bodyText>
+<sectionHeader confidence="0.998841" genericHeader="method">
+3 Graphical Models of Dependency Trees
+</sectionHeader>
+<subsectionHeader confidence="0.980373">
+3.1 Observed and hidden variables
+</subsectionHeader>
+<bodyText confidence="0.9897196">
+To apply BP, we must formulate dependency parsing
+as a search for an optimal assignment to the vari-
+ables of a graphical model. We encode a parse using
+the following variables:
+Sentence. The n-word input sentence W is fully
+observed (not a lattice). Let W = W0W1 · · · Wn,
+where W0 is always the special symbol ROOT.
+Tags. If desired, the variables T = T1T2 · · · Tn may
+specify tags on the n words, drawn from some tagset
+T (e.g., parts of speech). These variables are needed
+iff the tags are to be inferred jointly with the parse.
+Links. The O(n2) boolean variables {Lij : 0 &lt;
+i &lt; n,1 &lt; j &lt; n, i =� j} correspond to the possible
+links in the dependency parse.3 Lij = true is in-
+terpreted as meaning that there exists a dependency
+link from parent i —* child j.4
+Link roles, etc. It would be straightforward to add
+other variables, such as a binary variable Lij that is
+true iff there is a link i � j labeled with role r (e.g.,
+AGENT, PATIENT, TEMPORAL ADJUNCT).
+</bodyText>
+<subsectionHeader confidence="0.998271">
+3.2 Markov random fields
+</subsectionHeader>
+<bodyText confidence="0.9956285">
+We wish to define a probability distribution over all
+configurations, i.e., all joint assignments A to these
+</bodyText>
+<footnote confidence="0.961212285714286">
+3“Links” are conventionally called edges, but we reserve the
+term “edge” for describing the graphical model’s factor graph.
+4We could have chosen a different representation with O(n)
+integer variables {Pj : 1 &lt; j &lt; n}, writing Pj = i instead of
+Lij = true. This representation can achieve the same asymp-
+totic runtime for BP by using sparse messages, but some con-
+straints and algorithms would be somewhat harder to explain.
+</footnote>
+<bodyText confidence="0.929463">
+variables. Our distribution is simply an undirected
+graphical model, or Markov random field (MRF):5
+</bodyText>
+<equation confidence="0.974946333333333">
+11
+p(A) def = 1
+� m
+</equation>
+<bodyText confidence="0.996599421052631">
+specified by the collection of factors Fm : A H
+R[ &apos;O. Each factor is a function that consults only a
+subset of A. We say that the factor has degree d
+if it depends on the values of d variables in A, and
+that it is unary, binary, ternary, or global if d is
+respectively 1, 2, 3, or unbounded (grows with n).
+A factor function Fm(A) may also depend freely
+on the observed variables—the input sentence W
+and a known (learned) parameter vector 0. For no-
+tational simplicity, we suppress these extra argu-
+ments when writing and drawing factor functions,
+and when computing their degree. In this treatment,
+these observed variables are not specified by A, but
+instead are absorbed into the very definition of Fm.
+In defining a factor Fm, we often define the cir-
+cumstances under which it fires. These are the only
+circumstances that allow Fm(A) =� 1. When Fm
+does not fire, Fm(A) = 1 and does not affect the
+product in equation (1).
+</bodyText>
+<subsectionHeader confidence="0.999706">
+3.3 Hard constraints
+</subsectionHeader>
+<bodyText confidence="0.999370944444444">
+A hard factor Fm fires only on parses A that violate
+some specified condition. It has value 0 on those
+parses, acting as a hard constraint to rule them out.
+TREE. A hard global constraint on all the Lij vari-
+ables at once. It requires that exactly n of these vari-
+ables be true, and that the corresponding links form
+a directed tree rooted at position 0.
+PTREE. This stronger version of TREE requires
+further that the tree be projective. That is, it pro-
+hibits Lij and LH from both being true if i —* j
+crosses k —* E. (These links are said to cross if one
+of k, E is strictly between i and j while the other is
+strictly outside that range.)
+EXACTLY1. A family of O(n) hard global con-
+straints, indexed by 1 &lt; j &lt; n. EXACTLY1j re-
+quires that j have exactly one parent, i.e., exactly
+one of the Lij variables must be true. Note that EX-
+ACTLY1 is implied by TREE or PTREE.
+</bodyText>
+<footnote confidence="0.9759165">
+5Our overall model is properly called a dynamic MRF, since
+we must construct different-size MRFs for input sentences of
+different lengths. Parameters are shared both across and within
+these MRFs, so that only finitely many parameters are needed.
+</footnote>
+<equation confidence="0.979197">
+Fm(A) (1)
+</equation>
+<page confidence="0.993334">
+146
+</page>
+<bodyText confidence="0.98524175">
+ATMOST1. A weaker version. ATMOST1j re-
+quires j to have one or zero parents.
+NAND. A family of hard binary constraints.
+NANDij,kt requires that Lij and Lkt may not both be
+true. We will be interested in certain subfamilies.
+NOT2. Shorthand for the family of O(n3) bi-
+nary constraints {NANDij,kj}. These are collectively
+equivalent to ATMOST1, but expressed via a larger
+number of simpler constraints, which can make the
+BP approximation less effective (footnote 30).
+NO2CYCLE. Shorthand for the family of O(n2)
+binary constraints {NANDij,ji}.
+</bodyText>
+<subsectionHeader confidence="0.997063">
+3.4 Soft constraints
+</subsectionHeader>
+<bodyText confidence="0.999573333333333">
+A soft factor Fm acts as a soft constraint that prefers
+some parses to others. In our experiments, it is al-
+ways a log-linear function returning positive values:
+</bodyText>
+<equation confidence="0.9936145">
+�Fm(A) def = exp θhfh(A, W, m) (2)
+hEfeatures(F,)
+</equation>
+<bodyText confidence="0.999184238095238">
+where θ is a learned, finite collection of weights and
+f is a corresponding collection of feature functions,
+some of which are used by Fm. (Note that fh is
+permitted to consult the observed input W. It also
+sees which factor Fm it is scoring, to support reuse
+of a single feature function fh and its weight θh by
+unboundedly many factors in a model.)
+LINK. A family of unary soft factors that judge
+the links in a parse A individually. LINKij fires iff
+Lij = true, and then its value depends on (i, j),
+W, and θ. Our experiments use the same features as
+McDonald et al. (2005).
+A first-order (or “edge-factored”) parsing model
+(McDonald et al., 2005) contains only LINK factors,
+along with a global TREE or PTREE factor. Though
+there are O(n2) link factors (one per Lij), only n
+of them fire on any particular parse, since the global
+factor ensures that exactly n are true.
+We’ll consider various higher-order soft factors:
+PAIR. The binary factor PAIRij,kt fires with some
+value iff Lij and Lkt are both true. Thus, it penal-
+izes or rewards a pair of links for being simultane-
+ously present. This is a soft version of NAND.
+GRAND. Shorthand for the family of O(n3) binary
+factors {PAIRij,jk}, which evaluate grandparent-
+parent-child configurations, i —* j —* k. For exam-
+ple, whether preposition j attaches to verb i might
+depend on its object k. In non-projective parsing,
+we might prefer (but not require) that a parent and
+child be on the same side of the grandparent.
+SIB. Shorthand for the family of O(n3) binary fac-
+tors {PAIRij,ik}, which judge whether two children
+of the same parent are compatible. E.g., a given verb
+may not like to have two noun children both to its
+left.6 The children do not need to be adjacent.
+CHILDSEQ. A family of O(n) global factors.
+CHILDSEQi scores i’s sequence of children; hence
+it consults all variables of the form Lij. The scor-
+ing follows the parametrization of a weighted split
+head-automaton grammar (Eisner and Satta, 1999).
+If 5 has children 2, 7, 9 under A, then CHILDSEQi
+is a product of subfactors of the form PAIR5#,57,
+PAIR57,59, PAIR59,5# (right child sequence) and
+PAIR5#,52, PAIR52,5# (left child sequence).
+NOCROSS. A family of O(n2) global constraints.
+If the parent-to-j link crosses the parent-to-` link,
+then NOCROSSjt fires with a value that depends
+only on j and `. (If j and ` do not each have ex-
+actly one parent, NOCROSSjt fires with value 0; i.e.,
+it incorporates EXACTLY1j and EXACTLY1t.)7
+TAGi is a unary factor that evaluates whether Ti’s
+value is consistent with W (especially Wi).
+TAGLINKij is a ternary version of the LINKij fac-
+tor whose value depends on Lij, Ti and Tj (i.e., its
+feature functions consult the tag variables to decide
+whether a link is likely). One could similarly enrich
+the other features above to depend on tags and/or
+link roles; TAGLINK is just an illustrative example.
+TRIGRAM is a global factor that evaluates the tag
+sequence T according to a trigram model. It is a
+product of subfactors, each of which scores a tri-
+gram of adjacent tags Ti_2, Ti_1, Ti, possibly also
+considering the word sequence W (as in CRFs).
+</bodyText>
+<sectionHeader confidence="0.968422" genericHeader="method">
+4 A Sketch of Belief Propagation
+</sectionHeader>
+<bodyText confidence="0.9944705">
+MacKay (2003, chapters 16 and 26) provides an
+excellent introduction to belief propagation, a gen-
+</bodyText>
+<footnote confidence="0.567074">
+6A similar binary factor could directly discourage giving the
+verb two SUBJECTs, if the model has variables for link roles.
+7In effect, we have combined the O(n4) binary factors
+PAIRzj,k¢ into O(n2) groups, and made them more precise
+by multiplying in EXACTLYONE constraints (see footnote 30).
+This will permit O(n3) total computation if we are willing to
+sacrifice the ability of the PAIR weights to depend on i and k.
+</footnote>
+<page confidence="0.994238">
+147
+</page>
+<figureCaption confidence="0.999166333333333">
+Figure 1: A fragment of a factor graph, illustrating a few
+of the unary, binary, and global factors that affect vari-
+ables L25 and L56. The GRAND factor induces a loop.
+</figureCaption>
+<bodyText confidence="0.982995">
+eralization of the forward-backward algorithm that
+is deeply studied in the graphical models literature
+(Yedidia et al., 2004, for example). We briefly
+sketch the method in terms of our parsing task.
+</bodyText>
+<subsectionHeader confidence="0.997559">
+4.1 Where BP comes from
+</subsectionHeader>
+<bodyText confidence="0.999959764705882">
+The basic BP idea is simple. Variable L34 main-
+tains a distribution over values true and false—a
+“belief”—that is periodically recalculated based on
+the current distributions at other variables.8
+Readers familiar with Gibbs sampling can regard
+this as a kind of deterministic approximation. In
+Gibbs sampling, L34’s value is periodically resam-
+pled based on the current values of other variables.
+Loopy BP works not with random samples but their
+expectations. Hence it is approximate but tends to
+converge much faster than Gibbs sampling will mix.
+It is convenient to visualize an undirected factor
+graph (Fig. 1), in which each factor is connected
+to the variables it depends on. Many factors may
+connect to—and hence influence—a given variable
+such as L34. If X is a variable or a factor, N(X)
+denotes its set of neighbors.
+</bodyText>
+<subsectionHeader confidence="0.996937">
+4.2 What BP accomplishes
+</subsectionHeader>
+<bodyText confidence="0.99975353125">
+Given an input sentence W and a parameter vector
+θ, the collection of factors Fm defines a probabil-
+ity distribution (1). The parser should determine the
+values of the individual variables. In other words,
+we would like to marginalize equation (1) to obtain
+the distribution p(L34) over L34 = true vs. false,
+the distribution p(T4) over tags, etc.
+If the factor graph is acyclic, then BP com-
+putes these marginal distributions exactly. Given
+8Or, more precisely—this is the tricky part—based on ver-
+sions of those other distributions that do not factor in L34’s re-
+ciprocal influence on them. This prevents (e.g.) L34 and T3
+from mutually reinforcing each other’s existing beliefs.
+an HMM, for example, BP reduces to the forward-
+backward algorithm.
+BP’s estimates of these distributions are called be-
+liefs about the variables. BP also computes be-
+liefs about the factors, which are useful in learn-
+ing θ (see §7). E.g., if the model includes the factor
+TAGLINKij, which is connected to variables Lij, Ti,
+Tj, then BP will estimate the marginal joint distribu-
+tion p(Lij, Ti, Tj) over (boolean, tag, tag) triples.
+When the factor graph has loops, BP’s beliefs are
+usually not the true marginals of equation (1) (which
+are in general intractable to compute). Indeed, BP’s
+beliefs may not be the true marginals of any distribu-
+tion p(A) over assignments, i.e., they may be glob-
+ally inconsistent. All BP does is to incrementally
+adjust the beliefs till they are at least locally con-
+sistent: e.g., the beliefs at factors TAGLINKij and
+TAGLINKik must both imply9 the same belief about
+variable Ti, their common neighbor.
+</bodyText>
+<subsectionHeader confidence="0.998252">
+4.3 The BP algorithm
+</subsectionHeader>
+<bodyText confidence="0.999598117647059">
+This iterated negotiation among the factors is han-
+dled by message passing along the edges of the fac-
+tor graph. A message to or from a variable is a (pos-
+sibly unnormalized) probability distribution over the
+values of that variable.
+The variable V sends a message to factor F, say-
+ing “My other neighboring factors G jointly suggest
+that I have posterior distribution qV ,F (assuming
+that they are sending me independent evidence).”
+Meanwhile, factor F sends messages to V , saying,
+“Based on my factor function and the messages re-
+ceived from my other neighboring variables U about
+their values (and assuming that those messages are
+independent), I suggest you have posterior distribu-
+tion rF,V over your values.”
+To be more precise, BP at each iteration k (until
+convergence) updates two kinds of messages:
+</bodyText>
+<equation confidence="0.896512714285714">
+qV ,F(v) = κ rl rG,V (v) (3)
+k
+GEN(V)\F
+from variables to factors, and
+rF,V (v) = κ
+(k��) � F(A) �
+A s.t. A[V ]=v UEN(F)\V
+</equation>
+<footnote confidence="0.756551">
+9In the sense that marginalizing the belief p(Lij, Ti, Tj) at
+the factor yields the belief p(Ti) at the variable.
+</footnote>
+<figure confidence="0.997103111111111">
+TREE
+L[2,51
+L[5,61
+LINK
+GRAND
+LINK
+(4)
+qU,F(A[U])
+(k)
+</figure>
+<page confidence="0.97855">
+148
+</page>
+<bodyText confidence="0.99928775">
+from factors to variables. Each message is a proba-
+bility distribution over values v of V , normalized by
+a scaling constant n. Alternatively, messages may be
+left as unnormalized distributions, choosing n =� 1
+only as needed to prevent over- or underflow. Mes-
+sages are initialized to uniform distributions.
+Whenever we wish, we may compute the beliefs
+at V and F:
+</bodyText>
+<figure confidence="0.597965666666667">
+bvk,1)(v) def (k)
+bFk—T1) (A) = n 11 rG�V (v)
+def GEN(V )
+(k)
+n F(A) 11 qU�F (A[U�)
+UEN(F)
+</figure>
+<bodyText confidence="0.99929575">
+These beliefs do not truly characterize the ex-
+pected behavior of Gibbs sampling (§4.1), since the
+products in (5)–(6) make conditional independence
+assumptions that are valid only if the factor graph
+is acyclic. Furthermore, on cyclic (“loopy”) graphs,
+BP might only converge to a local optimum (Weiss
+and Freedman, 2001), or it might not converge at all.
+Still, BP often leads to good, fast approximations.
+</bodyText>
+<sectionHeader confidence="0.903908" genericHeader="method">
+5 Achieving Low Asymptotic Runtime
+</sectionHeader>
+<bodyText confidence="0.9999042">
+One iteration of standard BP simply updates all the
+messages as in equations (3)–(4): one message per
+edge of the factor graph.
+Therefore, adding new factors to the model in-
+creases the runtime per iteration additively, by in-
+creasing the number of messages to update. We
+believe this is a compelling advantage over dy-
+namic programming—in which new factors usually
+increase the runtime and space multiplicatively by
+exploding the number of distinct items.10
+</bodyText>
+<subsectionHeader confidence="0.859273">
+5.1 Propagators for local constraints
+</subsectionHeader>
+<bodyText confidence="0.977157090909091">
+But how long does updating each message take? The
+runtime of summing over all assignments EA in
+10For example, with unknown tags T, a model with
+PTREE+TAGLINK will take only O(n3 + n2g2) time for BP,
+compared to O(n3g2) time for dynamic programming (Eisner
+&amp; Satta 1999). Adding TRIGRAM, which is string-local rather
+than tree-local, will increase this only to O(n3 + n2g2 + ng3),
+compared to O(n3g6) for dynamic programming.
+Even more dramatic, adding the SIB family of O(n3)
+PAIRij,ik factors will add only O(n3) to the runtime of BP
+(Table 1). By contrast, the runtime of dynamic programming
+becomes exponential, because each item must record its head-
+word’s full set of current children.
+equation (4) may appear prohibitive. Crucially, how-
+ever, F(A) only depends on the values in A of F’s
+its neighboring variables N(F). So this sum is pro-
+portional to a sum over restricted assignments to just
+those variables.11
+For example, computing a message from
+TAGLINKij —* Ti only requires iterating over all
+(boolean, tag, tag) triples.12 The runtime to update
+that message is therefore O(2 · |T  |· |T |).
+</bodyText>
+<subsectionHeader confidence="0.969111">
+5.2 Propagators for global constraints
+</subsectionHeader>
+<bodyText confidence="0.999978962962963">
+The above may be tolerable for a ternary factor. But
+how about global factors? EXACTLY1j has n neigh-
+boring boolean variables: surely we cannot iterate
+over all 2n assignments to these! TREE is even
+worse, with 2O(n2) assignments to consider. We will
+give specialized algorithms for handling these sum-
+mations more efficiently.
+A historical note is in order. Traditional constraint
+satisfaction corresponds to the special case of (1)
+where all factors Fm are hard constraints (with val-
+ues in {0,1}). In that case, loopy BP reduces to
+an algorithm for generalized arc consistency (Mack-
+worth, 1977; Bessi`ere and R´egin, 1997; Dechter,
+2003), and updating a factor’s outgoing messages is
+known as constraint propagation. R´egin (1994)
+famously introduced an efficient propagator for
+a global constraint, ALLDIFFERENT, by adapting
+combinatorial bipartite matching algorithms.
+In the same spirit, we will demonstrate efficient
+propagators for our global constraints, e.g. by adapt-
+ing combinatorial algorithms for weighted parsing.
+We are unaware of any previous work on global fac-
+tors in sum-product BP, although for max-product
+BP,13 Duchi et al. (2007) independently showed
+that a global 1-to-1 alignment constraint—a kind
+of weighted ALLDIFFERENT—permits an efficient
+propagator based on weighted bipartite matching.
+</bodyText>
+<subsectionHeader confidence="0.995113">
+5.3 Constraint propagators for parsing
+</subsectionHeader>
+<bodyText confidence="0.984537">
+Table 1 shows our asymptotic runtimes for all fac-
+tors in §§3.3–3.4. Remember that if several of these
+</bodyText>
+<footnote confidence="0.884384">
+11The constant of proportionality may be folded into r,; it is
+the number of assignments to the other variables.
+12Separately for each value v of Ti, get v’s probability by
+summing over assignments to (Lij, Ti, Tj) s.t. Ti = v.
+13Max-product replaces the sums in equations (3)–(6) with
+maximizations. This replaces the forward-backward algorithm
+with its Viterbi approximation.
+</footnote>
+<page confidence="0.97759">
+149
+</page>
+<table confidence="0.9999451875">
+factor degree runtime count runtime
+family (each) (each) (total)
+TREE O(n2) O(n3) 1 O(n3)
+PTREE O(n2) O(n3) 1 O(n3)
+EXACTLY1 O(n) O(n) n O(n2)
+ATMOST1 O(n) O(n) n O(n2)
+NOT2 2 O(1) O(n3)
+NO2CYCLE 2 O(1) O(n2)
+LINK 1 O(1) O(n3) O(n3)
+GRAND 2 O(1) O(n) O(n3)
+SIB 2 O(1) O(n2) O(n3)
+CHILDSEQ O(n) O(n2)
+NOCROSS O(n) O(n)
+TAG 1 O(g) O(n) O(ng)
+TAGLINK 3 O(g2) O(n2) O(n2g2)
+TRIGRAM O(n) O(ng3) 1 O(ng3)
+</table>
+<tableCaption confidence="0.6484865">
+Table 1: Asymptotic runtimes of the propagators for var-
+ious factors (where n is the sentence length and g is the
+size of the tag set T). An iteration of standard BP propa-
+gates through each factor once. Running a factor’s prop-
+agator will update all of its outgoing messages, based on
+its current incoming messages.
+</tableCaption>
+<bodyText confidence="0.998616571428571">
+factors are included, the total runtime is additive.14
+Propagating the local factors is straightforward
+(§5.1). We now explain how to handle the global
+factors. Our main trick is to work backwards from
+marginal beliefs. Let F be a factor and V be one
+of its neighboring variables. At any time, F has a
+marginal belief about V (see footnote 9),
+</bodyText>
+<equation confidence="0.96366">
+�
+b���1)
+F → (V = v) =
+</equation>
+<bodyText confidence="0.9038782">
+A s.t. A[V]=v
+a sum over (6)’s products of incoming messages. By
+the definition of rF→V in (4), and distributivity, we
+can also express the marginal belief (7) as a point-
+wise product of outgoing and incoming messages15
+</bodyText>
+<equation confidence="0.99879625">
+b���1)
+F → (V = v) = r���1)
+F →V (v) · q��)
+V →F(v) (8)
+</equation>
+<bodyText confidence="0.9783122">
+up to a constant. If we can quickly sum up the
+marginal belief (7), then (8) says we can divide out
+each particular incoming message q��)
+V →F to obtain
+its corresponding outgoing message r���1)
+</bodyText>
+<equation confidence="0.66454">
+F →V .
+</equation>
+<bodyText confidence="0.9581745">
+14We may ignore the cost of propagators at the variables.
+Each outgoing message from a variable can be computed in
+time proportional to its size, which may be amortized against
+the cost of generating the corresponding incoming message.
+15E.g., the familiar product of forward and backward mes-
+sages that is used to extract posterior marginals from an HMM.
+Note that the marginal belief and both messages
+are unnormalized distributions over values v of V .
+F and k are clear from context below, so we simplify
+the notation so that (7)–(8) become
+</bodyText>
+<equation confidence="0.886843">
+b(V = v) = � b(A) = rV (v) · qV (v)
+A s.t. A[V]=v
+</equation>
+<bodyText confidence="0.990213">
+TRIGRAM must sum over assignments to the tag
+sequence T. The belief (6) in a given assignment
+is a product of trigram scores (which play the role
+of transition weights) and incoming messages qTj
+(playing the role of emission weights). The marginal
+belief (7) needed above, b(Ti = t), is found by sum-
+ming over assignments where Ti = t. All marginal
+beliefs are computed together in O(ng3) total time
+by the forward-backward algorithm.16
+EXACTLY1j is a sparse hard constraint. Even
+though there are 2n assignments to its n neighboring
+variables {Lij}, the factor function returns 1 on only
+n assignments and 0 on the rest. In fact, for a given i,
+b(Lij = true) in (7) is defined by (6) to have exactly
+one non-zero summand, in which A puts Lij = true
+and all other Ligj = false. We compute the marginal
+beliefs for all i together in O(n) total time:
+</bodyText>
+<listItem confidence="0.996448">
+1. Pre-compute 7r def = Hi qLij(false).17
+2. For each i, compute the marginal belief
+b(Lij = true) as 7r · qLij, where qLij E R de-
+notes the odds ratio qLij(true)/qLij(false).18
+3. The partition function b() denotes EA b(A);
+compute it in this case as Ei b(Lij = true).
+4. For each i, compute b(Lij = false) by subtrac-
+tion, as b() − b(Lij = true).
+</listItem>
+<bodyText confidence="0.758501230769231">
+TREE and PTREE must sum over assignments to
+the O(n2) neighboring variables {Lij}. There are
+now exponentially many non-zero summands, those
+in which A corresponds to a valid tree. Nonetheless,
+16Which is itself an exact BP algorithm, but on a different
+graph—a junction tree formed from the graph of TRIGRAM sub-
+factors. Each variable in the junction tree is a bigram. If we had
+simply replaced the global TRIGRAM factor with its subfactors
+in the full factor graph, we would have had to resort to General-
+ized BP (Yedidia et al., 2004) to obtain the same exact results.
+17But taking it = 1 gives the same results, up to a constant.
+18As a matter of implementation, this odds ratio qL,, can be
+used to represent the incoming message qL., everywhere.
+</bodyText>
+<equation confidence="0.795387">
+b���1)
+F → (A) (7)
+</equation>
+<page confidence="0.974367">
+150
+</page>
+<bodyText confidence="0.999962205128205">
+we can follow the same approach as for EXACTLY1.
+Steps 1 and 4 are modified to iterate over all i, j such
+that Lij is a variable. In step 3, the partition function
+PA b(A) is now 7r times the total weight of all trees,
+where the weight of a given tree is the product of the
+gLij values of its n edges. In step 2, the marginal
+belief b(Lij = true) is now 7r times the total weight
+of all trees having edge i → j.
+We perform these combinatorial sums by calling a
+first-order parsing algorithm, with edge weights qij.
+Thus, as outlined in §2, a first-order parser is called
+each time we propagate through the global TREE or
+PTREE constraint, using edge weights that include
+the first-order LINK factors but also multiply in any
+current messages from higher-order factors.
+The parsing algorithm simultaneously computes
+the partition function b(), and all O(n2) marginal
+beliefs b(Lij = true). For PTREE (projective), it
+is the inside-outside version of a dynamic program-
+ming algorithm (Eisner, 1996). For TREE (non-
+projective), Koo et al. (2007) and Smith and Smith
+(2007) show how to employ the matrix-tree theorem.
+In both cases, the total time is O(n3).19
+NOCROSSj` must sum over assignments to O(n)
+neighboring variables {Lij} and {Lk`}. The non-
+zero summands are assignments where j and E
+each have exactly one parent. At step 1, 7r def =
+Qi qLij(false) · Qk qLke(false). At step 2, the
+marginal belief b(Lij = true) sums over the n non-
+zero assignments containing i → j. It is 7r · gLij ·
+Pk �qLke · PAIRij,k`, where PAIRij,k` is xj` if i → j
+crosses k → E and is 1 otherwise. xj` is some factor
+value defined by equation (2) to penalize or reward
+the crossing. Steps 3–4 are just as in EXACTLY1j.
+The question is how to compute b(Lij = true) for
+each i in only O(1) time,20 so that we can propagate
+each of the O(n2) NOCROSSj` in O(n) time. This
+is why we allowed xj` to depend only on j, E. We
+can rewrite the sum b(Lij = true) as
+</bodyText>
+<equation confidence="0.964626">
+X7r · gLij · (xj` · X�qLke + 1 · 4Lke) (9)
+</equation>
+<bodyText confidence="0.985995">
+crossing k noncrossing k
+19A dynamic algorithm could incrementally update the out-
+going messages if only a few incoming messages have changed
+(as in asynchronous BP). In the case of TREE, dynamic matrix
+inverse allows us to update any row or column (i.e., messages
+from all parents or children of a given word) and find the new
+inverse in O(n2) time (Sherman and Morrison, 1950).
+20Symmetrically, we compute b(Lke = true) for each k.
+To find this in O(1) time, we precompute for each
+E an array of partial sums Q`[s, t] def = Ps&lt;k&lt;t �qLke.
+Since Q`[s, t] = Q`[s, t−1]+�qLte, we can compute
+each entry in O(1) time. The total precomputation
+time over all E, s, t is then O(n3), with the array Q`
+shared across all factors NOCROSSjq. The crossing
+sum is respectively Q`[0, i−1]+Q`[j+1, n], Q`[i+
+1, j − 1], or 0 according to whether E ∈ (i, j), E ∈�
+[i, j], or E = i.21 The non-crossing sum is Q`[0, n]
+minus the crossing sum.
+CHILDSEQi , like TRIGRAM, is propagated by a
+forward-backward algorithm. In this case, the al-
+gorithm is easiest to describe by replacing CHILD-
+SEQi in the factor graph by a collection of local
+subfactors, which pass messages in the ordinary
+way.22 Roughly speaking,23 at each j ∈ [1, n],
+we introduce a new variable Cij—a hidden state
+whose value is the position of i’s previous child,
+if any (so 0 ≤ Cij &lt; j). So the ternary sub-
+factor on (Cij, Lij, Ci,j+1) has value 1 if Lij =
+false and Ci,j+1 = Ci,j; a sibling-bigram score
+(PAIRiCij,iCi,j+1) if Lij = true and Ci,j+1 = j; and
+0 otherwise. The sparsity of this factor, which is 0
+almost everywhere, is what gives CHILDSEQi a total
+runtime of O(n2) rather than O(n3). It is equivalent
+to forward-backward on an HMM with n observa-
+tions (the Lij) and n states per observation (the Cj),
+with a deterministic (thus sparse) transition function.
+</bodyText>
+<sectionHeader confidence="0.991547" genericHeader="method">
+6 Decoding Trees
+</sectionHeader>
+<bodyText confidence="0.950709222222222">
+BP computes local beliefs, e.g. the conditional prob-
+ability that a link Lij is present. But if we wish
+to output a single well-formed dependency tree, we
+need to find a single assignment to all the {Lij} that
+satisfies the TREE (or PTREE) constraint.
+Our final belief about the TREE factor is a distri-
+bution over such assignments, in which a tree’s prob-
+ability is proportional to the probability of its edge
+weights gLij (incoming messages). We could simply
+return the mode of this distribution (found by using
+a 1-best first-order parser) or the k-best trees, or take
+samples.
+21There are no NOCROSSje factors with f = j.
+22We still treat CHILDSEQi as a global factor and compute all
+its correct outgoing messages on a single BP iteration, via serial
+forward and backward sweeps through the subfactors. Handling
+the subfactors in parallel, (3)–(4), would need O(n) iterations.
+23Ignoring the treatment of boundary symbols “#” (see §3.4).
+</bodyText>
+<page confidence="0.996757">
+151
+</page>
+<bodyText confidence="0.983440947368421">
+In our experiments, we actually take the edge
+weights to be not the messages �qLij from the links,
+def
+�bLij =
+log bLij(true)/bLij(false)). These are passed into a
+fast algorithm for maximum spanning tree (Tarjan,
+1977) or maximum projective spanning tree (Eis-
+ner, 1996). This procedure is equivalent to minimum
+Bayes risk (MBR) parsing (Goodman, 1996) with a
+dependency accuracy loss function.
+Notice that the above decoding approaches do not
+enforce any hard constraints other than TREE in the
+final output. In addition, they only recover values
+of the Lij variables. They marginalize over other
+variables such as tags and link roles. This solves
+the problem of “nuisance” variables (which merely
+fragment probability mass among refinements of a
+parse). On the other hand, it may be undesirable for
+variables whose values we desire to recover.24
+</bodyText>
+<sectionHeader confidence="0.985387" genericHeader="method">
+7 Training
+</sectionHeader>
+<bodyText confidence="0.999449071428571">
+Our training method also uses beliefs computed by
+BP, but at the factors. We choose the weight vector
+0 by maximizing the log-probability of training data
+24An alternative is to attempt to find the most probable
+(“MAP”) assignment to all variables—using the max-product
+algorithm (footnote 13) or one of its recent variants. The esti-
+mated marginal beliefs become “max marginals,” which assess
+the 1-best assignment consistent with each value of the variable.
+We can indeed build max-product propagators for our global
+constraints. PTREE still propagates in O(n3) time: simply
+change the first-order parser’s semiring (Goodman, 1999) to use
+max instead of sum. TREE requires O(n4) time: it seems that
+the O(n2) max marginals must be computed separately, each
+requiring a separate call to an O(n2) maximum spanning tree
+algorithm (Tarjan, 1977).
+If max-product BP converges, we may simply output each
+variable’s favorite value (according to its belief), if unique.
+However, max-product BP tends to be unstable on loopy graphs,
+and we may not wish to wait for full convergence in any case. A
+more robust technique for extracting an assignment is to mimic
+Viterbi decoding, and “follow backpointers” of the max-product
+computation along some spanning subtree of the factor graph.
+A slower but potentially more stable alternative is determin-
+istic annealing. Replace each factor Fm(A) with Fm(A)1/T ,
+where T &gt; 0 is a temperature. As T --+ 0 (“quenches”), the
+distribution (1) retains the same mode (the MAP assignment),
+but becomes more sharply peaked at the mode, and sum-product
+BP approaches max-product BP. Deterministic annealing runs
+sum-product BP while gradually reducing T toward 0 as it it-
+erates. By starting at a high T and reducing T slowly, it often
+manages in practice to find a good local optimum. We may then
+extract an assignment just as we do for max-product.
+under equation (1), regularizing only by early stop-
+ping. If all variables are observed in training, this
+objective function is convex (as for any log-linear
+model).
+The difficult step in computing the gradient of
+our objective is finding Vθ log Z, where Z in equa-
+tion (1) is the normalizing constant (partition func-
+tion) that sums over all assignments A. (Recall that
+Z, like each Fm, depends implicitly on W and 0.)
+As usual for log-linear models,
+</bodyText>
+<equation confidence="0.980668">
+Vθ log Z = � Ep(A)[VθFm(A)1 (10)
+m
+</equation>
+<bodyText confidence="0.99896925">
+Since VθFm(A) only depends on the assignment
+A’s values for variables that are connected to Fm
+in the factor graph, its expectation under p(A) de-
+pends only on the marginalization of p(A) to those
+variables jointly. Fortunately, BP provides an esti-
+mate of that marginal distribution, namely, its belief
+about the factor Fm, given W and 0 (§4.2).25
+Note that the hard constraints do not depend on 0
+at all; so their summands in equation (10) will be 0.
+We employ stochastic gradient descent (Bottou,
+2003), since this does not require us to compute
+the objective function itself but only to (approxi-
+mately) estimate its gradient as explained above. Al-
+ternatively, given any of the MAP decoding proce-
+dures from §6, we could use an error-driven learning
+method such as the perceptron or MIRA.26
+</bodyText>
+<sectionHeader confidence="0.998305" genericHeader="evaluation">
+8 Experiments
+</sectionHeader>
+<bodyText confidence="0.999057666666667">
+We asked: (1) For projective parsing, where higher-
+order factors have traditionally been incorporated
+into slow but exact dynamic programming (DP),
+what are the comparative speed and quality of the
+BP approximation? (2) How helpful are such higher-
+order factors—particularly for non-projective pars-
+ing, where BP is needed to make them tractable?
+(3) Do our global constraints (e.g., TREE) contribute
+to the goodness of BP’s approximation?
+</bodyText>
+<footnote confidence="0.7149971">
+25One could use coarser estimates at earlier stages of training,
+by running fewer iterations of BP.
+26The BP framework makes it tempting to extend an MRF
+model with various sorts of latent variables, whose values are
+not specified in training data. It is straightforward to train under
+these conditions. When counting which features fire on a train-
+ing parse or (for error-driven training) on an current erroneous
+parse, we can find expected counts if these parses are not fully
+observed, by using BP to sum over latent variables.
+but the full beliefs bLij at the links (where
+</footnote>
+<page confidence="0.928732">
+152
+</page>
+<note confidence="0.7680214">
+2 iterations of BP
+3 iterations of BP
+5 iterations of BP
+10 iterations of BP
+MBR DP
+</note>
+<figure confidence="0.9545775">
+0 20 40 60
+Parsing time in seconds
+</figure>
+<figureCaption confidence="0.999993666666667">
+Figure 4: Runtime vs. search error after different num-
+bers of BP iterations. This shows the simpler model of
+Fig. 2, where DP is still relatively fast.
+</figureCaption>
+<subsectionHeader confidence="0.955257">
+8.4 Faster higher-order projective parsing
+</subsectionHeader>
+<bodyText confidence="0.999866173913044">
+We built a first-order projective parser—one that
+uses only factors PTREE and LINK—and then com-
+pared the cost of incorporating second-order factors,
+GRAND and CHILDSEQ, by BP versus DP.28
+Under DP, the first-order runtime of O(n3) is in-
+creased to O(n4) with GRAND, and to O(n5) when
+we add CHILDSEQ as well. BP keeps runtime down
+to O(n3)—although with a higher constant factor,
+since it takes several rounds to converge, and since
+it computes more than just the best parse.29
+Figures 2–3 compare the empirical runtimes for
+various input sentence lengths. With only the
+GRAND factor, exact DP can still find the Viterbi
+parse (though not the MBR parse29) faster than ten
+iterations of the asymptotically better BP (Fig. 2),
+at least for sentences with n &lt; 75. However, once
+we add the CHILDSEQ factor, BP is always faster—
+dramatically so for longer sentences (Fig. 3). More
+complex models would widen BP’s advantage.
+Fig. 4 shows the tradeoff between runtime and
+search error of BP in the former case (GRAND only).
+To determine BP’s search error at finding the MBR
+parse, we measured its dependency accuracy not
+</bodyText>
+<footnote confidence="0.984898">
+28We trained these parsers using exact DP, using the inside-
+outside algorithm to compute equation (10). The training and
+test data were English, and for this section we filtered out sen-
+tences with non-projective links.
+29Viterbi parsing in the log domain only needs the (max, +)
+semiring, whereas both BP and any MBR parsing must use the
+slower (+, log+) so that they can compute marginals.
+</footnote>
+<table confidence="0.999226857142857">
+Danish Dutch English
+TREE+LINK 85.5 87.3 88.6
++NOCROSS 86.1 88.3 89.1
++GRAND 86.1 88.6 89.4
++CHILDSEQ 86.5 88.5 90.1
+Proj. DP 86.0 84.5 90.2
++hill-climbing 86.1 87.6 90.2
+</table>
+<tableCaption confidence="0.763559375">
+Table 2: (a) Percent unlabeled dependency accuracy for
+various non-projective BP parsers (5 iterations only),
+showing the cumulative contribution of different features.
+(b) Accuracy for an projective DP parser with all features.
+For relatively non-projective languages (Danish and espe-
+cially Dutch), the exact projective parses can be improved
+by non-projective hill-climbing—but in those cases, just
+running our non-projective BP is better and faster.
+</tableCaption>
+<bodyText confidence="0.999790555555556">
+against the gold standard, but against the optimal
+MBR parse under the model, which DP is able to
+find. After 10 iterations, the overall macro-averaged
+search error compared to O(n4) DP MBR is 0.4%;
+compared to O(n5) (not shown), 2.4%. More BP
+iterations may help accuracy. In future work, we
+plan to compare BP’s speed-accuracy curve on more
+complex projective models with the speed-accuracy
+curve of pruned or reranked DP.
+</bodyText>
+<subsectionHeader confidence="0.922394">
+8.5 Higher-order non-projective parsing
+</subsectionHeader>
+<bodyText confidence="0.999964954545455">
+The BP approximation can be used to improve
+the accuracy of non-projective parsing by adding
+higher-order features. These would be NP-hard to
+incorporate exactly; DP cannot be used.
+We used BP with a non-projective TREE factor
+to train conditional log-linear parsing models of two
+highly non-projective languages, Danish and Dutch,
+as well as slightly non-projective English (§8.1).
+In all three languages, the first-order non-projective
+parser greatly overpredicts the number of crossing
+links. We thus added NOCROSS factors, as well
+as GRAND and CHILDSEQ as before. All of these
+significantly improve the first-order baseline, though
+not necessarily cumulatively (Table 2).
+Finally, Table 2 compares loopy BP to a previ-
+ously proposed “hill-climbing” method for approx-
+imate inference in non-projective parsing McDon-
+ald and Pereira (2006). Hill-climbing decodes our
+richest non-projective model by finding the best pro-
+jective parse under that model—using slow, higher-
+order DP—and then greedily modifies words’ par-
+ents until the parse score (1) stops improving.
+</bodyText>
+<figure confidence="0.997876142857143">
+0.0 0.1 0.2 0.3 0.4
+Error relative to exact MBR
+Input length
+40 words
+50 words
+60 words
+70 words
+</figure>
+<page confidence="0.999196">
+154
+</page>
+<table confidence="0.999601571428571">
+Decoding Danish Dutch English
+NOT2 81.8 (76.7) 83.3 (75.0) 87.5 (66.4)
+ATMOST1 85.4 (82.2) 87.3 (86.3) 88.5 (84.6)
+EXACTLY1 85.7 (85.0) 87.0 (86.7) 88.6 (86.0)
++ NO2CYCLE 85.0 (85.2) 86.2 (86.7) 88.5 (86.2)
+TREE 85.5 (85.5) 87.3 (87.3) 88.6 (88.6)
+PTREE 85.8 83.9 88.8
+</table>
+<tableCaption confidence="0.999363">
+Table 3: After training a non-projective first-order model
+</tableCaption>
+<bodyText confidence="0.957882571428571">
+with TREE, decoding it with weaker constraints is asymp-
+totically faster (except for NOT2) but usually harm-
+ful. (Parenthetical numbers show that the harm is com-
+pounded if the weaker constraints are used in training
+as well; even though this matches training to test con-
+ditions, it may suffer more from BP’s approximate gradi-
+ents.) Decoding the TREE model with the even stronger
+PTREE constraint can actually be helpful for a more pro-
+jective language. All results use 5 iterations of BP.
+BP for non-projective languages is much faster
+and more accurate than the hill-climbing method.
+Also, hill-climbing only produces an (approximate)
+1-best parse, but BP also obtains (approximate)
+marginals of the distribution over all parses.
+</bodyText>
+<subsectionHeader confidence="0.994682">
+8.6 Importance of global hard constraints
+</subsectionHeader>
+<bodyText confidence="0.960468411764706">
+Given the BP architecture, do we even need the hard
+TREE constraint? Or would it suffice for more local
+hard constraints to negotiate locally via BP?
+We investigated this for non-projective first-order
+parsing. Table 3 shows that global constraints are
+indeed important, and that it is essential to use TREE
+during training. At test time, the weaker but still
+global EXACTLY1 may suffice (followed by MBR
+decoding to eliminate cycles), for total time O(n2).
+Table 3 includes NOT2, which takes O(n3) time,
+merely to demonstrate how the BP approximation
+becomes more accurate for training and decoding
+when we join the simple NOT2 constraints into more
+global ATMOST1 constraints. This does not change
+the distribution (1), but makes BP enforce stronger
+local consistency requirements at the factors, rely-
+ing less on independence assumptions. In general,
+one can get better BP approximations by replacing a
+group of factors F,,t(A) with their product.30
+The above experiments concern gold-standard
+30In the limit, one could replace the product (1) with a sin-
+gle all-purpose factor; then BP would be exact—but slow. (In
+constraint satisfaction, joining constraints similarly makes arc
+consistency slower but better at eliminating impossible values.)
+accuracy under a given first-order, non-projective
+model. Flipping all three of these parameters for
+Danish, we confirmed the pattern by instead mea-
+suring search error under a higher-order, projective
+model (PTREE+LINK+GRAND), when PTREE was
+weakened during decoding. Compared to the MBR
+parse under that model, the search errors from de-
+coding with weaker hard constraints were 2.2% for
+NOT2, 2.1% for EXACTLY1, 1.7% for EXACTLY1
++ NO2CYCLE, and 0.0% for PTREE.
+</bodyText>
+<sectionHeader confidence="0.988037" genericHeader="conclusions">
+9 Conclusions and Future Work
+</sectionHeader>
+<bodyText confidence="0.993723885714286">
+Belief propagation improves non-projective depen-
+dency parsing with features that would make ex-
+act inference intractable. For projective parsing, it
+is significantly faster than exact dynamic program-
+ming, at the cost of small amounts of search error,
+We are interested in extending these ideas to
+phrase-structure and lattice parsing, and in try-
+ing other higher-order features, such as those used
+in parse reranking (Charniak and Johnson, 2005;
+Huang, 2008) and history-based parsing (Nivre and
+McDonald, 2008). We could also introduce new
+variables, e.g., nonterminal refinements (Matsuzaki
+et al., 2005), or secondary links Mid (not constrained
+by TREE/PTREE) that augment the parse with repre-
+sentations of control, binding, etc. (Sleator and Tem-
+perley, 1993; Buch-Kromann, 2006).
+Other parsing-like problems that could be at-
+tacked with BP appear in syntax-based machine
+translation. Decoding is very expensive with a syn-
+chronous grammar composed with an n-gram lan-
+guage model (Chiang, 2007)—but our footnote 10
+suggests that BP might incorporate a language
+model rapidly. String alignment with synchronous
+grammars is quite expensive even for simple syn-
+chronous formalisms like ITG (Wu, 1997)—but
+Duchi et al. (2007) show how to incorporate bipar-
+tite matching into max-product BP.
+Finally, we can take advantage of improvements
+to BP proposed in the context of other applications.
+For example, instead of updating all messages in
+parallel at every iteration, it is empirically faster to
+serialize updates using a priority queue (Elidan et
+al., 2006; Sutton and McCallum, 2007).31
+31These methods need alteration to handle our global propa-
+gators, which do update all their outgoing messages at once.
+</bodyText>
+<page confidence="0.998745">
+155
+</page>
+<sectionHeader confidence="0.993899" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999927574257426">
+C. Bessi`ere and J.-C. R´egin. 1997. Arc consistency for
+general constraint networks: preliminary results. In
+IJCAI, pages 398–404.
+L. Bottou. 2003. Stochastic learning. In Advanced Lec-
+tures in Machine Learning, pages 146–168. Springer.
+A. Braunstein, M. Mezard, and R. Zecchina. 2005. Sur-
+vey propagation: An algorithm for satisfiability. Ran-
+dom Structures and Algorithms, 27:201–226.
+M. Buch-Kromann. 2006. Discontinuous Grammar.
+A Model of Human Parsing and Language Acquisi-
+tion”. Dr.ling.merc. dissertation, Copenhagen Busi-
+ness School.
+E. Charniak and M. Johnson. 2005. Coarse-to-fine n-
+best parsing and maxent discriminative reranking. In
+ACL, pages 173–180.
+D. Chiang. 2007. Hierarchical phrase-based translation.
+Computational Linguistics, 33(2):201–228.
+R. Dechter. 2003. Constraint Processing. Morgan Kauf-
+mann.
+J. Duchi, D. Tarlow, G. Elidan, and D. Koller. 2007.
+Using combinatorial optimization within max-product
+belief propagation. In NIPS 2006, pages 369–376.
+J. Eisner and G. Satta. 1999. Efficient parsing for bilex-
+ical context-free grammars and head automaton gram-
+mars. In ACL, pages 457–480.
+J. Eisner, E. Goldlust, and N. A. Smith. 2005. Compiling
+comp ling: Weighted dynamic programming and the
+dyna language. In HLT-EMNLP, pages 281–290.
+J. Eisner. 1996. Three new probabilistic models for de-
+pendency parsing: An exploration. In COLING.
+G. Elidan, I. McGraw, and D. Koller. 2006. Resid-
+ual belief propagation: Informed scheduling for asyn-
+chronous message passing. In UAI.
+J. T. Goodman. 1996. Parsing algorithms and metrics.
+In ACL, pages 177–183.
+J. Goodman. 1999. Semiring parsing. Computational
+Linguistics, 25(4):573–605.
+L. Huang. 2008. Forest reranking: Discriminative pars-
+ing with non-local features. In ACL, pages 586–594.
+T. Koo, A. Globerson, X. Carreras, and M. Collins. 2007.
+Structured prediction models via the Matrix-Tree The-
+orem. In EMNLP-CoNLL.
+D. MacKay. 2003. Information Theory, Inference, and
+Learning Algorithms. Cambridge.
+A. Mackworth. 1977. Consistency in networks of rela-
+tions. Artificial Intelligence, 8(1):99–118.
+A. F. T. Martins, D. Das, N. A. Smith, and E. P. Xing.
+2008. Stacking dependency parsers. In EMNLP.
+T. Matsuzaki, Y. Miyao, and J. Tsujii. 2005. Probabilis-
+tic CFG with latent annotations. In ACL, pages 75–82.
+R. McDonald and F. Pereira. 2006. Online learning
+of approximate dependency parsing algorithms. In
+EACL.
+R. McDonald, K. Crammer, and F. Pereira. 2005. Online
+large-margin training of dependency parsers. In ACL.
+J. Nivre and R. McDonald. 2008. Integrating graph-
+based and transition-based dependency parsers. In
+ACL.
+J. Nivre, J. Hall, S. K¨ubler, R. McDonald, J. Nilsson,
+S. Riedel, and D. Yuret. 2007. The CoNLL 2007
+shared task on dependency parsing. In Proceedings
+of the CoNLL Shared Task Session of EMNLP-CoNLL.
+J.-C. R´egin. 1994. A filtering algorithm for constraints
+of difference in csps. In AAAI, pages 362–367.
+S. Riedel and J. Clarke. 2006. Incremental integer linear
+programming for non-projective dependency parsing.
+In EMNLP, pages 129–137.
+J. Sherman and W. J. Morrison. 1950. Adjustment of an
+inverse matrix corresponding to a change in one ele-
+ment of a given matrix. Ann. Math. Stat., 21:124–127.
+D. Sleator and D. Temperley. 1993. Parsing English with
+a link grammar. In IWPT, pages 277–291, August.
+D. A. Smith and N. A. Smith. 2007. Probabilistic mod-
+els of nonprojective dependency trees. In EMNLP-
+CoNLL.
+C. Sutton and A. McCallum. 2004. Collective segmenta-
+tion and labeling of distant entities in information ex-
+traction. In ICML Workshop on Statistical Relational
+Learning.
+C. Sutton and A. McCallum. 2007. Improved dynamic
+schedules for belief propagation. In UAI.
+C. Sutton, K. Rohanimanesh, and A. McCallum. 2004.
+Dynamic conditional random fields: Factorized prob-
+abilistic models for labeling and segmenting sequence
+data. In ICML.
+R. E. Tarjan. 1977. Finding optimum branchings. Net-
+works, 7:25–35.
+R. W. Tromble and J. Eisner. 2006. A fast finite-state
+relaxation method for enforcing global constraints on
+sequence decoding. In HLT-NAACL, pages 423–430.
+Y. Weiss and W. T. Freedman. 2001. On the optimal-
+ity of solutions of the max-product belief propagation
+algorithm in arbitrary graphs. IEEE Transactions on
+Information Theory, 47.
+D. Wu. 1997. Stochastic inversion transduction gram-
+mars and bilingual parsing of parallel corpora. CL,
+23(3):377–404.
+J. S. Yedidia, W. T. Freeman, and Y. Weiss. 2004. Con-
+structing free-energy approximations and generalized
+belief approximation algorithms. MERL TR2004-
+040, Mitsubishi Electric Research Laboratories.
+</reference>
+<page confidence="0.998786">
+156
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.983484">
+<title confidence="0.999334">Parsing by Belief</title>
+<author confidence="0.999909">A Smith</author>
+<affiliation confidence="0.999723">Dept. of Computer Science, Johns Hopkins</affiliation>
+<address confidence="0.99504">Balitmore, MD 21218,</address>
+<abstract confidence="0.999178461538461">We formulate dependency parsing as a graphical model with the novel ingredient of global constraints. We show how to apply loopy belief propagation (BP), a simple and tool for and inference. As a parsing algorithm, BP is both asymptotically and empirically efficient. Even with second-order features or latent variables, which would make exact parsing considerslower or NP-hard, BP needs only with a small constant factor. Furthermore, such features significantly improve parse accuracy over exact first-order methods. Incorporating additional features would increase the runtime additively rather than multiplicatively.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>C Bessi`ere</author>
+<author>J-C R´egin</author>
+</authors>
+<title>Arc consistency for general constraint networks: preliminary results.</title>
+<date>1997</date>
+<booktitle>In IJCAI,</booktitle>
+<pages>398--404</pages>
+<marker>Bessi`ere, R´egin, 1997</marker>
+<rawString>C. Bessi`ere and J.-C. R´egin. 1997. Arc consistency for general constraint networks: preliminary results. In IJCAI, pages 398–404.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Bottou</author>
+</authors>
+<title>Stochastic learning.</title>
+<date>2003</date>
+<booktitle>In Advanced Lectures in Machine Learning,</booktitle>
+<pages>146--168</pages>
+<publisher>Springer.</publisher>
+<contexts>
+<context position="34121" citStr="Bottou, 2003" startWordPosition="5807" endWordPosition="5808">e each Fm, depends implicitly on W and 0.) As usual for log-linear models, Vθ log Z = � Ep(A)[VθFm(A)1 (10) m Since VθFm(A) only depends on the assignment A’s values for variables that are connected to Fm in the factor graph, its expectation under p(A) depends only on the marginalization of p(A) to those variables jointly. Fortunately, BP provides an estimate of that marginal distribution, namely, its belief about the factor Fm, given W and 0 (§4.2).25 Note that the hard constraints do not depend on 0 at all; so their summands in equation (10) will be 0. We employ stochastic gradient descent (Bottou, 2003), since this does not require us to compute the objective function itself but only to (approximately) estimate its gradient as explained above. Alternatively, given any of the MAP decoding procedures from §6, we could use an error-driven learning method such as the perceptron or MIRA.26 8 Experiments We asked: (1) For projective parsing, where higherorder factors have traditionally been incorporated into slow but exact dynamic programming (DP), what are the comparative speed and quality of the BP approximation? (2) How helpful are such higherorder factors—particularly for non-projective parsin</context>
+</contexts>
+<marker>Bottou, 2003</marker>
+<rawString>L. Bottou. 2003. Stochastic learning. In Advanced Lectures in Machine Learning, pages 146–168. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Braunstein</author>
+<author>M Mezard</author>
+<author>R Zecchina</author>
+</authors>
+<title>Survey propagation: An algorithm for satisfiability. Random Structures and Algorithms,</title>
+<date>2005</date>
+<pages>27--201</pages>
+<contexts>
+<context position="4446" citStr="Braunstein et al., 2005" startWordPosition="670" endWordPosition="674">s first-order parsing, part-of-speech tagging, and other tasks on a common input could mutually influence one another. Our method and its numerical details emerge naturally as an instance of the well-studied loopy BP algorithm, suggesting several potential future im2This may be reminiscent of adjusting a Lagrange multiplier on e&apos; until some (hard) constraint is satisfied. 145 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 145–156, Honolulu, October 2008.c�2008 Association for Computational Linguistics provements to accuracy (Yedidia et al., 2004; Braunstein et al., 2005) and efficiency (Sutton and McCallum, 2007). Loopy BP has occasionally been used before in NLP, with good results, to handle non-local features (Sutton and McCallum, 2004) or joint decoding (Sutton et al., 2004). However, our application to parsing requires an innovation to BP that we explain in §5—a global constraint to enforce that the parse is a tree. The tractability of some such global constraints points the way toward applying BP to other computationally intensive NLP problems, such as syntax-based alignment of parallel text. 3 Graphical Models of Dependency Trees 3.1 Observed and hidden</context>
+</contexts>
+<marker>Braunstein, Mezard, Zecchina, 2005</marker>
+<rawString>A. Braunstein, M. Mezard, and R. Zecchina. 2005. Survey propagation: An algorithm for satisfiability. Random Structures and Algorithms, 27:201–226.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Buch-Kromann</author>
+</authors>
+<title>Discontinuous Grammar. A Model of Human Parsing and Language Acquisition”.</title>
+<date>2006</date>
+<tech>Dr.ling.merc. dissertation,</tech>
+<institution>Copenhagen Business School.</institution>
+<contexts>
+<context position="43125" citStr="Buch-Kromann, 2006" startWordPosition="7232" endWordPosition="7233">tly faster than exact dynamic programming, at the cost of small amounts of search error, We are interested in extending these ideas to phrase-structure and lattice parsing, and in trying other higher-order features, such as those used in parse reranking (Charniak and Johnson, 2005; Huang, 2008) and history-based parsing (Nivre and McDonald, 2008). We could also introduce new variables, e.g., nonterminal refinements (Matsuzaki et al., 2005), or secondary links Mid (not constrained by TREE/PTREE) that augment the parse with representations of control, binding, etc. (Sleator and Temperley, 1993; Buch-Kromann, 2006). Other parsing-like problems that could be attacked with BP appear in syntax-based machine translation. Decoding is very expensive with a synchronous grammar composed with an n-gram language model (Chiang, 2007)—but our footnote 10 suggests that BP might incorporate a language model rapidly. String alignment with synchronous grammars is quite expensive even for simple synchronous formalisms like ITG (Wu, 1997)—but Duchi et al. (2007) show how to incorporate bipartite matching into max-product BP. Finally, we can take advantage of improvements to BP proposed in the context of other application</context>
+</contexts>
+<marker>Buch-Kromann, 2006</marker>
+<rawString>M. Buch-Kromann. 2006. Discontinuous Grammar. A Model of Human Parsing and Language Acquisition”. Dr.ling.merc. dissertation, Copenhagen Business School.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Charniak</author>
+<author>M Johnson</author>
+</authors>
+<title>Coarse-to-fine nbest parsing and maxent discriminative reranking.</title>
+<date>2005</date>
+<booktitle>In ACL,</booktitle>
+<pages>173--180</pages>
+<contexts>
+<context position="42787" citStr="Charniak and Johnson, 2005" startWordPosition="7182" endWordPosition="7185">el, the search errors from decoding with weaker hard constraints were 2.2% for NOT2, 2.1% for EXACTLY1, 1.7% for EXACTLY1 + NO2CYCLE, and 0.0% for PTREE. 9 Conclusions and Future Work Belief propagation improves non-projective dependency parsing with features that would make exact inference intractable. For projective parsing, it is significantly faster than exact dynamic programming, at the cost of small amounts of search error, We are interested in extending these ideas to phrase-structure and lattice parsing, and in trying other higher-order features, such as those used in parse reranking (Charniak and Johnson, 2005; Huang, 2008) and history-based parsing (Nivre and McDonald, 2008). We could also introduce new variables, e.g., nonterminal refinements (Matsuzaki et al., 2005), or secondary links Mid (not constrained by TREE/PTREE) that augment the parse with representations of control, binding, etc. (Sleator and Temperley, 1993; Buch-Kromann, 2006). Other parsing-like problems that could be attacked with BP appear in syntax-based machine translation. Decoding is very expensive with a synchronous grammar composed with an n-gram language model (Chiang, 2007)—but our footnote 10 suggests that BP might incorp</context>
+</contexts>
+<marker>Charniak, Johnson, 2005</marker>
+<rawString>E. Charniak and M. Johnson. 2005. Coarse-to-fine nbest parsing and maxent discriminative reranking. In ACL, pages 173–180.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Chiang</author>
+</authors>
+<title>Hierarchical phrase-based translation.</title>
+<date>2007</date>
+<journal>Computational Linguistics,</journal>
+<volume>33</volume>
+<issue>2</issue>
+<contexts>
+<context position="43337" citStr="Chiang, 2007" startWordPosition="7265" endWordPosition="7266">ch as those used in parse reranking (Charniak and Johnson, 2005; Huang, 2008) and history-based parsing (Nivre and McDonald, 2008). We could also introduce new variables, e.g., nonterminal refinements (Matsuzaki et al., 2005), or secondary links Mid (not constrained by TREE/PTREE) that augment the parse with representations of control, binding, etc. (Sleator and Temperley, 1993; Buch-Kromann, 2006). Other parsing-like problems that could be attacked with BP appear in syntax-based machine translation. Decoding is very expensive with a synchronous grammar composed with an n-gram language model (Chiang, 2007)—but our footnote 10 suggests that BP might incorporate a language model rapidly. String alignment with synchronous grammars is quite expensive even for simple synchronous formalisms like ITG (Wu, 1997)—but Duchi et al. (2007) show how to incorporate bipartite matching into max-product BP. Finally, we can take advantage of improvements to BP proposed in the context of other applications. For example, instead of updating all messages in parallel at every iteration, it is empirically faster to serialize updates using a priority queue (Elidan et al., 2006; Sutton and McCallum, 2007).31 31These me</context>
+</contexts>
+<marker>Chiang, 2007</marker>
+<rawString>D. Chiang. 2007. Hierarchical phrase-based translation. Computational Linguistics, 33(2):201–228.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Dechter</author>
+</authors>
+<title>Constraint Processing.</title>
+<date>2003</date>
+<publisher>Morgan Kaufmann.</publisher>
+<contexts>
+<context position="20334" citStr="Dechter, 2003" startWordPosition="3408" endWordPosition="3409">ble for a ternary factor. But how about global factors? EXACTLY1j has n neighboring boolean variables: surely we cannot iterate over all 2n assignments to these! TREE is even worse, with 2O(n2) assignments to consider. We will give specialized algorithms for handling these summations more efficiently. A historical note is in order. Traditional constraint satisfaction corresponds to the special case of (1) where all factors Fm are hard constraints (with values in {0,1}). In that case, loopy BP reduces to an algorithm for generalized arc consistency (Mackworth, 1977; Bessi`ere and R´egin, 1997; Dechter, 2003), and updating a factor’s outgoing messages is known as constraint propagation. R´egin (1994) famously introduced an efficient propagator for a global constraint, ALLDIFFERENT, by adapting combinatorial bipartite matching algorithms. In the same spirit, we will demonstrate efficient propagators for our global constraints, e.g. by adapting combinatorial algorithms for weighted parsing. We are unaware of any previous work on global factors in sum-product BP, although for max-product BP,13 Duchi et al. (2007) independently showed that a global 1-to-1 alignment constraint—a kind of weighted ALLDIF</context>
+</contexts>
+<marker>Dechter, 2003</marker>
+<rawString>R. Dechter. 2003. Constraint Processing. Morgan Kaufmann.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Duchi</author>
+<author>D Tarlow</author>
+<author>G Elidan</author>
+<author>D Koller</author>
+</authors>
+<title>Using combinatorial optimization within max-product belief propagation.</title>
+<date>2007</date>
+<booktitle>In NIPS</booktitle>
+<pages>369--376</pages>
+<contexts>
+<context position="20845" citStr="Duchi et al. (2007)" startWordPosition="3479" endWordPosition="3482">to an algorithm for generalized arc consistency (Mackworth, 1977; Bessi`ere and R´egin, 1997; Dechter, 2003), and updating a factor’s outgoing messages is known as constraint propagation. R´egin (1994) famously introduced an efficient propagator for a global constraint, ALLDIFFERENT, by adapting combinatorial bipartite matching algorithms. In the same spirit, we will demonstrate efficient propagators for our global constraints, e.g. by adapting combinatorial algorithms for weighted parsing. We are unaware of any previous work on global factors in sum-product BP, although for max-product BP,13 Duchi et al. (2007) independently showed that a global 1-to-1 alignment constraint—a kind of weighted ALLDIFFERENT—permits an efficient propagator based on weighted bipartite matching. 5.3 Constraint propagators for parsing Table 1 shows our asymptotic runtimes for all factors in §§3.3–3.4. Remember that if several of these 11The constant of proportionality may be folded into r,; it is the number of assignments to the other variables. 12Separately for each value v of Ti, get v’s probability by summing over assignments to (Lij, Ti, Tj) s.t. Ti = v. 13Max-product replaces the sums in equations (3)–(6) with maximiz</context>
+</contexts>
+<marker>Duchi, Tarlow, Elidan, Koller, 2007</marker>
+<rawString>J. Duchi, D. Tarlow, G. Elidan, and D. Koller. 2007. Using combinatorial optimization within max-product belief propagation. In NIPS 2006, pages 369–376.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Eisner</author>
+<author>G Satta</author>
+</authors>
+<title>Efficient parsing for bilexical context-free grammars and head automaton grammars.</title>
+<date>1999</date>
+<booktitle>In ACL,</booktitle>
+<pages>457--480</pages>
+<contexts>
+<context position="11504" citStr="Eisner and Satta, 1999" startWordPosition="1925" endWordPosition="1928">k. In non-projective parsing, we might prefer (but not require) that a parent and child be on the same side of the grandparent. SIB. Shorthand for the family of O(n3) binary factors {PAIRij,ik}, which judge whether two children of the same parent are compatible. E.g., a given verb may not like to have two noun children both to its left.6 The children do not need to be adjacent. CHILDSEQ. A family of O(n) global factors. CHILDSEQi scores i’s sequence of children; hence it consults all variables of the form Lij. The scoring follows the parametrization of a weighted split head-automaton grammar (Eisner and Satta, 1999). If 5 has children 2, 7, 9 under A, then CHILDSEQi is a product of subfactors of the form PAIR5#,57, PAIR57,59, PAIR59,5# (right child sequence) and PAIR5#,52, PAIR52,5# (left child sequence). NOCROSS. A family of O(n2) global constraints. If the parent-to-j link crosses the parent-to-` link, then NOCROSSjt fires with a value that depends only on j and `. (If j and ` do not each have exactly one parent, NOCROSSjt fires with value 0; i.e., it incorporates EXACTLY1j and EXACTLY1t.)7 TAGi is a unary factor that evaluates whether Ti’s value is consistent with W (especially Wi). TAGLINKij is a ter</context>
+<context position="18827" citStr="Eisner &amp; Satta 1999" startWordPosition="3161" endWordPosition="3164">g new factors to the model increases the runtime per iteration additively, by increasing the number of messages to update. We believe this is a compelling advantage over dynamic programming—in which new factors usually increase the runtime and space multiplicatively by exploding the number of distinct items.10 5.1 Propagators for local constraints But how long does updating each message take? The runtime of summing over all assignments EA in 10For example, with unknown tags T, a model with PTREE+TAGLINK will take only O(n3 + n2g2) time for BP, compared to O(n3g2) time for dynamic programming (Eisner &amp; Satta 1999). Adding TRIGRAM, which is string-local rather than tree-local, will increase this only to O(n3 + n2g2 + ng3), compared to O(n3g6) for dynamic programming. Even more dramatic, adding the SIB family of O(n3) PAIRij,ik factors will add only O(n3) to the runtime of BP (Table 1). By contrast, the runtime of dynamic programming becomes exponential, because each item must record its headword’s full set of current children. equation (4) may appear prohibitive. Crucially, however, F(A) only depends on the values in A of F’s its neighboring variables N(F). So this sum is proportional to a sum over rest</context>
+</contexts>
+<marker>Eisner, Satta, 1999</marker>
+<rawString>J. Eisner and G. Satta. 1999. Efficient parsing for bilexical context-free grammars and head automaton grammars. In ACL, pages 457–480.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Eisner</author>
+<author>E Goldlust</author>
+<author>N A Smith</author>
+</authors>
+<title>Compiling comp ling: Weighted dynamic programming and the dyna language. In</title>
+<date>2005</date>
+<booktitle>HLT-EMNLP,</booktitle>
+<pages>281--290</pages>
+<marker>Eisner, Goldlust, Smith, 2005</marker>
+<rawString>J. Eisner, E. Goldlust, and N. A. Smith. 2005. Compiling comp ling: Weighted dynamic programming and the dyna language. In HLT-EMNLP, pages 281–290.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Eisner</author>
+</authors>
+<title>Three new probabilistic models for dependency parsing: An exploration.</title>
+<date>1996</date>
+<booktitle>In COLING.</booktitle>
+<contexts>
+<context position="26647" citStr="Eisner, 1996" startWordPosition="4511" endWordPosition="4512"> all trees having edge i → j. We perform these combinatorial sums by calling a first-order parsing algorithm, with edge weights qij. Thus, as outlined in §2, a first-order parser is called each time we propagate through the global TREE or PTREE constraint, using edge weights that include the first-order LINK factors but also multiply in any current messages from higher-order factors. The parsing algorithm simultaneously computes the partition function b(), and all O(n2) marginal beliefs b(Lij = true). For PTREE (projective), it is the inside-outside version of a dynamic programming algorithm (Eisner, 1996). For TREE (nonprojective), Koo et al. (2007) and Smith and Smith (2007) show how to employ the matrix-tree theorem. In both cases, the total time is O(n3).19 NOCROSSj` must sum over assignments to O(n) neighboring variables {Lij} and {Lk`}. The nonzero summands are assignments where j and E each have exactly one parent. At step 1, 7r def = Qi qLij(false) · Qk qLke(false). At step 2, the marginal belief b(Lij = true) sums over the n nonzero assignments containing i → j. It is 7r · gLij · Pk �qLke · PAIRij,k`, where PAIRij,k` is xj` if i → j crosses k → E and is 1 otherwise. xj` is some factor </context>
+<context position="30672" citStr="Eisner, 1996" startWordPosition="5240" endWordPosition="5242">je factors with f = j. 22We still treat CHILDSEQi as a global factor and compute all its correct outgoing messages on a single BP iteration, via serial forward and backward sweeps through the subfactors. Handling the subfactors in parallel, (3)–(4), would need O(n) iterations. 23Ignoring the treatment of boundary symbols “#” (see §3.4). 151 In our experiments, we actually take the edge weights to be not the messages �qLij from the links, def �bLij = log bLij(true)/bLij(false)). These are passed into a fast algorithm for maximum spanning tree (Tarjan, 1977) or maximum projective spanning tree (Eisner, 1996). This procedure is equivalent to minimum Bayes risk (MBR) parsing (Goodman, 1996) with a dependency accuracy loss function. Notice that the above decoding approaches do not enforce any hard constraints other than TREE in the final output. In addition, they only recover values of the Lij variables. They marginalize over other variables such as tags and link roles. This solves the problem of “nuisance” variables (which merely fragment probability mass among refinements of a parse). On the other hand, it may be undesirable for variables whose values we desire to recover.24 7 Training Our trainin</context>
+</contexts>
+<marker>Eisner, 1996</marker>
+<rawString>J. Eisner. 1996. Three new probabilistic models for dependency parsing: An exploration. In COLING.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Elidan</author>
+<author>I McGraw</author>
+<author>D Koller</author>
+</authors>
+<title>Residual belief propagation: Informed scheduling for asynchronous message passing.</title>
+<date>2006</date>
+<booktitle>In UAI.</booktitle>
+<marker>Elidan, McGraw, Koller, 2006</marker>
+<rawString>G. Elidan, I. McGraw, and D. Koller. 2006. Residual belief propagation: Informed scheduling for asynchronous message passing. In UAI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J T Goodman</author>
+</authors>
+<title>Parsing algorithms and metrics.</title>
+<date>1996</date>
+<booktitle>In ACL,</booktitle>
+<pages>177--183</pages>
+<contexts>
+<context position="30754" citStr="Goodman, 1996" startWordPosition="5253" endWordPosition="5254">all its correct outgoing messages on a single BP iteration, via serial forward and backward sweeps through the subfactors. Handling the subfactors in parallel, (3)–(4), would need O(n) iterations. 23Ignoring the treatment of boundary symbols “#” (see §3.4). 151 In our experiments, we actually take the edge weights to be not the messages �qLij from the links, def �bLij = log bLij(true)/bLij(false)). These are passed into a fast algorithm for maximum spanning tree (Tarjan, 1977) or maximum projective spanning tree (Eisner, 1996). This procedure is equivalent to minimum Bayes risk (MBR) parsing (Goodman, 1996) with a dependency accuracy loss function. Notice that the above decoding approaches do not enforce any hard constraints other than TREE in the final output. In addition, they only recover values of the Lij variables. They marginalize over other variables such as tags and link roles. This solves the problem of “nuisance” variables (which merely fragment probability mass among refinements of a parse). On the other hand, it may be undesirable for variables whose values we desire to recover.24 7 Training Our training method also uses beliefs computed by BP, but at the factors. We choose the weigh</context>
+</contexts>
+<marker>Goodman, 1996</marker>
+<rawString>J. T. Goodman. 1996. Parsing algorithms and metrics. In ACL, pages 177–183.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Goodman</author>
+</authors>
+<title>Semiring parsing.</title>
+<date>1999</date>
+<journal>Computational Linguistics,</journal>
+<volume>25</volume>
+<issue>4</issue>
+<contexts>
+<context position="31893" citStr="Goodman, 1999" startWordPosition="5430" endWordPosition="5431">d also uses beliefs computed by BP, but at the factors. We choose the weight vector 0 by maximizing the log-probability of training data 24An alternative is to attempt to find the most probable (“MAP”) assignment to all variables—using the max-product algorithm (footnote 13) or one of its recent variants. The estimated marginal beliefs become “max marginals,” which assess the 1-best assignment consistent with each value of the variable. We can indeed build max-product propagators for our global constraints. PTREE still propagates in O(n3) time: simply change the first-order parser’s semiring (Goodman, 1999) to use max instead of sum. TREE requires O(n4) time: it seems that the O(n2) max marginals must be computed separately, each requiring a separate call to an O(n2) maximum spanning tree algorithm (Tarjan, 1977). If max-product BP converges, we may simply output each variable’s favorite value (according to its belief), if unique. However, max-product BP tends to be unstable on loopy graphs, and we may not wish to wait for full convergence in any case. A more robust technique for extracting an assignment is to mimic Viterbi decoding, and “follow backpointers” of the max-product computation along</context>
+</contexts>
+<marker>Goodman, 1999</marker>
+<rawString>J. Goodman. 1999. Semiring parsing. Computational Linguistics, 25(4):573–605.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Huang</author>
+</authors>
+<title>Forest reranking: Discriminative parsing with non-local features.</title>
+<date>2008</date>
+<booktitle>In ACL,</booktitle>
+<pages>586--594</pages>
+<contexts>
+<context position="1987" citStr="Huang, 2008" startWordPosition="293" endWordPosition="294">approximation technique from machine learning, namely, loopy belief propagation (BP). In this paper, we show that BP can be used to train and decode complex parsing models. Our approach calls a simpler parser as a subroutine, so it still exploits the useful, well-studied combinatorial structure of the parsing problem.1 2 Overview and Related Work We wish to make a dependency parse’s score depend on higher-order features, which consider ar*This work was supported by the Human Language Technology Center of Excellence. 1As do constraint relaxation (Tromble and Eisner, 2006) and forest reranking (Huang, 2008). In contrast, generic NP-hard solution techniques like Integer Linear Programming (Riedel and Clarke, 2006) know nothing about optimal substructure. bitrary interactions among two or more edges in the parse (and perhaps also other latent variables such as part-of-speech tags or edge labels). Such features can help accuracy—as we show. Alas, they raise the polynomial runtime of projective parsing, and render non-projective parsing NP-hard. Hence we seek approximations. We will show how BP’s “message-passing” discipline offers a principled way for higher-order features to incrementally adjust t</context>
+<context position="42801" citStr="Huang, 2008" startWordPosition="7186" endWordPosition="7187">ecoding with weaker hard constraints were 2.2% for NOT2, 2.1% for EXACTLY1, 1.7% for EXACTLY1 + NO2CYCLE, and 0.0% for PTREE. 9 Conclusions and Future Work Belief propagation improves non-projective dependency parsing with features that would make exact inference intractable. For projective parsing, it is significantly faster than exact dynamic programming, at the cost of small amounts of search error, We are interested in extending these ideas to phrase-structure and lattice parsing, and in trying other higher-order features, such as those used in parse reranking (Charniak and Johnson, 2005; Huang, 2008) and history-based parsing (Nivre and McDonald, 2008). We could also introduce new variables, e.g., nonterminal refinements (Matsuzaki et al., 2005), or secondary links Mid (not constrained by TREE/PTREE) that augment the parse with representations of control, binding, etc. (Sleator and Temperley, 1993; Buch-Kromann, 2006). Other parsing-like problems that could be attacked with BP appear in syntax-based machine translation. Decoding is very expensive with a synchronous grammar composed with an n-gram language model (Chiang, 2007)—but our footnote 10 suggests that BP might incorporate a langua</context>
+</contexts>
+<marker>Huang, 2008</marker>
+<rawString>L. Huang. 2008. Forest reranking: Discriminative parsing with non-local features. In ACL, pages 586–594.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Koo</author>
+<author>A Globerson</author>
+<author>X Carreras</author>
+<author>M Collins</author>
+</authors>
+<title>Structured prediction models via the Matrix-Tree Theorem.</title>
+<date>2007</date>
+<booktitle>In EMNLP-CoNLL.</booktitle>
+<contexts>
+<context position="26692" citStr="Koo et al. (2007)" startWordPosition="4517" endWordPosition="4520">these combinatorial sums by calling a first-order parsing algorithm, with edge weights qij. Thus, as outlined in §2, a first-order parser is called each time we propagate through the global TREE or PTREE constraint, using edge weights that include the first-order LINK factors but also multiply in any current messages from higher-order factors. The parsing algorithm simultaneously computes the partition function b(), and all O(n2) marginal beliefs b(Lij = true). For PTREE (projective), it is the inside-outside version of a dynamic programming algorithm (Eisner, 1996). For TREE (nonprojective), Koo et al. (2007) and Smith and Smith (2007) show how to employ the matrix-tree theorem. In both cases, the total time is O(n3).19 NOCROSSj` must sum over assignments to O(n) neighboring variables {Lij} and {Lk`}. The nonzero summands are assignments where j and E each have exactly one parent. At step 1, 7r def = Qi qLij(false) · Qk qLke(false). At step 2, the marginal belief b(Lij = true) sums over the n nonzero assignments containing i → j. It is 7r · gLij · Pk �qLke · PAIRij,k`, where PAIRij,k` is xj` if i → j crosses k → E and is 1 otherwise. xj` is some factor value defined by equation (2) to penalize or </context>
+</contexts>
+<marker>Koo, Globerson, Carreras, Collins, 2007</marker>
+<rawString>T. Koo, A. Globerson, X. Carreras, and M. Collins. 2007. Structured prediction models via the Matrix-Tree Theorem. In EMNLP-CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D MacKay</author>
+</authors>
+<title>Information Theory, Inference, and Learning Algorithms.</title>
+<date>2003</date>
+<location>Cambridge.</location>
+<contexts>
+<context position="12689" citStr="MacKay (2003" startWordPosition="2132" endWordPosition="2133">lly Wi). TAGLINKij is a ternary version of the LINKij factor whose value depends on Lij, Ti and Tj (i.e., its feature functions consult the tag variables to decide whether a link is likely). One could similarly enrich the other features above to depend on tags and/or link roles; TAGLINK is just an illustrative example. TRIGRAM is a global factor that evaluates the tag sequence T according to a trigram model. It is a product of subfactors, each of which scores a trigram of adjacent tags Ti_2, Ti_1, Ti, possibly also considering the word sequence W (as in CRFs). 4 A Sketch of Belief Propagation MacKay (2003, chapters 16 and 26) provides an excellent introduction to belief propagation, a gen6A similar binary factor could directly discourage giving the verb two SUBJECTs, if the model has variables for link roles. 7In effect, we have combined the O(n4) binary factors PAIRzj,k¢ into O(n2) groups, and made them more precise by multiplying in EXACTLYONE constraints (see footnote 30). This will permit O(n3) total computation if we are willing to sacrifice the ability of the PAIR weights to depend on i and k. 147 Figure 1: A fragment of a factor graph, illustrating a few of the unary, binary, and global</context>
+</contexts>
+<marker>MacKay, 2003</marker>
+<rawString>D. MacKay. 2003. Information Theory, Inference, and Learning Algorithms. Cambridge.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Mackworth</author>
+</authors>
+<title>Consistency in networks of relations.</title>
+<date>1977</date>
+<journal>Artificial Intelligence,</journal>
+<volume>8</volume>
+<issue>1</issue>
+<contexts>
+<context position="20290" citStr="Mackworth, 1977" startWordPosition="3401" endWordPosition="3403">or global constraints The above may be tolerable for a ternary factor. But how about global factors? EXACTLY1j has n neighboring boolean variables: surely we cannot iterate over all 2n assignments to these! TREE is even worse, with 2O(n2) assignments to consider. We will give specialized algorithms for handling these summations more efficiently. A historical note is in order. Traditional constraint satisfaction corresponds to the special case of (1) where all factors Fm are hard constraints (with values in {0,1}). In that case, loopy BP reduces to an algorithm for generalized arc consistency (Mackworth, 1977; Bessi`ere and R´egin, 1997; Dechter, 2003), and updating a factor’s outgoing messages is known as constraint propagation. R´egin (1994) famously introduced an efficient propagator for a global constraint, ALLDIFFERENT, by adapting combinatorial bipartite matching algorithms. In the same spirit, we will demonstrate efficient propagators for our global constraints, e.g. by adapting combinatorial algorithms for weighted parsing. We are unaware of any previous work on global factors in sum-product BP, although for max-product BP,13 Duchi et al. (2007) independently showed that a global 1-to-1 al</context>
+</contexts>
+<marker>Mackworth, 1977</marker>
+<rawString>A. Mackworth. 1977. Consistency in networks of relations. Artificial Intelligence, 8(1):99–118.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A F T Martins</author>
+<author>D Das</author>
+<author>N A Smith</author>
+<author>E P Xing</author>
+</authors>
+<title>Stacking dependency parsers.</title>
+<date>2008</date>
+<booktitle>In EMNLP.</booktitle>
+<contexts>
+<context position="3428" citStr="Martins et al., 2008" startWordPosition="514" endWordPosition="517">tself. BP’s behavior in our setup can be understood intuitively as follows. Inasmuch as the first-order parser finds that edge e is probable, the higher-order features will kick in and discourage other edges e&apos; to the extent that they prefer not to coexist with e.2 Thus, the next call to the first-order parser assigns lower probabilities to parses that contain these e&apos;. (The method is approximate because a first-order parser must equally penalize all parses containing e&apos;, even those that do not in fact contain e.) This behavior is somewhat similar to parser stacking (Nivre and McDonald, 2008; Martins et al., 2008), in which a first-order parser derives some of its input features from the full 1-best output of another parser. In our method, a first-order parser derives such input features from its own previous full output (but probabilistic output rather than just 1- best). This circular process is iterated to convergence. Our method also permits the parse to interact cheaply with other variables. Thus first-order parsing, part-of-speech tagging, and other tasks on a common input could mutually influence one another. Our method and its numerical details emerge naturally as an instance of the well-studie</context>
+</contexts>
+<marker>Martins, Das, Smith, Xing, 2008</marker>
+<rawString>A. F. T. Martins, D. Das, N. A. Smith, and E. P. Xing. 2008. Stacking dependency parsers. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Matsuzaki</author>
+<author>Y Miyao</author>
+<author>J Tsujii</author>
+</authors>
+<title>Probabilistic CFG with latent annotations.</title>
+<date>2005</date>
+<booktitle>In ACL,</booktitle>
+<pages>75--82</pages>
+<contexts>
+<context position="42949" citStr="Matsuzaki et al., 2005" startWordPosition="7204" endWordPosition="7207">ns and Future Work Belief propagation improves non-projective dependency parsing with features that would make exact inference intractable. For projective parsing, it is significantly faster than exact dynamic programming, at the cost of small amounts of search error, We are interested in extending these ideas to phrase-structure and lattice parsing, and in trying other higher-order features, such as those used in parse reranking (Charniak and Johnson, 2005; Huang, 2008) and history-based parsing (Nivre and McDonald, 2008). We could also introduce new variables, e.g., nonterminal refinements (Matsuzaki et al., 2005), or secondary links Mid (not constrained by TREE/PTREE) that augment the parse with representations of control, binding, etc. (Sleator and Temperley, 1993; Buch-Kromann, 2006). Other parsing-like problems that could be attacked with BP appear in syntax-based machine translation. Decoding is very expensive with a synchronous grammar composed with an n-gram language model (Chiang, 2007)—but our footnote 10 suggests that BP might incorporate a language model rapidly. String alignment with synchronous grammars is quite expensive even for simple synchronous formalisms like ITG (Wu, 1997)—but Duchi</context>
+</contexts>
+<marker>Matsuzaki, Miyao, Tsujii, 2005</marker>
+<rawString>T. Matsuzaki, Y. Miyao, and J. Tsujii. 2005. Probabilistic CFG with latent annotations. In ACL, pages 75–82.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R McDonald</author>
+<author>F Pereira</author>
+</authors>
+<title>Online learning of approximate dependency parsing algorithms.</title>
+<date>2006</date>
+<booktitle>In EACL.</booktitle>
+<contexts>
+<context position="39184" citStr="McDonald and Pereira (2006)" startWordPosition="6618" endWordPosition="6622">ive TREE factor to train conditional log-linear parsing models of two highly non-projective languages, Danish and Dutch, as well as slightly non-projective English (§8.1). In all three languages, the first-order non-projective parser greatly overpredicts the number of crossing links. We thus added NOCROSS factors, as well as GRAND and CHILDSEQ as before. All of these significantly improve the first-order baseline, though not necessarily cumulatively (Table 2). Finally, Table 2 compares loopy BP to a previously proposed “hill-climbing” method for approximate inference in non-projective parsing McDonald and Pereira (2006). Hill-climbing decodes our richest non-projective model by finding the best projective parse under that model—using slow, higherorder DP—and then greedily modifies words’ parents until the parse score (1) stops improving. 0.0 0.1 0.2 0.3 0.4 Error relative to exact MBR Input length 40 words 50 words 60 words 70 words 154 Decoding Danish Dutch English NOT2 81.8 (76.7) 83.3 (75.0) 87.5 (66.4) ATMOST1 85.4 (82.2) 87.3 (86.3) 88.5 (84.6) EXACTLY1 85.7 (85.0) 87.0 (86.7) 88.6 (86.0) + NO2CYCLE 85.0 (85.2) 86.2 (86.7) 88.5 (86.2) TREE 85.5 (85.5) 87.3 (87.3) 88.6 (88.6) PTREE 85.8 83.9 88.8 Table 3</context>
+</contexts>
+<marker>McDonald, Pereira, 2006</marker>
+<rawString>R. McDonald and F. Pereira. 2006. Online learning of approximate dependency parsing algorithms. In EACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R McDonald</author>
+<author>K Crammer</author>
+<author>F Pereira</author>
+</authors>
+<title>Online large-margin training of dependency parsers.</title>
+<date>2005</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="10116" citStr="McDonald et al. (2005)" startWordPosition="1689" endWordPosition="1692">A) def = exp θhfh(A, W, m) (2) hEfeatures(F,) where θ is a learned, finite collection of weights and f is a corresponding collection of feature functions, some of which are used by Fm. (Note that fh is permitted to consult the observed input W. It also sees which factor Fm it is scoring, to support reuse of a single feature function fh and its weight θh by unboundedly many factors in a model.) LINK. A family of unary soft factors that judge the links in a parse A individually. LINKij fires iff Lij = true, and then its value depends on (i, j), W, and θ. Our experiments use the same features as McDonald et al. (2005). A first-order (or “edge-factored”) parsing model (McDonald et al., 2005) contains only LINK factors, along with a global TREE or PTREE factor. Though there are O(n2) link factors (one per Lij), only n of them fire on any particular parse, since the global factor ensures that exactly n are true. We’ll consider various higher-order soft factors: PAIR. The binary factor PAIRij,kt fires with some value iff Lij and Lkt are both true. Thus, it penalizes or rewards a pair of links for being simultaneously present. This is a soft version of NAND. GRAND. Shorthand for the family of O(n3) binary facto</context>
+</contexts>
+<marker>McDonald, Crammer, Pereira, 2005</marker>
+<rawString>R. McDonald, K. Crammer, and F. Pereira. 2005. Online large-margin training of dependency parsers. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Nivre</author>
+<author>R McDonald</author>
+</authors>
+<title>Integrating graphbased and transition-based dependency parsers.</title>
+<date>2008</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="3405" citStr="Nivre and McDonald, 2008" startWordPosition="510" endWordPosition="513">idering the interactions itself. BP’s behavior in our setup can be understood intuitively as follows. Inasmuch as the first-order parser finds that edge e is probable, the higher-order features will kick in and discourage other edges e&apos; to the extent that they prefer not to coexist with e.2 Thus, the next call to the first-order parser assigns lower probabilities to parses that contain these e&apos;. (The method is approximate because a first-order parser must equally penalize all parses containing e&apos;, even those that do not in fact contain e.) This behavior is somewhat similar to parser stacking (Nivre and McDonald, 2008; Martins et al., 2008), in which a first-order parser derives some of its input features from the full 1-best output of another parser. In our method, a first-order parser derives such input features from its own previous full output (but probabilistic output rather than just 1- best). This circular process is iterated to convergence. Our method also permits the parse to interact cheaply with other variables. Thus first-order parsing, part-of-speech tagging, and other tasks on a common input could mutually influence one another. Our method and its numerical details emerge naturally as an inst</context>
+<context position="42854" citStr="Nivre and McDonald, 2008" startWordPosition="7191" endWordPosition="7194">e 2.2% for NOT2, 2.1% for EXACTLY1, 1.7% for EXACTLY1 + NO2CYCLE, and 0.0% for PTREE. 9 Conclusions and Future Work Belief propagation improves non-projective dependency parsing with features that would make exact inference intractable. For projective parsing, it is significantly faster than exact dynamic programming, at the cost of small amounts of search error, We are interested in extending these ideas to phrase-structure and lattice parsing, and in trying other higher-order features, such as those used in parse reranking (Charniak and Johnson, 2005; Huang, 2008) and history-based parsing (Nivre and McDonald, 2008). We could also introduce new variables, e.g., nonterminal refinements (Matsuzaki et al., 2005), or secondary links Mid (not constrained by TREE/PTREE) that augment the parse with representations of control, binding, etc. (Sleator and Temperley, 1993; Buch-Kromann, 2006). Other parsing-like problems that could be attacked with BP appear in syntax-based machine translation. Decoding is very expensive with a synchronous grammar composed with an n-gram language model (Chiang, 2007)—but our footnote 10 suggests that BP might incorporate a language model rapidly. String alignment with synchronous g</context>
+</contexts>
+<marker>Nivre, McDonald, 2008</marker>
+<rawString>J. Nivre and R. McDonald. 2008. Integrating graphbased and transition-based dependency parsers. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Nivre</author>
+<author>J Hall</author>
+<author>S K¨ubler</author>
+<author>R McDonald</author>
+<author>J Nilsson</author>
+<author>S Riedel</author>
+<author>D Yuret</author>
+</authors>
+<title>The CoNLL</title>
+<date>2007</date>
+<booktitle>In Proceedings of the CoNLL Shared Task Session of EMNLP-CoNLL.</booktitle>
+<marker>Nivre, Hall, K¨ubler, McDonald, Nilsson, Riedel, Yuret, 2007</marker>
+<rawString>J. Nivre, J. Hall, S. K¨ubler, R. McDonald, J. Nilsson, S. Riedel, and D. Yuret. 2007. The CoNLL 2007 shared task on dependency parsing. In Proceedings of the CoNLL Shared Task Session of EMNLP-CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J-C R´egin</author>
+</authors>
+<title>A filtering algorithm for constraints of difference in csps.</title>
+<date>1994</date>
+<booktitle>In AAAI,</booktitle>
+<pages>362--367</pages>
+<marker>R´egin, 1994</marker>
+<rawString>J.-C. R´egin. 1994. A filtering algorithm for constraints of difference in csps. In AAAI, pages 362–367.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Riedel</author>
+<author>J Clarke</author>
+</authors>
+<title>Incremental integer linear programming for non-projective dependency parsing.</title>
+<date>2006</date>
+<booktitle>In EMNLP,</booktitle>
+<pages>129--137</pages>
+<contexts>
+<context position="2095" citStr="Riedel and Clarke, 2006" startWordPosition="305" endWordPosition="308">per, we show that BP can be used to train and decode complex parsing models. Our approach calls a simpler parser as a subroutine, so it still exploits the useful, well-studied combinatorial structure of the parsing problem.1 2 Overview and Related Work We wish to make a dependency parse’s score depend on higher-order features, which consider ar*This work was supported by the Human Language Technology Center of Excellence. 1As do constraint relaxation (Tromble and Eisner, 2006) and forest reranking (Huang, 2008). In contrast, generic NP-hard solution techniques like Integer Linear Programming (Riedel and Clarke, 2006) know nothing about optimal substructure. bitrary interactions among two or more edges in the parse (and perhaps also other latent variables such as part-of-speech tags or edge labels). Such features can help accuracy—as we show. Alas, they raise the polynomial runtime of projective parsing, and render non-projective parsing NP-hard. Hence we seek approximations. We will show how BP’s “message-passing” discipline offers a principled way for higher-order features to incrementally adjust the numerical edge weights that are fed to a fast first-order parser. Thus the first-order parser is influenc</context>
+</contexts>
+<marker>Riedel, Clarke, 2006</marker>
+<rawString>S. Riedel and J. Clarke. 2006. Incremental integer linear programming for non-projective dependency parsing. In EMNLP, pages 129–137.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Sherman</author>
+<author>W J Morrison</author>
+</authors>
+<title>Adjustment of an inverse matrix corresponding to a change in one element of a given matrix.</title>
+<date>1950</date>
+<journal>Ann. Math. Stat.,</journal>
+<pages>21--124</pages>
+<contexts>
+<context position="28004" citStr="Sherman and Morrison, 1950" startWordPosition="4770" endWordPosition="4773">te b(Lij = true) for each i in only O(1) time,20 so that we can propagate each of the O(n2) NOCROSSj` in O(n) time. This is why we allowed xj` to depend only on j, E. We can rewrite the sum b(Lij = true) as X7r · gLij · (xj` · X�qLke + 1 · 4Lke) (9) crossing k noncrossing k 19A dynamic algorithm could incrementally update the outgoing messages if only a few incoming messages have changed (as in asynchronous BP). In the case of TREE, dynamic matrix inverse allows us to update any row or column (i.e., messages from all parents or children of a given word) and find the new inverse in O(n2) time (Sherman and Morrison, 1950). 20Symmetrically, we compute b(Lke = true) for each k. To find this in O(1) time, we precompute for each E an array of partial sums Q`[s, t] def = Ps&lt;k&lt;t �qLke. Since Q`[s, t] = Q`[s, t−1]+�qLte, we can compute each entry in O(1) time. The total precomputation time over all E, s, t is then O(n3), with the array Q` shared across all factors NOCROSSjq. The crossing sum is respectively Q`[0, i−1]+Q`[j+1, n], Q`[i+ 1, j − 1], or 0 according to whether E ∈ (i, j), E ∈� [i, j], or E = i.21 The non-crossing sum is Q`[0, n] minus the crossing sum. CHILDSEQi , like TRIGRAM, is propagated by a forward-</context>
+</contexts>
+<marker>Sherman, Morrison, 1950</marker>
+<rawString>J. Sherman and W. J. Morrison. 1950. Adjustment of an inverse matrix corresponding to a change in one element of a given matrix. Ann. Math. Stat., 21:124–127.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Sleator</author>
+<author>D Temperley</author>
+</authors>
+<title>Parsing English with a link grammar. In</title>
+<date>1993</date>
+<booktitle>IWPT,</booktitle>
+<pages>277--291</pages>
+<contexts>
+<context position="43104" citStr="Sleator and Temperley, 1993" startWordPosition="7227" endWordPosition="7231">ive parsing, it is significantly faster than exact dynamic programming, at the cost of small amounts of search error, We are interested in extending these ideas to phrase-structure and lattice parsing, and in trying other higher-order features, such as those used in parse reranking (Charniak and Johnson, 2005; Huang, 2008) and history-based parsing (Nivre and McDonald, 2008). We could also introduce new variables, e.g., nonterminal refinements (Matsuzaki et al., 2005), or secondary links Mid (not constrained by TREE/PTREE) that augment the parse with representations of control, binding, etc. (Sleator and Temperley, 1993; Buch-Kromann, 2006). Other parsing-like problems that could be attacked with BP appear in syntax-based machine translation. Decoding is very expensive with a synchronous grammar composed with an n-gram language model (Chiang, 2007)—but our footnote 10 suggests that BP might incorporate a language model rapidly. String alignment with synchronous grammars is quite expensive even for simple synchronous formalisms like ITG (Wu, 1997)—but Duchi et al. (2007) show how to incorporate bipartite matching into max-product BP. Finally, we can take advantage of improvements to BP proposed in the context</context>
+</contexts>
+<marker>Sleator, Temperley, 1993</marker>
+<rawString>D. Sleator and D. Temperley. 1993. Parsing English with a link grammar. In IWPT, pages 277–291, August.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D A Smith</author>
+<author>N A Smith</author>
+</authors>
+<title>Probabilistic models of nonprojective dependency trees.</title>
+<date>2007</date>
+<booktitle>In EMNLPCoNLL.</booktitle>
+<contexts>
+<context position="26719" citStr="Smith and Smith (2007)" startWordPosition="4522" endWordPosition="4525">ms by calling a first-order parsing algorithm, with edge weights qij. Thus, as outlined in §2, a first-order parser is called each time we propagate through the global TREE or PTREE constraint, using edge weights that include the first-order LINK factors but also multiply in any current messages from higher-order factors. The parsing algorithm simultaneously computes the partition function b(), and all O(n2) marginal beliefs b(Lij = true). For PTREE (projective), it is the inside-outside version of a dynamic programming algorithm (Eisner, 1996). For TREE (nonprojective), Koo et al. (2007) and Smith and Smith (2007) show how to employ the matrix-tree theorem. In both cases, the total time is O(n3).19 NOCROSSj` must sum over assignments to O(n) neighboring variables {Lij} and {Lk`}. The nonzero summands are assignments where j and E each have exactly one parent. At step 1, 7r def = Qi qLij(false) · Qk qLke(false). At step 2, the marginal belief b(Lij = true) sums over the n nonzero assignments containing i → j. It is 7r · gLij · Pk �qLke · PAIRij,k`, where PAIRij,k` is xj` if i → j crosses k → E and is 1 otherwise. xj` is some factor value defined by equation (2) to penalize or reward the crossing. Steps </context>
+</contexts>
+<marker>Smith, Smith, 2007</marker>
+<rawString>D. A. Smith and N. A. Smith. 2007. Probabilistic models of nonprojective dependency trees. In EMNLPCoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Sutton</author>
+<author>A McCallum</author>
+</authors>
+<title>Collective segmentation and labeling of distant entities in information extraction.</title>
+<date>2004</date>
+<booktitle>In ICML Workshop on Statistical Relational Learning.</booktitle>
+<contexts>
+<context position="4617" citStr="Sutton and McCallum, 2004" startWordPosition="699" endWordPosition="702">lly as an instance of the well-studied loopy BP algorithm, suggesting several potential future im2This may be reminiscent of adjusting a Lagrange multiplier on e&apos; until some (hard) constraint is satisfied. 145 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 145–156, Honolulu, October 2008.c�2008 Association for Computational Linguistics provements to accuracy (Yedidia et al., 2004; Braunstein et al., 2005) and efficiency (Sutton and McCallum, 2007). Loopy BP has occasionally been used before in NLP, with good results, to handle non-local features (Sutton and McCallum, 2004) or joint decoding (Sutton et al., 2004). However, our application to parsing requires an innovation to BP that we explain in §5—a global constraint to enforce that the parse is a tree. The tractability of some such global constraints points the way toward applying BP to other computationally intensive NLP problems, such as syntax-based alignment of parallel text. 3 Graphical Models of Dependency Trees 3.1 Observed and hidden variables To apply BP, we must formulate dependency parsing as a search for an optimal assignment to the variables of a graphical model. We encode a parse using the follo</context>
+</contexts>
+<marker>Sutton, McCallum, 2004</marker>
+<rawString>C. Sutton and A. McCallum. 2004. Collective segmentation and labeling of distant entities in information extraction. In ICML Workshop on Statistical Relational Learning.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Sutton</author>
+<author>A McCallum</author>
+</authors>
+<title>Improved dynamic schedules for belief propagation.</title>
+<date>2007</date>
+<booktitle>In UAI.</booktitle>
+<contexts>
+<context position="4489" citStr="Sutton and McCallum, 2007" startWordPosition="677" endWordPosition="681">ging, and other tasks on a common input could mutually influence one another. Our method and its numerical details emerge naturally as an instance of the well-studied loopy BP algorithm, suggesting several potential future im2This may be reminiscent of adjusting a Lagrange multiplier on e&apos; until some (hard) constraint is satisfied. 145 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 145–156, Honolulu, October 2008.c�2008 Association for Computational Linguistics provements to accuracy (Yedidia et al., 2004; Braunstein et al., 2005) and efficiency (Sutton and McCallum, 2007). Loopy BP has occasionally been used before in NLP, with good results, to handle non-local features (Sutton and McCallum, 2004) or joint decoding (Sutton et al., 2004). However, our application to parsing requires an innovation to BP that we explain in §5—a global constraint to enforce that the parse is a tree. The tractability of some such global constraints points the way toward applying BP to other computationally intensive NLP problems, such as syntax-based alignment of parallel text. 3 Graphical Models of Dependency Trees 3.1 Observed and hidden variables To apply BP, we must formulate d</context>
+</contexts>
+<marker>Sutton, McCallum, 2007</marker>
+<rawString>C. Sutton and A. McCallum. 2007. Improved dynamic schedules for belief propagation. In UAI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Sutton</author>
+<author>K Rohanimanesh</author>
+<author>A McCallum</author>
+</authors>
+<title>Dynamic conditional random fields: Factorized probabilistic models for labeling and segmenting sequence data.</title>
+<date>2004</date>
+<booktitle>In ICML.</booktitle>
+<contexts>
+<context position="4657" citStr="Sutton et al., 2004" startWordPosition="707" endWordPosition="710">P algorithm, suggesting several potential future im2This may be reminiscent of adjusting a Lagrange multiplier on e&apos; until some (hard) constraint is satisfied. 145 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 145–156, Honolulu, October 2008.c�2008 Association for Computational Linguistics provements to accuracy (Yedidia et al., 2004; Braunstein et al., 2005) and efficiency (Sutton and McCallum, 2007). Loopy BP has occasionally been used before in NLP, with good results, to handle non-local features (Sutton and McCallum, 2004) or joint decoding (Sutton et al., 2004). However, our application to parsing requires an innovation to BP that we explain in §5—a global constraint to enforce that the parse is a tree. The tractability of some such global constraints points the way toward applying BP to other computationally intensive NLP problems, such as syntax-based alignment of parallel text. 3 Graphical Models of Dependency Trees 3.1 Observed and hidden variables To apply BP, we must formulate dependency parsing as a search for an optimal assignment to the variables of a graphical model. We encode a parse using the following variables: Sentence. The n-word inp</context>
+</contexts>
+<marker>Sutton, Rohanimanesh, McCallum, 2004</marker>
+<rawString>C. Sutton, K. Rohanimanesh, and A. McCallum. 2004. Dynamic conditional random fields: Factorized probabilistic models for labeling and segmenting sequence data. In ICML.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R E Tarjan</author>
+</authors>
+<title>Finding optimum branchings.</title>
+<date>1977</date>
+<journal>Networks,</journal>
+<pages>7--25</pages>
+<contexts>
+<context position="30621" citStr="Tarjan, 1977" startWordPosition="5233" endWordPosition="5234">best trees, or take samples. 21There are no NOCROSSje factors with f = j. 22We still treat CHILDSEQi as a global factor and compute all its correct outgoing messages on a single BP iteration, via serial forward and backward sweeps through the subfactors. Handling the subfactors in parallel, (3)–(4), would need O(n) iterations. 23Ignoring the treatment of boundary symbols “#” (see §3.4). 151 In our experiments, we actually take the edge weights to be not the messages �qLij from the links, def �bLij = log bLij(true)/bLij(false)). These are passed into a fast algorithm for maximum spanning tree (Tarjan, 1977) or maximum projective spanning tree (Eisner, 1996). This procedure is equivalent to minimum Bayes risk (MBR) parsing (Goodman, 1996) with a dependency accuracy loss function. Notice that the above decoding approaches do not enforce any hard constraints other than TREE in the final output. In addition, they only recover values of the Lij variables. They marginalize over other variables such as tags and link roles. This solves the problem of “nuisance” variables (which merely fragment probability mass among refinements of a parse). On the other hand, it may be undesirable for variables whose va</context>
+<context position="32103" citStr="Tarjan, 1977" startWordPosition="5465" endWordPosition="5466">t to all variables—using the max-product algorithm (footnote 13) or one of its recent variants. The estimated marginal beliefs become “max marginals,” which assess the 1-best assignment consistent with each value of the variable. We can indeed build max-product propagators for our global constraints. PTREE still propagates in O(n3) time: simply change the first-order parser’s semiring (Goodman, 1999) to use max instead of sum. TREE requires O(n4) time: it seems that the O(n2) max marginals must be computed separately, each requiring a separate call to an O(n2) maximum spanning tree algorithm (Tarjan, 1977). If max-product BP converges, we may simply output each variable’s favorite value (according to its belief), if unique. However, max-product BP tends to be unstable on loopy graphs, and we may not wish to wait for full convergence in any case. A more robust technique for extracting an assignment is to mimic Viterbi decoding, and “follow backpointers” of the max-product computation along some spanning subtree of the factor graph. A slower but potentially more stable alternative is deterministic annealing. Replace each factor Fm(A) with Fm(A)1/T , where T &gt; 0 is a temperature. As T --+ 0 (“quen</context>
+</contexts>
+<marker>Tarjan, 1977</marker>
+<rawString>R. E. Tarjan. 1977. Finding optimum branchings. Networks, 7:25–35.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R W Tromble</author>
+<author>J Eisner</author>
+</authors>
+<title>A fast finite-state relaxation method for enforcing global constraints on sequence decoding.</title>
+<date>2006</date>
+<booktitle>In HLT-NAACL,</booktitle>
+<pages>423--430</pages>
+<contexts>
+<context position="1952" citStr="Tromble and Eisner, 2006" startWordPosition="286" endWordPosition="289">pproximations. We propose borrowing a different approximation technique from machine learning, namely, loopy belief propagation (BP). In this paper, we show that BP can be used to train and decode complex parsing models. Our approach calls a simpler parser as a subroutine, so it still exploits the useful, well-studied combinatorial structure of the parsing problem.1 2 Overview and Related Work We wish to make a dependency parse’s score depend on higher-order features, which consider ar*This work was supported by the Human Language Technology Center of Excellence. 1As do constraint relaxation (Tromble and Eisner, 2006) and forest reranking (Huang, 2008). In contrast, generic NP-hard solution techniques like Integer Linear Programming (Riedel and Clarke, 2006) know nothing about optimal substructure. bitrary interactions among two or more edges in the parse (and perhaps also other latent variables such as part-of-speech tags or edge labels). Such features can help accuracy—as we show. Alas, they raise the polynomial runtime of projective parsing, and render non-projective parsing NP-hard. Hence we seek approximations. We will show how BP’s “message-passing” discipline offers a principled way for higher-order</context>
+</contexts>
+<marker>Tromble, Eisner, 2006</marker>
+<rawString>R. W. Tromble and J. Eisner. 2006. A fast finite-state relaxation method for enforcing global constraints on sequence decoding. In HLT-NAACL, pages 423–430.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Weiss</author>
+<author>W T Freedman</author>
+</authors>
+<title>On the optimality of solutions of the max-product belief propagation algorithm in arbitrary graphs.</title>
+<date>2001</date>
+<journal>IEEE Transactions on Information Theory,</journal>
+<volume>47</volume>
+<contexts>
+<context position="17941" citStr="Weiss and Freedman, 2001" startWordPosition="3016" endWordPosition="3019">may be left as unnormalized distributions, choosing n =� 1 only as needed to prevent over- or underflow. Messages are initialized to uniform distributions. Whenever we wish, we may compute the beliefs at V and F: bvk,1)(v) def (k) bFk—T1) (A) = n 11 rG�V (v) def GEN(V ) (k) n F(A) 11 qU�F (A[U�) UEN(F) These beliefs do not truly characterize the expected behavior of Gibbs sampling (§4.1), since the products in (5)–(6) make conditional independence assumptions that are valid only if the factor graph is acyclic. Furthermore, on cyclic (“loopy”) graphs, BP might only converge to a local optimum (Weiss and Freedman, 2001), or it might not converge at all. Still, BP often leads to good, fast approximations. 5 Achieving Low Asymptotic Runtime One iteration of standard BP simply updates all the messages as in equations (3)–(4): one message per edge of the factor graph. Therefore, adding new factors to the model increases the runtime per iteration additively, by increasing the number of messages to update. We believe this is a compelling advantage over dynamic programming—in which new factors usually increase the runtime and space multiplicatively by exploding the number of distinct items.10 5.1 Propagators for lo</context>
+</contexts>
+<marker>Weiss, Freedman, 2001</marker>
+<rawString>Y. Weiss and W. T. Freedman. 2001. On the optimality of solutions of the max-product belief propagation algorithm in arbitrary graphs. IEEE Transactions on Information Theory, 47.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Wu</author>
+</authors>
+<title>Stochastic inversion transduction grammars and bilingual parsing of parallel corpora.</title>
+<date>1997</date>
+<journal>CL,</journal>
+<volume>23</volume>
+<issue>3</issue>
+<marker>Wu, 1997</marker>
+<rawString>D. Wu. 1997. Stochastic inversion transduction grammars and bilingual parsing of parallel corpora. CL, 23(3):377–404.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J S Yedidia</author>
+<author>W T Freeman</author>
+<author>Y Weiss</author>
+</authors>
+<title>Constructing free-energy approximations and generalized belief approximation algorithms. MERL TR2004-040, Mitsubishi Electric Research Laboratories.</title>
+<date>2004</date>
+<contexts>
+<context position="4420" citStr="Yedidia et al., 2004" startWordPosition="666" endWordPosition="669">h other variables. Thus first-order parsing, part-of-speech tagging, and other tasks on a common input could mutually influence one another. Our method and its numerical details emerge naturally as an instance of the well-studied loopy BP algorithm, suggesting several potential future im2This may be reminiscent of adjusting a Lagrange multiplier on e&apos; until some (hard) constraint is satisfied. 145 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 145–156, Honolulu, October 2008.c�2008 Association for Computational Linguistics provements to accuracy (Yedidia et al., 2004; Braunstein et al., 2005) and efficiency (Sutton and McCallum, 2007). Loopy BP has occasionally been used before in NLP, with good results, to handle non-local features (Sutton and McCallum, 2004) or joint decoding (Sutton et al., 2004). However, our application to parsing requires an innovation to BP that we explain in §5—a global constraint to enforce that the parse is a tree. The tractability of some such global constraints points the way toward applying BP to other computationally intensive NLP problems, such as syntax-based alignment of parallel text. 3 Graphical Models of Dependency Tre</context>
+<context position="13491" citStr="Yedidia et al., 2004" startWordPosition="2263" endWordPosition="2266"> variables for link roles. 7In effect, we have combined the O(n4) binary factors PAIRzj,k¢ into O(n2) groups, and made them more precise by multiplying in EXACTLYONE constraints (see footnote 30). This will permit O(n3) total computation if we are willing to sacrifice the ability of the PAIR weights to depend on i and k. 147 Figure 1: A fragment of a factor graph, illustrating a few of the unary, binary, and global factors that affect variables L25 and L56. The GRAND factor induces a loop. eralization of the forward-backward algorithm that is deeply studied in the graphical models literature (Yedidia et al., 2004, for example). We briefly sketch the method in terms of our parsing task. 4.1 Where BP comes from The basic BP idea is simple. Variable L34 maintains a distribution over values true and false—a “belief”—that is periodically recalculated based on the current distributions at other variables.8 Readers familiar with Gibbs sampling can regard this as a kind of deterministic approximation. In Gibbs sampling, L34’s value is periodically resampled based on the current values of other variables. Loopy BP works not with random samples but their expectations. Hence it is approximate but tends to conver</context>
+<context position="25415" citStr="Yedidia et al., 2004" startWordPosition="4290" endWordPosition="4293"> true). 4. For each i, compute b(Lij = false) by subtraction, as b() − b(Lij = true). TREE and PTREE must sum over assignments to the O(n2) neighboring variables {Lij}. There are now exponentially many non-zero summands, those in which A corresponds to a valid tree. Nonetheless, 16Which is itself an exact BP algorithm, but on a different graph—a junction tree formed from the graph of TRIGRAM subfactors. Each variable in the junction tree is a bigram. If we had simply replaced the global TRIGRAM factor with its subfactors in the full factor graph, we would have had to resort to Generalized BP (Yedidia et al., 2004) to obtain the same exact results. 17But taking it = 1 gives the same results, up to a constant. 18As a matter of implementation, this odds ratio qL,, can be used to represent the incoming message qL., everywhere. b���1) F → (A) (7) 150 we can follow the same approach as for EXACTLY1. Steps 1 and 4 are modified to iterate over all i, j such that Lij is a variable. In step 3, the partition function PA b(A) is now 7r times the total weight of all trees, where the weight of a given tree is the product of the gLij values of its n edges. In step 2, the marginal belief b(Lij = true) is now 7r times </context>
+</contexts>
+<marker>Yedidia, Freeman, Weiss, 2004</marker>
+<rawString>J. S. Yedidia, W. T. Freeman, and Y. Weiss. 2004. Constructing free-energy approximations and generalized belief approximation algorithms. MERL TR2004-040, Mitsubishi Electric Research Laboratories.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

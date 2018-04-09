@@ -1,0 +1,2587 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<sectionHeader confidence="0.8264825" genericHeader="method">
+THE CORRECTION OF ILL-FORMED INPUT USING HISTORY-BASED
+EXPECTATION WITH APPLICATIONS TO SPEECH UNDERSTANDING
+</sectionHeader>
+<author confidence="0.894153">
+Pamela K. Fink
+</author>
+<affiliation confidence="0.86515">
+Southwest Research Institute
+</affiliation>
+<address confidence="0.7998355">
+6220 Culebra Road
+San Antonio, TX 78284
+</address>
+<author confidence="0.640146">
+Alan W. Biermann
+</author>
+<affiliation confidence="0.947325">
+Department of Computer Science
+Duke University
+</affiliation>
+<sectionHeader confidence="0.449442" genericHeader="method">
+Durham, NC 27706
+</sectionHeader>
+<bodyText confidence="0.958744818181818">
+A method for error correction of ill-formed input is described that acquires dialogue patterns in
+typical usage and uses these patterns to predict new inputs. Error correction is done by strongly biasing
+parsing toward expected meanings unless clear evidence from the input shows the current sentence is
+not expected. A dialogue acquisition and tracking algorithm is presented along with a description of its
+implementation in a voice interactive system. A series of tests are described that show the power of
+the error correction methodology when stereotypic dialogue occurs.
+This material is based upon work supported by The
+National Science Foundation under Grant number MCS
+7904120 and Grant number MCS 8113491 and by the
+Air Force Office of Scientific Research, Air Force
+Systems Command, USAF, under Grant 81-0221.
+</bodyText>
+<sectionHeader confidence="0.999475" genericHeader="method">
+1 INTRODUCTION
+</sectionHeader>
+<bodyText confidence="0.999988951219512">
+In an environment where stereotypic discourse commonly
+occurs, the repetitiveness and predictability of the inter-
+actions may enable a machine to effectively anticipate
+some inputs. For a speech understanding system, such
+anticipation can greatly enhance the processor&apos;s capabili-
+ties for error correction so that proper action will take
+place despite inaccuracies at the voice recognition phase.
+This paper is concerned with the automatic construction
+of a model of user behaviors in typical interactions and
+the use of such a model in the correction of misrecogni-
+tion errors.
+It is assumed that a user approaches the machine in a
+typical application with a problem to be solved. He or
+she inputs a series of sentences requesting action or
+information that will lead to a solution and then leaves
+when the task is complete. In the early examples of such
+an interaction, the machine will have little or no expecta-
+tion and will be dependent on its basic capabilities for
+understanding and carrying out commands. However, if
+repetitive behaviors occur, the processor will effectively
+use them to anticipate inputs and correct errors. This will
+enable the user to speak less precisely and more quickly
+while still achieving reliable performance.
+Such repetitive behaviors may occur within a single
+dialogue where a user may utter sentences with similar
+meanings again and again (as in &amp;quot;Is there a plane on
+Thursday? What time does it leave? Is there one on
+Friday? When does it leave?&amp;quot;). They may also occur
+when a given dialogue resembles earlier ones. The
+expectation system will thus continuously monitor inputs,
+looking for repetition. If no repetitious behavior occurs,
+the natural language processor is allowed to proceed
+without intervention in handling a dialogue. However, if
+repetitiveness is detected, the expectation system will
+supply the processor with anticipated behaviors which
+can be used to help remove uncertainties in sentence
+recognition when they occur.
+In the following sections, an overview of the history-
+based expectation system is given. Then a representation
+for user behaviors is described, followed by an algorithm
+for creating and tracking such models along with a meth-
+</bodyText>
+<note confidence="0.720822333333333">
+Copyright1986 by the Association for Computational Linguistics. Permission to copy without fee all or part of this material is granted provided that
+the copies are not made for direct commercial advantage and the CL reference and this copyright notice are included on the first page. To copy
+otherwise, or to republish, requires a fee and/or specific permission.
+0362-613X/86/010013-36$03.00
+Computational Linguistics, Volume 12, Number 1, January-March 1986 13
+Pamela K. Fink and Alan W. Biermaim The Correction of III-Formed Input
+</note>
+<bodyText confidence="0.9996952">
+od for using them in error correction. Finally, an imple-
+mentation of this methodology is described in the domain
+of speech recognition and results from a series of tests
+investigating the system&apos;s performance in various situ-
+ations are presented.
+</bodyText>
+<sectionHeader confidence="0.9983825" genericHeader="method">
+2 AN OVERVIEW OF THE HISTORY-BASED
+EXPECTATION SYSTEM
+</sectionHeader>
+<bodyText confidence="0.999359333333333">
+The general goal of the history-based expectation system
+is to merge a series of dialogues, each of which consists
+of a sequence of sentences, into a more general dialogue
+that reflects the patterns that exist between and within
+the separate dialogues. Thus, the expectation system
+must:
+</bodyText>
+<listItem confidence="0.639293285714286">
+— save incoming dialogues,
+— find patterns between and within these dialogues so
+that they can be merged into a more general dialogue
+which becomes a formula for a more general situation,
+and
+— use this information to help predict what will be said by
+a user in a given situation.
+</listItem>
+<bodyText confidence="0.996214433333333">
+This ability to predict what might be said by a user can
+help error correct what is input to the natural language
+system through errorful means, such as a voice recogniz-
+er. We will call this ability expectation. Figure 1 shows
+an overview of the structure of the history-based expec-
+tation system. Expectation is acquired at two levels, the
+sentence level and the dialogue level. A special parser,
+called the expectation parser, is used to analyze at the
+sentence level. The expected dialogue is a data structure
+used to store the history-based expectation that is
+acquired using an expectation acquisition algorithm. This
+constitutes the dialogue level.
+As each sentence is entered into the system, such as
+through a speech recognition device, it is parsed and a
+meaning representation is produced and saved by an
+expectation acquisition algorithm in the expectation
+module (see 1 in Figure 1). The parse is also output for
+use in the next step in the system&apos;s processing of the
+sentence. This process builds a sequence of sentence
+meanings, which are then incorporated into an expected
+dialogue (see 2 in Figure 1). After an expected dialogue
+is partially or completely built, the expectation module
+attempts to determine where the user is in a given
+dialogue using information from the expected dialogue
+and the current parsed sentence (see 1 and 3 in Figure
+1). If it succeeds, it creates and transmits (see 4 in
+Figure 1) an expected sentence set to the expectation
+parser. The expectation parser will then use this infor-
+mation to improve its ability to recognize the next incom-
+ing sentence.
+</bodyText>
+<figure confidence="0.997475166666667">
+EXPECTED
+DIALOGUE
+31- 12
+I EXPECTATION I
+I MODULE I
+LT
+Lfti
+WORD
+SEQUENCE=&gt; I EXPECTATION I
+NETWORK I PARSER I
+EXPECTAT ION
+GRAMMAR
+</figure>
+<figureCaption confidence="0.9976275">
+Figure 1. Overview of the history-based
+expectation system.
+</figureCaption>
+<figure confidence="0.81210825">
+EXPECTED
+SENTENCE
+SET
+14 Computational Linguistics, Volume 12, Number 1, January-March 1986
+Pamela K. Fink and Alan W. Biermann The Correction of Ill-Formed Input
+3 A REPRESENTATION FOR USER BEHAVIORS
+Suppose a user inputs the following sequence:
+Sentence Label
+Display my mail summary for today. Si
+Show me this letter. (with touch input) S2
+(the letter appears on the screen)
+Remove this letter. S3
+Display the letter from JA. S4
+(letter appears on the screen)
+Delete it. S5
+Log off. S6
+</figure>
+<bodyText confidence="0.988680633333333">
+We denote the meaning of each sentence Si with the
+notation M(Si). The exact form of M(Si) need not be
+discussed at this point; it could be a conceptual depend-
+ence graph (Schank and Abelson 1977), a deep parse of
+Si, or some other representation. A user behavior is
+represented by a network, or directed graph, of such
+meanings. At the beginning of a task, the state of the
+interaction is represented by the start state of the graph.
+The immediate successors of this state are the typical
+opening meaning structures for this user, and succeeding
+states represent, historically, paths that have been
+followed by this user.
+It is important that if two sentences, Si and Sj, have
+approximately the same meaning this should be clear in
+the representations M(Si) and M(Sj). Our algorithm,
+described below, merges two meanings M(Si) and M(Sj)
+into a single node in the behavior representation if they
+— are sufficiently similar, and
+— appear in similar contexts.
+Thus, in the above example it would appear that M(S3)
+and M(S5) play similar roles and could be represented by
+one structure: after a letter is read, one might expect to
+see it deleted.
+Often, two commands will be similar except for the
+instantiation of certain constituents. This is the case in
+sentences S2 and S4, which request the display of,
+respectively, the message indicated by a touch and the
+letter from JA. Again, it is desired to represent such
+similar meanings in a behavior graph with a single node if
+they appear in similar environments. Thus, a routine will
+be needed to find a generalization of two such sentences
+that can represent their common meaning. In the exam-
+ple, the generalization of S2 and S4 might be &amp;quot;display
+(LETTER)&amp;quot; where &amp;quot;(LETTER)&amp;quot; is a noun group referring
+to a letter.
+In tracking a dialogue, we may arrive at a node in the
+behavior graph with meaning Ml. This means a
+command is expected with meaning M2 that is either
+identical to, or a special case of, Ml. If such an M2 is
+input at this time, we will say that M1 predicts M2 and
+define the predicate:
+Predicts(M1, M2) = true if and only if meaning M1
+is identical or similar to M2.
+It is quite possible, as with M(S2) and M(S4) above, that
+a common generalization can be found for two sentences
+that appear in similar contexts. Then one will be able to
+merge them into a single node in the behavior graph.
+Thus, it is necessary to have a predicate to check whether
+these conditions hold and a function to find the desired
+generalization. The following two routines do this:
+Mergeable(M1, M2) = true if and only if an M can
+be found such that Predicts(M, M1) and
+Predicts(M, M2).
+Merge(M1, M2) yields a meaning M that is identi-
+cal to, or a generalization of, M1 and M2.
+A user behavior is represented as a network of
+sentence meanings with transitions from one meaning to
+another that indicate traversals observed in actual
+dialogues and their frequencies. For example, the above
+six-sentence sequence could be represented as shown in
+</bodyText>
+<figureCaption confidence="0.904328">
+Figure 2. Each node i has a meaning Mi and a count Ci,
+which gives the number of times in observed dialogues
+this node has been visited. The integer on each transition
+gives the number of times it has been traversed in
+observed dialogues.
+Figure 2. Modelling the user&apos;s behavior.
+</figureCaption>
+<bodyText confidence="0.999914">
+More formally, a behavior graph B will consist of a set
+of nodes named 0, 1, 2, 3, ..., bsize-1. Each node i will
+have its associated Mi and Ci and the first node will have
+a special meaning MO = &apos;start&apos;. The transitions will be
+represented as triples (i, j, k) where the traversal is from
+node i to node k and has been observed j times. The
+example six-command sequence would be represented by
+</bodyText>
+<equation confidence="0.955601333333333">
+START
+M(SI)
+M(S2),M(S4)
+2
+M(S3).M(S5)
+M(S6)
+</equation>
+<page confidence="0.621286">
+Computational Linguistics, Volume 12, Number 1, January-March 1986 15
+</page>
+<note confidence="0.716552">
+The Correction of III-Formed Input
+Pamela K. Fink and Alan W. Biermann
+</note>
+<bodyText confidence="0.997832">
+the nodes 0 through 4 with Mi&apos;s and Ci&apos;s as shown and
+with the triples
+</bodyText>
+<equation confidence="0.654589">
+{(0,1,1) (1,1,2) (2,2,3) (3,1,2) (3,1,4)}.
+</equation>
+<bodyText confidence="0.994274333333333">
+Notice that the observed probability of crossing transi-
+tion (i, j, k) is j/Ci, a fact that is used by the expectation
+parser.
+</bodyText>
+<sectionHeader confidence="0.9699585" genericHeader="method">
+4 THE EXPECTATION MODEL BUILDING AND
+TRACKING ALGORITHM
+</sectionHeader>
+<bodyText confidence="0.961638625">
+It is desired to have an algorithm to monitor the
+discourse, collect the history of inputs, and invoke expec-
+tation when any kind of repetition occurs. Such an algo-
+rithm is described below. To do so, however, some
+additional notation is needed:
+current = an integer giving the state number in B corre-
+sponding to the most recently recognized sentence.
+bsize = the total number of states in B.
+</bodyText>
+<equation confidence="0.983871">
+E(i) = j &gt; 0 (i, j, k) is in Bj, the set of successor
+</equation>
+<bodyText confidence="0.9517545">
+states to state i, also called the expected sentence set
+of i.
+P(S, E(current)) = The result of the expectation parser
+with input S and E(current), where S is the current
+input sentence which may have errors, and E(current)
+is a set of expected meanings in B, the successors of
+node current. The result or output of the parse of
+sentence S is its meaning M(S).
+The behavior graph B begins with one state numbered
+&amp;quot;0&amp;quot; and with MO = start, C(0) = 0. Thus, the size of
+the graph is bsize = 1 and the most recently recognized
+sentence is assumed to be this start state, current = 0.
+Suppose that the first sentence in the above sample
+dialogue is read:
+</bodyText>
+<equation confidence="0.95405225">
+Si = &amp;quot;Display my mail summary for today.&amp;quot;
+Then the processor will begin with no expectation since
+E(0) is currently the empty set, and find
+M(S1) = P(S1, {}).
+</equation>
+<bodyText confidence="0.84409">
+This will result in the creation of a second state in B with
+the following statements:
+Create a NEW NODE:
+</bodyText>
+<equation confidence="0.976001857142857">
+Put(current, 1, bsize) into B;
+(a transition to the new state is created)
+C(current) := C(current) + 1; (state O&apos;s count is incremented)
+current := bsize; (the new state is now the current state)
+M(current) := M(S); (the new state&apos;s meaning is recorded)
+C(current) := 0; (this state has not yet been visited and exited)
+bsize := bsize +1; (the size of graph B is incremented)
+</equation>
+<bodyText confidence="0.9998614">
+Thus, the first two states shown in Figure 2 will exist
+with the single transition (0, 1, 1). Sentence S2 and S3
+result in similar processing, the addition of states 2 and 3,
+and the creation of transitions (1, 1, 2) and (2, 1, 3) as
+shown in Figure 3.
+</bodyText>
+<figure confidence="0.89395">
+START
+M(SI)
+</figure>
+<figureCaption confidence="0.999026">
+Figure 3. Constructing the behavior graph.
+</figureCaption>
+<bodyText confidence="0.9999175">
+The input sentence will yield a different action,
+however, if its meaning M(S) is determined to be merge-
+able with the meaning of an existing node Mk on the
+graph. While the details of mergeability have not yet
+been discussed, let us assume for the current example
+that M(S4) is mergeable with M(S2). Then a new mean-
+ing will appear in the graph that is a generalization of
+these two, Merge(M(S2), M(S4)), and a graph transition
+will be built to this new meaning. Transfer to the exist-
+ing meaning Mk would proceed as follows:
+</bodyText>
+<equation confidence="0.99980525">
+C(current) := C(current) + 1;
+Mk := Merge(Mk, M(S));
+Put(current, 1, k) into B;
+current := k;
+</equation>
+<bodyText confidence="0.999786357142857">
+Figure 4 shows the updated graph. At this point, current
+= 2, and the expectation set, E(2), is non-empty for the
+first time. So, now we compute P(S5, {M3}), meaning
+that S5 is read with the expectation that its meaning will
+be &amp;quot;remove this one&amp;quot;. Given this expectation, the parser
+will prefer any transitions down paths that lead to some
+paraphrase of this sentence and, unless the system clearly
+recognizes that something else has been said, a sentence
+meaning &amp;quot;remove this one&amp;quot; should be recognized. If it is,
+then current will be advanced to this expected node. In
+general, there may be several expected sentence mean-
+ings, and the processor will select the one most similar to
+the incoming utterance unless that sentence is clearly not
+any member of the expected set.
+</bodyText>
+<page confidence="0.939058">
+16 Computational Linguistics, Volume 12, Number 1, January-March 1986
+</page>
+<table confidence="0.946852739130435">
+Pamela K. Fink and Alan W. Biermann
+The Correction of III-Formed Input
+if no behavior graph B exists then
+begin
+bsize := 1;
+MO := start;
+CO := 0;
+end;
+else
+load B;
+current := 0;
+repeat
+begin
+read input sentence S;
+M(S) := P(S, &amp;quot;Mk I kin E(current)&amp;quot;);
+if Predicts(Mk, M(S)) where k in E(current) then
+begin
+C(current) := C(current) + 1;
+Mk := Merge(Mk, M(S));
+Increment r in (current, r, k);
+current := k;
+end;
+START
+</table>
+<figure confidence="0.715656">
+M(SI)
+M(S2),M(S4)
+M(S3)
+else
+</figure>
+<figureCaption confidence="0.99904">
+Figure 4. Merging M(S2) and M(S4).
+</figureCaption>
+<bodyText confidence="0.999277333333333">
+Thus, if a successor k to the current state predicts the
+incoming sentence, we track that successor. Tracking
+the expected meaning Mk would proceed as follows:
+</bodyText>
+<equation confidence="0.981846307692308">
+C(current) := C(current) + 1;
+Mk := Merge(Mk, M(S));
+Increment r in (current, r, k);
+current := k;
+if Mergeable(&amp;quot;Mk I k = 1 and/or 2 and/or ...
+bsize-1&amp;quot;, M(S)) then
+begin
+C(current) := C(current) + 1;
+Mk := Merge(&amp;quot;Mk I k = 1 and/or 2
+and/or ... bsize-1&amp;quot;, M(S));
+Put(current, 1, k) into B;
+current := k;
+end;
+</equation>
+<figure confidence="0.6411495">
+else
+create a NEW NODE;
+</figure>
+<figureCaption confidence="0.892211166666667">
+Figure 5 shows the result.
+Figure 5. Merging M(S3) and M(S5).
+The final sentence S6 in the dialogue will cause the
+creation of a termination state and complete the graph of
+Figure 2. The behavior graph creation and tracking algo-
+rithm is thus the collection of the above code segments:
+</figureCaption>
+<equation confidence="0.927544">
+end;
+until M(S) is a dialogue termination.
+</equation>
+<bodyText confidence="0.999629043478261">
+This code creates a finite state model of the dialogue
+based on equivalence or similarity classes defined by the
+functions Predicts, Mergeable, and Merge. As will be
+discussed in the next section, similarity classes are based
+not only on the similarity of the sentences themselves,
+but also on the environment in which they occur. Thus,
+there is only one state for each such similarity class in the
+finite state model created.
+When the user enters the system again, this algorithm
+can be reinvoked using the existing B graph. If the next
+dialogue is very similar to a previous one, then the expec-
+tation dialogue will powerfully support error correction.
+If the next dialogue has little resemblance to previous
+ones, then no expectation will be available, and the user
+will be dependent on basic processor recognition capabil-
+ities.
+This section has given an overview of the approach to
+history-based expectation processing. The details of the
+method are dependent on how the functions P, Predicts,
+Mergeable, and Merge are implemented. The following
+sections describe our implementation, which was used to
+investigate the viability of this approach and the perform-
+ance it can achieve.
+</bodyText>
+<footnote confidence="0.318379">
+Computational Linguistics, Volume 12, Number 1, January-March 1986
+</footnote>
+<page confidence="0.998799">
+17
+</page>
+<note confidence="0.676677">
+Pamela K. Fink and Alan W. Biermann The Correction of Ill-Formed Input
+</note>
+<sectionHeader confidence="0.958603" genericHeader="method">
+5 AN IMPLEMENTATION
+</sectionHeader>
+<bodyText confidence="0.999992125">
+The usefulness of the methodology described above was
+tested in the implementation of a connected speech
+understanding system. An off-the-shelf speech recogni-
+tion device, a Nippon Electric Corporation DP-200, was
+added to an existing natural language processing system,
+the Natural Language Computer (NLC) (Ballard 1979,
+Biermann and Ballard 1980). The expectation system
+provided the intermediate processing between the error-
+ful output of the speech recognizer and the deep seman-
+tics of NLC. The resulting speech understanding system
+is called the Voice Natural Language Computer with
+Expectation (VNLCE, Fink 1983). [The current system
+should be distinguished from an earlier voice system
+(VNLC, Biermann et al. 1985), which had no expectation
+and which handled discrete speech where a 300 millisec-
+ond pause must follow each word.]
+It should be emphasized, of course, that the central
+issue here is the study of expectation mechanisms and the
+details of the design decisions could have been made in
+rather different ways. Thus one could have implemented
+expectation error correction with a typed input system or
+with a speech input system that integrates voice signal
+processing with higher level functions in a way not possi-
+ble with a commercial recognizer. This implementation
+shows only one way in which the functions P, Predicts,
+Mergeable, and Merge can be constructed to achieve
+expectation capabilities. The conclusion of this paper is
+that in this particular situation substantial error
+correction is achieved, and thus one may suspect that
+similar results can be achieved in other applications.
+The implementation, as in the overview of the general
+system presented in section 2, consists of two major
+parts, an expectation parser and an expectation module,
+and their respective data structures. The expectation
+parser embodies the function P, while the major func-
+tions of the expectation module are Predicts, Mergeable,
+and Merge. An expected sentence set, E(current), along
+with the most recent input sentence S, are inputs to the
+expectation parser P. The expectation parser P uses
+these two inputs to determine the meaning M(S) of the
+input sentence S. Thus, M(S) is a deep parse of S. The
+function Predicts determines if one of the sentences in
+E(current) predicts M(S). If so, then M(S) is merged
+with this sentence meaning and dialogue tracking is
+begun from that point. Otherwise the function Mergea-
+ble determines how &amp;quot;similar&amp;quot; M(S) is to any other
+sentences in the expected dialogue. In this implementa-
+tion, the function Mergeable is actually much more
+cautious about determining whether or not a set of
+sentences should be merged. For the implementation, if
+Mergeable determines that certain nodes in the expected
+dialogue are mergeable with M(S), then it adds the
+successors of these nodes to E, creating an expanded
+expected sentence set. Then, if the next sentence input is
+predicted by one or more of these sentences, they are
+merged through the action of Predicts and Merge.
+</bodyText>
+<subsectionHeader confidence="0.99714">
+5.1 THE EXPECTATION PARSER
+</subsectionHeader>
+<bodyText confidence="0.999990657894737">
+The purpose of the expectation parser in this implemen-
+tation of a speech understanding system is to take input
+from the scanner and the expectation module, and use
+this information to determine what was said by the user.
+Thus, during the parsing process, the expectation parser
+must reconcile the sequence of words input from the
+scanner with the expected sentence set from the expecta-
+tion module, or determine that the scanner input is not
+like anything that was expected and, thus, ignore
+expectation. In this way, the expectation parser parses
+from two inputs. It is constantly trying to maintain an
+equilibrium between the input from the scanner and the
+input from the expectation module. This balancing is
+kept in line by a set of rating factors that are used during
+the parsing procedure to help guide the search for a
+reasonable sentence structure. These rating factors, at
+times, will be referred to as probabilities in the following
+discussion. However, in reality, the ratings are one thou-
+sand times the values of the logarithms of numbers
+between 0 and 1. Thus, the ratings span the values —999
+to 0, where 0 is equivalent to a probability of one. These
+ratings are computed this way because they remain inte-
+gral and still fairly accurately represent the correct
+values. Also, they can simply be added and subtracted
+rather than multiplied and divided in the hundreds of
+calculations required for a single sentence parse.
+The expectation parser uses an ATN-like represen-
+tation for its grammar (Woods 1970). Its strategy is
+top-down. The types of sentences accepted are essential-
+ly those accepted by the original NLC grammar, imper-
+ative sentences with nested noun groups and
+conjunctions (Ballard 1979). An attempt has been made
+to build as deep a parse as possible so that sentences with
+the same meaning result in identical parses. Sentences
+have the same &amp;quot;meaning&amp;quot; if they result in identical tasks
+being performed. The various sentence structures that
+have the same meaning we call paraphrases. We have
+studied the following types of paraphrasing:
+</bodyText>
+<listItem confidence="0.977007538461539">
+1) WORD &lt;= &gt; WORD
+&apos;entry&apos; &lt;=&gt; &apos;number&apos;
+2) ADJ NOUN &lt;=&gt; NOUN QUALIFIER
+&apos;positive entries&apos; &lt;=&gt; &apos;entries which are positive&apos;
+3) NOUN NUMBER &lt;=&gt; DET ORDINAL NOUN
+&apos;row 2&apos; &lt;=&gt; &apos;the second row&apos;
+4) CLASSIFIER NOUN &lt;=&gt; NOUN of/in CLASSIFIER
+&apos;the row 1 entries&apos; &lt;=&gt; &apos;the entries in row 1&apos;
+5) EQUIVALENT SETS
+&apos;row 1&apos; &lt;=&gt; &apos;entries in row 1&apos;
+6) QUANTIFIERS
+&apos;all (of) (the) entries&apos; &lt;=&gt; &apos;the entries&apos;
+7) CONJUNCTION OF NOUNS
+</listItem>
+<bodyText confidence="0.93228">
+&apos;double rows one and two&apos; &lt;=&gt; &apos;double row one
+and row two&apos;
+</bodyText>
+<page confidence="0.907581">
+18 Computational Linguistics, Volume 12, Number 1, January-March 1986
+</page>
+<note confidence="0.456195">
+Pamela K. Fink and Alan W. Biermaim The Correction of III-Formed Input
+</note>
+<listItem confidence="0.9802726">
+8) DEFAULT CONTEXT
+&apos;the rows&apos; &lt;=&gt; &apos;the rows in matrix 1&apos;
+9) NAMES
+&apos;column 1&apos; &lt;=&gt; `testA&apos;
+10) PRONOUNS
+&apos;it&apos; &lt;=&gt; &apos;row 1&apos;
+11) ORDINAL NOUN &lt;=&gt; NOUN X in COLUMN or ROW
+NOUN NUMBER &lt;=&gt; NOUN X in COLUMN or ROW
+&apos;sixth entry&apos; &lt;=&gt; &apos;entry 2 in column 3&apos;
+&apos;entry 6&apos; &lt;=&gt; &apos;entry 3 in row 2&apos;
+12) NUMBER &lt;=&gt; ENTRY X
+&apos;9.75&apos; &lt;=&gt; &apos;entry 3&apos;
+13) WORD &lt;=&gt; {WORDS}
+&apos;double&apos; &lt;=&gt; &apos;multiply by two&apos;
+14) CONJUNCTION OF VERBS
+</listItem>
+<bodyText confidence="0.990872625">
+&apos;double row two and zero matrix one.&apos;
+&lt;=&gt; &apos;double row two. zero matrix one.&apos;
+It is obvious from this list that there are varying levels of
+paraphrasing. Some arise at the vocabulary level
+(number 1), some at the syntactic level (numbers 2, 3, 4,
+5, 6, and 7), some at the semantic level (numbers 8, 9,
+and 10), some at the current world level (numbers 11
+and 12), and some at a combination of levels (numbers
+13 and 14). Some are domain dependent, especially at
+the vocabulary level such as entry &lt;=&gt; number. Others
+are not, such as ADJ NOUN &lt;=&gt; NOUN QUALIFIER.
+Those that only require knowledge of the vocabulary or
+of the grammar are implemented in the current history-
+based expectation system. This means that paraphrases
+one through seven are handled currently as part of the
+parsing process itself. The last seven may be dealt with
+at some future date. However, they are somewhat more
+complicated because they require temporal-type know-
+ledge such as the current referent of a pronoun or the
+current size of a matrix. The lexical and grammatical
+paraphrases, on the other hand, will always have the
+same meaning, regardless of the current state of the
+world. By handling the seven lexical and syntactic para-
+phrases, a stored parse can aid in recognizing many
+sentences with the same &amp;quot;meaning&amp;quot; but different surface
+structures.
+To simplify representation of the parser output we
+have developed a special notation to indicate the deep
+parse of a sentence. For example, the parse of the
+sentences:
+Double the positive row 1 entries.
+Double the positive entries in row 1.
+Double the row 1 entries which are positive.
+Double the entries in row 1 which are positive.
+is notated as:
+Double (entries (positive) (r 1))
+The mechanism for using the expectation information
+during parsing is built into the ATN-like network. The
+parser receives from the scanner a sequence of word slots.
+These word slots are defined by the speech recognition
+system based on the sequence of words it recognized.
+Thus, there could be missing or extra word slots due to
+errors made during speech recognition. To each word
+slot the scanner adds other possible words based on what
+words the system tends to confuse. The scanner also
+rates the possibilities for each word slot by the same
+scale discussed previously. During parsing, the parser
+creates a template that represents the parse of the
+sentence input. This template contains slots that repre-
+sent the parts of a sentence such as verb, adjective, and
+headnoun. At each point in the parse of a sentence,
+when the expectation parser is trying to determine what
+the role of the current word slot is in the sentence, five
+different attempts are made to use the current word slot
+as needed to fill the template slot at the current point in
+the grammar network. These are:
+</bodyText>
+<listItem confidence="0.997248">
+• ADV (advance): Find a word in the current word slot
+from the scanner output that will fit the needs at this
+node in the grammar. If such a word cannot be found,
+try choice 2.
+• EXPADV (expectation advance): Look at the parse of
+the current expected sentence to see if the template
+</listItem>
+<bodyText confidence="0.967106">
+slot that the parser is currently trying to fill is filled in
+the expected sentence. If so, copy the value in the
+template slot from the expected sentence to the current
+parse, ignoring the word slot from the scanner. Other-
+wise, try choice 3.
+</bodyText>
+<listItem confidence="0.991181">
+• SKIPWORD: Skip the current word slot from the scan-
+ner output, filling the corresponding parser template
+</listItem>
+<bodyText confidence="0.9993912">
+slot, when appropriate, with a NIL value to indicate
+that a word has been skipped and that it was assumed
+to have the function associated with the template slot.
+If the parse fails later on, and the parser backs up to
+this point, try choice 4.
+</bodyText>
+<listItem confidence="0.940807333333333">
+• EXTRAWS (extra word slot): Assume that the word
+slot from the scanner is an extra one due to an error in
+recognition. Skip this word slot and again try choice 1.
+If failure occurs, try choice 2. Finally, if failure again
+occurs, try choice 5.
+• LOSTWS (lost word slot): Assume that the needed
+word slot from the scanner is lost due to an error in
+recognition. Without advancing to the next scanner
+word slot, try step 2 again. If this fails, then fill the
+parser template slot, when appropriate, with a NIL
+value to indicate that a word has been lost and that it
+was assumed to have the function associated with that
+template slot. Remain at the current scanner word slot
+so that it can again be evaluated for a different func-
+tion.
+</listItem>
+<bodyText confidence="0.646213333333333">
+An example piece of the parser network is shown in
+Figure 6. The five kinds of error correction were hand
+coded into each network so that the special character-
+</bodyText>
+<table confidence="0.772281789473684">
+Computational Linguistics, Volume 12, Number 1, January-March 1986 19
+The Correction of III-Formed Input
+Pamela K. Fink and Alan W. Bierman
+formatted routine FILLADJ:
+4257 START
+4267 ADV
+4272 CHEK PART ADJ
+4279 FILLSLOT ADJECTIVE QUOTE
+4556 EXPCOMP ADJ
+4286 RET
+4551 E XPADV
+5214 EXPCHEK ADJECTIVE
+4885 COPYSLOT ADJECTIVE
+4750 COPYWORD ADJECTIVE
+goto 45 56
+goto 4556
+4756 SKIPWORD LOG7
+4762 FILLSLOT ADJECTIVE NIL
+4769 COPYWORD QUOTE NIL
+</table>
+<figure confidence="0.960266285714286">
+goto 4556
+5036 EXTRAWS LOG7
+I goto 4267
+I goto 4551
+5043 LOSTWS LOG7
+goto 5214
+goto 4762
+</figure>
+<figureCaption confidence="0.998714">
+Figure 6. An example parse net.
+</figureCaption>
+<bodyText confidence="0.9980888">
+istics of each grammatical structure could be accounted
+for individually. Thus in some cases, certain error
+correction alternatives were checked immediately while
+in others it was wiser to determine whether normal proc-
+essing would fail at deeper levels before attempting those
+same corrections. The network represents a tree struc-
+ture which is searched by the expectation parser.
+Succession in the network is represented by the parent-
+child relationship, which is indicated in Figure 6 by
+indentation. Thus, the node containing the command
+ADV is the parent of the node containing the command
+CHEK PART ADJ, and so is succeeded by it. Should a
+command fail, the parser backs up to the parent node of
+the node that has just failed. Thus, if a check for an
+adjective in CHEK PART ADJ fails, control will back up
+to the node containing ADV. Choice is represented by
+the sibling relationship which is indicated in Figure 6 by
+the vertical lines connecting nodes. Thus, ADV,
+EXPADV, SKIPWORD, EXTRAWS, and LOSTWS are all
+siblings in the tree network and are choices that the
+parser can make when parsing a sentence. Note that, in
+this case, these five choices represent the five possible
+attempts that are made in trying to parse a word slot that
+were discussed above. A choice is made by picking the
+siblings in the order in which they appear in the network.
+Thus, when the CHEK PART ADJ fails and control backs
+up to ADV, the expectation parser will back up to the
+START node and then take the second choice, EXPADV,
+and attempt to proceed down that chain of commands.
+The scoring mechanism within the parser serves to aid
+in the evaluation of the alternative paths during the parse
+process and the pruning of improbable choices. A typical
+spoken input to the system is
+&amp;quot;add row one to row two&amp;quot;
+and the speech recognition machine will often return
+such errorful output as
+&amp;quot;and row * to row&amp;quot;.
+The asterisk indicates that the device guesses the exist-
+ence of a word but has failed to identify it.
+The parser must be able to extract the user&apos;s original
+intent and its operation is guided by rating factors which
+evaluate the quality of the path through the parser, the
+word selection, the level of agreement with expectation,
+and the self consistency (or compatibility) of the
+sentence. These individual ratings work as follows:
+</bodyText>
+<sectionHeader confidence="0.441333" genericHeader="method">
+1) The Transition Value
+</sectionHeader>
+<bodyText confidence="0.999507583333333">
+Every time the parser moves over a SKIPWORD,
+EXTRAWS, or LOSTWS command a charge is made
+to the value of the transition. Normally, a transition
+does not cost anything, but each SKIPWORD,
+EXTRAWS, and LOSTWS executed results in a lower-
+ing of the transition&apos;s value. This charge is made for
+the rest of the parse unless the SKIPWORD,
+EXTRAWS, or LOSTWS is backed over. This charge
+can be seen in the sample grammar net appearing in
+Figure 6 after the words SKIPWORD, EXTRAWS, and
+LOSTWS. The charge in this example for each of the
+three commands is 1000*log[0.7] = —35.
+</bodyText>
+<sectionHeader confidence="0.519319" genericHeader="method">
+2) The Word Value
+</sectionHeader>
+<bodyText confidence="0.988537142857143">
+We define the synophones of a given vocabulary
+word to be the words a user might speak that could
+possibly be recognized as that word. Because of the
+nature of the dynamic programming algorithm in the
+NEC machine, it yields only one guess at each word
+slot. So it is necessary for our software to provide
+the set of synophones for each guessed word. This,
+in effect, simulates the situation where the speech
+recognition device provides a larger number of possi-
+ble matches. Thus, in the case of the above recog-
+nizer output, the following synophones would be
+produced to represent the sequence of possible
+words spoken:
+word slot word rating
+</bodyText>
+<equation confidence="0.962603125">
+0 and 1000*log[1.0] = 0
+add 1000slog[0.8] = —22
+1 row 1000*log[1.0] = 0
+rows 1000*log[0.8] = —22
+2 1000*log[1.0] = 0
+3 to 1000*log[1.0] = 0
+two 1000*log[1.0] = 0
+into 1000*log[0.8] = —22
+</equation>
+<table confidence="0.920821833333333">
+20 Computational Linguistics, Volume 12, Number 1, January-March 1986
+Pamela K. Fink and Alan W. Biermann The Correction of III-Formed Input
+4 row 1000*log[1.0] = 0 1) The Transition Value
+rows 1000*log[0.8] = —22 word slot transition value:
+5 1000*log!1.0! = 0 ws transition[x] = value of SKIPWORD, EXTRAWS, or
+LOSTWS at word slot x
+</table>
+<bodyText confidence="0.9978284">
+Each alternative word is given a rating. The words
+selected by the recognizer are given maximum
+ratings and alternatives are given lower values. If
+two words have the same pronunciation as with to
+and two, they are given the same values.
+</bodyText>
+<sectionHeader confidence="0.669052" genericHeader="method">
+3) The Expectation Value
+</sectionHeader>
+<bodyText confidence="0.999753">
+This value is based on whether or not there is an
+expected sentence, how well the current parse is
+matching the current expected sentence from the
+expected sentence set, and how much the current
+parse is using this expected sentence. Whenever a
+slot is filled by the parser, it is compared with the
+corresponding slot in the expected sentence. If they
+do not match, the expectation value decreases, other-
+wise the expectation value remains the same.
+</bodyText>
+<sectionHeader confidence="0.653419" genericHeader="method">
+4) The Compatibility Value
+</sectionHeader>
+<bodyText confidence="0.999926432432433">
+This value differs from the other three in that it is
+simply true or false. Verb-operand, noungroup-
+noungroup, and expectation are checks made during
+the parse. If compatibility fails, then the expectation
+parser backs up, otherwise it continues forward.
+Each of these components has a value assessed at each
+word slot in the incoming sentence as well as one for the
+entire sentence. The word slot values are assumed to
+have a top rating until the parser reaches that word slot.
+Thus, the parser is always examining a best case situation
+based on what it has already done. For example, all
+word slot transition values are assumed, initially, to have
+the value 1000*log[1] = 0. The transition value at a
+word slot is only lowered if it is necessary for the parser
+to execute a SKIPWORD, EXTRAWS, or LOSTWS
+command in parsing that word slot. The charge made is
+according to the value indicated at the particular
+command in the grammar network. The average of the
+current values of all word slot transition values creates
+the sentence transition rating for the parse so far. The
+word slot and sentence values for the expectation and
+word values are computed similarly. The compatibility
+value differs, however, since it does not have degrees of
+ratings but rather indicates acceptability or lack thereof.
+Thus, it is not included in the formula for determining a
+rating for the parse. Rather, if it fails, then parsing auto-
+matically backs up. If it succeeds, then parsing continues
+forward.
+The values of the transition, word, and expectation
+components are used to determine two sentence parse
+ratings. At each word slot, the values of the three factors
+are averaged together to produce a general word slot
+parse rating. Also, the sentence values for the three
+components are averaged together to obtain a general
+sentence parse rating. Thus, we have the following
+equations that define the various rating values, where n is
+the number of word slots in the sentence:
+</bodyText>
+<figure confidence="0.979563565217391">
+sentence transition value:
+transition confidence = E ws —transition[i]/n
+i-o
+2) The Word Value
+word slot word value:
+ws word[x] = value of the word chosen from the
+scanner input for word slot x
+sentence word value:
+word confidence = E ws word[i]/n
+—
+3) The Expectation Value
+word slot expectation value:
+ws expectation[x] = match of word slot x in current
+parse with slot x in the expected sentence
+sentence expectation value:
+expectation confidence = E ws —expectation[i]/n
+4) The Parse Values
+word slot parse value:
+word slot factor[x] = (ws transition[x] +
+ws_word[x] + ws expectation[x])/3
+sentence parse value:
+sentence factor = (transition confidence +
+word confidence + expectation confidence)/3
+</figure>
+<bodyText confidence="0.997053470588235">
+The transition confidence, word confidence and
+expectation confidence provide an average overall
+value for the ws transition, ws word, and
+ws expectation ratings, respectively. These average
+values provide a best case rating at any point during the
+parse because they assume perfect ratings for all word
+slots not yet parsed. The overall parse values,
+word slot factor and sentence factor, are calculated
+simply from the average of the other three rating values.
+This is done so that each factor has equivalent power in
+controlling the parse. If it is desirable to allow one factor
+to have more control over the parse than the other two,
+then this can be accomplished by manipulating the partic-
+ular minimum rating values discussed below. In order to
+control the expectation parsing, search is cut-off if rating
+values fall below certain levels. Currently, these levels
+are:
+</bodyText>
+<listItem confidence="0.873372">
+1. Minimum word slot transition value (-52)
+Minimum sentence transition value (-12)
+2. Minimum word slot word value (-150)
+Minimum sentence word value (-60)
+3. Minimum word slot expectation value (-23)
+Minimum sentence expectation value (-7)
+4 Minimum word slot parse value (-190)
+</listItem>
+<bodyText confidence="0.94398588">
+Minimum sentence parse value (-65)
+If any one of the rating factors drops below its corre-
+sponding minimum value, the current search path is cut-
+off and a different route through the grammar nets is
+attempted. In this way, there is a control over the extent
+of the search. By setting all the minimum ratings to
+Computational Linguistics, Volume 12, Number 1, January-March 1986 21
+Pamela K. Fink and Alan W. Biennann The Correction of Ill-Formed Input
+—999, for example, all possibilities in the grammar are
+checked. On the other hand, setting all the minimum
+ratings to 0 results in the expectation parser behaving like
+a normal parser since this essentially turns off the use of
+the SKIPWORD, EXTRAWS, and LOSTWS commands, the
+use of synophones, and expectation.
+In theory, the parsing algorithm is admissible. That is,
+it is capable of finding the best possible parse. The vari-
+ous rating factors can initially be set high and gradually
+lowered until a parse is found. This parse would have the
+highest rating possible. However, this is impractical in
+practice due to the amount of time required to repeatedly
+search a growing space. Thus, minimum rating values are
+set and the search is conducted once. In this way, the
+first parse found is the &amp;quot;best&amp;quot; parse in the sense that it is
+the first one found whose rating was higher than the
+minimum pre-set value.
+</bodyText>
+<subsectionHeader confidence="0.970926">
+5.2 ROUTINES OF THE EXPECTATION MODULE
+</subsectionHeader>
+<bodyText confidence="0.999302129032258">
+The task of the expectation module is to acquire a gener-
+al dialogue from a series of dialogues spoken by a user.
+The dialogues essentially contain examples of how to go
+about solving a particular kind of problem. In acquiring
+these dialogues and merging them into one generalized
+dialogue, the expectation system learns how to solve this
+particular kind of problem through examples. In a sense,
+by building this generalized dialogue the expectation
+system is creating a procedure that can solve a particular
+subset of problems. This is a future goal of the project.
+However, the current application is for the generalized
+dialogue to be used as an aid in the voice recognition
+process by offering predictions about what might be said
+next.
+The types of problems that can be learned by the
+existing history-based expectation system include linear
+algebra applications such as matrix multiplication, simul-
+taneous linear equations, and Gaussian elimination.
+Non-linear algebra problems that require matrix-type
+representations can also be learned, such as gradebook
+maintenance and invoice manipulation. Though the
+implemented system is limited to matrix-oriented prob-
+lems, the theoretical system is capable of learning a wide
+range of problem types. The only requirement on the
+problem or situation is that it can be entered into the
+expectation system in the form of examples. Thus, for
+example, it can acquire a &amp;quot;script&amp;quot; such as the one for
+going to a restaurant as defined in Schank and Abelson
+(1977).
+The expectation module takes two inputs and produc-
+es two outputs. The inputs are
+</bodyText>
+<listItem confidence="0.997429">
+• the user behavior graph discussed earlier, called the
+expected dialogue D, and
+• the meaning of the most recently input sentence, M(S).
+</listItem>
+<bodyText confidence="0.952857644067797">
+Its outputs are a new expected dialogue D modified
+according to the latest input sentence M(S) and an
+expected sentence set E. These outputs are produced
+based upon the inputs and the functions Predicts, Merge-
+able, and Merge.
+The role of the predicate Predicts can be best under-
+stood by recalling the function of the parser P. P uses
+the set of expected sentences E(current) to try to error
+correct the incoming sentence S. P may do this by
+discovering that some Mk in E(current) is quite similar to
+M(S). If P does select such an Mk and uses it to help
+parse S, then Predicts (Mk, M(S)) is true. Otherwise,
+Predicts (Mk, M(S)) is false. Thus the function of
+Predicts is to select the Mk which the parser used in pars-
+ing S. If the parser did not use expectation, then Predicts
+always is false.
+If the incoming sentence was not predicted by existing
+transitions in D, perhaps it can be found to be similar to
+some node Mk in D and a new transition could be added
+to that node. The routine Mergeable has the job of find-
+ing one or more such Mk&apos;s into which the current
+sentence meaning M(S) can be merged. The question of
+similarity of two sentences is determined by the meanings
+of the sentences themselves and the &amp;quot;environment&amp;quot; in
+which they occur in the dialogue. Sentence &amp;quot;meanings&amp;quot;
+are based on the sentence deep parses produced by the
+expectation parser, while a sentence &amp;quot;environment&amp;quot; is
+based on the meanings of the sentences preceding and
+following it in the expected dialogue.
+Similarity is based on the notion of &amp;quot;distance&amp;quot;.
+Currently two sentences are considered similar in mean-
+ing if their parses differ in only one slot in the noun
+group template. This means that their noun group
+distance cannot be greater than one to be considered
+similar. For example, the following two sentences are
+similar:
+M(&amp;quot;double the first row&amp;quot;) = double (r 1 )
+M(&amp;quot;double row 2&amp;quot;) = double (r2)
+The environment of one sentence matches that of another if
+the sentence meanings preceding the two sentences being
+compared are identical and/or the sentence meanings
+following them are identical. Clearly, these definitions
+are quite arbitrary and many other strategies could be
+tried. However, for the purposes of this study, they were
+quite satisfactory.
+Based on the question of how well the environment
+and the sentence itself matches previously seen environ-
+ments and sentences, five different matches are possible
+between the current incoming sentence and the elements
+of the expected dialogue:
+1) The sentence matches a sentence meaning in the
+expected dialogue exactly, but there is no match of
+their environments.
+2) The sentence matches a sentence meaning in the
+expected dialogue similarly, but there is no match of
+their environments.
+3) The sentence matches a sentence meaning in the
+expected sentence set exactly, which implies that
+their environments also match.
+</bodyText>
+<page confidence="0.97275">
+22 Computational Linguistics, Volume 12, Number 1, January-March 1986
+</page>
+<note confidence="0.680508">
+Pamela K. Fink and Alan W. Biermann The Correction of Ill-Formed Input
+</note>
+<bodyText confidence="0.961675830985916">
+4) The sentence matches a sentence meaning in the
+expected sentence set similarly, which implies that
+their environments also match.
+5) There is no match between the sentence and any
+sentence meaning in the expected dialogue.
+In cases 1, 2, and 5, the sentence is determined to be new
+and unique to the expected dialogue. Therefore, Mk and
+M(S) are not mergeable. In such cases, M(S) is added as
+a new entry in the expected dialogue D. In the other two
+cases, numbers 3 and 4, the incoming sentence is deter-
+mined to be the same as or similar to one already seen
+previously in an exact or similar situation. Thus, Mk is
+mergeable with M(S). In case 3 the sentence is automat-
+ically merged with the one that it matches exactly in the
+expected sentence set. In case 4, the sentence is merged
+with the one that it matches similarly in the expected
+sentence set only after it has passed an argument creation
+algorithm test to be discussed below. Otherwise it is also
+considered new and unique and added to the expected
+dialogue as in cases 1, 2, and 5. The actual argument
+creation occurs in the function Merge.
+The notion of creating an argument is associated with
+the problem of when to merge a set of similar sentences
+in an expected dialogue into one sentence with a special
+flag in the slot where the sentences differ. This is deter-
+mined by the function Mergeable. As an example, at a
+certain point in a dialogue, one may have an expected
+sentence set E(i) such as the following:
+double (rl) .33
+double (r2) .33
+double (r3) .33
+The numbers indicate the probability levels, derived from
+j/Ci, as discussed at the end of section 3.
+In such a situation, the user&apos;s intentions may be
+reflected more correctly by the following expected
+sentence set:
+double (rARG) 1.0
+which signifies that any row may be referred to. Howev-
+er, though this simplified expected sentence set may be a
+good generalization of the pattern observed, it has
+ramifications for error correction. Specifically, it will be
+unable to fill in a row number should that value be miss-
+ing in the incoming sentence. The first option also has its
+drawbacks. In this case, should the row number be miss-
+ing in the sentence, the expectation parser will error
+correct the sentence to the most probable value, or the
+first one in the set if the probabilities are equal, here the
+value one for row 1. Thus, both options are imperfect in
+terms of the error correction capabilities that they can
+provide. The comparison that must be made to deter-
+mine which option is better in a given situation is how
+often the first will error correct incorrectly as opposed to
+how much error correcting power we will lose by using
+the second. How it is done is beyond the scope of this
+paper but is explained in detail in Fink (1983).
+The Merge function takes two inputs, M1 and M2,
+which have been determined by the Mergeable function
+to be similar in some way by considering their respective
+environments and meanings. Based upon how similar the
+two meanings are, Merge creates a meaning M that is a
+generalization of M1 and M2, sometimes employing an
+argument. Thus, there are only two possible kinds of
+matches at this point between an input sentence and a
+member of the expected sentence set, an exact match or
+a similar match. In the case of an exact match M = M1
+= M2 and M replaces M1 in the expected dialogue. In
+the case of a similar match, the meanings only differ by
+one slot in the noun group of their deep parse represen-
+tation, so a generalization of that slot to &amp;quot;ARG&amp;quot; is made,
+meaning an argument is created. The function appears as
+follows:
+</bodyText>
+<equation confidence="0.99691325">
+Merge (M1, M2)
+begin
+for each slot x in M1 and M2 do
+if x(M1) != x(M2) then
+x(M) := ARG;
+else
+x(M) := x(M1);
+end;
+</equation>
+<bodyText confidence="0.999552">
+Thus, if the sentences &amp;quot;Double (r1)&amp;quot; and &amp;quot;Double (r2)&amp;quot;
+are inputs to Merge, the output would be &amp;quot;Double
+(rARG)&amp;quot;.
+</bodyText>
+<sectionHeader confidence="0.996789" genericHeader="method">
+6 EXPERIMENTAL RESULTS
+</sectionHeader>
+<bodyText confidence="0.969071235294118">
+An experiment was run using VNLCE to test the error
+correction capabilities in different situations. These situ-
+ations were simulated by making the test subjects
+perform certain tasks on the system that resulted in
+different dialogue structures, or schemas. The four tests
+made on VNLCE in this experiment are considered to be
+representative of the possible schemas that can be
+produced by different dialogues in different situations.
+All possible dialogue schemas actually produce a contin-
+uum of patterns from totally-ordered to totally-unord-
+ered. The tests described below are simply points on this
+continuum.
+I) Totally-Ordered Schema
+This type of schema occurs whenever the system has
+at most two sentences at a time in its expected
+sentence set and one of these always has a probabili-
+ty rating over 80%.
+</bodyText>
+<sectionHeader confidence="0.600294" genericHeader="method">
+II) Partially-Ordered Schema
+</sectionHeader>
+<bodyText confidence="0.99997425">
+In this case, there is a general order to the sentences
+being spoken, but there is not usually just one highly
+probable sentence in the expected sentence set at a
+time, but several with varying degrees of probability.
+</bodyText>
+<sectionHeader confidence="0.606444" genericHeader="method">
+III) Totally-Unordered Schema
+</sectionHeader>
+<bodyText confidence="0.960306017241379">
+This occurs when there is no over-all order to the
+sentences being spoken. Essentially any sentence in
+Computational Linguistics, Volume 12, Number 1, January-March 1986 23
+Pamela K. Fink and Alan W. Biermann The Correction of III-Formed Input
+the expectation dialogue has a probability of being
+spoken next.
+IV) Totally-Ordered Schema with Arguments
+This test is an example of a totally-ordered schema,
+but the system does not know exactly what will be
+said all the time because one or more of the expected
+sentences contain an argument.
+Each of the four tests was run on three different test
+subjects to acquire data concerning how fast a user
+speaks, what types of errors are produced by the voice
+recognizer, and how well the expectation system acquires
+and uses the expected dialogue to help error correct the
+input.
+To begin the experiment session, the subject trained
+the voice recognizer, a NEC DP-200, on a specific vocab-
+ulary of 49 different words in connected speech mode.
+The DP-200 can handle only 150 word slots in connected
+speech mode, so 49 allowed for some repetitive training.
+The subject was then given a brief tutorial that lead
+him/her through a few features of the VNLCE system
+and gave him/her some practice in talking to the NEC
+device. This training session usually took a total of about
+45 minutes. The subject was then given one or more of
+the test sheets representing the problems to be solved.
+The number was based on the amount of time that the
+subject was willing to donate to the effort.
+Each test dialogue had a similar over-all structure in
+that it required a certain amount of repetition, thus creat-
+ing a loop structure in the expected dialogue. In all tests,
+except test II, the subject was provided with the specific
+sequence of sentences to be spoken. This guaranteed
+that the desired level of repetition was actually achieved.
+How much repetition there was in each dialogue
+depended on the expected dialogue schema being
+imitated. In test I, which was done to demonstrate a
+totally-ordered schema, the test subject had to repeat an
+identical sequence of six sentences nine times in a row
+except for the seventh time when four new sentences
+were inserted into the loop. A sample schema can be
+seen in Figure 7. In test II, the user had much more free-
+dom, since its purpose was to demonstrate a partially-
+ordered schema. Here the subject had to solve six sets of
+simultaneous linear equations with two equations and
+two unknowns and he/she spoke whatever sentences that
+seemed appropriate. A sample schema is shown in
+Figure 8. Notice that in one case an argument was
+created. The third test was done to show how well error
+correction works when the dialogue seems random, creat-
+ing a totally-unordered schema. To create such an envi-
+ronment, the user was asked to repeat four sentences in
+random order eight times. An example expected dialogue
+schema that resulted from this test is shown in Figure 9.
+In the last test, test IV, the subject was asked to repeat a
+sequence of four sentences six times, each time through
+changing the value of the row number spoken. This
+demonstrates the argument creation facility in a totally-
+ordered dialogue schema. The expected dialogue gener-
+ated from this test appears in Figure 10.
+Each test has associated with it three charts indicating
+the results. The first graph represents the average
+sentence error and correction rates, the second shows the
+average word error and correction rates, while the third
+illustrates the average rate-of-speech in words-per-sec-
+ond spoken by the subject while doing the experiment.
+The charts indicating the average error and correction
+rates of the four tests reflect the loop structure of the
+dialogues. Each chart is a series of bar graphs, each bar
+graph representing the average error and correction rates
+over the sentences spoken by the subjects in a particular
+loop of the dialogue. The highest point on each of these
+bars represents the raw error rate of the voice recognizer.
+The different markings within the bars themselves repre-
+sent the percentage of the errors that were corrected by a
+particular facility of the expectation system. The hori-
+zontal design associated with &amp;quot;loosening&amp;quot; indicates the
+percentage of the errors that were corrected by the use of
+the flexible parsing techniques, such features as the syno-
+phones and the parser commands SKIP WORD,
+EXTRAWS, and LOSTWS. The vertical design associated
+with expectation indicates the percentage of the errors
+that were corrected by use of the expected sentence set
+alone. The blank area indicates the percentage of the
+errors that were corrected by using both of the above
+facilities. Finally, the dot design shows the percentage of
+the errors that were not corrected. Thus, for example, in
+the top chart in Figure 11, the eighth loop of the dialogue
+had an 85% sentence error rate from the voice recogniz-
+er. Of those errors, 6% were corrected using the facili-
+ties associated with loosening the search, while 25%
+were corrected by using only expectation. Another 63%
+were corrected using features from both categories. Only
+6% could not be corrected.
+Test I, using a totally-ordered dialogue schema, was
+done to show how well the expectation system can error
+correct errorful input when it can predict exactly what
+will be said next. As can be seen from the graphs in
+Figure 11, as the ability to predict what will be said next
+increases, so does the ability to error correct. In loop
+seven of the dialogue, we deliberately had each user add
+four extra sentences between the fourth and fifth
+sentences of the loop. This was done to show that the
+expectation system had not become a complete automa-
+ton, but that it was still capable of dealing with unex-
+pected input. However, as can be seen from these graphs
+(Figure 11), the expectation system&apos;s error correcting
+power decreases in that particular loop of the dialogue
+since there is no expectation at certain points to help it.
+Test II, creating a partially-ordered dialogue schema,
+was done to show how the expectation acquisition algo-
+rithm dealt with dialogues containing some pattern and to
+see how well error correction could work when expecta-
+tion was not perfect. The results are shown in Figure 12.
+</bodyText>
+<page confidence="0.980844">
+24 Computational Linguistics, Volume 12, Number 1, January-March 1986
+</page>
+<note confidence="0.8768115">
+Pamela K. Fink and Alan W. Biermann
+The Correction of Ill-Formed Input
+</note>
+<figure confidence="0.9952251">
+(divide (pos a) (c3))
+/ 9
+1
+(double (negative e (r2))) (multiply (c3) (e6))
+1
+(subtract (el) (r2))
+&apos;t
+(divide (r2) (largest
+read (r2)
+read (rl)
+</figure>
+<figureCaption confidence="0.999768">
+Figure 7. Expected dialogue schema for Test I.
+</figureCaption>
+<figure confidence="0.950948133333333">
+Computational Linguistics, Volume 12, Number 1, January-March 1986 25
+Pamela K. Fink and Alan W. Biermann The Correction of Ill-Formed Input
+read (r2)
+2 2
+(mu1tip1y(r1)(431(r1)) (au1tip1y(r2)(e1)
+2
+(subtract (rl) (r2)
+11
+(r3) (a2(r2))
+4
+(multiply (r2) (eARG))
+4
+(subtract (r2) (ri))
+4\
+Qubtract (rl) (r)
+</figure>
+<figureCaption confidence="0.999808">
+Figure 8. Expected dialogue schema for Test II.
+</figureCaption>
+<figure confidence="0.962872666666667">
+26 Computational Linguistics, Volume 12, Number 1, January-March 1986
+1
+71(
+divide (rl) (largest e
+1 t I 3 2
+double (positive e (c3))
+2&apos;
+add (r2) (r1)
+2 4 1 3
+multiply (negative e (r2)) (00
+)
+if
+</figure>
+<figureCaption confidence="0.999732">
+Figure 9. Expected dialogue schema for Test III.
+</figureCaption>
+<table confidence="0.573001333333333">
+Pamela K. Fink and Alan W. Biermann The Correction of III-Formed Input
+Computational Linguistics, Volume 12, Number 1, January-March 1986 27
+Pamela K. Fink and Alan W. Biermann The Correction of Ill-Formed Input
+</table>
+<figure confidence="0.993867727272727">
+) (read (rARG)
+6
+(read (rARG)
+6
+Cdouble (e2 (rARG)
+6
+(subtract (e2 (rARG)) (negative e))
+6
+zero (el (rARG)
+1
+(STOE)
+</figure>
+<figureCaption confidence="0.999545">
+Figure 10. Expected dialogue schema for Test IV.
+</figureCaption>
+<page confidence="0.880469">
+28 Computational Linguistics, Volume 12, Number 1, January-March 1986
+</page>
+<note confidence="0.460627">
+Pamela K. Fink and Alan W. Biermann The Correction of III-Formed Input
+</note>
+<figure confidence="0.962477041666667">
+SENTENCE-ERROR-RATE LEGEND: % Errors Corrected by
+100% - Vng: loosening
+6110: expectation
+90% - CD. both
+OH t corrected
+80% -
+70%
+60%
+50%
+40%
+30%
+20%
+10%
+1
+0%
+W ORD - ERROR- RATE
+100% -
+I
+90%
+80%
+70%
+60%
+50%
+40%
+</figure>
+<figureCaption confidence="0.999632">
+Figure 11. Error and correction rates for Test I.
+</figureCaption>
+<figure confidence="0.998271166666667">
+4 5 6 7
+LOOP NUMBER IN DIALOGUE
+9
+30%
+20%
+10%
+0%
+10
+I Yp
+4 5 6 7
+LOOP NUMBER IN DIALOGUE
+1
+2
+10
+&amp;quot;
+Computational Linguistics, Volume 12, Number 1, January-March 1986 29
+Pamela K. Fink and Alan W. Biermann The Correction of BI-Formed Input
+SENTENCE-ERROR-RATE LEGEND: % Errors Corrected by
+100% - EMA • loosening
+1 11181 expectation
+90% C:3 both
+not corrected
+80%
+WORD-ERROR-RATE
+70%
+60%
+40%
+30%
+20%
+10%
+50%
+0%
+1
+1
+1
+1
+1
+ill
+■■■•
+dot,
+4 5 6 7 8 9 10
+LOOP NUMBER IN DIALOGUE
+f pm(
+4 5 6 7 8 9 10
+LOOP NUMBER IN DIALOGUE
+100%
+1
+90%
+1
+80%
+1
+70%
+1
+60%
+1
+50%
+1
+40%
+1
+30%
+1
+20%
+1
+10%
+1
+0%
+</figure>
+<figureCaption confidence="0.997483">
+Figure 12. Error and correction rates for Test II.
+</figureCaption>
+<figure confidence="0.976612923076923">
+30 Computational Linguistics, Volume 12, Number 1, January-March 1986
+Pamela K. Fink and Alan W. Biermann The Correction of III-Formed Input
+SENTENCE-ERROR-RATE
+100%
+90%
+80%
+LEGEND: % Errors Corrected by
+EMI: loosening
+ER • expectation
+both
+(=I: not corrected
+LOOP NUMBER IN DIALOGUE
+70%
+60%
+1 2
+7 8 9 10
+■■■•••■
+5 6
+01
+50%
+40%
+30%
+20%
+10%
+0%
+WORD-ERROR-RATE
+100% -
+I
+90% -
+I
+80% -
+I
+70% -
+I
+60% -
+I
+50% -
+I
+40% -
+I
+30% •j.I
+20% -
+I
+10% -
+I
+0%
+3 4 5 6 7
+J
+2
+8
+10
+LOOP NUMBER IN DIALOGUE
+</figure>
+<figureCaption confidence="0.999532">
+Figure 13. Error and correction rates for Test III.
+</figureCaption>
+<figure confidence="0.977451528301886">
+Computational Linguistics, Volume 12, Number 1, January-March 1986 31
+Pamela K. Fink and Alan W. Biermann The Correction of III-Formed Input
+2
+LEGEND: % Errors Corrected by
+IM • loosening
+expectation
+: both
+I-1 • not corrected
+3 4 5 6 7 8 9 10
+LOOP NUMBER IN DIALOGUE
+SENTENCE-ERROR-RATE
+100% -
+I
+90% -
+I
+80% -
+I
+70% -
+I
+60% -
+I
+50% -
+I
+40% -
+I
+30% -
+I
+20% -
+I
+10% -
+I
+0%
+• •
+•
+4.
+^
+WORD-ERROR-RATE
+100% -
+I
+90%
+80%
+70%
+60%
+50%
+40%
+30%
+20%
+10%
+0%
+., -
+:._.-2:L,. -211iii;
+4 5 6 7
+LOOP NUMBER IN DIALOGUE
+</figure>
+<page confidence="0.98303">
+8
+9
+10
+</page>
+<figureCaption confidence="0.997734">
+Figure 14. Error and correction rates for Test IV.
+</figureCaption>
+<page confidence="0.586246">
+32 Computational Linguistics, Volume 12, Number 1, January-March 1986
+</page>
+<figure confidence="0.969551083333333">
+Pamela K. Fink and Alan W. Biermann The Correction of III-Formed Input
+# OF WORDS/SECOND
+4 -
+I
+3 -
+1
+2 —
+1
+1 -
+1
+0
+TEST I - Totally-Ordered Schema
+.......-----
+1 2 3 4 5 6 7 8 9 10
+LOOP NUMBER IN DIALOGUE
+# OF WORDS/SECOND
+4-
+3-
+2-
+1-
+0
+TEST II - Partially-Ordered Schema
+1 2 3 4 5 6 7 8 9 10
+LOOP NUMBER IN DIALOGUE
+# OF WORDS/SECOND TEST III - Totally-Unordered Schema
+4-
+3-
+0
+1 2 3 4 5 6 7 8 9 10
+LOOP NUMBER IN DIALOGUE
+# OF WORDS/SECOND TEST IV - Totally-Ordered Schema with Arguments
+4-
+3-
+2-
+1 2 3 4 5 6 7 8 9 10
+LOOP NUMBER IN DIALOGUE
+</figure>
+<figureCaption confidence="0.991012">
+Figure 15. Speech rate in the four dialogue schema tests.
+</figureCaption>
+<bodyText confidence="0.961074882352941">
+Computational Linguistics, Volume 12, Number 1, January-March 1986 33
+Pamela K. Fink and Alan W. Biermann The Correction of III-Formed Input
+Test III demonstrates the error correction capabilities
+of the system when expectation only knows that one of a
+group of sentences will be said next. It produces a total-
+ly-unordered dialogue schema. The results of the
+systems error correction capabilities in such a situation
+appear in Figure 13.
+Test IV uses a totally-ordered dialogue schema, but
+with a variation from test I. Each sentence sooner or
+later contains an argument so that the system does not
+know everything about the sentence that will be said
+next. The data given in Figure 14 shows the error
+correction rates for this dialogue. It clearly shows how
+error correction failures increase until after the third loop
+when argument creation begins so that the system no
+longer error corrects incorrectly.
+Figure 15 shows the graphs of the average speech rate
+of the speakers for each of the four tests. Like the other
+eight graphs, these graphs reflect the loop structure of
+the dialogues. As can be seen, the speakers tended to
+increase their speech rate as they talked to the system.
+This behavior was hoped for because as the speech rate
+increased, so did the error rate of the speech recognizer,
+thus placing more of a burden on the error correcting
+abilities of the expectation system. Note that, in all eight
+graphs in Figures 11 through 14, the word and sentence
+error rates from the voice recognizer generally increased
+with the progress through the dialogue. This is due to the
+increased rate of speech. However, the actual failure rate
+of VNLCE did not increase by the same amount. These
+extra errors were corrected by the expectation system.
+Figure 16 gives a summary of the average error and
+correction rates for each test and over all.
+</bodyText>
+<sectionHeader confidence="0.989601" genericHeader="related work">
+7 RELATED LITERATURE
+</sectionHeader>
+<bodyText confidence="0.999751606060606">
+A number of speech understanding systems have been
+developed during the past fifteen years (Barnett et al.
+1980, Dixon and Martin 1979, Erman et al. 1980, Haton
+and Pierrel 1976, Lea 1980, Lowerre and Reddy 1980,
+Medress 1980, Reddy 1976, Walker 1978, and Wolf and
+Woods 1980). Most of these efforts concentrated on the
+interaction between low level information sources from a
+speech recognizer and a natural language processor to
+discover the meaning of an input sentence. While some
+of these systems did exhibit expectation capabilities at
+the sentence level, none acquired dialogues of the kind
+described here for the sake of dialogue level expectation
+and error correction. A detailed description of the kinds
+of expectation mechanisms appearing in these systems
+appears in Fink (1983).
+The problem of handling ill-formed input has been
+studied by Carbonell and Hayes (1983), Granger (1983),
+Jensen et al. (1983), Kwasny and Sondheimer (1981),
+Riesbeck and Schank (1976), Thompson (1980), Weis-
+chedel and Black (1980), and Weischedel and Sondheim-
+er (1983). A wide variety of techniques have been
+developed for addressing problems at the word, phrase,
+sentence, and in some cases, dialogue level. However,
+these methodologies have not used historical information
+at the dialogue level as described here. In most cases, the
+goal of these systems is to characterize the ill-formed
+input into classes of errors and to correct on that basis.
+The work described here makes no attempt to classify the
+errors, but treats them as random events that occur at
+any point in a sentence. Thus, an error in this work has
+no pattern but occurs probabilistically. A verb is just as
+likely to be mis-recognized or not recognized as is a
+noun, adjective, determiner, etc.
+</bodyText>
+<figure confidence="0.944233055555556">
+Test I Test II Test III Test IV Over—all
+word—error—rate
+18.78 11.75
+.59 1.50
+61.22 40.83
+3.22 6.00
+2.27 2.95
+11.25 12.17 13.49
+1.50 4.17 1 . 94
+52.25 56.33 52 . 66
+5.38 16.00 7.65
+1.85 1.97 2.26
+corrected
+word—error—rate
+sentence—error—rate
+corrected
+sentence—error—rate
+average speaking rate
+</figure>
+<figureCaption confidence="0.960215">
+Figure 16. Average word and sentence error rate in percent,
+average speaking rate in words-spoken-per-minute.
+</figureCaption>
+<page confidence="0.938065">
+34 Computational Linguistics, Volume 12, Number 1, January-March 1986
+</page>
+<note confidence="0.537542">
+Pamela K. Fink and Alan W. Biermann The Correction of DI-Formed Input
+</note>
+<bodyText confidence="0.999983233333333">
+The acquisition of dialogue as implemented in VNLCE
+is reminiscent of the program synthesis methodology
+developed by Biermann and Krishnaswamy (1976)
+where program flowcharts were constructed from traces
+of their behaviors. However, the &amp;quot;flowcharts&amp;quot; in the
+current project are probabilistic in nature and the prob-
+lems associated with matching incoming sentences to
+existing nodes has not been previously addressed.
+Another dialogue acquisition system has been developed
+by Ho (1984). However, that system has different goals:
+to enable the user to consciously design a dialogue to
+embody a particular human-machine interaction. The
+acquisition system described here is aimed at dealing with
+ill-formed input and is completely automatic and invisible
+to the user. It self activates to bias recognition toward
+historically observed patterns but is not otherwise
+observable.
+The VNLCE processor may be considered to be a
+learning system of the tradition described, for example, in
+Michalski et al. (1984). The current system learns finite
+state flowcharts whereas typical learning systems usually
+acquire coefficient values as in Minsky and Papert
+(1969), assertional statements as in Michalski (1980), or
+semantic nets as in Winston (1975). That is, the current
+system learns procedures rather than data structures.
+There is some literature on procedure acquisition such as
+the LISP synthesis work described in Biermann et al.
+(1984) and the PROLOG synthesis method of Shapiro
+(1982). However, the latter methodologies have not
+been applied to dialogue acquisition.
+</bodyText>
+<sectionHeader confidence="0.999395" genericHeader="conclusions">
+8 CONCLUSIONS AND AREAS FOR FUTURE RESEARCH
+</sectionHeader>
+<bodyText confidence="0.999633982142857">
+We have shown that the ability to use expectation in the
+form of knowledge about the dialogue being spoken, as
+with humans, is a tremendous aid to speech recognition
+by computer. Since expectation, in this research, has
+been based on repetition of patterns, the expectation
+system&apos;s ability to correct varies, of course, with the
+repetitiveness of the dialogue itself. We have attempted,
+in sections 5 and 6, to justify this decision by demon-
+strating how the expectation system can acquire common
+programming constructs such as loops and arguments. It
+is our belief that repetitious patterns occur in everyday
+life, and that the expectation system is capable of dealing
+with such patterns, resulting in a generalized situation
+similar to a Schankian script. Finally, we have tested the
+expectation system&apos;s correction power in some represen-
+tative situations, as discussed in section 6. It has been
+demonstrated that the expectation system has the capa-
+bilities of reducing a large sentence error rate to nearly
+zero in many situations. At the word level, error rates to
+the expectation system climbed as high as 47% in certain
+user dialogues when the user was speaking fast. At the
+same time, the error rate leaving the expectation system
+remained fairly low at between zero and fifteen percent.
+On the average, the system was able to lower a sentence
+error rate of 53% to 8%, and a word error rate of
+13.5% to 2%. The use of expectation, along with an
+ability to ignore or add words to the input stream of the
+parser, is all that is needed to achieve this error
+correction rate on randomly erroneous input.
+The parser design, with the five choices at each word
+slot, has the potential to run into problems with the expo-
+nential growth of the search and to result in unacceptably
+long parse times. However, when the rating scheme is
+used intelligently, it not only aids in finding the best
+parse of a word sequence, but it also helps to lower the
+search time necessary by pruning unreasonable search
+choices. The average parse time for a sentence, from the
+tests discussed above, was 5.1 seconds while the average
+total processing time for a sentence was 10.5 seconds.
+This was on a highly loaded PDP 11/70 under the UNIX&apos;
+operating system. In the event that a particular word
+sequence leads the parser down a garden path, a time-
+out facility has been implemented that causes the parser
+to fail after one minute of real-time. However, out of a
+total of 629 sentences spoken in the above four tests, this
+feature was needed only 19 times.
+The research reported on here was divided into two
+parts, the theory and the implementation. Most of the
+theory developed was implemented in the VNLCE
+system. This theory has been aimed at error correction
+of random errors using expectation based on historical
+information. However, there are many possible exten-
+sions that could be examined in the future and added to
+the implementation if the investigation indicates that it
+would create a yet more usable system. These include
+the following:
+</bodyText>
+<listItem confidence="0.997710846153846">
+• use of low level knowledge from the speech recognition
+phase,
+• use of high level knowledge about the domain in partic-
+ular and the dialogue task in general,
+• a &amp;quot;continue&amp;quot; facility and an &amp;quot;auto-loop&amp;quot; facility as
+described by Biermann and Krishnaswamy (1976),
+• a &amp;quot;conditioning&amp;quot; facility as described by Fink et al.
+(1985),
+• implementation of new types of paraphrasing,
+• checking a larger environment in the expectation
+acquisition algorithm when deciding if an incoming
+sentence is the same or similar to one already seen, and
+• examining inter-speaker dialogue patterns.
+</listItem>
+<bodyText confidence="0.987353310344828">
+All but two of these areas for expansion are aimed at
+moving the expectation system from one that finds
+patterns in a user&apos;s dialogues and acquires historical
+knowledge about them to one that can acquire true
+procedures. The first two areas for expansion have noth-
+ing to do with creating a true procedure acquisition
+module but would be highly desirable from the point of
+view of the speech recognition application. Features
+three and four would simply make the system easier to
+use and would require little theoretical investigation. The
+final three would require research efforts.
+In conclusion, we have designed a system that is capa-
+ble of correcting ill-formed input and implemented the
+Computational Linguistics, Volume 12, Number 1, January-March 1986 35
+Pamela K. Fink and Alan W. Biermann The Correction of III-Formed Input
+design in the area of speech recognition. The system
+performs error-correction through a mechanism also used
+by humans in the same situation, that of expectation. We
+have shown that the expectation algorithm is general
+enough to handle almost any dialogue structure. It is
+possible to predict approximately what kind of error
+correction to expect from the system based on the
+dialogue structure and the word error rate. We have also
+shown that the theory on which the implemented expec-
+tation system is based is capable of acquiring and gener-
+alizing real-world, script-like situations. This research
+can serve as a starting point for further research into the
+field of computer expectation, procedure acquisition, and
+learning.
+</bodyText>
+<sectionHeader confidence="0.999018" genericHeader="references">
+REFERENCES
+</sectionHeader>
+<reference confidence="0.993875729411765">
+Ballard, B. 1979 Semantic Processing for a Natural Language
+Programming System. Ph.D. Dissertation Report CS-1979-8, Duke
+University, Durham, North Carolina.
+Barnett, J.; Berstein, M.; Gillman, R.; and Kameny, I. 1980 The SDC
+Speech Understanding System. In Lea 1980: 272-293.
+Biermann, A. and Ballard, B. 1980 Toward Natural Language Compu-
+tation. AJCL 6(2): 71-86.
+Biermann, A.; Guiho, G.; and Kodratoff, Y., Eds. 1984 Automatic
+Program Construction Techniques. Macmillan Publishing Co., New
+York, New York.
+Biermann, A. and Krishnaswamy, R. 1976 Construction of Programs
+from Example Computations. IEEE Transactions on Software Engi-
+neering SE-2(3): 141-153.
+Biermann, A.; Rodman, R.; Rubin, D.; and Heidlage, J. 1985. Natural
+Language with Discrete Speech as a Mode for Human-to-Machine
+Communication. Comm. of ACM 28(6).
+Carbonell, J. and Hayes, P. 1983 Recovery Strategies for Parsing
+Extragrammatical Language. AJCL 9(3-4): 123-146.
+Dixon, N. and Martin, T., Eds. 1979 Automatic Speech and Speaker
+Recognition. IEEE Press, New York, New York.
+Erman, L.; Hayes-Roth, F; Lesser, V.; and Reddy, D. 1980 The Hear-
+say-II Speech Understanding System: Integrating Knowledge to
+Resolve Uncertainty. Computing Surveys, 12(2).
+Fink, P. 1983 The Acquisition and Use of Dialogue Expectation in
+Speech Recognition, Dissertation, Department of Computer
+Science, Duke University.
+Fink, P.; Sigmon, A.; and Biermann, A. 1985 Computer Control Via
+Limited Natural Language. IEEE Trans SMC SMC-14(1): 54-68.
+Granger, R. 1983 The NOMAD System: Expectation-Based
+Detection and Correction of Errors during Understanding of
+Syntactically Ill-Formed Text. AJCL 9(3-4): 188-196.
+Haton, J. and Pierrel, J. 1976 Organization and Operation of a
+Connected Speech Understanding System at Lexical, Syntactic and
+Semantic Levels. 1976 IEEE International Conference on Acous-
+tics, Speech and Signal Processing, Philadelphia, Pennsylvania:
+430-433.
+Ho, T.-P. 1984 The Dialogue Designing Dialogue System, Disserta-
+tion, Computer Science Department, California Institute of Tech-
+nology.
+Jensen, K.; Heidorn, G.; Miller, L.; and Ravin, Y. 1983 Parse Fitting
+and Prose Fixing: Getting a Hold on Ill-Formedness. AJCL 9(3-4):
+147-160.
+Kwasny, S. and Sondheimer, N. 1981 Relaxation Techniques for Pars-
+ing Grammatically Ill-Formed Input in Natural Language Under-
+standing Systems. AJCL 7(2): 99-108.
+Lea, W., Ed. 1980 Trends in Speech Recognition. Prentice-Hall, New
+Jersey.
+Lowerre, B. and Reddy, R. 1980 The Harpy Speech Understanding
+System. In Lea 1980: 340-360.
+Medress, M. 1980 The Sperry Univac System for Continuous Speech
+Recognition. In Lea 1980.
+Michalski, R. 1980 Pattern Recognition as Rule-Guided Inductive
+Inference. IEEE Trans. Pattern Analysis and Machine Intelligence.
+Michalski, R.; Carbonell, J.; and Mitchell, T. 1984 Machine Learning.
+Springer Verlag, New York.
+Minsky, M. and Papert, S. 1969 Perceptrons. MIT Press, Cambridge,
+Massachusetts.
+Reddy, D. 1976 Speech Recognition by Machine: A Review.
+Proceedings of the IEEE 64(4): 501-531.
+Riesbeck, C. and Schank, R. 1976 Comprehension by Computer:
+Expectation-Based Analysis of Sentences in Context. Tech. Rep.
+78, Computer Science Department, Yale University, New Haven,
+Connecticut.
+Schank, R. and Abelson, R. 1977 Scripts, Plans, Goals, and Under-
+standing. Lawrence Erlbaum Associates, Hillsdale, New Jersey.
+Shapiro, E. 1982 Algorithmic Program Debugging. MIT Press,
+Cambridge, Massachusetts.
+Thompson, B. 1980 Linguistic Analysis of Natural Language Commu-
+nication with Computers. Proceedings of the Eighth International
+Conference on Computational Linguistics, Tokyo, Japan: 190-201.
+Walker, D., Ed. 1978 Understanding Spoken Language. Elsevier North-
+Holland, New York, New York.
+Weischedel, R. and Black, J. 1980 Responding Intelligently to Unpars-
+able Inputs. AJCL 6(2): 97-109.
+Weischedel, R. and Sondheimer, N. 1983 Meta-Rules as a Basis for
+Processing Ill-Formed Input. AJCL 9(3-4): 161-177.
+Winston, P. 1975 Learning Structural Descriptions from Examples. In
+Winston, P., Ed., Psychology of Computer Vision. McGraw-Hill, New
+York, New York.
+Wolf, J. and Woods, W. 1980 The HWIM Speech Understanding
+System. In Lea 1980: 316-339.
+Woods, W. 1970 Transition Network Grammars for Natural
+Language Analysis. Comm. of the ACM 13(10): 591-606.
+NOTE
+1. UNIX is a trademark of AT&amp;T Bell Laboratories.
+</reference>
+<page confidence="0.957409">
+36 Computational Linguistics, Volume 12, Number 1, January-March 1986
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.448073">
+<title confidence="0.994355">THE CORRECTION OF ILL-FORMED INPUT USING HISTORY-BASED EXPECTATION WITH APPLICATIONS TO SPEECH UNDERSTANDING</title>
+<author confidence="0.999996">Pamela K Fink</author>
+<affiliation confidence="0.996236">Southwest Research</affiliation>
+<address confidence="0.997345">6220 Culebra San Antonio, TX 78284</address>
+<author confidence="0.99997">Alan W Biermann</author>
+<affiliation confidence="0.812648">Department of Computer Duke Durham, NC 27706</affiliation>
+<abstract confidence="0.991857">A method for error correction of ill-formed input is described that acquires dialogue patterns in typical usage and uses these patterns to predict new inputs. Error correction is done by strongly biasing parsing toward expected meanings unless clear evidence from the input shows the current sentence is not expected. A dialogue acquisition and tracking algorithm is presented along with a description of its implementation in a voice interactive system. A series of tests are described that show the power of the error correction methodology when stereotypic dialogue occurs.</abstract>
+<note confidence="0.9915584">This material is based upon work supported by The National Science Foundation under Grant number MCS 7904120 and Grant number MCS 8113491 and by the Air Force Office of Scientific Research, Air Force Command, Grant 81-0221.</note>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>B Ballard</author>
+</authors>
+<title>Semantic Processing for a Natural Language Programming System.</title>
+<date>1979</date>
+<tech>Ph.D. Dissertation Report CS-1979-8,</tech>
+<institution>Duke University,</institution>
+<location>Durham, North Carolina.</location>
+<contexts>
+<context position="17587" citStr="Ballard 1979" startWordPosition="2965" endWordPosition="2966">tions describe our implementation, which was used to investigate the viability of this approach and the performance it can achieve. Computational Linguistics, Volume 12, Number 1, January-March 1986 17 Pamela K. Fink and Alan W. Biermann The Correction of Ill-Formed Input 5 AN IMPLEMENTATION The usefulness of the methodology described above was tested in the implementation of a connected speech understanding system. An off-the-shelf speech recognition device, a Nippon Electric Corporation DP-200, was added to an existing natural language processing system, the Natural Language Computer (NLC) (Ballard 1979, Biermann and Ballard 1980). The expectation system provided the intermediate processing between the errorful output of the speech recognizer and the deep semantics of NLC. The resulting speech understanding system is called the Voice Natural Language Computer with Expectation (VNLCE, Fink 1983). [The current system should be distinguished from an earlier voice system (VNLC, Biermann et al. 1985), which had no expectation and which handled discrete speech where a 300 millisecond pause must follow each word.] It should be emphasized, of course, that the central issue here is the study of expec</context>
+<context position="22008" citStr="Ballard 1979" startWordPosition="3682" endWordPosition="3683">s —999 to 0, where 0 is equivalent to a probability of one. These ratings are computed this way because they remain integral and still fairly accurately represent the correct values. Also, they can simply be added and subtracted rather than multiplied and divided in the hundreds of calculations required for a single sentence parse. The expectation parser uses an ATN-like representation for its grammar (Woods 1970). Its strategy is top-down. The types of sentences accepted are essentially those accepted by the original NLC grammar, imperative sentences with nested noun groups and conjunctions (Ballard 1979). An attempt has been made to build as deep a parse as possible so that sentences with the same meaning result in identical parses. Sentences have the same &amp;quot;meaning&amp;quot; if they result in identical tasks being performed. The various sentence structures that have the same meaning we call paraphrases. We have studied the following types of paraphrasing: 1) WORD &lt;= &gt; WORD &apos;entry&apos; &lt;=&gt; &apos;number&apos; 2) ADJ NOUN &lt;=&gt; NOUN QUALIFIER &apos;positive entries&apos; &lt;=&gt; &apos;entries which are positive&apos; 3) NOUN NUMBER &lt;=&gt; DET ORDINAL NOUN &apos;row 2&apos; &lt;=&gt; &apos;the second row&apos; 4) CLASSIFIER NOUN &lt;=&gt; NOUN of/in CLASSIFIER &apos;the row 1 entries</context>
+</contexts>
+<marker>Ballard, 1979</marker>
+<rawString>Ballard, B. 1979 Semantic Processing for a Natural Language Programming System. Ph.D. Dissertation Report CS-1979-8, Duke University, Durham, North Carolina.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Barnett</author>
+<author>M Berstein</author>
+<author>R Gillman</author>
+<author>I Kameny</author>
+</authors>
+<title>The SDC Speech Understanding System. In Lea</title>
+<date>1980</date>
+<pages>272--293</pages>
+<contexts>
+<context position="60519" citStr="Barnett et al. 1980" startWordPosition="10372" endWordPosition="10375">s of the expectation system. Note that, in all eight graphs in Figures 11 through 14, the word and sentence error rates from the voice recognizer generally increased with the progress through the dialogue. This is due to the increased rate of speech. However, the actual failure rate of VNLCE did not increase by the same amount. These extra errors were corrected by the expectation system. Figure 16 gives a summary of the average error and correction rates for each test and over all. 7 RELATED LITERATURE A number of speech understanding systems have been developed during the past fifteen years (Barnett et al. 1980, Dixon and Martin 1979, Erman et al. 1980, Haton and Pierrel 1976, Lea 1980, Lowerre and Reddy 1980, Medress 1980, Reddy 1976, Walker 1978, and Wolf and Woods 1980). Most of these efforts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kin</context>
+</contexts>
+<marker>Barnett, Berstein, Gillman, Kameny, 1980</marker>
+<rawString>Barnett, J.; Berstein, M.; Gillman, R.; and Kameny, I. 1980 The SDC Speech Understanding System. In Lea 1980: 272-293.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Biermann</author>
+<author>B Ballard</author>
+</authors>
+<title>Toward Natural Language Computation.</title>
+<date>1980</date>
+<journal>AJCL</journal>
+<volume>6</volume>
+<issue>2</issue>
+<pages>71--86</pages>
+<contexts>
+<context position="17615" citStr="Biermann and Ballard 1980" startWordPosition="2967" endWordPosition="2970"> our implementation, which was used to investigate the viability of this approach and the performance it can achieve. Computational Linguistics, Volume 12, Number 1, January-March 1986 17 Pamela K. Fink and Alan W. Biermann The Correction of Ill-Formed Input 5 AN IMPLEMENTATION The usefulness of the methodology described above was tested in the implementation of a connected speech understanding system. An off-the-shelf speech recognition device, a Nippon Electric Corporation DP-200, was added to an existing natural language processing system, the Natural Language Computer (NLC) (Ballard 1979, Biermann and Ballard 1980). The expectation system provided the intermediate processing between the errorful output of the speech recognizer and the deep semantics of NLC. The resulting speech understanding system is called the Voice Natural Language Computer with Expectation (VNLCE, Fink 1983). [The current system should be distinguished from an earlier voice system (VNLC, Biermann et al. 1985), which had no expectation and which handled discrete speech where a 300 millisecond pause must follow each word.] It should be emphasized, of course, that the central issue here is the study of expectation mechanisms and the de</context>
+</contexts>
+<marker>Biermann, Ballard, 1980</marker>
+<rawString>Biermann, A. and Ballard, B. 1980 Toward Natural Language Computation. AJCL 6(2): 71-86.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Biermann</author>
+<author>G Guiho</author>
+<author>Y Kodratoff</author>
+<author>Eds</author>
+</authors>
+<title>Automatic Program Construction Techniques.</title>
+<date>1984</date>
+<publisher>Macmillan Publishing Co.,</publisher>
+<location>New York, New York.</location>
+<contexts>
+<context position="64139" citStr="Biermann et al. (1984)" startWordPosition="10932" endWordPosition="10935">istorically observed patterns but is not otherwise observable. The VNLCE processor may be considered to be a learning system of the tradition described, for example, in Michalski et al. (1984). The current system learns finite state flowcharts whereas typical learning systems usually acquire coefficient values as in Minsky and Papert (1969), assertional statements as in Michalski (1980), or semantic nets as in Winston (1975). That is, the current system learns procedures rather than data structures. There is some literature on procedure acquisition such as the LISP synthesis work described in Biermann et al. (1984) and the PROLOG synthesis method of Shapiro (1982). However, the latter methodologies have not been applied to dialogue acquisition. 8 CONCLUSIONS AND AREAS FOR FUTURE RESEARCH We have shown that the ability to use expectation in the form of knowledge about the dialogue being spoken, as with humans, is a tremendous aid to speech recognition by computer. Since expectation, in this research, has been based on repetition of patterns, the expectation system&apos;s ability to correct varies, of course, with the repetitiveness of the dialogue itself. We have attempted, in sections 5 and 6, to justify thi</context>
+</contexts>
+<marker>Biermann, Guiho, Kodratoff, Eds, 1984</marker>
+<rawString>Biermann, A.; Guiho, G.; and Kodratoff, Y., Eds. 1984 Automatic Program Construction Techniques. Macmillan Publishing Co., New York, New York.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Biermann</author>
+<author>R Krishnaswamy</author>
+</authors>
+<title>Construction of Programs from Example Computations.</title>
+<date>1976</date>
+<journal>IEEE Transactions on Software Engineering</journal>
+<volume>2</volume>
+<issue>3</issue>
+<pages>141--153</pages>
+<contexts>
+<context position="62857" citStr="Biermann and Krishnaswamy (1976)" startWordPosition="10741" endWordPosition="10744">8 11.75 .59 1.50 61.22 40.83 3.22 6.00 2.27 2.95 11.25 12.17 13.49 1.50 4.17 1 . 94 52.25 56.33 52 . 66 5.38 16.00 7.65 1.85 1.97 2.26 corrected word—error—rate sentence—error—rate corrected sentence—error—rate average speaking rate Figure 16. Average word and sentence error rate in percent, average speaking rate in words-spoken-per-minute. 34 Computational Linguistics, Volume 12, Number 1, January-March 1986 Pamela K. Fink and Alan W. Biermann The Correction of DI-Formed Input The acquisition of dialogue as implemented in VNLCE is reminiscent of the program synthesis methodology developed by Biermann and Krishnaswamy (1976) where program flowcharts were constructed from traces of their behaviors. However, the &amp;quot;flowcharts&amp;quot; in the current project are probabilistic in nature and the problems associated with matching incoming sentences to existing nodes has not been previously addressed. Another dialogue acquisition system has been developed by Ho (1984). However, that system has different goals: to enable the user to consciously design a dialogue to embody a particular human-machine interaction. The acquisition system described here is aimed at dealing with ill-formed input and is completely automatic and invisible</context>
+<context position="67604" citStr="Biermann and Krishnaswamy (1976)" startWordPosition="11516" endWordPosition="11519"> was implemented in the VNLCE system. This theory has been aimed at error correction of random errors using expectation based on historical information. However, there are many possible extensions that could be examined in the future and added to the implementation if the investigation indicates that it would create a yet more usable system. These include the following: • use of low level knowledge from the speech recognition phase, • use of high level knowledge about the domain in particular and the dialogue task in general, • a &amp;quot;continue&amp;quot; facility and an &amp;quot;auto-loop&amp;quot; facility as described by Biermann and Krishnaswamy (1976), • a &amp;quot;conditioning&amp;quot; facility as described by Fink et al. (1985), • implementation of new types of paraphrasing, • checking a larger environment in the expectation acquisition algorithm when deciding if an incoming sentence is the same or similar to one already seen, and • examining inter-speaker dialogue patterns. All but two of these areas for expansion are aimed at moving the expectation system from one that finds patterns in a user&apos;s dialogues and acquires historical knowledge about them to one that can acquire true procedures. The first two areas for expansion have nothing to do with crea</context>
+</contexts>
+<marker>Biermann, Krishnaswamy, 1976</marker>
+<rawString>Biermann, A. and Krishnaswamy, R. 1976 Construction of Programs from Example Computations. IEEE Transactions on Software Engineering SE-2(3): 141-153.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Biermann</author>
+<author>R Rodman</author>
+<author>D Rubin</author>
+<author>J Heidlage</author>
+</authors>
+<title>Natural Language with Discrete Speech as a Mode for Human-to-Machine Communication.</title>
+<date>1985</date>
+<journal>Comm. of ACM</journal>
+<volume>28</volume>
+<issue>6</issue>
+<contexts>
+<context position="17987" citStr="Biermann et al. 1985" startWordPosition="3023" endWordPosition="3026">speech understanding system. An off-the-shelf speech recognition device, a Nippon Electric Corporation DP-200, was added to an existing natural language processing system, the Natural Language Computer (NLC) (Ballard 1979, Biermann and Ballard 1980). The expectation system provided the intermediate processing between the errorful output of the speech recognizer and the deep semantics of NLC. The resulting speech understanding system is called the Voice Natural Language Computer with Expectation (VNLCE, Fink 1983). [The current system should be distinguished from an earlier voice system (VNLC, Biermann et al. 1985), which had no expectation and which handled discrete speech where a 300 millisecond pause must follow each word.] It should be emphasized, of course, that the central issue here is the study of expectation mechanisms and the details of the design decisions could have been made in rather different ways. Thus one could have implemented expectation error correction with a typed input system or with a speech input system that integrates voice signal processing with higher level functions in a way not possible with a commercial recognizer. This implementation shows only one way in which the functi</context>
+</contexts>
+<marker>Biermann, Rodman, Rubin, Heidlage, 1985</marker>
+<rawString>Biermann, A.; Rodman, R.; Rubin, D.; and Heidlage, J. 1985. Natural Language with Discrete Speech as a Mode for Human-to-Machine Communication. Comm. of ACM 28(6).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Carbonell</author>
+<author>P Hayes</author>
+</authors>
+<title>Recovery Strategies for Parsing Extragrammatical Language.</title>
+<date>1983</date>
+<journal>AJCL</journal>
+<pages>9--3</pages>
+<contexts>
+<context position="61286" citStr="Carbonell and Hayes (1983)" startWordPosition="10493" endWordPosition="10496">and Wolf and Woods 1980). Most of these efforts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has been studied by Carbonell and Hayes (1983), Granger (1983), Jensen et al. (1983), Kwasny and Sondheimer (1981), Riesbeck and Schank (1976), Thompson (1980), Weischedel and Black (1980), and Weischedel and Sondheimer (1983). A wide variety of techniques have been developed for addressing problems at the word, phrase, sentence, and in some cases, dialogue level. However, these methodologies have not used historical information at the dialogue level as described here. In most cases, the goal of these systems is to characterize the ill-formed input into classes of errors and to correct on that basis. The work described here makes no attem</context>
+</contexts>
+<marker>Carbonell, Hayes, 1983</marker>
+<rawString>Carbonell, J. and Hayes, P. 1983 Recovery Strategies for Parsing Extragrammatical Language. AJCL 9(3-4): 123-146.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Dixon</author>
+<author>T Martin</author>
+<author>Eds</author>
+</authors>
+<title>Automatic Speech and Speaker Recognition.</title>
+<date>1979</date>
+<publisher>IEEE Press,</publisher>
+<location>New York, New York.</location>
+<marker>Dixon, Martin, Eds, 1979</marker>
+<rawString>Dixon, N. and Martin, T., Eds. 1979 Automatic Speech and Speaker Recognition. IEEE Press, New York, New York.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Erman</author>
+<author>F Hayes-Roth</author>
+<author>V Lesser</author>
+<author>D Reddy</author>
+</authors>
+<title>The Hearsay-II Speech Understanding System: Integrating Knowledge to Resolve Uncertainty.</title>
+<date>1980</date>
+<journal>Computing Surveys,</journal>
+<volume>12</volume>
+<issue>2</issue>
+<contexts>
+<context position="60561" citStr="Erman et al. 1980" startWordPosition="10380" endWordPosition="10383">ll eight graphs in Figures 11 through 14, the word and sentence error rates from the voice recognizer generally increased with the progress through the dialogue. This is due to the increased rate of speech. However, the actual failure rate of VNLCE did not increase by the same amount. These extra errors were corrected by the expectation system. Figure 16 gives a summary of the average error and correction rates for each test and over all. 7 RELATED LITERATURE A number of speech understanding systems have been developed during the past fifteen years (Barnett et al. 1980, Dixon and Martin 1979, Erman et al. 1980, Haton and Pierrel 1976, Lea 1980, Lowerre and Reddy 1980, Medress 1980, Reddy 1976, Walker 1978, and Wolf and Woods 1980). Most of these efforts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in </context>
+</contexts>
+<marker>Erman, Hayes-Roth, Lesser, Reddy, 1980</marker>
+<rawString>Erman, L.; Hayes-Roth, F; Lesser, V.; and Reddy, D. 1980 The Hearsay-II Speech Understanding System: Integrating Knowledge to Resolve Uncertainty. Computing Surveys, 12(2).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Fink</author>
+</authors>
+<title>The Acquisition and Use of Dialogue Expectation in Speech Recognition,</title>
+<date>1983</date>
+<institution>Dissertation, Department of Computer Science, Duke University.</institution>
+<contexts>
+<context position="17884" citStr="Fink 1983" startWordPosition="3009" endWordPosition="3010">efulness of the methodology described above was tested in the implementation of a connected speech understanding system. An off-the-shelf speech recognition device, a Nippon Electric Corporation DP-200, was added to an existing natural language processing system, the Natural Language Computer (NLC) (Ballard 1979, Biermann and Ballard 1980). The expectation system provided the intermediate processing between the errorful output of the speech recognizer and the deep semantics of NLC. The resulting speech understanding system is called the Voice Natural Language Computer with Expectation (VNLCE, Fink 1983). [The current system should be distinguished from an earlier voice system (VNLC, Biermann et al. 1985), which had no expectation and which handled discrete speech where a 300 millisecond pause must follow each word.] It should be emphasized, of course, that the central issue here is the study of expectation mechanisms and the details of the design decisions could have been made in rather different ways. Thus one could have implemented expectation error correction with a typed input system or with a speech input system that integrates voice signal processing with higher level functions in a wa</context>
+<context position="46031" citStr="Fink (1983)" startWordPosition="7801" endWordPosition="7802">sing in the sentence, the expectation parser will error correct the sentence to the most probable value, or the first one in the set if the probabilities are equal, here the value one for row 1. Thus, both options are imperfect in terms of the error correction capabilities that they can provide. The comparison that must be made to determine which option is better in a given situation is how often the first will error correct incorrectly as opposed to how much error correcting power we will lose by using the second. How it is done is beyond the scope of this paper but is explained in detail in Fink (1983). The Merge function takes two inputs, M1 and M2, which have been determined by the Mergeable function to be similar in some way by considering their respective environments and meanings. Based upon how similar the two meanings are, Merge creates a meaning M that is a generalization of M1 and M2, sometimes employing an argument. Thus, there are only two possible kinds of matches at this point between an input sentence and a member of the expected sentence set, an exact match or a similar match. In the case of an exact match M = M1 = M2 and M replaces M1 in the expected dialogue. In the case of</context>
+<context position="61197" citStr="Fink (1983)" startWordPosition="10481" endWordPosition="10482"> Lea 1980, Lowerre and Reddy 1980, Medress 1980, Reddy 1976, Walker 1978, and Wolf and Woods 1980). Most of these efforts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has been studied by Carbonell and Hayes (1983), Granger (1983), Jensen et al. (1983), Kwasny and Sondheimer (1981), Riesbeck and Schank (1976), Thompson (1980), Weischedel and Black (1980), and Weischedel and Sondheimer (1983). A wide variety of techniques have been developed for addressing problems at the word, phrase, sentence, and in some cases, dialogue level. However, these methodologies have not used historical information at the dialogue level as described here. In most cases, the goal of these systems is to characterize the ill-formed input in</context>
+</contexts>
+<marker>Fink, 1983</marker>
+<rawString>Fink, P. 1983 The Acquisition and Use of Dialogue Expectation in Speech Recognition, Dissertation, Department of Computer Science, Duke University.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Fink</author>
+<author>A Sigmon</author>
+<author>A Biermann</author>
+</authors>
+<title>Computer Control Via Limited Natural Language.</title>
+<date>1985</date>
+<journal>IEEE Trans SMC</journal>
+<volume>14</volume>
+<issue>1</issue>
+<pages>54--68</pages>
+<contexts>
+<context position="67668" citStr="Fink et al. (1985)" startWordPosition="11527" endWordPosition="11530">ection of random errors using expectation based on historical information. However, there are many possible extensions that could be examined in the future and added to the implementation if the investigation indicates that it would create a yet more usable system. These include the following: • use of low level knowledge from the speech recognition phase, • use of high level knowledge about the domain in particular and the dialogue task in general, • a &amp;quot;continue&amp;quot; facility and an &amp;quot;auto-loop&amp;quot; facility as described by Biermann and Krishnaswamy (1976), • a &amp;quot;conditioning&amp;quot; facility as described by Fink et al. (1985), • implementation of new types of paraphrasing, • checking a larger environment in the expectation acquisition algorithm when deciding if an incoming sentence is the same or similar to one already seen, and • examining inter-speaker dialogue patterns. All but two of these areas for expansion are aimed at moving the expectation system from one that finds patterns in a user&apos;s dialogues and acquires historical knowledge about them to one that can acquire true procedures. The first two areas for expansion have nothing to do with creating a true procedure acquisition module but would be highly des</context>
+</contexts>
+<marker>Fink, Sigmon, Biermann, 1985</marker>
+<rawString>Fink, P.; Sigmon, A.; and Biermann, A. 1985 Computer Control Via Limited Natural Language. IEEE Trans SMC SMC-14(1): 54-68.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Granger</author>
+</authors>
+<title>The NOMAD System: Expectation-Based Detection and Correction of Errors during Understanding of Syntactically Ill-Formed Text.</title>
+<date>1983</date>
+<journal>AJCL</journal>
+<pages>9--3</pages>
+<contexts>
+<context position="61302" citStr="Granger (1983)" startWordPosition="10497" endWordPosition="10498">st of these efforts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has been studied by Carbonell and Hayes (1983), Granger (1983), Jensen et al. (1983), Kwasny and Sondheimer (1981), Riesbeck and Schank (1976), Thompson (1980), Weischedel and Black (1980), and Weischedel and Sondheimer (1983). A wide variety of techniques have been developed for addressing problems at the word, phrase, sentence, and in some cases, dialogue level. However, these methodologies have not used historical information at the dialogue level as described here. In most cases, the goal of these systems is to characterize the ill-formed input into classes of errors and to correct on that basis. The work described here makes no attempt to classify t</context>
+</contexts>
+<marker>Granger, 1983</marker>
+<rawString>Granger, R. 1983 The NOMAD System: Expectation-Based Detection and Correction of Errors during Understanding of Syntactically Ill-Formed Text. AJCL 9(3-4): 188-196.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Haton</author>
+<author>J Pierrel</author>
+</authors>
+<title>Organization and Operation of a Connected Speech Understanding System at Lexical, Syntactic and Semantic Levels.</title>
+<date>1976</date>
+<booktitle>IEEE International Conference on Acoustics, Speech and Signal Processing,</booktitle>
+<pages>430--433</pages>
+<location>Philadelphia, Pennsylvania:</location>
+<contexts>
+<context position="60585" citStr="Haton and Pierrel 1976" startWordPosition="10384" endWordPosition="10387">Figures 11 through 14, the word and sentence error rates from the voice recognizer generally increased with the progress through the dialogue. This is due to the increased rate of speech. However, the actual failure rate of VNLCE did not increase by the same amount. These extra errors were corrected by the expectation system. Figure 16 gives a summary of the average error and correction rates for each test and over all. 7 RELATED LITERATURE A number of speech understanding systems have been developed during the past fifteen years (Barnett et al. 1980, Dixon and Martin 1979, Erman et al. 1980, Haton and Pierrel 1976, Lea 1980, Lowerre and Reddy 1980, Medress 1980, Reddy 1976, Walker 1978, and Wolf and Woods 1980). Most of these efforts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in</context>
+</contexts>
+<marker>Haton, Pierrel, 1976</marker>
+<rawString>Haton, J. and Pierrel, J. 1976 Organization and Operation of a Connected Speech Understanding System at Lexical, Syntactic and Semantic Levels. 1976 IEEE International Conference on Acoustics, Speech and Signal Processing, Philadelphia, Pennsylvania: 430-433.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T-P Ho</author>
+</authors>
+<title>The Dialogue Designing Dialogue System, Dissertation,</title>
+<date>1984</date>
+<institution>Computer Science Department, California Institute of Technology.</institution>
+<contexts>
+<context position="63190" citStr="Ho (1984)" startWordPosition="10791" endWordPosition="10792">nal Linguistics, Volume 12, Number 1, January-March 1986 Pamela K. Fink and Alan W. Biermann The Correction of DI-Formed Input The acquisition of dialogue as implemented in VNLCE is reminiscent of the program synthesis methodology developed by Biermann and Krishnaswamy (1976) where program flowcharts were constructed from traces of their behaviors. However, the &amp;quot;flowcharts&amp;quot; in the current project are probabilistic in nature and the problems associated with matching incoming sentences to existing nodes has not been previously addressed. Another dialogue acquisition system has been developed by Ho (1984). However, that system has different goals: to enable the user to consciously design a dialogue to embody a particular human-machine interaction. The acquisition system described here is aimed at dealing with ill-formed input and is completely automatic and invisible to the user. It self activates to bias recognition toward historically observed patterns but is not otherwise observable. The VNLCE processor may be considered to be a learning system of the tradition described, for example, in Michalski et al. (1984). The current system learns finite state flowcharts whereas typical learning syst</context>
+</contexts>
+<marker>Ho, 1984</marker>
+<rawString>Ho, T.-P. 1984 The Dialogue Designing Dialogue System, Dissertation, Computer Science Department, California Institute of Technology.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Jensen</author>
+<author>G Heidorn</author>
+<author>L Miller</author>
+<author>Y Ravin</author>
+</authors>
+<title>Parse Fitting and Prose Fixing: Getting a Hold on Ill-Formedness.</title>
+<date>1983</date>
+<journal>AJCL</journal>
+<pages>9--3</pages>
+<contexts>
+<context position="61324" citStr="Jensen et al. (1983)" startWordPosition="10499" endWordPosition="10502">rts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has been studied by Carbonell and Hayes (1983), Granger (1983), Jensen et al. (1983), Kwasny and Sondheimer (1981), Riesbeck and Schank (1976), Thompson (1980), Weischedel and Black (1980), and Weischedel and Sondheimer (1983). A wide variety of techniques have been developed for addressing problems at the word, phrase, sentence, and in some cases, dialogue level. However, these methodologies have not used historical information at the dialogue level as described here. In most cases, the goal of these systems is to characterize the ill-formed input into classes of errors and to correct on that basis. The work described here makes no attempt to classify the errors, but treats </context>
+</contexts>
+<marker>Jensen, Heidorn, Miller, Ravin, 1983</marker>
+<rawString>Jensen, K.; Heidorn, G.; Miller, L.; and Ravin, Y. 1983 Parse Fitting and Prose Fixing: Getting a Hold on Ill-Formedness. AJCL 9(3-4): 147-160.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Kwasny</author>
+<author>N Sondheimer</author>
+</authors>
+<title>Relaxation Techniques for Parsing Grammatically Ill-Formed Input in Natural Language Understanding Systems.</title>
+<date>1981</date>
+<journal>AJCL</journal>
+<volume>7</volume>
+<issue>2</issue>
+<pages>99--108</pages>
+<contexts>
+<context position="61354" citStr="Kwasny and Sondheimer (1981)" startWordPosition="10503" endWordPosition="10506">e interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has been studied by Carbonell and Hayes (1983), Granger (1983), Jensen et al. (1983), Kwasny and Sondheimer (1981), Riesbeck and Schank (1976), Thompson (1980), Weischedel and Black (1980), and Weischedel and Sondheimer (1983). A wide variety of techniques have been developed for addressing problems at the word, phrase, sentence, and in some cases, dialogue level. However, these methodologies have not used historical information at the dialogue level as described here. In most cases, the goal of these systems is to characterize the ill-formed input into classes of errors and to correct on that basis. The work described here makes no attempt to classify the errors, but treats them as random events that occ</context>
+</contexts>
+<marker>Kwasny, Sondheimer, 1981</marker>
+<rawString>Kwasny, S. and Sondheimer, N. 1981 Relaxation Techniques for Parsing Grammatically Ill-Formed Input in Natural Language Understanding Systems. AJCL 7(2): 99-108.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W Lea</author>
+<author>Ed</author>
+</authors>
+<title>Trends in Speech Recognition.</title>
+<date>1980</date>
+<publisher>Prentice-Hall,</publisher>
+<location>New Jersey.</location>
+<marker>Lea, Ed, 1980</marker>
+<rawString>Lea, W., Ed. 1980 Trends in Speech Recognition. Prentice-Hall, New Jersey.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Lowerre</author>
+<author>R Reddy</author>
+</authors>
+<title>The Harpy Speech Understanding System. In Lea</title>
+<date>1980</date>
+<pages>340--360</pages>
+<contexts>
+<context position="60619" citStr="Lowerre and Reddy 1980" startWordPosition="10390" endWordPosition="10393">d sentence error rates from the voice recognizer generally increased with the progress through the dialogue. This is due to the increased rate of speech. However, the actual failure rate of VNLCE did not increase by the same amount. These extra errors were corrected by the expectation system. Figure 16 gives a summary of the average error and correction rates for each test and over all. 7 RELATED LITERATURE A number of speech understanding systems have been developed during the past fifteen years (Barnett et al. 1980, Dixon and Martin 1979, Erman et al. 1980, Haton and Pierrel 1976, Lea 1980, Lowerre and Reddy 1980, Medress 1980, Reddy 1976, Walker 1978, and Wolf and Woods 1980). Most of these efforts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handl</context>
+</contexts>
+<marker>Lowerre, Reddy, 1980</marker>
+<rawString>Lowerre, B. and Reddy, R. 1980 The Harpy Speech Understanding System. In Lea 1980: 340-360.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Medress</author>
+</authors>
+<title>The Sperry Univac System for Continuous Speech Recognition. In</title>
+<date>1980</date>
+<location>Lea</location>
+<contexts>
+<context position="60633" citStr="Medress 1980" startWordPosition="10394" endWordPosition="10395">rom the voice recognizer generally increased with the progress through the dialogue. This is due to the increased rate of speech. However, the actual failure rate of VNLCE did not increase by the same amount. These extra errors were corrected by the expectation system. Figure 16 gives a summary of the average error and correction rates for each test and over all. 7 RELATED LITERATURE A number of speech understanding systems have been developed during the past fifteen years (Barnett et al. 1980, Dixon and Martin 1979, Erman et al. 1980, Haton and Pierrel 1976, Lea 1980, Lowerre and Reddy 1980, Medress 1980, Reddy 1976, Walker 1978, and Wolf and Woods 1980). Most of these efforts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed</context>
+</contexts>
+<marker>Medress, 1980</marker>
+<rawString>Medress, M. 1980 The Sperry Univac System for Continuous Speech Recognition. In Lea 1980.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Michalski</author>
+</authors>
+<title>Pattern Recognition as Rule-Guided Inductive Inference.</title>
+<date>1980</date>
+<journal>IEEE Trans. Pattern Analysis and Machine</journal>
+<booktitle>Machine Learning.</booktitle>
+<publisher>Springer Verlag,</publisher>
+<location>New York.</location>
+<contexts>
+<context position="63906" citStr="Michalski (1980)" startWordPosition="10897" endWordPosition="10898">mbody a particular human-machine interaction. The acquisition system described here is aimed at dealing with ill-formed input and is completely automatic and invisible to the user. It self activates to bias recognition toward historically observed patterns but is not otherwise observable. The VNLCE processor may be considered to be a learning system of the tradition described, for example, in Michalski et al. (1984). The current system learns finite state flowcharts whereas typical learning systems usually acquire coefficient values as in Minsky and Papert (1969), assertional statements as in Michalski (1980), or semantic nets as in Winston (1975). That is, the current system learns procedures rather than data structures. There is some literature on procedure acquisition such as the LISP synthesis work described in Biermann et al. (1984) and the PROLOG synthesis method of Shapiro (1982). However, the latter methodologies have not been applied to dialogue acquisition. 8 CONCLUSIONS AND AREAS FOR FUTURE RESEARCH We have shown that the ability to use expectation in the form of knowledge about the dialogue being spoken, as with humans, is a tremendous aid to speech recognition by computer. Since expec</context>
+</contexts>
+<marker>Michalski, 1980</marker>
+<rawString>Michalski, R. 1980 Pattern Recognition as Rule-Guided Inductive Inference. IEEE Trans. Pattern Analysis and Machine Intelligence. Michalski, R.; Carbonell, J.; and Mitchell, T. 1984 Machine Learning. Springer Verlag, New York.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Minsky</author>
+<author>S Papert</author>
+</authors>
+<title>Perceptrons.</title>
+<date>1969</date>
+<publisher>MIT Press,</publisher>
+<location>Cambridge, Massachusetts.</location>
+<contexts>
+<context position="63859" citStr="Minsky and Papert (1969)" startWordPosition="10889" endWordPosition="10892">o enable the user to consciously design a dialogue to embody a particular human-machine interaction. The acquisition system described here is aimed at dealing with ill-formed input and is completely automatic and invisible to the user. It self activates to bias recognition toward historically observed patterns but is not otherwise observable. The VNLCE processor may be considered to be a learning system of the tradition described, for example, in Michalski et al. (1984). The current system learns finite state flowcharts whereas typical learning systems usually acquire coefficient values as in Minsky and Papert (1969), assertional statements as in Michalski (1980), or semantic nets as in Winston (1975). That is, the current system learns procedures rather than data structures. There is some literature on procedure acquisition such as the LISP synthesis work described in Biermann et al. (1984) and the PROLOG synthesis method of Shapiro (1982). However, the latter methodologies have not been applied to dialogue acquisition. 8 CONCLUSIONS AND AREAS FOR FUTURE RESEARCH We have shown that the ability to use expectation in the form of knowledge about the dialogue being spoken, as with humans, is a tremendous aid</context>
+</contexts>
+<marker>Minsky, Papert, 1969</marker>
+<rawString>Minsky, M. and Papert, S. 1969 Perceptrons. MIT Press, Cambridge, Massachusetts.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Reddy</author>
+</authors>
+<title>Speech Recognition by Machine: A Review.</title>
+<date>1976</date>
+<journal>Proceedings of the IEEE</journal>
+<volume>64</volume>
+<issue>4</issue>
+<pages>501--531</pages>
+<contexts>
+<context position="60645" citStr="Reddy 1976" startWordPosition="10396" endWordPosition="10397">recognizer generally increased with the progress through the dialogue. This is due to the increased rate of speech. However, the actual failure rate of VNLCE did not increase by the same amount. These extra errors were corrected by the expectation system. Figure 16 gives a summary of the average error and correction rates for each test and over all. 7 RELATED LITERATURE A number of speech understanding systems have been developed during the past fifteen years (Barnett et al. 1980, Dixon and Martin 1979, Erman et al. 1980, Haton and Pierrel 1976, Lea 1980, Lowerre and Reddy 1980, Medress 1980, Reddy 1976, Walker 1978, and Wolf and Woods 1980). Most of these efforts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has b</context>
+</contexts>
+<marker>Reddy, 1976</marker>
+<rawString>Reddy, D. 1976 Speech Recognition by Machine: A Review. Proceedings of the IEEE 64(4): 501-531.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Riesbeck</author>
+<author>R Schank</author>
+</authors>
+<title>Comprehension by Computer: Expectation-Based Analysis of Sentences in Context.</title>
+<date>1976</date>
+<tech>Tech. Rep. 78,</tech>
+<institution>Computer Science Department, Yale University,</institution>
+<location>New Haven, Connecticut.</location>
+<contexts>
+<context position="61382" citStr="Riesbeck and Schank (1976)" startWordPosition="10507" endWordPosition="10510">l information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has been studied by Carbonell and Hayes (1983), Granger (1983), Jensen et al. (1983), Kwasny and Sondheimer (1981), Riesbeck and Schank (1976), Thompson (1980), Weischedel and Black (1980), and Weischedel and Sondheimer (1983). A wide variety of techniques have been developed for addressing problems at the word, phrase, sentence, and in some cases, dialogue level. However, these methodologies have not used historical information at the dialogue level as described here. In most cases, the goal of these systems is to characterize the ill-formed input into classes of errors and to correct on that basis. The work described here makes no attempt to classify the errors, but treats them as random events that occur at any point in a sentenc</context>
+</contexts>
+<marker>Riesbeck, Schank, 1976</marker>
+<rawString>Riesbeck, C. and Schank, R. 1976 Comprehension by Computer: Expectation-Based Analysis of Sentences in Context. Tech. Rep. 78, Computer Science Department, Yale University, New Haven, Connecticut.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Schank</author>
+<author>R Abelson</author>
+</authors>
+<title>Scripts, Plans, Goals, and Understanding. Lawrence Erlbaum Associates,</title>
+<date>1977</date>
+<location>Hillsdale, New Jersey.</location>
+<contexts>
+<context position="7179" citStr="Schank and Abelson 1977" startWordPosition="1147" endWordPosition="1150">2, Number 1, January-March 1986 Pamela K. Fink and Alan W. Biermann The Correction of Ill-Formed Input 3 A REPRESENTATION FOR USER BEHAVIORS Suppose a user inputs the following sequence: Sentence Label Display my mail summary for today. Si Show me this letter. (with touch input) S2 (the letter appears on the screen) Remove this letter. S3 Display the letter from JA. S4 (letter appears on the screen) Delete it. S5 Log off. S6 We denote the meaning of each sentence Si with the notation M(Si). The exact form of M(Si) need not be discussed at this point; it could be a conceptual dependence graph (Schank and Abelson 1977), a deep parse of Si, or some other representation. A user behavior is represented by a network, or directed graph, of such meanings. At the beginning of a task, the state of the interaction is represented by the start state of the graph. The immediate successors of this state are the typical opening meaning structures for this user, and succeeding states represent, historically, paths that have been followed by this user. It is important that if two sentences, Si and Sj, have approximately the same meaning this should be clear in the representations M(Si) and M(Sj). Our algorithm, described b</context>
+<context position="40043" citStr="Schank and Abelson (1977)" startWordPosition="6760" endWordPosition="6763">trix multiplication, simultaneous linear equations, and Gaussian elimination. Non-linear algebra problems that require matrix-type representations can also be learned, such as gradebook maintenance and invoice manipulation. Though the implemented system is limited to matrix-oriented problems, the theoretical system is capable of learning a wide range of problem types. The only requirement on the problem or situation is that it can be entered into the expectation system in the form of examples. Thus, for example, it can acquire a &amp;quot;script&amp;quot; such as the one for going to a restaurant as defined in Schank and Abelson (1977). The expectation module takes two inputs and produces two outputs. The inputs are • the user behavior graph discussed earlier, called the expected dialogue D, and • the meaning of the most recently input sentence, M(S). Its outputs are a new expected dialogue D modified according to the latest input sentence M(S) and an expected sentence set E. These outputs are produced based upon the inputs and the functions Predicts, Mergeable, and Merge. The role of the predicate Predicts can be best understood by recalling the function of the parser P. P uses the set of expected sentences E(current) to t</context>
+</contexts>
+<marker>Schank, Abelson, 1977</marker>
+<rawString>Schank, R. and Abelson, R. 1977 Scripts, Plans, Goals, and Understanding. Lawrence Erlbaum Associates, Hillsdale, New Jersey.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Shapiro</author>
+</authors>
+<title>Algorithmic Program Debugging.</title>
+<date>1982</date>
+<publisher>MIT Press,</publisher>
+<location>Cambridge, Massachusetts.</location>
+<contexts>
+<context position="64189" citStr="Shapiro (1982)" startWordPosition="10942" endWordPosition="10943">ble. The VNLCE processor may be considered to be a learning system of the tradition described, for example, in Michalski et al. (1984). The current system learns finite state flowcharts whereas typical learning systems usually acquire coefficient values as in Minsky and Papert (1969), assertional statements as in Michalski (1980), or semantic nets as in Winston (1975). That is, the current system learns procedures rather than data structures. There is some literature on procedure acquisition such as the LISP synthesis work described in Biermann et al. (1984) and the PROLOG synthesis method of Shapiro (1982). However, the latter methodologies have not been applied to dialogue acquisition. 8 CONCLUSIONS AND AREAS FOR FUTURE RESEARCH We have shown that the ability to use expectation in the form of knowledge about the dialogue being spoken, as with humans, is a tremendous aid to speech recognition by computer. Since expectation, in this research, has been based on repetition of patterns, the expectation system&apos;s ability to correct varies, of course, with the repetitiveness of the dialogue itself. We have attempted, in sections 5 and 6, to justify this decision by demonstrating how the expectation sy</context>
+</contexts>
+<marker>Shapiro, 1982</marker>
+<rawString>Shapiro, E. 1982 Algorithmic Program Debugging. MIT Press, Cambridge, Massachusetts.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Thompson</author>
+</authors>
+<title>Linguistic Analysis of Natural Language Communication with Computers.</title>
+<date>1980</date>
+<booktitle>Proceedings of the Eighth International Conference on Computational Linguistics,</booktitle>
+<location>Tokyo, Japan:</location>
+<contexts>
+<context position="61399" citStr="Thompson (1980)" startWordPosition="10511" endWordPosition="10512"> speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has been studied by Carbonell and Hayes (1983), Granger (1983), Jensen et al. (1983), Kwasny and Sondheimer (1981), Riesbeck and Schank (1976), Thompson (1980), Weischedel and Black (1980), and Weischedel and Sondheimer (1983). A wide variety of techniques have been developed for addressing problems at the word, phrase, sentence, and in some cases, dialogue level. However, these methodologies have not used historical information at the dialogue level as described here. In most cases, the goal of these systems is to characterize the ill-formed input into classes of errors and to correct on that basis. The work described here makes no attempt to classify the errors, but treats them as random events that occur at any point in a sentence. Thus, an error</context>
+</contexts>
+<marker>Thompson, 1980</marker>
+<rawString>Thompson, B. 1980 Linguistic Analysis of Natural Language Communication with Computers. Proceedings of the Eighth International Conference on Computational Linguistics, Tokyo, Japan: 190-201.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Walker</author>
+<author>Ed</author>
+</authors>
+<title>Understanding Spoken Language.</title>
+<date>1978</date>
+<publisher>Elsevier NorthHolland,</publisher>
+<location>New York, New York.</location>
+<marker>Walker, Ed, 1978</marker>
+<rawString>Walker, D., Ed. 1978 Understanding Spoken Language. Elsevier NorthHolland, New York, New York.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Weischedel</author>
+<author>J Black</author>
+</authors>
+<title>Responding Intelligently to Unparsable Inputs.</title>
+<date>1980</date>
+<journal>AJCL</journal>
+<volume>6</volume>
+<issue>2</issue>
+<pages>97--109</pages>
+<contexts>
+<context position="61428" citStr="Weischedel and Black (1980)" startWordPosition="10513" endWordPosition="10517">r and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has been studied by Carbonell and Hayes (1983), Granger (1983), Jensen et al. (1983), Kwasny and Sondheimer (1981), Riesbeck and Schank (1976), Thompson (1980), Weischedel and Black (1980), and Weischedel and Sondheimer (1983). A wide variety of techniques have been developed for addressing problems at the word, phrase, sentence, and in some cases, dialogue level. However, these methodologies have not used historical information at the dialogue level as described here. In most cases, the goal of these systems is to characterize the ill-formed input into classes of errors and to correct on that basis. The work described here makes no attempt to classify the errors, but treats them as random events that occur at any point in a sentence. Thus, an error in this work has no pattern </context>
+</contexts>
+<marker>Weischedel, Black, 1980</marker>
+<rawString>Weischedel, R. and Black, J. 1980 Responding Intelligently to Unparsable Inputs. AJCL 6(2): 97-109.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Weischedel</author>
+<author>N Sondheimer</author>
+</authors>
+<title>Meta-Rules as a Basis for Processing Ill-Formed Input.</title>
+<date>1983</date>
+<journal>AJCL</journal>
+<pages>9--3</pages>
+<contexts>
+<context position="61466" citStr="Weischedel and Sondheimer (1983)" startWordPosition="10519" endWordPosition="10523">r to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has been studied by Carbonell and Hayes (1983), Granger (1983), Jensen et al. (1983), Kwasny and Sondheimer (1981), Riesbeck and Schank (1976), Thompson (1980), Weischedel and Black (1980), and Weischedel and Sondheimer (1983). A wide variety of techniques have been developed for addressing problems at the word, phrase, sentence, and in some cases, dialogue level. However, these methodologies have not used historical information at the dialogue level as described here. In most cases, the goal of these systems is to characterize the ill-formed input into classes of errors and to correct on that basis. The work described here makes no attempt to classify the errors, but treats them as random events that occur at any point in a sentence. Thus, an error in this work has no pattern but occurs probabilistically. A verb i</context>
+</contexts>
+<marker>Weischedel, Sondheimer, 1983</marker>
+<rawString>Weischedel, R. and Sondheimer, N. 1983 Meta-Rules as a Basis for Processing Ill-Formed Input. AJCL 9(3-4): 161-177.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Winston</author>
+</authors>
+<title>Learning Structural Descriptions from Examples. In</title>
+<date>1975</date>
+<publisher>McGraw-Hill,</publisher>
+<institution>Psychology of Computer Vision.</institution>
+<location>New York, New York.</location>
+<contexts>
+<context position="63945" citStr="Winston (1975)" startWordPosition="10904" endWordPosition="10905">ion. The acquisition system described here is aimed at dealing with ill-formed input and is completely automatic and invisible to the user. It self activates to bias recognition toward historically observed patterns but is not otherwise observable. The VNLCE processor may be considered to be a learning system of the tradition described, for example, in Michalski et al. (1984). The current system learns finite state flowcharts whereas typical learning systems usually acquire coefficient values as in Minsky and Papert (1969), assertional statements as in Michalski (1980), or semantic nets as in Winston (1975). That is, the current system learns procedures rather than data structures. There is some literature on procedure acquisition such as the LISP synthesis work described in Biermann et al. (1984) and the PROLOG synthesis method of Shapiro (1982). However, the latter methodologies have not been applied to dialogue acquisition. 8 CONCLUSIONS AND AREAS FOR FUTURE RESEARCH We have shown that the ability to use expectation in the form of knowledge about the dialogue being spoken, as with humans, is a tremendous aid to speech recognition by computer. Since expectation, in this research, has been base</context>
+</contexts>
+<marker>Winston, 1975</marker>
+<rawString>Winston, P. 1975 Learning Structural Descriptions from Examples. In Winston, P., Ed., Psychology of Computer Vision. McGraw-Hill, New York, New York.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Wolf</author>
+<author>W Woods</author>
+</authors>
+<title>The HWIM Speech Understanding System. In Lea</title>
+<date>1980</date>
+<pages>316--339</pages>
+<contexts>
+<context position="60684" citStr="Wolf and Woods 1980" startWordPosition="10401" endWordPosition="10404">d with the progress through the dialogue. This is due to the increased rate of speech. However, the actual failure rate of VNLCE did not increase by the same amount. These extra errors were corrected by the expectation system. Figure 16 gives a summary of the average error and correction rates for each test and over all. 7 RELATED LITERATURE A number of speech understanding systems have been developed during the past fifteen years (Barnett et al. 1980, Dixon and Martin 1979, Erman et al. 1980, Haton and Pierrel 1976, Lea 1980, Lowerre and Reddy 1980, Medress 1980, Reddy 1976, Walker 1978, and Wolf and Woods 1980). Most of these efforts concentrated on the interaction between low level information sources from a speech recognizer and a natural language processor to discover the meaning of an input sentence. While some of these systems did exhibit expectation capabilities at the sentence level, none acquired dialogues of the kind described here for the sake of dialogue level expectation and error correction. A detailed description of the kinds of expectation mechanisms appearing in these systems appears in Fink (1983). The problem of handling ill-formed input has been studied by Carbonell and Hayes (198</context>
+</contexts>
+<marker>Wolf, Woods, 1980</marker>
+<rawString>Wolf, J. and Woods, W. 1980 The HWIM Speech Understanding System. In Lea 1980: 316-339.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W Woods</author>
+</authors>
+<title>Transition Network Grammars for Natural Language Analysis.</title>
+<date>1970</date>
+<journal>Comm. of the ACM</journal>
+<volume>13</volume>
+<issue>10</issue>
+<pages>591--606</pages>
+<contexts>
+<context position="21812" citStr="Woods 1970" startWordPosition="3652" endWordPosition="3653">to as probabilities in the following discussion. However, in reality, the ratings are one thousand times the values of the logarithms of numbers between 0 and 1. Thus, the ratings span the values —999 to 0, where 0 is equivalent to a probability of one. These ratings are computed this way because they remain integral and still fairly accurately represent the correct values. Also, they can simply be added and subtracted rather than multiplied and divided in the hundreds of calculations required for a single sentence parse. The expectation parser uses an ATN-like representation for its grammar (Woods 1970). Its strategy is top-down. The types of sentences accepted are essentially those accepted by the original NLC grammar, imperative sentences with nested noun groups and conjunctions (Ballard 1979). An attempt has been made to build as deep a parse as possible so that sentences with the same meaning result in identical parses. Sentences have the same &amp;quot;meaning&amp;quot; if they result in identical tasks being performed. The various sentence structures that have the same meaning we call paraphrases. We have studied the following types of paraphrasing: 1) WORD &lt;= &gt; WORD &apos;entry&apos; &lt;=&gt; &apos;number&apos; 2) ADJ NOUN &lt;=&gt;</context>
+</contexts>
+<marker>Woods, 1970</marker>
+<rawString>Woods, W. 1970 Transition Network Grammars for Natural Language Analysis. Comm. of the ACM 13(10): 591-606.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>NOTE</author>
+</authors>
+<title>UNIX is a trademark of AT&amp;T Bell Laboratories.</title>
+<marker>NOTE, </marker>
+<rawString>NOTE 1. UNIX is a trademark of AT&amp;T Bell Laboratories.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

@@ -1,0 +1,1328 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.993856">
+Transformation-Based Learning in the Fast Lane
+</title>
+<author confidence="0.94003">
+Grace Ngait,t and Radu Floriant
+</author>
+<affiliation confidence="0.5554655">
+{gyn,rflorian}@cs.jhu.edu
+t Johns Hopkins University � Weniwen Technologies
+</affiliation>
+<address confidence="0.351328">
+Baltimore, MD 21218, USA Hong Kong
+</address>
+<sectionHeader confidence="0.876225" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999915818181818">
+Transformation-based learning has been successfully
+employed to solve many natural language process-
+ing problems. It achieves state-of-the-art perfor-
+mance on many natural language processing tasks
+and does not overtrain easily. However, it does have
+a serious drawback: the training time is often in-
+torelably long, especially on the large corpora which
+are often used in NLP. In this paper, we present a
+novel and realistic method for speeding up the train-
+ing time of a transformation-based learner without
+sacrificing performance. The paper compares and
+contrasts the training time needed and performance
+achieved by our modified learner with two other
+systems: a standard transformation-based learner,
+and the ICA system (Hepple, 2000). The results of
+these experiments show that our system is able to
+achieve a significant improvement in training time
+while still achieving the same performance as a stan-
+dard transformation-based learner. This is a valu-
+able contribution to systems and algorithms which
+utilize transformation-based learning at any part of
+the execution.
+</bodyText>
+<sectionHeader confidence="0.99729" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999894769230769">
+Much research in natural language processing has
+gone into the development of rule-based machine
+learning algorithms. These algorithms are attractive
+because they often capture the linguistic features of
+a corpus in a small and concise set of rules.
+Transformation-based learning (TBL) (Brill,
+1995) is one of the most successful rule-based ma-
+chine learning algorithms. It is a flexible method
+which is easily extended to various tasks and do-
+mains, and it has been applied to a wide variety of
+NLP tasks, including part of speech tagging (Brill,
+1995), noun phrase chunking (Ramshaw and Mar-
+cus, 1999), parsing (Brill, 1996), phrase chunking
+(Florian et al., 2000), spelling correction (Mangu
+and Brill, 1997), prepositional phrase attachment
+(Brill and Resnik, 1994), dialog act tagging (Samuel
+et al., 1998), segmentation and message understand-
+ing (Day et al., 1997). Furthermore, transformation-
+based learning achieves state-of-the-art performance
+on several tasks, and is fairly resistant to overtrain-
+ing (Ramshaw and Marcus, 1994).
+Despite its attractive features as a machine learn-
+ing algorithm, TBL does have a serious draw-
+back in its lengthy training time, especially on the
+larger-sized corpora often used in NLP tasks. For
+example, a well-implemented transformation-based
+part-of-speech tagger will typically take over 38
+hours to finish training on a 1 million word cor-
+pus. This disadvantage is further exacerbated when
+the transformation-based learner is used as the base
+learner in learning algorithms such as boosting or
+active learning, both of which require multiple it-
+erations of estimation and application of the base
+learner. In this paper, we present a novel method
+which enables a transformation-based learner to re-
+duce its training time dramatically while still retain-
+ing all of its learning power. In addition, we will
+show that our method scales better with training
+data size.
+</bodyText>
+<sectionHeader confidence="0.986461" genericHeader="method">
+2 Transformation-based Learning
+</sectionHeader>
+<bodyText confidence="0.999780111111111">
+The central idea of transformation-based learning
+(TBL) is to learn an ordered list of rules which
+progressively improve upon the current state of the
+training set. An initial assignment is made based on
+simple statistics, and then rules are greedily learned
+to correct the mistakes, until no net improvement
+can be made.
+The following definitions and notations will be
+used throughout the paper:
+</bodyText>
+<listItem confidence="0.977749612903226">
+• The sample space is denoted by S;
+• C denotes the set of possible classifications of
+the samples;
+• C[s] denotes the classification associated with a
+sample s, and T[s] denotes the true classifica-
+tion of s;
+• p will usually denote a predicate defined on S;
+• A rule r is defined as a predicate - class label
+pair, (p, t), where t E C is called the target of r;
+• R denotes the set of all rules;
+• If r = (p, t), p, will denote p and t, will denote
+t;
+• A rule r = (pr, tr) applies to a sample s if
+pr(s) = true and tr =� C[s]; the resulting sam-
+ple is denoted by r(s).
+Using the TBL framework to solve a problem as-
+sumes the existence of:
+• An initial class assignment. This can be as sim-
+ple as the most common class label in the train-
+ing set, or it can be the output of another clas-
+sifier.
+• A set of allowable templates for rules. These
+templates determine the types of predicates the
+rules will test; they have the largest impact on
+the behavior of the system.
+• An objective function f for learning. Unlike
+in many other learning algorithms, the objec-
+tive function for TBL will directly optimize the
+evaluation function. A typical example is the
+difference in performance resulting from apply-
+ing the rule:
+</listItem>
+<equation confidence="0.698571">
+f (r) = good (r) — bad (r)
+</equation>
+<bodyText confidence="0.678076">
+where
+</bodyText>
+<equation confidence="0.9692835">
+good (r) = I{sJC [s] =� T [s] A C [r (s)] = T [s]}�
+bad (r) = I{sJC [s] = T [s] A C [r (s)] =� T [s]}�
+</equation>
+<bodyText confidence="0.99871875">
+Since we are not interested in rules that have a nega-
+tive objective function value, only the rules that have
+a positive good (r) need be examined. This leads to
+the following approach:
+</bodyText>
+<listItem confidence="0.992388">
+1. Generate the rules (using the rule template set)
+that correct at least an error (i.e. good (r) &gt; 0),
+by examining all the incorrect samples (s s.t.
+C [s] =� T [s]);
+2. Compute the values bad (•) for each rule r such
+that good(r) &gt; f(b) , storing at each point in
+time the rule b that has the highest score; while
+computing bad(r), skip to the next rule when
+</listItem>
+<equation confidence="0.793803">
+f (r) &lt; f (b)
+</equation>
+<bodyText confidence="0.9998553">
+The system thus learns a list of rules in a greedy
+fashion, according to the objective function. When
+no rule that improves the current state of the train-
+ing set beyond a pre-set threshold can be found, the
+training phase ends. During the application phase,
+the evaluation set is initialized with the initial class
+assignment. The rules are then applied sequentially
+to the evaluation set in the order they were learned.
+The final classification is the one attained when all
+rules have been applied.
+</bodyText>
+<subsectionHeader confidence="0.840036">
+2.1 Previous Work
+</subsectionHeader>
+<bodyText confidence="0.9999184">
+As was described in the introductory section, the
+long training time of TBL poses a serious prob-
+lem. Various methods have been investigated to-
+wards ameliorating this problem, and the following
+subsections detail two of the approaches.
+</bodyText>
+<subsubsectionHeader confidence="0.924801">
+2.1.1 The Ramshaw &amp; Marcus Approach
+</subsubsectionHeader>
+<bodyText confidence="0.999472923076923">
+One of the most time-consuming steps in
+transformation-based learning is the updating
+step. The iterative nature of the algorithm requires
+that each newly selected rule be applied to the
+corpus, and the current state of the corpus updated
+before the next rule is learned.
+Ramshaw &amp; Marcus (1994) attempted to reduce
+the training time of the algorithm by making the up-
+date process more efficient. Their method requires
+each rule to store a list of pointers to samples that
+it applies to, and for each sample to keep a list of
+pointers to rules that apply to it. Given these two
+sets of lists, the system can then easily:
+</bodyText>
+<listItem confidence="0.99558375">
+1. identify the positions where the best rule applies
+in the corpus; and
+2. update the scores of all the rules which are af-
+fected by a state change in the corpus.
+</listItem>
+<bodyText confidence="0.99994">
+These two processes are performed multiple times
+during the update process, and the modification re-
+sults in a significant reduction in running time.
+The disadvantage of this method consists in the
+system having an unrealistically high memory re-
+quirement. For example, a transformation-based
+text chunker training upon a modestly-sized corpus
+of 200,000 words has approximately 2 million rules
+active at each iteration. The additional memory
+space required to store the lists of pointers associ-
+ated with these rules is about 450 MB, which is a
+rather large requirement to add to a system.l
+</bodyText>
+<subsubsectionHeader confidence="0.799912">
+2.1.2 The ICA Approach
+</subsubsectionHeader>
+<bodyText confidence="0.999871375">
+The ICA system (Hepple, 2000) aims to reduce the
+training time by introducing independence assump-
+tions on the training samples that dramatically re-
+duce the training time with the possible downside of
+sacrificing performance.
+To achieve the speedup, the ICA system disallows
+any interaction between the learned rules, by enforc-
+ing the following two assumptions:
+</bodyText>
+<listItem confidence="0.999196454545455">
+• Sample Independence a state change in a
+sample (e.g. a change in the current part-
+of-speech tag of a word) does not change the
+context of surrounding samples. This is cer-
+tainly the case in tasks such as prepositional
+phrase attachment, where samples are mutually
+independent. Even for tasks such as part-of-
+speech tagging where intuition suggests it does
+not hold, it may still be a reasonable assump-
+tion to make if the rules apply infrequently and
+sparsely enough.
+</listItem>
+<bodyText confidence="0.4172854">
+&apos;We need to note that the 200k-word corpus used in this
+experiment is considered small by NLP standards. Many of
+the available corpora contain over 1 million words. As the
+size of the corpus increases, so does the number of rules and
+the additional memory space required.
+</bodyText>
+<listItem confidence="0.906384">
+• Rule Commitment there will be at most one
+</listItem>
+<bodyText confidence="0.784382733333333">
+state change per sample. In other words, at
+most one rule is allowed to apply to each sample.
+This mode of application is similar to that of a
+decision list (Rivest, 1987), where an sample is
+modified by the first rule that applies to it, and
+not modified again thereafter. In general, this
+assumption will hold for problems which have
+high initial accuracy and where state changes
+are infrequent.
+The ICA system was designed and tested on the
+task of part-of-speech tagging, achieving an impres-
+sive reduction in training time while suffering only
+a small decrease in accuracy. The experiments pre-
+sented in Section 4 include ICA in the training time
+and performance comparisons�.
+</bodyText>
+<subsubsectionHeader confidence="0.947074">
+2.1.3 Other Approaches
+</subsubsectionHeader>
+<bodyText confidence="0.999947272727273">
+Samuel (1998) proposed a Monte Carlo approach
+to transformation-based learning, in which only a
+fraction of the possible rules are randomly selected
+for estimation at each iteration. The µ-TBL sys-
+tem described in Lager (1999) attempts to cut down
+on training time with a more efficient Prolog imple-
+mentation and an implementation of &amp;quot;lazy&amp;quot; learning.
+The application of a transformation-based learning
+can be considerably sped-up if the rules are compiled
+in a finite-state transducer, as described in Roche
+and Schabes (1995).
+</bodyText>
+<sectionHeader confidence="0.986422" genericHeader="method">
+3 The Algorithm
+</sectionHeader>
+<bodyText confidence="0.962558428571429">
+The approach presented here builds on the same
+foundation as the one in (Ramshaw and Marcus,
+1994): instead of regenerating the rules each time,
+they are stored into memory, together with the two
+values good (r) and bad (r).
+The following notations will be used throughout
+this section:
+</bodyText>
+<listItem confidence="0.917399">
+• G (r) = fs 2 Sjp,(s) = true and C[s] =6
+</listItem>
+<bodyText confidence="0.894415">
+t, and t, = T[s]g the samples on which the
+rule applies and changes them to the correct
+classification; therefore, good(r) = jG(r)j.
+</bodyText>
+<listItem confidence="0.909084">
+• B (r) = fs 2 Sjp,(s) = true and C[s] =6
+</listItem>
+<bodyText confidence="0.960966090909091">
+t, and C[s] = T [s]g the samples on which
+the rule applies and changes the classification
+from correct to incorrect; similarly, bad(r) =
+jB(r)j.
+Given a newly learned rule b that is to be applied
+to S, the goal is to identify the rules r for which at
+least one of the sets G (r) , B (r) is modified by the
+application of rule b. Obviously, if both sets are not
+modified when applying rule b, then the value of the
+objective function for rule r remains unchanged.
+2The algorithm was implemented by the the authors, fol-
+lowing the description in Hepple (2000).
+The presentation is complicated by the fact that,
+in many NLP tasks, the samples are not indepen-
+dent. For instance, in POS tagging, a sample is de-
+pendent on the classification of the preceding and
+succeeding 2 samples (this assumes that there ex-
+ists a natural ordering of the samples in S). Let
+V (s) denote the &amp;quot;vicinity&amp;quot; of a sample the set of
+samples on whose classification the sample s might
+depend on (for consistency, s 2 V (s)); if samples are
+independent, then V (s) = fsg.
+</bodyText>
+<subsectionHeader confidence="0.999565">
+3.1 Generating the Rules
+</subsectionHeader>
+<bodyText confidence="0.999942">
+Let s be a sample on which the best rule b applies
+(i.e. [b (s)] =6 C [s]). We need to identify the rules
+r that are influenced by the change s ! b (s). Let
+r be such a rule. f (r) needs to be updated if and
+only if there exists at least one sample s&apos; such that
+</bodyText>
+<equation confidence="0.99851025">
+s&apos; 2 G (r) and b (s&apos;) 2� G (r) or (1)
+s&apos; 2 B (r) and b (s&apos;) 2� B (r) or (2)
+s&apos; 2� G (r) and b (s&apos;) 2 G (r) or (3)
+s&apos; 2� B (r) and b (s&apos;) 2 B (r) (4)
+</equation>
+<bodyText confidence="0.998979">
+Each of the above conditions corresponds to a spe-
+cific update of the good (r) or bad (r) counts. We
+will discuss how rules which should get their good or
+bad counts decremented (subcases (1) and (2)) can
+be generated, the other two being derived in a very
+similar fashion.
+The key observation behind the proposed algo-
+rithm is: when investigating the effects of applying
+the rule b to sample s, only samples s&apos; in the set
+V (s) need to be checked. Any sample s&apos; that is not
+in the set
+</bodyText>
+<equation confidence="0.471131">
+U V (s)
+</equation>
+<bodyText confidence="0.823118125">
+{sIb changes s}
+can be ignored since s&apos; = b(s&apos;).
+Let s&apos; 2 V (s) be a sample in the vicinity of s.
+There are 2 cases to be examined one in which b
+applies to s&apos; and one in which b does not:
+Case I: c (s&apos;) = c (b (s&apos;)) (b does not modify the
+classification of sample s&apos;). We note that the
+condition
+</bodyText>
+<construct confidence="0.81468975">
+s&apos; 2 G (r) and b (s&apos;) 2� G (r)
+is equivalent to
+p, (s&apos;) = true ^ C [s&apos;] =6 t, ^
+t, = T [s&apos;] ^ p, (b (s&apos;)) = false
+</construct>
+<bodyText confidence="0.507647666666667">
+and the formula
+s&apos; 2 B (r) and b (s&apos;) 2� B (r)
+is equivalent to
+</bodyText>
+<equation confidence="0.7303625">
+p, (s&apos;) = true ^ C [s&apos;] =6 t,^
+C [s&apos;] = T [s&apos;] ^ p, (b (s&apos;)) = false
+</equation>
+<bodyText confidence="0.992778166666667">
+(for the full details of the derivation, inferred from
+the definition of G (r) and B (r), please refer to
+Florian and Ngai (2001)).
+These formulae offer us a method of generating
+the rules r which are influenced by the modification
+s&apos; —� b (s&apos;):
+</bodyText>
+<listItem confidence="0.99139">
+1. Generate all predicates p (using the predicate
+templates) that are true on the sample s&apos;.
+2. If C [s&apos;] =� T [s&apos;] then
+</listItem>
+<bodyText confidence="0.680516333333333">
+(a) If p (b (s&apos;)) = false then decrease good (r),
+where r is the rule created with predicate
+p s.t. target T [s&apos;];
+</bodyText>
+<sectionHeader confidence="0.495321" genericHeader="method">
+3. Else
+</sectionHeader>
+<bodyText confidence="0.979911416666667">
+(a) If p (b (s&apos;)) = false then for all the rules
+r whose predicate is p3 and tr =� C [s&apos;] de-
+crease bad (r);
+The algorithm for generating the rules r that need
+their good counts (formula (3)) or bad counts (for-
+mula (4)) increased can be obtained from the formu-
+lae (1) (respectively (2)), by switching the states s&apos;
+and b (s&apos;), and making sure to add all the new pos-
+sible rules that might be generated (only for (3)).
+Case II: C [s&apos;] =� C [b (s&apos;)] (b does change the clas-
+sification of sample s&apos;). In this case, the formula (5)
+is transformed into:
+</bodyText>
+<equation confidence="0.8630525">
+pr (s&apos;) = true n C [s&apos;] =� tr n tr = T [s&apos;] n
+(pr (b (s&apos;)) = false V tr = C [b (s&apos;)]) (7)
+</equation>
+<bodyText confidence="0.9934458">
+(again, the full derivation is presented in Florian and
+Ngai (2001)). The case of (2), however, is much
+simpler. It is easy to notice that C [s&apos;] =� C [b (s&apos;)]
+and s&apos; E B (r) implies that b (s&apos;) E� B (r); indeed,
+a necessary condition for a sample s&apos; to be in a set
+</bodyText>
+<equation confidence="0.70552525">
+B (r) is that s&apos; is classified correctly, C [s&apos;] = T [s&apos;].
+Since T [s&apos;] =� C [b (s&apos;)], results C [b (s&apos;)] =� T [s&apos;] and
+therefore b (s&apos;) E� B (r). Condition (3) is, therefore,
+equivalent to
+pr (s&apos;) = true n C [s&apos;] =� tr n C [s&apos;] = T [s&apos;]
+(8)
+The algorithm is modified by replacing the test
+p (b (s&apos;)) = false with the test pr (b (s&apos;)) = false V
+</equation>
+<bodyText confidence="0.996863">
+C [b (s)] = tr in formula (1) and removing the test
+altogether for case of (2). The formulae used to gen-
+erate rules r that might have their counts increased
+(equations (3) and (4)) are obtained in the same
+fashion as in Case I.
+</bodyText>
+<subsectionHeader confidence="0.992786">
+3.2 The Full Picture
+</subsectionHeader>
+<bodyText confidence="0.980688">
+At every point in the algorithm, we assumed that all
+the rules that have at least some positive outcome
+(good (r) &gt; 0) are stored, and their score computed.
+</bodyText>
+<footnote confidence="0.9866315">
+3This can be done efficiently with an appropriate data
+structure - for example, using a double hash.
+</footnote>
+<figureCaption confidence="0.999821">
+Figure 1: FastTBL Algorithm
+</figureCaption>
+<bodyText confidence="0.966744958333333">
+Therefore, at the beginning of the algorithm, all the
+rules that correct at least one wrong classification
+need to be generated. The bad counts for these rules
+are then computed by generation as well: in every
+position that has the correct classification, the rules
+that change the classification are generated, as in
+Case 4, and their bad counts are incremented. The
+entire FastTBL algorithm is presented in Figure 1.
+Note that, when the bad counts are computed, only
+rules that already have positive good counts are se-
+lected for evaluation. This prevents the generation
+of useless rules and saves computational time.
+The number of examined rules is kept close to the
+minimum. Because of the way the rules are gen-
+erated, most of them need to modify either one of
+their counts. Some additional space (besides the one
+needed to represent the rules) is necessary for repre-
+senting the rules in a predicate hash in order to
+For all samples s that satisfy C [s] =� T [s], generate all rules
+r that correct the classification of s; increase good (r).
+For all samples s that satisfy C [s] = T [s] generate all pred-
+icates p s.t. p (s) = true; for each rule r s.t. pr = p and
+tr =� C [s] increase bad (r).
+1: Find the rule b = argmaxrER f (r).
+</bodyText>
+<figure confidence="0.986880361111111">
+If (f (b) &lt; Threshold or corpus learned to completion) then
+quit.
+For each predicate p, let R (p) be the rules whose predicate
+is p (pr = r).
+For each samples s, s&apos; s.t. C [s] =� C [b (s)] and s&apos; 2 V (s):
+If C [s&apos;] = C [b (s&apos;)] then
+• for each predicate p s.t. p (s&apos;) = true
+—If C [s&apos;] =� T [s&apos;] then
+*If p (b (s&apos;)) = false then decrease good (r),
+where r = [p, T [s&apos;]], the rule created with
+predicate p and target T [s&apos;];
+— Else
+*If p (b (s&apos;)) = false then for all the rules
+r 2 R (p) s.t. tr =� C [s&apos;] decrease bad (r);
+• for each predicate p s.t. p (b (s&apos;)) = true
+—If C [b (s&apos;)] =� T [s&apos;] then
+*If p (s&apos;) = false then increase good (r),
+where r = [p, T [s&apos;]];
+— Else
+*If p (s&apos;) = false then for all rules r 2 R (p)
+Else s.t. tr =� C [b (s&apos;)] increase bad (r);
+• for each predicate p s.t. p (s&apos;) = true
+—If C [s&apos;] =� T [s&apos;] then
+*If p (b (s&apos;)) = false V C [b (s&apos;)] = tr then
+decrease good (r), where r = [p, T [s&apos;]];
+— Else
+*For all the rules r 2 R(p) s.t. tr =� C [s&apos;]
+decrease bad (r);
+• for each predicate p s.t. p (b (s&apos;)) = true
+—If C [b (s&apos;)] =� T [s&apos;] then
+*If p (s&apos;) = false V C [s&apos;] = tr then increase
+good (r), where r = [p, T [s&apos;]];
+— Else
+*For all rules r 2 R (p) s.t. tr =� C [b (s&apos;)]
+increase bad (r);
+Repeat from step 1:
+</figure>
+<bodyText confidence="0.997640857142857">
+have a straightforward access to all rules that have a
+given predicate; this amount is considerably smaller
+than the one used to represent the rules. For exam-
+ple, in the case of text chunking task described in
+section 4, only approximately 30Mb additional mem-
+ory is required, while the approach of Ramshaw and
+Marcus (1994) would require approximately 450Mb.
+</bodyText>
+<subsectionHeader confidence="0.997509">
+3.3 Behavior of the Algorithm
+</subsectionHeader>
+<bodyText confidence="0.999996875">
+As mentioned before, the original algorithm has a
+number of deficiencies that cause it to run slowly.
+Among them is the drastic slowdown in rule learning
+as the scores of the rules decrease. When the best
+rule has a high score, which places it outside the tail
+of the score distribution, the rules in the tail will be
+skipped when the bad counts are calculated, since
+their good counts are small enough to cause them
+to be discarded. However, when the best rule is in
+the tail, many other rules with similar scores can no
+longer be discarded and their bad counts need to be
+computed, leading to a progressively longer running
+time per iteration.
+Our algorithm does not suffer from the same prob-
+lem, because the counts are updated (rather than
+recomputed) at each iteration, and only for the sam-
+ples that were affected by the application of the lat-
+est rule learned. Since the number of affected sam-
+ples decreases as learning progresses, our algorithm
+actually speeds up considerably towards the end of
+the training phase. Considering that the number
+of low-score rules is a considerably higher than the
+number of high-score rules, this leads to a dramatic
+reduction in the overall running time.
+This has repercussions on the scalability of the al-
+gorithm relative to training data size. Since enlarg-
+ing the training data size results in a longer score dis-
+tribution tail, our algorithm is expected to achieve
+an even more substantial relative running time im-
+provement over the original algorithm. Section 4
+presents experimental results that validate the su-
+perior scalability of the FastTBL algorithm.
+</bodyText>
+<sectionHeader confidence="0.999027" genericHeader="evaluation">
+4 Experiments
+</sectionHeader>
+<bodyText confidence="0.996861703703704">
+Since the goal of this paper is to compare and con-
+trast system training time and performance, extra
+measures were taken to ensure fairness in the com-
+parisons. To minimize implementation differences,
+all the code was written in C++ and classes were
+shared among the systems whenever possible. For
+each task, the same training set was provided to each
+system, and the set of possible rule templates was
+kept the same. Furthermore, extra care was taken
+to run all comparable experiments on the same ma-
+chine and under the same memory and processor
+load conditions.
+To provide a broad comparison between the sys-
+tems, three NLP tasks with different properties
+were chosen as the experimental domains. The
+first task, part-of-speech tagging, is one where the
+commitment assumption seems intuitively valid and
+the samples are not independent. The second
+task, prepositional phrase attachment, has examples
+which are independent from each other. The last
+task is text chunking, where both independence and
+commitment assumptions do not seem to be valid.
+A more detailed description of each task, data and
+the system parameters are presented in the following
+subsections.
+Four algorithms are compared during the follow-
+ing experiments:
+</bodyText>
+<listItem confidence="0.998434">
+• The regular TBL, as described in section 2;
+• An improved version of TBL, which makes ex-
+tensive use of indexes to speed up the rules&apos; up-
+date;
+• The FastTBL algorithm;
+• The ICA algorithm (Hepple, 2000).
+</listItem>
+<subsectionHeader confidence="0.937256">
+4.1 Part-of-Speech Tagging
+</subsectionHeader>
+<bodyText confidence="0.999943066666667">
+The goal of this task is to assign to each word
+in the given sentence a tag corresponding to its
+part of speech. A multitude of approaches have
+been proposed to solve this problem, including
+transformation-based learning, Maximum Entropy
+models, Hidden Markov models and memory-based
+approaches.
+The data used in the experiment was selected from
+the Penn Treebank Wall Street Journal, and is the
+same used by Brill and Wu (1998). The training set
+contained approximately 1M words and the test set
+approximately 200k words.
+Table 1 presents the results of the experiment4.
+All the algorithms were trained until a rule with
+a score of 2 was reached. The FastTBL algorithm
+performs very similarly to the regular TBL, while
+running in an order of magnitude faster. The two
+assumptions made by the ICA algorithm result in
+considerably less training time, but the performance
+is also degraded (the difference in performance is sta-
+tistically significant, as determined by a signed test,
+at a significance level of 0.001). Also present in Ta-
+ble 1 are the results of training Brill&apos;s tagger on the
+same data. The results of this tagger are presented
+to provide a performance comparison with a widely
+used tagger. Also worth mentioning is that the tag-
+ger achieved an accuracy of 96.76% when trained on
+the entire data5; a Maximum Entropy tagger (Rat-
+naparkhi, 1996) achieves 96.83% accuracy with the
+same training data/test data.
+</bodyText>
+<footnote confidence="0.9992816">
+4The time shown is the combined running time for both
+the lexical tagger and the contextual tagger.
+5We followed the setup from Brill&apos;s tagger: the contextual
+tagger is trained only on half of the training data. The train-
+ing time on the entire data was approximately 51 minutes.
+</footnote>
+<table confidence="0.99548325">
+Brill&apos;s tagger Regular TBL Indexed TBL FastTBL ICA (Hepple)
+Accuracy 96.61% 96.61% 96.61% 96.61% 96.23%
+Running time 5879 mins, 46 secs 2286 mins, 21 secs 420 mins, 7 secs 17 mins, 21 secs 6 mins, 13 secs
+Time ratio 0.4 1.0 5.4 131.7 367.8
+</table>
+<tableCaption confidence="0.997774">
+Table 1: POS tagging: Evaluation and Running Times
+</tableCaption>
+<table confidence="0.9998405">
+Regular TBL Indexed TBL Fast TBL ICA (Hepple)
+Accuracy 81.0% 81.0% 81.0% 77.8%
+Running time 190 mins, 19 secs 65 mins, 50 secs 14 mins, 38 secs 4 mins, 1 sec
+Time Ratio 1.0 2.9 13 47.4
+</table>
+<tableCaption confidence="0.996077">
+Table 2: PP Attachment:Evaluation and Running Times
+</tableCaption>
+<subsectionHeader confidence="0.96402">
+4.2 Prepositional Phrase Attachment
+</subsectionHeader>
+<bodyText confidence="0.99250075">
+Prepositional phrase attachment is the task of decid-
+ing the point of attachment for a given prepositional
+phrase (PP). As an example, consider the following
+two sentences:
+</bodyText>
+<listItem confidence="0.9848305">
+1. I washed the shirt with soap and water.
+2. I washed the shirt with pockets.
+</listItem>
+<bodyText confidence="0.999886166666667">
+In Sentence 1, the PP &amp;quot;with soap and water&amp;quot; de-
+scribes the act of washing the shirt. In Sentence 2,
+however, the PP &amp;quot;with pockets&amp;quot; is a description for
+the shirt that was washed.
+Most previous work has concentrated on situa-
+tions which are of the form VP NP1 P NP2. The
+problem is cast as a classification task, and the sen-
+tence is reduced to a 4-tuple containing the preposi-
+tion and the non-inflected base forms of the head
+words of the verb phrase VP and the two noun
+phrases NP1 and NP2. For example, the tuple cor-
+responding to the two above sentences would be:
+</bodyText>
+<listItem confidence="0.997766">
+1. wash shirt with soap
+2. wash shirt with pocket
+</listItem>
+<bodyText confidence="0.999828928571429">
+Many approaches to solving this this problem have
+been proposed, most of them using standard ma-
+chine learning techniques, including transformation-
+based learning, decision trees, maximum entropy
+and backoff estimation. The transformation-based
+learning system was originally developed by Brill
+and Resnik (1994).
+The data used in the experiment consists of ap-
+proximately 13,000 quadruples (VP NP1 P NP2)
+extracted from Penn Treebank parses. The set is
+split into a test set of 500 samples and a training set
+of 12,500 samples. The templates used to generate
+rules are similar to the ones used by Brill and Resnik
+(1994) and some include WordNet features. All the
+systems were trained until no more rules could be
+learned.
+Table 2 shows the results of the experiments.
+Again, the ICA algorithm learns the rules very fast,
+but has a slightly lower performance than the other
+two TBL systems. Since the samples are inherently
+independent, there is no performance loss because
+of the independence assumption; therefore the per-
+formance penalty has to come from the commitment
+assumption. The Fast TBL algorithm runs, again,
+in a order of magnitude faster than the original TBL
+while preserving the performance; the time ratio is
+only 13 in this case due to the small training size
+(only 13000 samples).
+</bodyText>
+<subsectionHeader confidence="0.997824">
+4.3 Text Chunking
+</subsectionHeader>
+<bodyText confidence="0.9997664">
+Text chunking is a subproblem of syntactic pars-
+ing, or sentence diagramming. Syntactic parsing at-
+tempts to construct a parse tree from a sentence by
+identifying all phrasal constituents and their attach-
+ment points. Text chunking simplifies the task by
+dividing the sentence into non-overlapping phrases,
+where each word belongs to the lowest phrasal con-
+stituent that dominates it. The following exam-
+ple shows a sentence with text chunks and part-of-
+speech tags:
+</bodyText>
+<equation confidence="0.476904666666667">
+[NP A.P.NNP GreenNNP ] [ADVP
+currentlyRB ] [VP has ] [NP 2,664,098CD
+sharesNNS] [ADJP outstandingJJ ] .
+</equation>
+<bodyText confidence="0.99989">
+The problem can be transformed into a classification
+task. Following Ramshaw &amp; Marcus&apos; (1999) work in
+base noun phrase chunking, each word is assigned
+a chunk tag corresponding to the phrase to which
+it belongs . The following table shows the above
+sentence with the assigned chunk tags:
+</bodyText>
+<table confidence="0.998774888888889">
+Word POS tag Chunk Tag
+A.P. NNP B-NP
+Green NNP I-NP
+currently RB B-ADVP
+has VBZ B-VP
+2,664,098 CD B-NP
+shares NNS I-NP
+outstanding JJ B-ADJP
+. . O
+</table>
+<tableCaption confidence="0.4322595">
+The data used in this experiment is the CoNLL-
+2000 phrase chunking corpus (Tjong Kim Sang and
+Buchholz, 2000). The training corpus consists of
+sections 15-18 of the Penn Treebank (Marcus et al.,
+1993); section 20 was used as the test set. The chunk
+tags are derived from the parse tree constituents,
+</tableCaption>
+<table confidence="0.9982295">
+Regular TBL Indexed TBL Fast TBL ICA (Hepple)
+F-measure 92.30 92.30 92.30 86.20
+Running Time 19211 mins, 40 secs 2056 mins, 4secs 137 mins, 57 secs 12 mins, 40 secs
+Time Ratio 1.0 9.3 139.2 1516.7
+</table>
+<tableCaption confidence="0.99987">
+Table 3: Text Chunking: Evaluation and Running Times
+</tableCaption>
+<bodyText confidence="0.9896131">
+and the part-of-speech tags were generated by Brill&apos;s
+tagger (Brill, 1995). All the systems are trained to
+completion (until all the rules are learned).
+Table 3 shows the results of the text chunking ex-
+periments. The performance of the FastTBL algo-
+rithm is the same as of regular TBL&apos;s, and runs in an
+order of magnitude faster. The ICA algorithm again
+runs considerably faster, but at a cost of a signifi-
+cant performance hit. There are at least 2 reasons
+that contribute to this behavior:
+1. The initial state has a lower performance than
+the one in tagging; therefore the independence
+assumption might not hold. 25% of the samples
+are changed by at least one rule, as opposed to
+POS tagging, where only 2.5% of the samples
+are changed by a rule.
+2. The commitment assumption might also not
+hold. For this task, 20% of the samples that
+were modified by a rule are also changed again
+by another one.
+</bodyText>
+<subsectionHeader confidence="0.996647">
+4.4 Training Data Size Scalability
+</subsectionHeader>
+<bodyText confidence="0.999915961538462">
+A question usually asked about a machine learning
+algorithm is how well it adapts to larger amounts
+of training data. Since the performance of the Fast
+TBL algorithm is identical to that of regular TBL,
+the issue of interest is the dependency between the
+running time of the algorithm and the amount of
+training data.
+The experiment was performed with the part-of-
+speech data set. The four algorithms were trained
+on training sets of different sizes; training times were
+recorded and averaged over 4 trials. The results are
+presented in Figure 2(a). It is obvious that the Fast
+TBL algorithm is much more scalable than the reg-
+ular TBL displaying a linear dependency on the
+amount of training data, while the regular TBL has
+an almost quadratic dependency. The explanation
+for this behavior has been given in Section 3.3.
+Figure 2(b) shows the time spent at each iteration
+versus the iteration number, for the original TBL
+and fast TBL systems. It can be observed that the
+time taken per iteration increases dramatically with
+the iteration number for the regular TBL, while for
+the FastTBL, the situation is reversed. The con-
+sequence is that, once a certain threshold has been
+reached, the incremental time needed to train the
+FastTBL system to completion is negligible.
+</bodyText>
+<sectionHeader confidence="0.999291" genericHeader="conclusions">
+5 Conclusions
+</sectionHeader>
+<bodyText confidence="0.9999909">
+We have presented in this paper a new and im-
+proved method of computing the objective function
+for transformation-based learning. This method al-
+lows a transformation-based algorithm to train an
+observed 13 to 139 times faster than the original
+one, while preserving the final performance of the
+algorithm. The method was tested in three differ-
+ent domains, each one having different characteris-
+tics: part-of-speech tagging, prepositional phrase at-
+tachment and text chunking. The results obtained
+indicate that the algorithmic improvement gener-
+ated by our method is not linked to a particular
+task, but extends to any classification task where
+transformation-based learning can be applied. Fur-
+thermore, our algorithm scales better with training
+data size; therefore the relative speed-up obtained
+will increase when more samples are available for
+training, making the procedure a good candidate for
+large corpora tasks.
+The increased speed of the Fast TBL algorithm
+also enables its usage in higher level machine learn-
+ing algorithms, such as adaptive boosting, model
+combination and active learning. Recent work (Flo-
+rian et al., 2000) has shown how a TBL frame-
+work can be adapted to generate confidences on the
+output, and our algorithm is compatible with that
+framework. The stability, resistance to overtraining,
+the existence of probability estimates and, now, rea-
+sonable speed make TBL an excellent candidate for
+solving classification tasks in general.
+</bodyText>
+<sectionHeader confidence="0.998756" genericHeader="acknowledgments">
+6 Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.99990725">
+The authors would like to thank David Yarowsky
+for his advice and guidance, Eric Brill and John
+C. Henderson for discussions on the initial ideas of
+the material presented in the paper, and the anony-
+mous reviewers for useful suggestions, observations
+and connections with other published material. The
+work presented here was supported by NSF grants
+IRI-9502312, IRI-9618874 and IIS-9985033.
+</bodyText>
+<sectionHeader confidence="0.99622" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.990940666666667">
+E. Brill and P. Resnik. 1994. A rule-based ap-
+proach to prepositional phrase attachment disam-
+biguation. In Proceedings of the Fifteenth Interna-
+tional Conference on Computational Linguistics
+(COLING-1994), pages 1198-1204, Kyoto.
+E. Brill and J. Wu. 1998. Classifier combination for
+</reference>
+<figure confidence="0.99904832">
+Running Time (minutes)
+Running Time (seconds)
+100000 150000 200000 250000 300000 350000 400000 450000 500000 550000
+Training Set Size (words)
+(a) Running Time versus Training Data Size
+Iteration Number
+(b) Running Time versus Iteration Number
+25000
+20000
+15000
+10000
+5000
+0
+Regular TBL
+Indexed TBL
+ICA FastTBL
+2000
+1500
+1000
+500
+0
+0 200 400 600 800 1000
+Regular TBL
+Indexed TBL
+FastTBL
+</figure>
+<figureCaption confidence="0.996678">
+Figure 2: Algorithm Scalability
+</figureCaption>
+<reference confidence="0.994086701298701">
+improved lexical disambiguation. Proceedings of
+COLING-ACL&apos;98, pages 191-195, August.
+E. Brill. 1995. Transformation-based error-driven
+learning and natural language processing: A case
+study in part of speech tagging. Computational
+Linguistics, 21(4):543-565.
+E. Brill, 1996. Recent Advances in Parsing Technol-
+ogy, chapter Learning to Parse with Transforma-
+tions. Kluwer.
+D. Day, J. Aberdeen, L. Hirschman, R. Kozierok,
+P. Robinson, and M. Vilain. 1997. Mixed-
+initiative development of language processing sys-
+tems. In Fifth Conference on Applied Natural
+Language Processing, pages 348-355. Association
+for Computational Linguistics, March.
+R. Florian and G. Ngai. 2001. Transformation-
+based learning in the fast lane. Technical report,
+Johns Hopkins University, Computer Science De-
+partment.
+R. Florian, J.C. Henderson, and G. Ngai. 2000.
+Coaxing confidence from an old friend: Probabilis-
+tic classifications from transformation rule lists.
+In Proceedings of SIGDAT-EMNLP 2000, pages
+26-43, Hong Kong, October.
+M. Hepple. 2000. Independence and commitment:
+Assumptions for rapid training and execution of
+rule-based pos taggers. In Proceedings of the 38th
+Annual Meeting of the ACL, pages 278-285, Hong
+Kong, October.
+T. Lager. 1999. The µ-tbl system: Logic pro-
+gramming tools for transformation-based learn-
+ing. In Proceedings of the 3rd International Work-
+shop on Computational Natural Language Learn-
+ing, Bergen.
+L. Mangu and E. Brill. 1997. Automatic rule acqui-
+sition for spelling correction. In Proceedings of the
+Fourteenth International Conference on Machine
+Learning, pages 734-741, Nashville, Tennessee.
+M. P. Marcus, B. Santorini, and M. A.
+Marcinkiewicz. 1993. Building a large an-
+notated corpus of english: The Penn Treebank.
+Computational Linguistics, 19(2):313-330.
+L. Ramshaw and M. Marcus. 1994. Exploring the
+statistical derivation of transformational rule se-
+quences for part-of-speech tagging. In The Bal-
+ancing Act: Proceedings of the ACL Workshop on
+Combining Symbolic and Statistical Approaches to
+Language, pages 128-135, New Mexico State Uni-
+versity, July.
+L. Ramshaw and M. Marcus, 1999. Natural Lan-
+guage Processing Using Very Large Corpora, chap-
+ter Text Chunking Using Transformation-based
+Learning, pages 157-176. Kluwer.
+A. Ratnaparkhi. 1996. A maximum entropy part-
+of-speech tagger. In Proceedings of the First Con-
+ference on Empirical Methods in NLP, pages 133-
+142, Philadelphia, PA.
+R. Rivest. 1987. Learning decision lists. Machine
+Learning, 2(3):229-246.
+E. Roche and Y. Schabes. 1995. Computational
+linguistics. Deterministic Part of Speech Tagging
+with Finite State Transducers, 21(2):227-253.
+K. Samuel, S. Carberry, and K. Vijay-Shanker.
+1998. Dialogue act tagging with transformation-
+based learning. In Proceedings of the 17th Interna-
+tional Conference on Computational Linguistics
+and the 36th Annual Meeting of the Association
+for Computational Linguistics, pages 1150-1156,
+Montreal, Quebec, Canada.
+K. Samuel. 1998. Lazy transformation-based
+learning. In Proceedings of the 11th Intera-
+tional Florida AI Research Symposium Confer-
+ence, pages 235-239, Florida, USA.
+E. Tjong Kim Sang and S. Buchholz. 2000. In-
+troduction to the conll-2000 shared task: Chunk-
+ing. In Proceedings of CoNLL-2000 and LLL-
+2000, pages 127-132, Lisbon, Portugal.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.685791">
+<title confidence="0.702444">Transformation-Based Learning in the Fast Lane</title>
+<email confidence="0.99215">gyn@cs.jhu.edu</email>
+<email confidence="0.99215">rflorian@cs.jhu.edu</email>
+<affiliation confidence="0.999762">Hopkins University Technologies</affiliation>
+<address confidence="0.999597">Baltimore, MD 21218, USA Hong Kong</address>
+<abstract confidence="0.999390565217391">Transformation-based learning has been successfully employed to solve many natural language processing problems. It achieves state-of-the-art performance on many natural language processing tasks and does not overtrain easily. However, it does have a serious drawback: the training time is often intorelably long, especially on the large corpora which are often used in NLP. In this paper, we present a novel and realistic method for speeding up the training time of a transformation-based learner without sacrificing performance. The paper compares and contrasts the training time needed and performance achieved by our modified learner with two other systems: a standard transformation-based learner, and the ICA system (Hepple, 2000). The results of these experiments show that our system is able to achieve a significant improvement in training time while still achieving the same performance as a standard transformation-based learner. This is a valuable contribution to systems and algorithms which utilize transformation-based learning at any part of the execution.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>E Brill</author>
+<author>P Resnik</author>
+</authors>
+<title>A rule-based approach to prepositional phrase attachment disambiguation.</title>
+<date>1994</date>
+<booktitle>In Proceedings of the Fifteenth International Conference on Computational Linguistics (COLING-1994),</booktitle>
+<pages>1198--1204</pages>
+<location>Kyoto.</location>
+<contexts>
+<context position="2053" citStr="Brill and Resnik, 1994" startWordPosition="303" endWordPosition="306">active because they often capture the linguistic features of a corpus in a small and concise set of rules. Transformation-based learning (TBL) (Brill, 1995) is one of the most successful rule-based machine learning algorithms. It is a flexible method which is easily extended to various tasks and domains, and it has been applied to a wide variety of NLP tasks, including part of speech tagging (Brill, 1995), noun phrase chunking (Ramshaw and Marcus, 1999), parsing (Brill, 1996), phrase chunking (Florian et al., 2000), spelling correction (Mangu and Brill, 1997), prepositional phrase attachment (Brill and Resnik, 1994), dialog act tagging (Samuel et al., 1998), segmentation and message understanding (Day et al., 1997). Furthermore, transformationbased learning achieves state-of-the-art performance on several tasks, and is fairly resistant to overtraining (Ramshaw and Marcus, 1994). Despite its attractive features as a machine learning algorithm, TBL does have a serious drawback in its lengthy training time, especially on the larger-sized corpora often used in NLP tasks. For example, a well-implemented transformation-based part-of-speech tagger will typically take over 38 hours to finish training on a 1 mill</context>
+<context position="24754" citStr="Brill and Resnik (1994)" startWordPosition="4467" endWordPosition="4470">ion task, and the sentence is reduced to a 4-tuple containing the preposition and the non-inflected base forms of the head words of the verb phrase VP and the two noun phrases NP1 and NP2. For example, the tuple corresponding to the two above sentences would be: 1. wash shirt with soap 2. wash shirt with pocket Many approaches to solving this this problem have been proposed, most of them using standard machine learning techniques, including transformationbased learning, decision trees, maximum entropy and backoff estimation. The transformation-based learning system was originally developed by Brill and Resnik (1994). The data used in the experiment consists of approximately 13,000 quadruples (VP NP1 P NP2) extracted from Penn Treebank parses. The set is split into a test set of 500 samples and a training set of 12,500 samples. The templates used to generate rules are similar to the ones used by Brill and Resnik (1994) and some include WordNet features. All the systems were trained until no more rules could be learned. Table 2 shows the results of the experiments. Again, the ICA algorithm learns the rules very fast, but has a slightly lower performance than the other two TBL systems. Since the samples are</context>
+</contexts>
+<marker>Brill, Resnik, 1994</marker>
+<rawString>E. Brill and P. Resnik. 1994. A rule-based approach to prepositional phrase attachment disambiguation. In Proceedings of the Fifteenth International Conference on Computational Linguistics (COLING-1994), pages 1198-1204, Kyoto.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Brill</author>
+<author>J Wu</author>
+</authors>
+<title>Classifier combination for improved lexical disambiguation.</title>
+<date>1998</date>
+<booktitle>Proceedings of COLING-ACL&apos;98,</booktitle>
+<pages>191--195</pages>
+<contexts>
+<context position="21746" citStr="Brill and Wu (1998)" startWordPosition="3953" endWordPosition="3956">n 2; • An improved version of TBL, which makes extensive use of indexes to speed up the rules&apos; update; • The FastTBL algorithm; • The ICA algorithm (Hepple, 2000). 4.1 Part-of-Speech Tagging The goal of this task is to assign to each word in the given sentence a tag corresponding to its part of speech. A multitude of approaches have been proposed to solve this problem, including transformation-based learning, Maximum Entropy models, Hidden Markov models and memory-based approaches. The data used in the experiment was selected from the Penn Treebank Wall Street Journal, and is the same used by Brill and Wu (1998). The training set contained approximately 1M words and the test set approximately 200k words. Table 1 presents the results of the experiment4. All the algorithms were trained until a rule with a score of 2 was reached. The FastTBL algorithm performs very similarly to the regular TBL, while running in an order of magnitude faster. The two assumptions made by the ICA algorithm result in considerably less training time, but the performance is also degraded (the difference in performance is statistically significant, as determined by a signed test, at a significance level of 0.001). Also present </context>
+</contexts>
+<marker>Brill, Wu, 1998</marker>
+<rawString>E. Brill and J. Wu. 1998. Classifier combination for improved lexical disambiguation. Proceedings of COLING-ACL&apos;98, pages 191-195, August.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Brill</author>
+</authors>
+<title>Transformation-based error-driven learning and natural language processing: A case study in part of speech tagging.</title>
+<date>1995</date>
+<journal>Computational Linguistics,</journal>
+<pages>21--4</pages>
+<contexts>
+<context position="1586" citStr="Brill, 1995" startWordPosition="230" endWordPosition="231"> that our system is able to achieve a significant improvement in training time while still achieving the same performance as a standard transformation-based learner. This is a valuable contribution to systems and algorithms which utilize transformation-based learning at any part of the execution. 1 Introduction Much research in natural language processing has gone into the development of rule-based machine learning algorithms. These algorithms are attractive because they often capture the linguistic features of a corpus in a small and concise set of rules. Transformation-based learning (TBL) (Brill, 1995) is one of the most successful rule-based machine learning algorithms. It is a flexible method which is easily extended to various tasks and domains, and it has been applied to a wide variety of NLP tasks, including part of speech tagging (Brill, 1995), noun phrase chunking (Ramshaw and Marcus, 1999), parsing (Brill, 1996), phrase chunking (Florian et al., 2000), spelling correction (Mangu and Brill, 1997), prepositional phrase attachment (Brill and Resnik, 1994), dialog act tagging (Samuel et al., 1998), segmentation and message understanding (Day et al., 1997). Furthermore, transformationbas</context>
+<context position="27382" citStr="Brill, 1995" startWordPosition="4914" endWordPosition="4915">ed in this experiment is the CoNLL2000 phrase chunking corpus (Tjong Kim Sang and Buchholz, 2000). The training corpus consists of sections 15-18 of the Penn Treebank (Marcus et al., 1993); section 20 was used as the test set. The chunk tags are derived from the parse tree constituents, Regular TBL Indexed TBL Fast TBL ICA (Hepple) F-measure 92.30 92.30 92.30 86.20 Running Time 19211 mins, 40 secs 2056 mins, 4secs 137 mins, 57 secs 12 mins, 40 secs Time Ratio 1.0 9.3 139.2 1516.7 Table 3: Text Chunking: Evaluation and Running Times and the part-of-speech tags were generated by Brill&apos;s tagger (Brill, 1995). All the systems are trained to completion (until all the rules are learned). Table 3 shows the results of the text chunking experiments. The performance of the FastTBL algorithm is the same as of regular TBL&apos;s, and runs in an order of magnitude faster. The ICA algorithm again runs considerably faster, but at a cost of a significant performance hit. There are at least 2 reasons that contribute to this behavior: 1. The initial state has a lower performance than the one in tagging; therefore the independence assumption might not hold. 25% of the samples are changed by at least one rule, as oppo</context>
+</contexts>
+<marker>Brill, 1995</marker>
+<rawString>E. Brill. 1995. Transformation-based error-driven learning and natural language processing: A case study in part of speech tagging. Computational Linguistics, 21(4):543-565.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Brill</author>
+</authors>
+<title>Recent Advances in Parsing Technology, chapter Learning to Parse with Transformations.</title>
+<date>1996</date>
+<publisher>Kluwer.</publisher>
+<contexts>
+<context position="1910" citStr="Brill, 1996" startWordPosition="286" endWordPosition="287">ch in natural language processing has gone into the development of rule-based machine learning algorithms. These algorithms are attractive because they often capture the linguistic features of a corpus in a small and concise set of rules. Transformation-based learning (TBL) (Brill, 1995) is one of the most successful rule-based machine learning algorithms. It is a flexible method which is easily extended to various tasks and domains, and it has been applied to a wide variety of NLP tasks, including part of speech tagging (Brill, 1995), noun phrase chunking (Ramshaw and Marcus, 1999), parsing (Brill, 1996), phrase chunking (Florian et al., 2000), spelling correction (Mangu and Brill, 1997), prepositional phrase attachment (Brill and Resnik, 1994), dialog act tagging (Samuel et al., 1998), segmentation and message understanding (Day et al., 1997). Furthermore, transformationbased learning achieves state-of-the-art performance on several tasks, and is fairly resistant to overtraining (Ramshaw and Marcus, 1994). Despite its attractive features as a machine learning algorithm, TBL does have a serious drawback in its lengthy training time, especially on the larger-sized corpora often used in NLP tas</context>
+</contexts>
+<marker>Brill, 1996</marker>
+<rawString>E. Brill, 1996. Recent Advances in Parsing Technology, chapter Learning to Parse with Transformations. Kluwer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Day</author>
+<author>J Aberdeen</author>
+<author>L Hirschman</author>
+<author>R Kozierok</author>
+<author>P Robinson</author>
+<author>M Vilain</author>
+</authors>
+<title>Mixedinitiative development of language processing systems.</title>
+<date>1997</date>
+<booktitle>In Fifth Conference on Applied Natural Language Processing,</booktitle>
+<pages>348--355</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics,</institution>
+<contexts>
+<context position="2154" citStr="Day et al., 1997" startWordPosition="319" endWordPosition="322">Transformation-based learning (TBL) (Brill, 1995) is one of the most successful rule-based machine learning algorithms. It is a flexible method which is easily extended to various tasks and domains, and it has been applied to a wide variety of NLP tasks, including part of speech tagging (Brill, 1995), noun phrase chunking (Ramshaw and Marcus, 1999), parsing (Brill, 1996), phrase chunking (Florian et al., 2000), spelling correction (Mangu and Brill, 1997), prepositional phrase attachment (Brill and Resnik, 1994), dialog act tagging (Samuel et al., 1998), segmentation and message understanding (Day et al., 1997). Furthermore, transformationbased learning achieves state-of-the-art performance on several tasks, and is fairly resistant to overtraining (Ramshaw and Marcus, 1994). Despite its attractive features as a machine learning algorithm, TBL does have a serious drawback in its lengthy training time, especially on the larger-sized corpora often used in NLP tasks. For example, a well-implemented transformation-based part-of-speech tagger will typically take over 38 hours to finish training on a 1 million word corpus. This disadvantage is further exacerbated when the transformation-based learner is us</context>
+</contexts>
+<marker>Day, Aberdeen, Hirschman, Kozierok, Robinson, Vilain, 1997</marker>
+<rawString>D. Day, J. Aberdeen, L. Hirschman, R. Kozierok, P. Robinson, and M. Vilain. 1997. Mixedinitiative development of language processing systems. In Fifth Conference on Applied Natural Language Processing, pages 348-355. Association for Computational Linguistics, March.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Florian</author>
+<author>G Ngai</author>
+</authors>
+<title>Transformationbased learning in the fast lane.</title>
+<date>2001</date>
+<tech>Technical report,</tech>
+<institution>Johns Hopkins University, Computer Science Department.</institution>
+<contexts>
+<context position="13241" citStr="Florian and Ngai (2001)" startWordPosition="2344" endWordPosition="2347">et s&apos; 2 V (s) be a sample in the vicinity of s. There are 2 cases to be examined one in which b applies to s&apos; and one in which b does not: Case I: c (s&apos;) = c (b (s&apos;)) (b does not modify the classification of sample s&apos;). We note that the condition s&apos; 2 G (r) and b (s&apos;) 2� G (r) is equivalent to p, (s&apos;) = true ^ C [s&apos;] =6 t, ^ t, = T [s&apos;] ^ p, (b (s&apos;)) = false and the formula s&apos; 2 B (r) and b (s&apos;) 2� B (r) is equivalent to p, (s&apos;) = true ^ C [s&apos;] =6 t,^ C [s&apos;] = T [s&apos;] ^ p, (b (s&apos;)) = false (for the full details of the derivation, inferred from the definition of G (r) and B (r), please refer to Florian and Ngai (2001)). These formulae offer us a method of generating the rules r which are influenced by the modification s&apos; —� b (s&apos;): 1. Generate all predicates p (using the predicate templates) that are true on the sample s&apos;. 2. If C [s&apos;] =� T [s&apos;] then (a) If p (b (s&apos;)) = false then decrease good (r), where r is the rule created with predicate p s.t. target T [s&apos;]; 3. Else (a) If p (b (s&apos;)) = false then for all the rules r whose predicate is p3 and tr =� C [s&apos;] decrease bad (r); The algorithm for generating the rules r that need their good counts (formula (3)) or bad counts (formula (4)) increased can be obt</context>
+</contexts>
+<marker>Florian, Ngai, 2001</marker>
+<rawString>R. Florian and G. Ngai. 2001. Transformationbased learning in the fast lane. Technical report, Johns Hopkins University, Computer Science Department.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Florian</author>
+<author>J C Henderson</author>
+<author>G Ngai</author>
+</authors>
+<title>Coaxing confidence from an old friend: Probabilistic classifications from transformation rule lists.</title>
+<date>2000</date>
+<booktitle>In Proceedings of SIGDAT-EMNLP</booktitle>
+<pages>26--43</pages>
+<location>Hong Kong,</location>
+<contexts>
+<context position="1950" citStr="Florian et al., 2000" startWordPosition="290" endWordPosition="293">ng has gone into the development of rule-based machine learning algorithms. These algorithms are attractive because they often capture the linguistic features of a corpus in a small and concise set of rules. Transformation-based learning (TBL) (Brill, 1995) is one of the most successful rule-based machine learning algorithms. It is a flexible method which is easily extended to various tasks and domains, and it has been applied to a wide variety of NLP tasks, including part of speech tagging (Brill, 1995), noun phrase chunking (Ramshaw and Marcus, 1999), parsing (Brill, 1996), phrase chunking (Florian et al., 2000), spelling correction (Mangu and Brill, 1997), prepositional phrase attachment (Brill and Resnik, 1994), dialog act tagging (Samuel et al., 1998), segmentation and message understanding (Day et al., 1997). Furthermore, transformationbased learning achieves state-of-the-art performance on several tasks, and is fairly resistant to overtraining (Ramshaw and Marcus, 1994). Despite its attractive features as a machine learning algorithm, TBL does have a serious drawback in its lengthy training time, especially on the larger-sized corpora often used in NLP tasks. For example, a well-implemented tran</context>
+<context position="30657" citStr="Florian et al., 2000" startWordPosition="5453" endWordPosition="5457">e algorithmic improvement generated by our method is not linked to a particular task, but extends to any classification task where transformation-based learning can be applied. Furthermore, our algorithm scales better with training data size; therefore the relative speed-up obtained will increase when more samples are available for training, making the procedure a good candidate for large corpora tasks. The increased speed of the Fast TBL algorithm also enables its usage in higher level machine learning algorithms, such as adaptive boosting, model combination and active learning. Recent work (Florian et al., 2000) has shown how a TBL framework can be adapted to generate confidences on the output, and our algorithm is compatible with that framework. The stability, resistance to overtraining, the existence of probability estimates and, now, reasonable speed make TBL an excellent candidate for solving classification tasks in general. 6 Acknowledgements The authors would like to thank David Yarowsky for his advice and guidance, Eric Brill and John C. Henderson for discussions on the initial ideas of the material presented in the paper, and the anonymous reviewers for useful suggestions, observations and co</context>
+</contexts>
+<marker>Florian, Henderson, Ngai, 2000</marker>
+<rawString>R. Florian, J.C. Henderson, and G. Ngai. 2000. Coaxing confidence from an old friend: Probabilistic classifications from transformation rule lists. In Proceedings of SIGDAT-EMNLP 2000, pages 26-43, Hong Kong, October.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Hepple</author>
+</authors>
+<title>Independence and commitment: Assumptions for rapid training and execution of rule-based pos taggers.</title>
+<date>2000</date>
+<booktitle>In Proceedings of the 38th Annual Meeting of the ACL,</booktitle>
+<pages>278--285</pages>
+<location>Hong Kong,</location>
+<contexts>
+<context position="935" citStr="Hepple, 2000" startWordPosition="134" endWordPosition="135">s state-of-the-art performance on many natural language processing tasks and does not overtrain easily. However, it does have a serious drawback: the training time is often intorelably long, especially on the large corpora which are often used in NLP. In this paper, we present a novel and realistic method for speeding up the training time of a transformation-based learner without sacrificing performance. The paper compares and contrasts the training time needed and performance achieved by our modified learner with two other systems: a standard transformation-based learner, and the ICA system (Hepple, 2000). The results of these experiments show that our system is able to achieve a significant improvement in training time while still achieving the same performance as a standard transformation-based learner. This is a valuable contribution to systems and algorithms which utilize transformation-based learning at any part of the execution. 1 Introduction Much research in natural language processing has gone into the development of rule-based machine learning algorithms. These algorithms are attractive because they often capture the linguistic features of a corpus in a small and concise set of rules</context>
+<context position="7735" citStr="Hepple, 2000" startWordPosition="1305" endWordPosition="1306">ormed multiple times during the update process, and the modification results in a significant reduction in running time. The disadvantage of this method consists in the system having an unrealistically high memory requirement. For example, a transformation-based text chunker training upon a modestly-sized corpus of 200,000 words has approximately 2 million rules active at each iteration. The additional memory space required to store the lists of pointers associated with these rules is about 450 MB, which is a rather large requirement to add to a system.l 2.1.2 The ICA Approach The ICA system (Hepple, 2000) aims to reduce the training time by introducing independence assumptions on the training samples that dramatically reduce the training time with the possible downside of sacrificing performance. To achieve the speedup, the ICA system disallows any interaction between the learned rules, by enforcing the following two assumptions: • Sample Independence a state change in a sample (e.g. a change in the current partof-speech tag of a word) does not change the context of surrounding samples. This is certainly the case in tasks such as prepositional phrase attachment, where samples are mutually inde</context>
+<context position="11155" citStr="Hepple (2000)" startWordPosition="1892" endWordPosition="1893">d(r) = jG(r)j. • B (r) = fs 2 Sjp,(s) = true and C[s] =6 t, and C[s] = T [s]g the samples on which the rule applies and changes the classification from correct to incorrect; similarly, bad(r) = jB(r)j. Given a newly learned rule b that is to be applied to S, the goal is to identify the rules r for which at least one of the sets G (r) , B (r) is modified by the application of rule b. Obviously, if both sets are not modified when applying rule b, then the value of the objective function for rule r remains unchanged. 2The algorithm was implemented by the the authors, following the description in Hepple (2000). The presentation is complicated by the fact that, in many NLP tasks, the samples are not independent. For instance, in POS tagging, a sample is dependent on the classification of the preceding and succeeding 2 samples (this assumes that there exists a natural ordering of the samples in S). Let V (s) denote the &amp;quot;vicinity&amp;quot; of a sample the set of samples on whose classification the sample s might depend on (for consistency, s 2 V (s)); if samples are independent, then V (s) = fsg. 3.1 Generating the Rules Let s be a sample on which the best rule b applies (i.e. [b (s)] =6 C [s]). We need to ide</context>
+<context position="21289" citStr="Hepple, 2000" startWordPosition="3881" endWordPosition="3882">re not independent. The second task, prepositional phrase attachment, has examples which are independent from each other. The last task is text chunking, where both independence and commitment assumptions do not seem to be valid. A more detailed description of each task, data and the system parameters are presented in the following subsections. Four algorithms are compared during the following experiments: • The regular TBL, as described in section 2; • An improved version of TBL, which makes extensive use of indexes to speed up the rules&apos; update; • The FastTBL algorithm; • The ICA algorithm (Hepple, 2000). 4.1 Part-of-Speech Tagging The goal of this task is to assign to each word in the given sentence a tag corresponding to its part of speech. A multitude of approaches have been proposed to solve this problem, including transformation-based learning, Maximum Entropy models, Hidden Markov models and memory-based approaches. The data used in the experiment was selected from the Penn Treebank Wall Street Journal, and is the same used by Brill and Wu (1998). The training set contained approximately 1M words and the test set approximately 200k words. Table 1 presents the results of the experiment4.</context>
+</contexts>
+<marker>Hepple, 2000</marker>
+<rawString>M. Hepple. 2000. Independence and commitment: Assumptions for rapid training and execution of rule-based pos taggers. In Proceedings of the 38th Annual Meeting of the ACL, pages 278-285, Hong Kong, October.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Lager</author>
+</authors>
+<title>The µ-tbl system: Logic programming tools for transformation-based learning.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the 3rd International Workshop on Computational Natural Language Learning,</booktitle>
+<location>Bergen.</location>
+<contexts>
+<context position="9777" citStr="Lager (1999)" startWordPosition="1643" endWordPosition="1644">problems which have high initial accuracy and where state changes are infrequent. The ICA system was designed and tested on the task of part-of-speech tagging, achieving an impressive reduction in training time while suffering only a small decrease in accuracy. The experiments presented in Section 4 include ICA in the training time and performance comparisons�. 2.1.3 Other Approaches Samuel (1998) proposed a Monte Carlo approach to transformation-based learning, in which only a fraction of the possible rules are randomly selected for estimation at each iteration. The µ-TBL system described in Lager (1999) attempts to cut down on training time with a more efficient Prolog implementation and an implementation of &amp;quot;lazy&amp;quot; learning. The application of a transformation-based learning can be considerably sped-up if the rules are compiled in a finite-state transducer, as described in Roche and Schabes (1995). 3 The Algorithm The approach presented here builds on the same foundation as the one in (Ramshaw and Marcus, 1994): instead of regenerating the rules each time, they are stored into memory, together with the two values good (r) and bad (r). The following notations will be used throughout this sect</context>
+</contexts>
+<marker>Lager, 1999</marker>
+<rawString>T. Lager. 1999. The µ-tbl system: Logic programming tools for transformation-based learning. In Proceedings of the 3rd International Workshop on Computational Natural Language Learning, Bergen.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Mangu</author>
+<author>E Brill</author>
+</authors>
+<title>Automatic rule acquisition for spelling correction.</title>
+<date>1997</date>
+<booktitle>In Proceedings of the Fourteenth International Conference on Machine Learning,</booktitle>
+<pages>734--741</pages>
+<location>Nashville, Tennessee.</location>
+<contexts>
+<context position="1995" citStr="Mangu and Brill, 1997" startWordPosition="296" endWordPosition="299">ed machine learning algorithms. These algorithms are attractive because they often capture the linguistic features of a corpus in a small and concise set of rules. Transformation-based learning (TBL) (Brill, 1995) is one of the most successful rule-based machine learning algorithms. It is a flexible method which is easily extended to various tasks and domains, and it has been applied to a wide variety of NLP tasks, including part of speech tagging (Brill, 1995), noun phrase chunking (Ramshaw and Marcus, 1999), parsing (Brill, 1996), phrase chunking (Florian et al., 2000), spelling correction (Mangu and Brill, 1997), prepositional phrase attachment (Brill and Resnik, 1994), dialog act tagging (Samuel et al., 1998), segmentation and message understanding (Day et al., 1997). Furthermore, transformationbased learning achieves state-of-the-art performance on several tasks, and is fairly resistant to overtraining (Ramshaw and Marcus, 1994). Despite its attractive features as a machine learning algorithm, TBL does have a serious drawback in its lengthy training time, especially on the larger-sized corpora often used in NLP tasks. For example, a well-implemented transformation-based part-of-speech tagger will t</context>
+</contexts>
+<marker>Mangu, Brill, 1997</marker>
+<rawString>L. Mangu and E. Brill. 1997. Automatic rule acquisition for spelling correction. In Proceedings of the Fourteenth International Conference on Machine Learning, pages 734-741, Nashville, Tennessee. M. P. Marcus, B. Santorini, and M. A. Marcinkiewicz. 1993. Building a large annotated corpus of english: The Penn Treebank. Computational Linguistics, 19(2):313-330.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Ramshaw</author>
+<author>M Marcus</author>
+</authors>
+<title>Exploring the statistical derivation of transformational rule sequences for part-of-speech tagging. In The Balancing Act:</title>
+<date>1994</date>
+<booktitle>Proceedings of the ACL Workshop on Combining Symbolic and Statistical Approaches to Language,</booktitle>
+<pages>128--135</pages>
+<institution>Mexico State University,</institution>
+<location>New</location>
+<contexts>
+<context position="2320" citStr="Ramshaw and Marcus, 1994" startWordPosition="340" endWordPosition="343">y extended to various tasks and domains, and it has been applied to a wide variety of NLP tasks, including part of speech tagging (Brill, 1995), noun phrase chunking (Ramshaw and Marcus, 1999), parsing (Brill, 1996), phrase chunking (Florian et al., 2000), spelling correction (Mangu and Brill, 1997), prepositional phrase attachment (Brill and Resnik, 1994), dialog act tagging (Samuel et al., 1998), segmentation and message understanding (Day et al., 1997). Furthermore, transformationbased learning achieves state-of-the-art performance on several tasks, and is fairly resistant to overtraining (Ramshaw and Marcus, 1994). Despite its attractive features as a machine learning algorithm, TBL does have a serious drawback in its lengthy training time, especially on the larger-sized corpora often used in NLP tasks. For example, a well-implemented transformation-based part-of-speech tagger will typically take over 38 hours to finish training on a 1 million word corpus. This disadvantage is further exacerbated when the transformation-based learner is used as the base learner in learning algorithms such as boosting or active learning, both of which require multiple iterations of estimation and application of the base</context>
+<context position="10193" citStr="Ramshaw and Marcus, 1994" startWordPosition="1707" endWordPosition="1710">oposed a Monte Carlo approach to transformation-based learning, in which only a fraction of the possible rules are randomly selected for estimation at each iteration. The µ-TBL system described in Lager (1999) attempts to cut down on training time with a more efficient Prolog implementation and an implementation of &amp;quot;lazy&amp;quot; learning. The application of a transformation-based learning can be considerably sped-up if the rules are compiled in a finite-state transducer, as described in Roche and Schabes (1995). 3 The Algorithm The approach presented here builds on the same foundation as the one in (Ramshaw and Marcus, 1994): instead of regenerating the rules each time, they are stored into memory, together with the two values good (r) and bad (r). The following notations will be used throughout this section: • G (r) = fs 2 Sjp,(s) = true and C[s] =6 t, and t, = T[s]g the samples on which the rule applies and changes them to the correct classification; therefore, good(r) = jG(r)j. • B (r) = fs 2 Sjp,(s) = true and C[s] =6 t, and C[s] = T [s]g the samples on which the rule applies and changes the classification from correct to incorrect; similarly, bad(r) = jB(r)j. Given a newly learned rule b that is to be applie</context>
+<context position="18182" citStr="Ramshaw and Marcus (1994)" startWordPosition="3364" endWordPosition="3367">he rules r 2 R(p) s.t. tr =� C [s&apos;] decrease bad (r); • for each predicate p s.t. p (b (s&apos;)) = true —If C [b (s&apos;)] =� T [s&apos;] then *If p (s&apos;) = false V C [s&apos;] = tr then increase good (r), where r = [p, T [s&apos;]]; — Else *For all rules r 2 R (p) s.t. tr =� C [b (s&apos;)] increase bad (r); Repeat from step 1: have a straightforward access to all rules that have a given predicate; this amount is considerably smaller than the one used to represent the rules. For example, in the case of text chunking task described in section 4, only approximately 30Mb additional memory is required, while the approach of Ramshaw and Marcus (1994) would require approximately 450Mb. 3.3 Behavior of the Algorithm As mentioned before, the original algorithm has a number of deficiencies that cause it to run slowly. Among them is the drastic slowdown in rule learning as the scores of the rules decrease. When the best rule has a high score, which places it outside the tail of the score distribution, the rules in the tail will be skipped when the bad counts are calculated, since their good counts are small enough to cause them to be discarded. However, when the best rule is in the tail, many other rules with similar scores can no longer be di</context>
+<context position="6606" citStr="Ramshaw &amp; Marcus (1994)" startWordPosition="1108" endWordPosition="1111">ined when all rules have been applied. 2.1 Previous Work As was described in the introductory section, the long training time of TBL poses a serious problem. Various methods have been investigated towards ameliorating this problem, and the following subsections detail two of the approaches. 2.1.1 The Ramshaw &amp; Marcus Approach One of the most time-consuming steps in transformation-based learning is the updating step. The iterative nature of the algorithm requires that each newly selected rule be applied to the corpus, and the current state of the corpus updated before the next rule is learned. Ramshaw &amp; Marcus (1994) attempted to reduce the training time of the algorithm by making the update process more efficient. Their method requires each rule to store a list of pointers to samples that it applies to, and for each sample to keep a list of pointers to rules that apply to it. Given these two sets of lists, the system can then easily: 1. identify the positions where the best rule applies in the corpus; and 2. update the scores of all the rules which are affected by a state change in the corpus. These two processes are performed multiple times during the update process, and the modification results in a si</context>
+</contexts>
+<marker>Ramshaw, Marcus, 1994</marker>
+<rawString>L. Ramshaw and M. Marcus. 1994. Exploring the statistical derivation of transformational rule sequences for part-of-speech tagging. In The Balancing Act: Proceedings of the ACL Workshop on Combining Symbolic and Statistical Approaches to Language, pages 128-135, New Mexico State University, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Ramshaw</author>
+<author>M Marcus</author>
+</authors>
+<title>Natural Language Processing Using Very Large Corpora, chapter Text Chunking Using Transformation-based Learning,</title>
+<date>1999</date>
+<pages>157--176</pages>
+<publisher>Kluwer.</publisher>
+<contexts>
+<context position="1887" citStr="Ramshaw and Marcus, 1999" startWordPosition="280" endWordPosition="284">xecution. 1 Introduction Much research in natural language processing has gone into the development of rule-based machine learning algorithms. These algorithms are attractive because they often capture the linguistic features of a corpus in a small and concise set of rules. Transformation-based learning (TBL) (Brill, 1995) is one of the most successful rule-based machine learning algorithms. It is a flexible method which is easily extended to various tasks and domains, and it has been applied to a wide variety of NLP tasks, including part of speech tagging (Brill, 1995), noun phrase chunking (Ramshaw and Marcus, 1999), parsing (Brill, 1996), phrase chunking (Florian et al., 2000), spelling correction (Mangu and Brill, 1997), prepositional phrase attachment (Brill and Resnik, 1994), dialog act tagging (Samuel et al., 1998), segmentation and message understanding (Day et al., 1997). Furthermore, transformationbased learning achieves state-of-the-art performance on several tasks, and is fairly resistant to overtraining (Ramshaw and Marcus, 1994). Despite its attractive features as a machine learning algorithm, TBL does have a serious drawback in its lengthy training time, especially on the larger-sized corpor</context>
+</contexts>
+<marker>Ramshaw, Marcus, 1999</marker>
+<rawString>L. Ramshaw and M. Marcus, 1999. Natural Language Processing Using Very Large Corpora, chapter Text Chunking Using Transformation-based Learning, pages 157-176. Kluwer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Ratnaparkhi</author>
+</authors>
+<title>A maximum entropy partof-speech tagger.</title>
+<date>1996</date>
+<booktitle>In Proceedings of the First Conference on Empirical Methods in NLP,</booktitle>
+<pages>133--142</pages>
+<location>Philadelphia, PA.</location>
+<contexts>
+<context position="22672" citStr="Ratnaparkhi, 1996" startWordPosition="4109" endWordPosition="4111">der of magnitude faster. The two assumptions made by the ICA algorithm result in considerably less training time, but the performance is also degraded (the difference in performance is statistically significant, as determined by a signed test, at a significance level of 0.001). Also present in Table 1 are the results of training Brill&apos;s tagger on the same data. The results of this tagger are presented to provide a performance comparison with a widely used tagger. Also worth mentioning is that the tagger achieved an accuracy of 96.76% when trained on the entire data5; a Maximum Entropy tagger (Ratnaparkhi, 1996) achieves 96.83% accuracy with the same training data/test data. 4The time shown is the combined running time for both the lexical tagger and the contextual tagger. 5We followed the setup from Brill&apos;s tagger: the contextual tagger is trained only on half of the training data. The training time on the entire data was approximately 51 minutes. Brill&apos;s tagger Regular TBL Indexed TBL FastTBL ICA (Hepple) Accuracy 96.61% 96.61% 96.61% 96.61% 96.23% Running time 5879 mins, 46 secs 2286 mins, 21 secs 420 mins, 7 secs 17 mins, 21 secs 6 mins, 13 secs Time ratio 0.4 1.0 5.4 131.7 367.8 Table 1: POS tag</context>
+</contexts>
+<marker>Ratnaparkhi, 1996</marker>
+<rawString>A. Ratnaparkhi. 1996. A maximum entropy partof-speech tagger. In Proceedings of the First Conference on Empirical Methods in NLP, pages 133-142, Philadelphia, PA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Rivest</author>
+</authors>
+<title>Learning decision lists.</title>
+<date>1987</date>
+<booktitle>Machine Learning,</booktitle>
+<pages>2--3</pages>
+<contexts>
+<context position="9020" citStr="Rivest, 1987" startWordPosition="1523" endWordPosition="1524">ggests it does not hold, it may still be a reasonable assumption to make if the rules apply infrequently and sparsely enough. &apos;We need to note that the 200k-word corpus used in this experiment is considered small by NLP standards. Many of the available corpora contain over 1 million words. As the size of the corpus increases, so does the number of rules and the additional memory space required. • Rule Commitment there will be at most one state change per sample. In other words, at most one rule is allowed to apply to each sample. This mode of application is similar to that of a decision list (Rivest, 1987), where an sample is modified by the first rule that applies to it, and not modified again thereafter. In general, this assumption will hold for problems which have high initial accuracy and where state changes are infrequent. The ICA system was designed and tested on the task of part-of-speech tagging, achieving an impressive reduction in training time while suffering only a small decrease in accuracy. The experiments presented in Section 4 include ICA in the training time and performance comparisons�. 2.1.3 Other Approaches Samuel (1998) proposed a Monte Carlo approach to transformation-base</context>
+</contexts>
+<marker>Rivest, 1987</marker>
+<rawString>R. Rivest. 1987. Learning decision lists. Machine Learning, 2(3):229-246.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Roche</author>
+<author>Y Schabes</author>
+</authors>
+<title>Computational linguistics. Deterministic Part of Speech Tagging with Finite State Transducers,</title>
+<date>1995</date>
+<pages>21--2</pages>
+<contexts>
+<context position="10077" citStr="Roche and Schabes (1995)" startWordPosition="1687" endWordPosition="1690">in Section 4 include ICA in the training time and performance comparisons�. 2.1.3 Other Approaches Samuel (1998) proposed a Monte Carlo approach to transformation-based learning, in which only a fraction of the possible rules are randomly selected for estimation at each iteration. The µ-TBL system described in Lager (1999) attempts to cut down on training time with a more efficient Prolog implementation and an implementation of &amp;quot;lazy&amp;quot; learning. The application of a transformation-based learning can be considerably sped-up if the rules are compiled in a finite-state transducer, as described in Roche and Schabes (1995). 3 The Algorithm The approach presented here builds on the same foundation as the one in (Ramshaw and Marcus, 1994): instead of regenerating the rules each time, they are stored into memory, together with the two values good (r) and bad (r). The following notations will be used throughout this section: • G (r) = fs 2 Sjp,(s) = true and C[s] =6 t, and t, = T[s]g the samples on which the rule applies and changes them to the correct classification; therefore, good(r) = jG(r)j. • B (r) = fs 2 Sjp,(s) = true and C[s] =6 t, and C[s] = T [s]g the samples on which the rule applies and changes the cla</context>
+</contexts>
+<marker>Roche, Schabes, 1995</marker>
+<rawString>E. Roche and Y. Schabes. 1995. Computational linguistics. Deterministic Part of Speech Tagging with Finite State Transducers, 21(2):227-253.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Samuel</author>
+<author>S Carberry</author>
+<author>K Vijay-Shanker</author>
+</authors>
+<title>Dialogue act tagging with transformationbased learning.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the 17th International Conference on Computational Linguistics and the 36th Annual Meeting of the Association for Computational Linguistics,</booktitle>
+<pages>1150--1156</pages>
+<location>Montreal, Quebec, Canada.</location>
+<contexts>
+<context position="2095" citStr="Samuel et al., 1998" startWordPosition="310" endWordPosition="313">tic features of a corpus in a small and concise set of rules. Transformation-based learning (TBL) (Brill, 1995) is one of the most successful rule-based machine learning algorithms. It is a flexible method which is easily extended to various tasks and domains, and it has been applied to a wide variety of NLP tasks, including part of speech tagging (Brill, 1995), noun phrase chunking (Ramshaw and Marcus, 1999), parsing (Brill, 1996), phrase chunking (Florian et al., 2000), spelling correction (Mangu and Brill, 1997), prepositional phrase attachment (Brill and Resnik, 1994), dialog act tagging (Samuel et al., 1998), segmentation and message understanding (Day et al., 1997). Furthermore, transformationbased learning achieves state-of-the-art performance on several tasks, and is fairly resistant to overtraining (Ramshaw and Marcus, 1994). Despite its attractive features as a machine learning algorithm, TBL does have a serious drawback in its lengthy training time, especially on the larger-sized corpora often used in NLP tasks. For example, a well-implemented transformation-based part-of-speech tagger will typically take over 38 hours to finish training on a 1 million word corpus. This disadvantage is furt</context>
+</contexts>
+<marker>Samuel, Carberry, Vijay-Shanker, 1998</marker>
+<rawString>K. Samuel, S. Carberry, and K. Vijay-Shanker. 1998. Dialogue act tagging with transformationbased learning. In Proceedings of the 17th International Conference on Computational Linguistics and the 36th Annual Meeting of the Association for Computational Linguistics, pages 1150-1156, Montreal, Quebec, Canada.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Samuel</author>
+</authors>
+<title>Lazy transformation-based learning.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the 11th Interational Florida AI Research Symposium Conference,</booktitle>
+<pages>235--239</pages>
+<location>Florida, USA.</location>
+<contexts>
+<context position="9565" citStr="Samuel (1998)" startWordPosition="1610" endWordPosition="1611"> of application is similar to that of a decision list (Rivest, 1987), where an sample is modified by the first rule that applies to it, and not modified again thereafter. In general, this assumption will hold for problems which have high initial accuracy and where state changes are infrequent. The ICA system was designed and tested on the task of part-of-speech tagging, achieving an impressive reduction in training time while suffering only a small decrease in accuracy. The experiments presented in Section 4 include ICA in the training time and performance comparisons�. 2.1.3 Other Approaches Samuel (1998) proposed a Monte Carlo approach to transformation-based learning, in which only a fraction of the possible rules are randomly selected for estimation at each iteration. The µ-TBL system described in Lager (1999) attempts to cut down on training time with a more efficient Prolog implementation and an implementation of &amp;quot;lazy&amp;quot; learning. The application of a transformation-based learning can be considerably sped-up if the rules are compiled in a finite-state transducer, as described in Roche and Schabes (1995). 3 The Algorithm The approach presented here builds on the same foundation as the one i</context>
+</contexts>
+<marker>Samuel, 1998</marker>
+<rawString>K. Samuel. 1998. Lazy transformation-based learning. In Proceedings of the 11th Interational Florida AI Research Symposium Conference, pages 235-239, Florida, USA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Tjong Kim Sang</author>
+<author>S Buchholz</author>
+</authors>
+<title>Introduction to the conll-2000 shared task: Chunking.</title>
+<date>2000</date>
+<booktitle>In Proceedings of CoNLL-2000 and LLL2000,</booktitle>
+<pages>127--132</pages>
+<location>Lisbon, Portugal.</location>
+<contexts>
+<context position="26867" citStr="Sang and Buchholz, 2000" startWordPosition="4824" endWordPosition="4827">[ADVP currentlyRB ] [VP has ] [NP 2,664,098CD sharesNNS] [ADJP outstandingJJ ] . The problem can be transformed into a classification task. Following Ramshaw &amp; Marcus&apos; (1999) work in base noun phrase chunking, each word is assigned a chunk tag corresponding to the phrase to which it belongs . The following table shows the above sentence with the assigned chunk tags: Word POS tag Chunk Tag A.P. NNP B-NP Green NNP I-NP currently RB B-ADVP has VBZ B-VP 2,664,098 CD B-NP shares NNS I-NP outstanding JJ B-ADJP . . O The data used in this experiment is the CoNLL2000 phrase chunking corpus (Tjong Kim Sang and Buchholz, 2000). The training corpus consists of sections 15-18 of the Penn Treebank (Marcus et al., 1993); section 20 was used as the test set. The chunk tags are derived from the parse tree constituents, Regular TBL Indexed TBL Fast TBL ICA (Hepple) F-measure 92.30 92.30 92.30 86.20 Running Time 19211 mins, 40 secs 2056 mins, 4secs 137 mins, 57 secs 12 mins, 40 secs Time Ratio 1.0 9.3 139.2 1516.7 Table 3: Text Chunking: Evaluation and Running Times and the part-of-speech tags were generated by Brill&apos;s tagger (Brill, 1995). All the systems are trained to completion (until all the rules are learned). Table </context>
+</contexts>
+<marker>Sang, Buchholz, 2000</marker>
+<rawString>E. Tjong Kim Sang and S. Buchholz. 2000. Introduction to the conll-2000 shared task: Chunking. In Proceedings of CoNLL-2000 and LLL2000, pages 127-132, Lisbon, Portugal.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

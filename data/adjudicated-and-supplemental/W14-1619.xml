@@ -1,0 +1,1537 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.001046">
+<title confidence="0.949474">
+Probabilistic Modeling of Joint-context in Distributional Similarity
+</title>
+<author confidence="0.909436">
+Oren Melamud§, Ido Dagan§, Jacob Goldberger♦, Idan Szpektor†, Deniz Yuret‡
+</author>
+<note confidence="0.6378835">
+§ Computer Science Department, Bar-Ilan University
+Q Faculty of Engineering, Bar-Ilan University
+† Yahoo! Research Israel
+‡ Koc¸ University
+</note>
+<email confidence="0.711826">
+{melamuo,dagan,goldbej}@{cs,cs,eng}.biu.ac.il
+idan@yahoo-inc.com, dyuret@ku.edu.tr
+</email>
+<sectionHeader confidence="0.993469" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999827909090909">
+Most traditional distributional similarity
+models fail to capture syntagmatic patterns
+that group together multiple word features
+within the same joint context. In this work
+we introduce a novel generic distributional
+similarity scheme under which the power
+of probabilistic models can be leveraged
+to effectively model joint contexts. Based
+on this scheme, we implement a concrete
+model which utilizes probabilistic n-gram
+language models. Our evaluations sug-
+gest that this model is particularly well-
+suited for measuring similarity for verbs,
+which are known to exhibit richer syntag-
+matic patterns, while maintaining compa-
+rable or better performance with respect
+to competitive baselines for nouns. Fol-
+lowing this, we propose our scheme as a
+framework for future semantic similarity
+models leveraging the substantial body of
+work that exists in probabilistic language
+modeling.
+</bodyText>
+<sectionHeader confidence="0.998992" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.989726333333334">
+The Distributional Hypothesis is commonly
+phrased as “words which are similar in meaning
+occur in similar contexts” (Rubenstein and Good-
+enough, 1965). Distributional similarity models
+following this hypothesis vary in two major as-
+pects, namely the representation of the context and
+the respective computational model. Probably the
+most prominent class of distributional similarity
+models represents context as a vector of word fea-
+tures and computes similarity using feature vector
+arithmetics (Lund and Burgess, 1996; Turney et
+al., 2010). To construct the feature vectors, the
+context of each target word token1, which is com-
+monly a word window around it, is first broken
+1We use word type to denote an entry in the vocabulary,
+and word token for a particular occurrence of a word type.
+into a set of individual independent words. Then
+the weights of the entries in the word feature vec-
+tor capture the degree of association between the
+target word type and each of the individual word
+features, independently of one another.
+Despite its popularity, it was suggested that
+the word feature vector approach misses valu-
+able information, which is embedded in the co-
+location and inter-relations of words (e.g. word
+order) within the same context (Ruiz-Casado et al.,
+2005). Following this motivation, Ruiz-Casado
+et al. (2005) proposed an alternative composite-
+feature model, later adopted in (Agirre et al.,
+2009). This model adopts a richer context repre-
+sentation by considering entire word window con-
+texts as features, while keeping the same compu-
+tational vector-based model. Although showing
+interesting potential, this approach suffers from a
+very high-dimensional feature space resulting in
+data sparseness problems. Therefore, it requires
+exceptionally large learning corpora to consider
+large windows effectively.
+A parallel line of work adopted richer context
+representations as well, with a different compu-
+tational model. These works utilized neural net-
+works to learn low dimensional continuous vector
+representations for word types, which were found
+useful for measuring semantic similarity (Col-
+lobert and Weston, 2008; Mikolov et al., 2013).
+These vectors are trained by optimizing the pre-
+diction of target words given their observed con-
+texts (or variants of this objective). Most of these
+models consider each observed context as a joint
+set of context words within a word window.
+In this work we follow the motivation in the pre-
+vious works above to exploit richer joint-context
+representations for modeling distributional simi-
+larity. Under this approach the set of features in
+the context of each target word token is consid-
+ered to jointly reflect on the meaning of the target
+word type. To further facilitate this type of mod-
+</bodyText>
+<page confidence="0.978725">
+181
+</page>
+<note confidence="0.688389">
+Proceedings of the Eighteenth Conference on Computational Language Learning, pages 181–190,
+Baltimore, Maryland USA, June 26-27 2014. c�2014 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.999531555555556">
+eling we propose a novel probabilistic computa-
+tional scheme for distributional similarity, which
+leverages the power of probabilistic models and
+addresses the data sparseness challenge associated
+with large joint-contexts. Our scheme is based on
+the following probabilistic corollary to the distri-
+butional hypothesis:
+“words are similar in meaning if (1)
+they are likely to occur in the same contexts”
+To realize this corollary, our distributional sim-
+ilarity scheme assigns high similarity scores to
+word pairs a and b, for which a is likely in the con-
+texts that are observed for b and vice versa. The
+scheme is generic in the sense that various under-
+lying probabilistic models can be used to provide
+the estimates for the likelihood of a target word
+given a context. This allows concrete semantic
+similarity models based on this scheme to lever-
+age the capabilities of probabilistic models, such
+as established language models, which typically
+address the modeling of joint-contexts.
+We hypothesize that an underlying model that
+could capture syntagmatic patterns in large word
+contexts, yet is flexible enough to deal with data
+sparseness, is desired. It is generally accepted
+that the semantics of verbs in particular are cor-
+related with their syntagmatic properties (Levin,
+1993; Hanks, 2013). This provides grounds to ex-
+pect that such model has the potential to excel for
+verbs. To capture syntagmatic patterns, we choose
+in this work standard n-gram language models as
+the basis for a concrete model implementing our
+scheme. This choice is inspired by recent work on
+learning syntactic categories (Yatbaz et al., 2012),
+which successfully utilized such language mod-
+els to represent word window contexts of target
+words. However, we note that other richer types
+of language models, such as class-based (Brown
+et al., 1992) or hybrid (Tan et al., 2012), can be
+seamlessly integrated into our scheme.
+Our evaluations suggest that our model is in-
+deed particularly advantageous for measuring se-
+mantic similarity for verbs, while maintaining
+comparable or better performance with respect to
+competitive baselines for nouns.
+</bodyText>
+<sectionHeader confidence="0.982039" genericHeader="introduction">
+2 Background
+</sectionHeader>
+<bodyText confidence="0.999924142857143">
+In this section we provide additional details re-
+garding previous works that we later use as base-
+lines in our evaluations.
+To implement the composite-feature approach,
+Ruiz-Casado et al. (2005) used a Web search en-
+gine to compare entire window contexts of target
+word types. For example, a single feature that
+could be retrieved this way for the target word like
+is “Children cookies and milk”. They showed
+good results on detecting synonyms in the 80
+multiple-choice questions TOEFL test. Agirre et
+al. (2009) constructed composite-feature vectors
+using an exceptionally large 1.6 Teraword learn-
+ing corpus. They found that this approach out-
+performs the traditional independent feature vec-
+tor approach on a subset of the WordSim353 test-
+set (Finkelstein et al., 2001), which is designed to
+test the more restricted relation of semantic simi-
+larity (to be distinguished from looser semantic re-
+latedness). We are not aware of additional works
+following this approach, of using entire word win-
+dows as features.
+Neural networks have been used to train lan-
+guage models that are based on low dimensional
+continuous vector representations for word types,
+also called word embeddings (Bengio et al., 2003;
+Mikolov et al., 2010). Although originally de-
+signed to improve language models, later works
+have shown that such word embeddings are useful
+in various other NLP tasks, including measuring
+semantic similarity with vector arithmetics (Col-
+lobert and Weston, 2008; Mikolov et al., 2013).
+Specifically, the recent work by Mikolov et al.
+(2013) introduced the CBOW and Skip-gram mod-
+els, achieving state-of-the-art results in detecting
+semantic analogies. The CBOW model is trained
+to predict a target word given the set of context
+words in a word window around it, where this
+context is considered jointly as a bag-of-words.
+The Skip-gram model is trained to predict each of
+the context words independently given the target
+word.
+</bodyText>
+<sectionHeader confidence="0.973176" genericHeader="method">
+3 Probabilistic Distributional Similarity
+</sectionHeader>
+<subsectionHeader confidence="0.997">
+3.1 Motivation
+</subsectionHeader>
+<bodyText confidence="0.998033333333333">
+In this section we briefly demonstrate the bene-
+fits of considering joint-contexts of words. As an
+illustrative example, we note that the target words
+like and surround may share many individual word
+features such as “school” and “campus” in the sen-
+tences “Mary’s son likes the school campus” and
+“The forest surrounds the school campus”. This
+potentially implies that individual features may
+not be sufficient to accurately reflect the difference
+</bodyText>
+<page confidence="0.997243">
+182
+</page>
+<bodyText confidence="0.998124666666667">
+between such words. Alternatively, we could use
+the following composite features to model the con-
+text of these words, “Mary’s son the school
+campus” and “The forest the school campus”.
+This would discriminate better between like and
+surround. However, in this case sentences such as
+“Mary’s son likes the school campus” and “John’s
+son loves the school campus” will not provide any
+evidence to the similarity between like and love,
+since “Mary’s son the school campus” is a dif-
+ferent feature than “John’s son the school cam-
+pus”.
+In the remainder of this section we propose
+a modeling scheme and then a concrete model,
+which can predict that like and love are likely to
+occur in each other’s joint-contexts, whereas like
+and surround are not, and then assign similarity
+scores accordingly.
+</bodyText>
+<subsectionHeader confidence="0.999325">
+3.2 The probabilistic similarity scheme
+</subsectionHeader>
+<bodyText confidence="0.999888411764706">
+We now present a computational scheme that re-
+alizes our proposed corollary (1) to the distribu-
+tional hypothesis and facilitates robust probabilis-
+tic modeling of joint contexts. First, we slightly
+rephrase this corollary as follows: “words a and
+b are similar in meaning if word b is likely in
+the contexts of a and vice versa”. We denote the
+probability of an occurrence of a target word b
+given a joint-context c by p(b|c). For example,
+p(love|“Mary’s son the school campus”) is the
+probability of the word love to be the filler of the
+‘place-holder’ in the given joint-context “Mary’s
+son the school campus”. Similarly, we denote
+p(c|a) as the probability of a joint-context c given
+a word a, which fills its place-holder. We now
+propose psim(b|a) to reflect how likely b is in the
+joint-contexts of a. We define this measure as:
+</bodyText>
+<equation confidence="0.970328">
+psim(b|a) = � p(c|a) · p(b|c) (2)
+c
+</equation>
+<bodyText confidence="0.999989">
+where c goes over all possible joint-contexts in the
+language.
+To implement this measure we need to find
+an efficient estimate for psim(b|a). The most
+straight forward strategy is to compute sim-
+ple corpus count ratio estimates for p(b|c) and
+</bodyText>
+<equation confidence="0.88663875">
+p(c|a), denoted p#(b|c) count(b,c) =and
+count(*,c)
+p#(c|a) = count(a,c) However, when consid-
+count(a,*)
+</equation>
+<bodyText confidence="0.999216820512821">
+ering large joint-contexts for c, this approach be-
+comes similar to the composite-feature approach
+since it is based on co-occurrence counts of tar-
+get words with large joint-contexts. Therefore, we
+expect in this case to encounter the data sparse-
+ness problems mentioned in Section 1, where se-
+mantically similar word type pairs that share only
+few or no identical joint-contexts yield very low
+psim(b|a) estimates.
+To address the data sparseness challenge and
+adopt more advanced context modeling, we aim to
+use a more robust underlying probabilistic model
+0 for our scheme and denote the probabilities es-
+timated by this model by pθ(b|c) and pθ(c|a). We
+note that contrary to the count ratio model, given a
+robust model 0, such as a language model, pθ(b|c)
+and pθ(c|a) can be positive even if the target words
+b and a were not observed with the joint-context c
+in the learning corpus.
+While using pθ(b|c) and pθ(c|a) to estimate the
+value of psim(b|a) addresses the sparseness chal-
+lenge, it introduces a computational challenge.
+This is because estimating psim(b|a) would re-
+quire computing the sum over all of the joint-
+contexts in the learning corpus regardless of
+whether they were actually observed with either
+word type a or b. For that reason we choose a
+middle ground approach, estimating p(b|c) with
+0, while using a count ratio estimate for p(c|a),
+as follows. We denote the collection of all joint-
+contexts observed for the target word a in the
+learning corpus by Ca, where |Ca|= count(a, ∗).
+For example, Clike = {c1=“Mary’s son the
+school campus”, c2=“John’s daughter to read
+poetry”,...}. We note that this collection is a multi-
+set, where the same joint-context can appear more
+than once.
+We now approximate psim(b|a) from Equation
+(2) as follows:
+</bodyText>
+<equation confidence="0.971136666666667">
+ˆpsim
+θ (b|a) = � p#(c|a) · pθ(b|c) =
+c (3)
+</equation>
+<bodyText confidence="0.958988833333333">
+We note that this formulation still addresses
+sparseness of data by using a robust model, such as
+a language model, to estimate pθ(b|c). At the same
+time it requires our model to sum only over the
+joint-contexts in the collection Ca, since contexts
+not observed for a yield p#(c|a) = 0. Even so,
+since the size of these context collections grows
+linearly with the corpus size, considering all ob-
+served contexts may still present a scalability chal-
+lenge. Nevertheless, we expect our approximation
+ˆpsim
+θ (b|a) to converge with a reasonable sample
+</bodyText>
+<equation confidence="0.7114095">
+1 pθ(b|c)
+|Ca |c∈-
+</equation>
+<page confidence="0.991036">
+183
+</page>
+<bodyText confidence="0.997295538461538">
+size from a’s joint-contexts. Therefore, in order
+to bound computational complexity, we limit the
+size of the context collections used to train our
+model to a maximum of N by randomly sampling
+N entries from larger collections. In all our ex-
+periments we use N = 10, 000. Higher values
+of N yielded negligible performances differences.
+Overall we see that our model estimates ˆpsim
+θ (b|a)
+as the average probability predicted for b in (a
+large sample of) the contexts observed for a.
+Finally, we define our similarity measure for tar-
+get word types a and b:
+</bodyText>
+<equation confidence="0.980602">
+1
+simθ(a, b) = ˆpsim
+θ (b|a) , ˆpsim
+θ (a|b) (4)
+</equation>
+<bodyText confidence="0.9996736">
+As intended, this similarity measure promotes
+word pairs in which both b is likely in the con-
+texts of a and vice versa. Next, we describe a
+model which implements this scheme with an n-
+gram language model as a concrete choice for 0.
+</bodyText>
+<subsectionHeader confidence="0.6560535">
+3.3 Probabilistic similarity using language
+models
+</subsectionHeader>
+<bodyText confidence="0.999449846153846">
+In this work we focus on the word window context
+representation, which is the most common. We
+define a word window of order k around a target
+word as a window with up to k words to each side
+of the target word, not crossing sentence bound-
+aries. The word window does not include the tar-
+get word itself, but rather a ‘place-holder’ for it.
+Since word windows are sequences of words,
+probabilistic language models are a natural choice
+of a model 0 for estimating pθ(b|c). Language
+models assign likelihood estimates to sequences
+of words using approximation strategies. In
+this work we choose n-gram language models,
+aiming to capture syntagmatic properties of the
+word contexts, which are sensitive to word or-
+der. To approximate the probability of long se-
+quences of words, n-gram language models com-
+pute the product of the estimated probability of
+each word in the sequence conditioned on at most
+the n − 1 words preceding it. Furthermore, they
+use ‘discounting’ methods to improve the esti-
+mates of conditional probabilities when learning
+data is sparse. Specifically, in this work we use
+the Kneser-Ney n-gram model (Kneser and Ney,
+1995).
+We compute pθ(b|c) as follows:
+</bodyText>
+<equation confidence="0.9858685">
+pθ(b|c) = pθ(b,c)
+pθ(c)
+</equation>
+<bodyText confidence="0.99986475">
+where pθ(b, c) is the probability of the word se-
+quence comprising the word window c, in which
+the word b fills the place-holder. For instance, for
+c = “I drive my to work every” and b = car,
+pθ(b, c) is the estimated language model probabil-
+ity of “I drive my car to work every”. pθ(c) is the
+marginal probability of pθ(*, c) over all possible
+words in the vocabulary. 2
+</bodyText>
+<sectionHeader confidence="0.998371" genericHeader="method">
+4 Experimental Settings
+</sectionHeader>
+<bodyText confidence="0.99995275">
+Although sometimes used interchangeably, it is
+common to distinguish between semantic simi-
+larity and semantic relatedness (Budanitsky and
+Hirst, 2001; Agirre et al., 2009). Semantic simi-
+larity is used to describe ‘likeness’ relations, such
+as the relations between synonyms, hypernym-
+hyponyms, and co-hyponyms. Semantic relat-
+edness refers to a broader range of relations in-
+cluding also meronymy and various other asso-
+ciative relations as in ‘pencil-paper’ or ‘penguin-
+Antarctica’. In this work we focus on semantic
+similarity and evaluate all compared methods on
+several semantic similarity tasks.
+Following previous works (Lin, 1998; Riedl and
+Biemann, 2013) we use Wordnet to construct large
+scale gold standards for semantic similarity evalu-
+ations. We perform the evaluations separately for
+nouns and verbs to test our hypothesis that our
+model is particularly well-suited for verbs. To fur-
+ther evaluate our results on verbs we use the verb
+similarity test-set released by (Yang and Powers,
+2006), which contains pairs of verbs associated
+with semantic similarity scores based on human
+judgements.
+</bodyText>
+<sectionHeader confidence="0.538845" genericHeader="method">
+4.1 Compared methods
+</sectionHeader>
+<bodyText confidence="0.993274529411765">
+We compare our model with a traditional fea-
+ture vector model, the composite-feature model
+(Agirre et al., 2009), and the recent state-of-the-art
+word embedding models, CBOW and Skip-gram
+(Mikolov et al., 2013), all trained on the same
+learning corpus and evaluated on equal grounds.
+We denote the traditional feature vector baseline
+by IFV W−k, where IFV stands for “Independent-
+Feature Vector” and k is the order of the con-
+text word window considered. Similarly, we
+2Computing pθ(c) by summing over all possible place-
+holder filler words, as we did in this work, is computation-
+ally intensive. However, this can be done more efficiently
+by implementing customized versions of (at least some) n-
+gram language models with little computational overhead,
+e.g. by counting the learning corpus occurrences of n-gram
+templates, in which one of the elements matches any word.
+</bodyText>
+<page confidence="0.8215595">
+(5)
+184
+</page>
+<bodyText confidence="0.99984806122449">
+denote the composite-feature vector baseline by
+CFV W−k, where CFV stands for “Composite-
+Feature Vector”. This baseline constructs
+traditional-like feature vectors, but considers en-
+tire word windows around target word tokens as
+single features. In both of these baselines we use
+Cosine as the vector similarity measure, and posi-
+tive pointwise mutual information (PPMI) for the
+feature vector weights. PPMI is a well-known
+variant of pointwise mutual information (Church
+and Hanks, 1990), and the combination of Cosine
+with PPMI was shown to perform particularly well
+in (Bullinaria and Levy, 2007).
+We denote Mikolov’s CBOW and Skip-gram
+baseline models by CBOWW −k and SKIPW −k
+respectively, where k denotes again the order of
+the window used to train these models. We used
+Mikolov’s word2vec utility3 with standard param-
+eters (600 dimensions, negative sampling 15) to
+learn the word embeddings, and Cosine as the vec-
+tor similarity measure between them.
+As the underlying probabilistic language model
+for our method we use the Berkeley implementa-
+tion4 (Pauls and Klein, 2011) of the Kneser-Ney
+n-gram model with the default discount parame-
+ters. We denote our model PDSW −k, where PDS
+stands for “Probabilistic Distributional Similar-
+ity”, and k is the order of the context word win-
+dow. In order to avoid giving our model an un-
+fair advantage of tuning the order of the language
+model n as an additional parameter, we use a fixed
+n = k + 1. This means that the conditional prob-
+abilities that our n-gram model learns consider a
+scope of up to half the size of the window, which
+is the distance in words between the target word
+and either end of the window. We note that this
+is the smallest reasonable value for n, as smaller
+values effectively mean that there will be context
+words within the window that are more than n
+words away from the target word, and therefore
+will not be considered by our model.
+As learning corpus we used the first CD of
+the freely available Reuters RCV1 dataset (Rose
+et al., 2002). This learning corpus contains ap-
+proximately 100M words, which is comparable in
+size to the British National Corpus (BNC) (As-
+ton, 1997). We first applied part-of-speech tag-
+ging and lemmatization to all words. Then we
+represented each word w in the corpus as the pair
+</bodyText>
+<footnote confidence="0.999531">
+3http://code.google.com/p/word2vec
+4http://code.google.com/p/berkeleylm/
+</footnote>
+<bodyText confidence="0.999669476190477">
+[pos(w), lemma(w)], where pos(w) is a coarse-
+grained part-of-speech category and lemma(w) is
+the lemmatized form of w. Finally, we converted
+every pair [pos(w), lemma(w)] that occurs less
+than 100 times in the learning corpus to the pair
+[pos(w), ? ], which represents all rare words of the
+same part-of-speech tag. Ignoring rare words is a
+common practice used in order to clean up the cor-
+pus and reduce the vocabulary size (Gorman and
+Curran, 2006; Collobert and Weston, 2008).
+The above procedure resulted in a word vocabu-
+lary of 27K words. From this vocabulary we con-
+structed a target verb set with over 2.5K verbs by
+selecting all verbs that exist in Wordnet (Fellbaum,
+2010). We repeated this procedure to create a tar-
+get noun set with over 9K nouns. We used our
+learning corpus for all compared methods and had
+them assign a semantic similarity score for every
+pair of verbs and every pair of nouns in these tar-
+get sets. These scores were later used in all of our
+evaluations.
+</bodyText>
+<subsectionHeader confidence="0.994675">
+4.2 Wordnet evaluation
+</subsectionHeader>
+<bodyText confidence="0.999993321428572">
+There is a shortage of large scale test-sets for se-
+mantic similarity. Popular test-sets such as Word-
+Sim353 and the TOEFL synonyms test contain
+only 353 and 80 test items respectively, and there-
+fore make it difficult to obtain statistically signif-
+icant results. To automatically construct larger-
+scale test-sets for semantic similarity, we sampled
+large target word subsets from our corpus and used
+Wordnet as a gold standard for their semantically
+similar words, following related previous evalua-
+tions (Lin, 1998; Riedl and Biemann, 2013). We
+constructed two test-sets for our primary evalua-
+tion, one for verb similarity and another for noun
+similarity.
+To perform the verb similarity evaluation, we
+randomly sampled 1,000 verbs from the target
+verb set, where the probability of each verb to be
+sampled is set to be proportional to its frequency in
+the learning corpus. Next, for each sampled verb
+a we constructed a Wordnet-based gold standard
+set of semantically similar words. In this set each
+verb a&apos; is annotated as a ‘synonym’ of a if at least
+one of the senses of a&apos; is a synonym of any of the
+senses of a. In addition, each verb a&apos; is annotated
+as a ‘semantic neighbor’ of a if at least one of the
+senses of a&apos; is a synonym, co-hyponym, or a di-
+rect hypernym/hyponym of any of the senses of a.
+We note that by definition all verbs annotated as
+</bodyText>
+<page confidence="0.997932">
+185
+</page>
+<bodyText confidence="0.999977772727273">
+synonyms of a are annotated as semantic neigh-
+bors as well. Next, per each verb a and an evalu-
+ated method, we generated a ranked list of all other
+verbs, which was induced according to the similar-
+ity scores of this method.
+Finally, we evaluated the compared methods
+on two tasks, ‘synonym detection’ and ‘seman-
+tic neighbor detection’. In the synonym detection
+task we evaluated the methods’ ability to retrieve
+as much verbs annotated in our gold standard as
+‘synonyms’, in the top-n entries of their ranked
+lists. Similarly, we evaluated all methods on the
+‘semantic neighbors’ task. The synonym detec-
+tion task is designed to evaluate the ability of the
+compared methods to identify a more restrictive
+interpretation of semantic similarity, while the se-
+mantic neighbor detection task does the same for
+a somewhat broader interpretation.
+We repeated the above procedure for sam-
+pling 1,000 target nouns, constructing the noun
+Wordnet-based gold standards and evaluating on
+the two semantic similarity tasks.
+</bodyText>
+<subsectionHeader confidence="0.999236">
+4.3 VerbSim evaluation
+</subsectionHeader>
+<bodyText confidence="0.999857363636364">
+The publicly available VerbSim test-set contains
+130 verb pairs, each annotated with an average of
+6 human judgements of semantic similarity (Yang
+and Powers, 2006). We extracted a 107 pairs sub-
+set of this dataset for which all verbs are in our
+learning corpus. We followed works such as (Yang
+and Powers, 2007; Agirre et al., 2009) and com-
+pared the Spearman correlations between the verb-
+pair similarity scores assigned by the compared
+methods and the manually annotated scores in this
+dataset.
+</bodyText>
+<sectionHeader confidence="0.999933" genericHeader="evaluation">
+5 Results
+</sectionHeader>
+<bodyText confidence="0.999945123076923">
+For each method and verb a in our 1,000 tested
+verbs, we used the Wordnet gold standard to com-
+pute the precision at top-1, top-5 and top-10 of the
+ranked list generated by this method for a. We
+then computed mean precision values averaged
+over all verbs for each of the compared methods,
+denoted as P@1, P@5 and P@10. The detailed
+report of P@10 results is omitted for brevity, as
+they behave very similarly to P@5. We varied the
+context window order used by all methods to test
+its effect on the results. We measured the same
+metrics for nouns.
+The results of our Wordnet-based 1,000 verbs
+evaluation are presented in the upper part of Fig-
+ure 1. The results show significant improvement
+of our method over all baselines, with a margin
+between 2 to 3 points on the synonyms detection
+task and 5 to 7 points on the semantic neighbors
+detection task. Our best performing configura-
+tions are PDSW −3 and PDSW −4, outperform-
+ing all other baselines on both tasks and in all pre-
+cision categories. This difference is statistically
+significant at p &lt; 0.001 using a paired t-test in all
+cases except for the P@1 in the synonyms detec-
+tion task. Within the baselines, the composite fea-
+ture vector (CFV) performs somewhat better than
+the independent feature vector (IFV) baseline, and
+both methods perform best around window order
+of two, with gradual decline for larger windows.
+The word embedding baselines, CBOW and SKIP,
+perform comparably to the feature vector base-
+lines and to one another, with best performance
+achieved around window order of four.
+When gradually increasing the context window
+order within the range of up to 4 words, our PDS
+model shows improvement. This is in contrast to
+the feature vector baselines, whose performance
+declines for context window orders larger than 2.
+This suggests that our approach is able to take ad-
+vantage of larger contexts in comparison to stan-
+dard feature vector models. The decline in perfor-
+mance for the independent feature vector baseline
+(IFV) may be related to the fact that independent
+features farther away from the target word are gen-
+erally more loosely related to it. This seems con-
+sistent with previous works, where narrow win-
+dows of the order of two words performed well
+(Bullinaria and Levy, 2007; Agirre et al., 2009;
+Bruni et al., 2012) and in particular so when eval-
+uating semantic similarity rather than relatedness.
+On the other hand, the decline in performance for
+the composite feature vector baseline (CFV) may
+be attributed to the data sparseness phenomenon
+associated with larger windows. The performance
+of the word embedding baselines (CBOW and
+SKIP) starts declining very mildly only for win-
+dow orders larger than 4. This might be attributed
+to the fact that these models assign lower weights
+to context words the farther away they are from the
+center of the window.
+The results of our Wordnet-based 1,000 nouns
+evaluation are presented in the lower part of Fig-
+ure 1. These results are partly consistent with the
+results achieved for verbs, but with a couple of
+notable differences. First, though our model still
+</bodyText>
+<page confidence="0.997839">
+186
+</page>
+<figureCaption confidence="0.909487">
+Figure 1: Mean precision scores as a function of window order, obtained against the Wordnet-based gold
+standard, on both the verb and noun test-sets with both the synonyms and semantic neighbor detection
+tasks. “P@n” stands for precision in the top-n words of the ranked lists. Note that the Y-axis scale varies
+between graphs.
+</figureCaption>
+<bodyText confidence="0.9989544">
+outperforms or performs comparably to all other
+baselines, in this case the advantage of our model
+over the feature vector baselines is much more
+moderate and not statistically significant. Second,
+the word embedding baselines generally perform
+worst (with CBOW performing a little better than
+SKIP), and our model outperforms them in both
+P@5 and P@10 with a margin of around 2 points
+for the synonyms detection task and 3-4 points for
+the neighbor detection task, with statistical signif-
+icance at p &lt; 0.001.
+Next, to reconfirm the particular applicability
+of our model to verb similarity as apparent from
+the Wordnet evaluation, we performed the Verb-
+Sim evaluation and present the results in Table 1.
+We compared the Spearman correlation obtained
+for the top-performing window order of each of
+the evaluated methods in the Wordnet verbs eval-
+uation. We present two sets of results. The ‘all
+scores‘ results follow the standard evaluation pro-
+cedure, considering all similarity scores produced
+by each method. In the ‘top-100 scores‘ results,
+for each method we converted to zero the scores
+that it assigned to word pairs, where neither of
+the words is in the top-100 most similar words
+of the other. Then we performed the evaluation
+with these revised scores. This procedure focuses
+on evaluating the quality of the methods’ top-
+100 ranked word lists. The results show that our
+method outperforms all baselines by a nice mar-
+</bodyText>
+<page confidence="0.991954">
+187
+</page>
+<table confidence="0.999838">
+Method All scores top-100 scores
+PDS W-4 0.616 0.625
+CFV W-2 0.477 0.497
+IFV W-2 0.467 0.546
+SKIP W-4 0.469 0.512
+CBOW W-5 0.528 0.469
+</table>
+<tableCaption confidence="0.999441">
+Table 1: Spearman correlation values obtained for
+</tableCaption>
+<bodyText confidence="0.962700636363636">
+the VerbSim evaluation. Each method was evalu-
+ated with the optimal window order found in the
+Wordnet verbs evaluation.
+gin of more than 8 points with the score of 0.616
+and 0.625 for the ‘all scores‘ and ‘top-100 scores‘
+evaluations respectively. Though not statistically
+significant, due to the small test-set size, these re-
+sults support the ones from the Wordnet evalu-
+ation, suggesting that our model performs better
+than the baselines on measuring verb similarity.
+In summary, our results suggest that in lack of a
+robust context modeling scheme it is hard for dis-
+tributional similarity models to effectively lever-
+age larger word window contexts for measuring
+semantic similarity. It appears that this is some-
+what less of a concern when it comes to noun sim-
+ilarity, as the simple feature vector models reach
+near-optimal performance with small word win-
+dows of order 2, but it is an important factor for
+verb similarity. In his recent book, Hanks (2013)
+claims that contrary to nouns, computational mod-
+els that are to capture the meanings of verbs must
+consider their syntagmatic patterns in text. Our
+particularly good results on verb similarity sug-
+gest that our modeling approach is able to cap-
+ture such information in larger context windows.
+We further conjecture that the reason the word em-
+bedding baselines did not do as well as our model
+on verb similarity might be due to their particular
+choice of joint-context formulation, which is not
+sensitive to word order. However, these conjec-
+tures should be further validated with additional
+evaluations in future work.
+</bodyText>
+<sectionHeader confidence="0.999181" genericHeader="discussions">
+6 Future Directions
+</sectionHeader>
+<bodyText confidence="0.999794">
+In this paper we investigated the potential for im-
+proving distributional similarity models by model-
+ing jointly the occurrence of several features under
+the same context. We evaluated several previous
+works with different context modeling approaches
+and suggest that the type of the underlying con-
+text modeling may have significant effect on the
+performance of the semantic model. Further-
+more, we introduced a generic probabilistic distri-
+butional similarity approach, which can leverage
+the power of established probabilistic language
+models to effectively model joint-contexts for the
+purpose of measuring semantic similarity. Our
+concrete model utilizing n-gram language models
+outperforms several competitive baselines on se-
+mantic similarity tasks, and appears to be partic-
+ularly well-suited for verbs. In the remainder of
+this section we describe some potential future di-
+rections that can be pursued.
+First, the performance of our generic scheme
+is largely inherited from the nature of its under-
+lying language model. Therefore, we see much
+potential in exploring the use of other types of
+language models, such as class-based (Brown et
+al., 1992), syntax-based (Pauls and Klein, 2012)
+or hybrid (Tan et al., 2012). Furthermore, a sim-
+ilar approach to ours could be attempted in word
+embedding models. For instance, our syntagmatic
+joint-context modeling approach could be investi-
+gated by word embedding models to generate bet-
+ter embeddings for verbs.
+Another direction relates to the well known ten-
+dency of many words, and particularly verbs, to
+assume different meanings (or senses) under dif-
+ferent contexts. To address this phenomenon con-
+text sensitive similarity and inference models have
+been proposed (Dinu and Lapata, 2010; Melamud
+et al., 2013). Similarly to many semantic similar-
+ity models, our current model aggregates informa-
+tion from all observed contexts of a target word
+type regardless of its different senses. However,
+we believe that our approach is well suited to ad-
+dress context sensitive similarity with proper en-
+hancements, as it considers joint-contexts that can
+more accurately disambiguate the meaning of tar-
+get words. As an example, it is possible to con-
+sider the likelihood of word b to occur in a subset
+of the contexts observed for word a, which is bi-
+ased towards a particular sense of a.
+Finally, we note that our model is not a classic
+vector space model and therefore common vec-
+tor composition approaches (Mitchell and Lap-
+ata, 2008) cannot be directly applied to it. In-
+stead, other methods, such as similarity of com-
+positions (Turney, 2012), should be investigated to
+extend our approach for measuring similarity be-
+tween phrases.
+</bodyText>
+<page confidence="0.99794">
+188
+</page>
+<sectionHeader confidence="0.998316" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.985601375">
+This work was partially supported by the Israeli
+Ministry of Science and Technology grant 3-8705,
+the Israel Science Foundation grant 880/12, the
+European Community’s Seventh Framework Pro-
+gramme (FP7/2007-2013) under grant agreement
+no. 287923 (EXCITEMENT) and the Scien-
+tific and Technical Research Council of Turkey
+(T ¨UB˙ITAK, Grant Number 112E277).
+</bodyText>
+<sectionHeader confidence="0.998116" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999644197802198">
+Eneko Agirre, Enrique Alfonseca, Keith Hall, Jana
+Kravalova, Marius Pas¸ca, and Aitor Soroa. 2009.
+A study on similarity and relatedness using distribu-
+tional and wordnet-based approaches. In Proceed-
+ings of NAACL. Association for Computational Lin-
+guistics.
+Guy Aston. 1997. The BNC Handbook Exploring the
+British National Corpus with SARA Guy Aston and
+Lou Burnard.
+Yoshua Bengio, Rjean Ducharme, Pascal Vincent, and
+Christian Jauvin. 2003. A neural probabilistic lan-
+guage model. Journal of Machine Learning Re-
+search, 3:1137–1155.
+Peter F. Brown, Peter V. Desouza, Robert L. Mer-
+cer, Vincent J. Della Pietra, and Jenifer C. Lai.
+1992. Class-based n-gram models of natural lan-
+guage. Computational linguistics, 18(4):467–479.
+Elia Bruni, Gemma Boleda, Marco Baroni, and Nam-
+Khanh Tran. 2012. Distributional semantics in tech-
+nicolor. In Proceedings of ACL.
+Alexander Budanitsky and Graeme Hirst. 2001.
+Semantic distance in wordnet: An experimental,
+application-oriented evaluation of five measures. In
+Workshop on WordNet and Other Lexical Resources.
+John A. Bullinaria and Joseph P. Levy. 2007. Ex-
+tracting semantic representations from word co-
+occurrence statistics: A computational study. Be-
+havior Research Methods, 39(3):510–526.
+Kenneth W. Church and Patrick Hanks. 1990. Word
+association norms, mutual information, and lexicog-
+raphy. Computational Linguistics, 16(1):22–29.
+Ronan Collobert and Jason Weston. 2008. A unified
+architecture for natural language processing: Deep
+neural networks with multitask learning. In Pro-
+ceedings of the 25th international conference on
+Machine learning, pages 160–167. ACM.
+Georgiana Dinu and Mirella Lapata. 2010. Measuring
+distributional similarity in context. In Proceedings
+of EMNLP.
+Christiane Fellbaum. 2010. WordNet. Springer.
+Lev Finkelstein, Evgeniy Gabrilovich, Yossi Matias,
+Ehud Rivlin, Zach Solan, Gadi Wolfman, and Ey-
+tan Ruppin. 2001. Placing search in context: The
+concept revisited. In Proceedings of the 10th inter-
+national conference on World Wide Web. ACM.
+James Gorman and James R. Curran. 2006. Scaling
+distributional similarity to large corpora. In Pro-
+ceedings of ACL.
+Patrick Hanks. 2013. Lexical Analysis: Norms and
+Exploitations. Mit Press.
+Reinhard Kneser and Hermann Ney. 1995. Improved
+backing-off for m-gram language modeling. In In-
+ternational Conference on Acoustics, Speech, and
+Signal Processing. IEEE.
+Beth Levin. 1993. English verb classes and alter-
+nations: A preliminary investigation. University of
+Chicago press.
+Dekang Lin. 1998. Automatic retrieval and clustering
+of similar words. In Proceedings of COLING-ACL.
+Kevin Lund and Curt Burgess. 1996. Producing
+high-dimensional semantic spaces from lexical co-
+occurrence. Behavior Research Methods, Instru-
+ments, &amp; Computers.
+Oren Melamud, Jonathan Berant, Ido Dagan, Jacob
+Goldberger, and Idan Szpektor. 2013. A two level
+model for context sensitive inference rules. In Pro-
+ceedings of ACL.
+Tomas Mikolov, Martin Karafi´at, Lukas Burget, Jan
+Cernock`y, and Sanjeev Khudanpur. 2010. Recur-
+rent neural network based language model. In IN-
+TERSPEECH.
+Tomas Mikolov, Kai Chen, Greg Corrado, and Jef-
+frey Dean. 2013. Efficient estimation of word
+representations in vector space. arXiv preprint
+arXiv:1301.3781.
+Jeff Mitchell and Mirella Lapata. 2008. Vector-based
+models of semantic composition. In Proceedings of
+ACL.
+Adam Pauls and Dan Klein. 2011. Faster and Smaller
+N-Gram Language Models. In Proceedings ofACL.
+Adam Pauls and Dan Klein. 2012. Large-scale syntac-
+tic language modeling with treelets. In Proceedings
+ofACL.
+Martin Riedl and Chris Biemann. 2013. Scaling to
+largeˆ3 data: An efficient and effective method to
+compute distributional thesauri. In Proceedings of
+EMNLP.
+Tony Rose, Mark Stevenson, and Miles Whitehead.
+2002. The Reuters Corpus Volume 1-from Yester-
+day’s News to Tomorrow’s Language Resources. In
+LREC.
+</reference>
+<page confidence="0.988">
+189
+</page>
+<reference confidence="0.998214433333333">
+Herbert Rubenstein and John B. Goodenough. 1965.
+Contextual correlates of synonymy. Communica-
+tions of the ACM.
+Maria Ruiz-Casado, Enrique Alfonseca, and Pablo
+Castells. 2005. Using context-window overlapping
+in synonym discovery and ontology extension. Pro-
+ceedings of RANLP.
+Ming Tan, Wenli Zhou, Lei Zheng, and Shaojun Wang.
+2012. A scalable distributed syntactic, semantic,
+and lexical language model. Computational Lin-
+guistics, 38(3):631–671.
+Peter D. Turney, Patrick Pantel, et al. 2010. From fre-
+quency to meaning: Vector space models of seman-
+tics. Journal of artificial intelligence research.
+Peter D. Turney. 2012. Domain and function: A
+dual-space model of semantic relations and compo-
+sitions. Journal of Artificial Intelligence Researc,
+44(1):533–585, May.
+Dongqiang Yang and David M. W. Powers. 2006. Verb
+similarity on the taxonomy of wordnet. In the 3rd
+International WordNet Conference (GWC-06).
+Dongqiang Yang and David M. W. Powers. 2007.
+An empirical investigation into grammatically con-
+strained contexts in predicting distributional similar-
+ity. In Australasian Language Technology Workshop
+2007, pages 117–124.
+Mehmet Ali Yatbaz, Enis Sert, and Deniz Yuret. 2012.
+Learning syntactic categories using paradigmatic
+representations of word context. In Proceedings of
+EMNLP.
+</reference>
+<page confidence="0.997826">
+190
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.351814">
+<title confidence="0.999142">Probabilistic Modeling of Joint-context in Distributional Similarity</title>
+<author confidence="0.993974">Ido Jacob Idan Deniz</author>
+<affiliation confidence="0.772611">Science Department, Bar-Ilan of Engineering, Bar-Ilan Research University</affiliation>
+<email confidence="0.924895">idan@yahoo-inc.com,dyuret@ku.edu.tr</email>
+<abstract confidence="0.997239608695652">Most traditional distributional similarity models fail to capture syntagmatic patterns that group together multiple word features within the same joint context. In this work we introduce a novel generic distributional similarity scheme under which the power of probabilistic models can be leveraged to effectively model joint contexts. Based on this scheme, we implement a concrete which utilizes probabilistic language models. Our evaluations suggest that this model is particularly wellsuited for measuring similarity for verbs, which are known to exhibit richer syntagmatic patterns, while maintaining comparable or better performance with respect to competitive baselines for nouns. Following this, we propose our scheme as a framework for future semantic similarity models leveraging the substantial body of work that exists in probabilistic language modeling.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Eneko Agirre</author>
+<author>Enrique Alfonseca</author>
+<author>Keith Hall</author>
+<author>Jana Kravalova</author>
+<author>Marius Pas¸ca</author>
+<author>Aitor Soroa</author>
+</authors>
+<title>A study on similarity and relatedness using distributional and wordnet-based approaches.</title>
+<date>2009</date>
+<booktitle>In Proceedings of NAACL. Association for Computational Linguistics.</booktitle>
+<marker>Agirre, Alfonseca, Hall, Kravalova, Pas¸ca, Soroa, 2009</marker>
+<rawString>Eneko Agirre, Enrique Alfonseca, Keith Hall, Jana Kravalova, Marius Pas¸ca, and Aitor Soroa. 2009. A study on similarity and relatedness using distributional and wordnet-based approaches. In Proceedings of NAACL. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Guy Aston</author>
+</authors>
+<date>1997</date>
+<booktitle>The BNC Handbook Exploring the British National Corpus with SARA Guy Aston</booktitle>
+<contexts>
+<context position="19778" citStr="Aston, 1997" startWordPosition="3179" endWordPosition="3181">of up to half the size of the window, which is the distance in words between the target word and either end of the window. We note that this is the smallest reasonable value for n, as smaller values effectively mean that there will be context words within the window that are more than n words away from the target word, and therefore will not be considered by our model. As learning corpus we used the first CD of the freely available Reuters RCV1 dataset (Rose et al., 2002). This learning corpus contains approximately 100M words, which is comparable in size to the British National Corpus (BNC) (Aston, 1997). We first applied part-of-speech tagging and lemmatization to all words. Then we represented each word w in the corpus as the pair 3http://code.google.com/p/word2vec 4http://code.google.com/p/berkeleylm/ [pos(w), lemma(w)], where pos(w) is a coarsegrained part-of-speech category and lemma(w) is the lemmatized form of w. Finally, we converted every pair [pos(w), lemma(w)] that occurs less than 100 times in the learning corpus to the pair [pos(w), ? ], which represents all rare words of the same part-of-speech tag. Ignoring rare words is a common practice used in order to clean up the corpus an</context>
+</contexts>
+<marker>Aston, 1997</marker>
+<rawString>Guy Aston. 1997. The BNC Handbook Exploring the British National Corpus with SARA Guy Aston and Lou Burnard.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yoshua Bengio</author>
+<author>Rjean Ducharme</author>
+<author>Pascal Vincent</author>
+<author>Christian Jauvin</author>
+</authors>
+<title>A neural probabilistic language model.</title>
+<date>2003</date>
+<journal>Journal of Machine Learning Research,</journal>
+<pages>3--1137</pages>
+<contexts>
+<context position="7520" citStr="Bengio et al., 2003" startWordPosition="1142" endWordPosition="1145">ge 1.6 Teraword learning corpus. They found that this approach outperforms the traditional independent feature vector approach on a subset of the WordSim353 testset (Finkelstein et al., 2001), which is designed to test the more restricted relation of semantic similarity (to be distinguished from looser semantic relatedness). We are not aware of additional works following this approach, of using entire word windows as features. Neural networks have been used to train language models that are based on low dimensional continuous vector representations for word types, also called word embeddings (Bengio et al., 2003; Mikolov et al., 2010). Although originally designed to improve language models, later works have shown that such word embeddings are useful in various other NLP tasks, including measuring semantic similarity with vector arithmetics (Collobert and Weston, 2008; Mikolov et al., 2013). Specifically, the recent work by Mikolov et al. (2013) introduced the CBOW and Skip-gram models, achieving state-of-the-art results in detecting semantic analogies. The CBOW model is trained to predict a target word given the set of context words in a word window around it, where this context is considered jointl</context>
+</contexts>
+<marker>Bengio, Ducharme, Vincent, Jauvin, 2003</marker>
+<rawString>Yoshua Bengio, Rjean Ducharme, Pascal Vincent, and Christian Jauvin. 2003. A neural probabilistic language model. Journal of Machine Learning Research, 3:1137–1155.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Peter F Brown</author>
+<author>Peter V Desouza</author>
+<author>Robert L Mercer</author>
+<author>Vincent J Della Pietra</author>
+<author>Jenifer C Lai</author>
+</authors>
+<title>Class-based n-gram models of natural language.</title>
+<date>1992</date>
+<journal>Computational linguistics,</journal>
+<volume>18</volume>
+<issue>4</issue>
+<contexts>
+<context position="6017" citStr="Brown et al., 1992" startWordPosition="905" endWordPosition="908">n particular are correlated with their syntagmatic properties (Levin, 1993; Hanks, 2013). This provides grounds to expect that such model has the potential to excel for verbs. To capture syntagmatic patterns, we choose in this work standard n-gram language models as the basis for a concrete model implementing our scheme. This choice is inspired by recent work on learning syntactic categories (Yatbaz et al., 2012), which successfully utilized such language models to represent word window contexts of target words. However, we note that other richer types of language models, such as class-based (Brown et al., 1992) or hybrid (Tan et al., 2012), can be seamlessly integrated into our scheme. Our evaluations suggest that our model is indeed particularly advantageous for measuring semantic similarity for verbs, while maintaining comparable or better performance with respect to competitive baselines for nouns. 2 Background In this section we provide additional details regarding previous works that we later use as baselines in our evaluations. To implement the composite-feature approach, Ruiz-Casado et al. (2005) used a Web search engine to compare entire window contexts of target word types. For example, a s</context>
+<context position="31639" citStr="Brown et al., 1992" startWordPosition="5142" endWordPosition="5145">age models to effectively model joint-contexts for the purpose of measuring semantic similarity. Our concrete model utilizing n-gram language models outperforms several competitive baselines on semantic similarity tasks, and appears to be particularly well-suited for verbs. In the remainder of this section we describe some potential future directions that can be pursued. First, the performance of our generic scheme is largely inherited from the nature of its underlying language model. Therefore, we see much potential in exploring the use of other types of language models, such as class-based (Brown et al., 1992), syntax-based (Pauls and Klein, 2012) or hybrid (Tan et al., 2012). Furthermore, a similar approach to ours could be attempted in word embedding models. For instance, our syntagmatic joint-context modeling approach could be investigated by word embedding models to generate better embeddings for verbs. Another direction relates to the well known tendency of many words, and particularly verbs, to assume different meanings (or senses) under different contexts. To address this phenomenon context sensitive similarity and inference models have been proposed (Dinu and Lapata, 2010; Melamud et al., 2</context>
+</contexts>
+<marker>Brown, Desouza, Mercer, Pietra, Lai, 1992</marker>
+<rawString>Peter F. Brown, Peter V. Desouza, Robert L. Mercer, Vincent J. Della Pietra, and Jenifer C. Lai. 1992. Class-based n-gram models of natural language. Computational linguistics, 18(4):467–479.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Elia Bruni</author>
+<author>Gemma Boleda</author>
+<author>Marco Baroni</author>
+<author>NamKhanh Tran</author>
+</authors>
+<title>Distributional semantics in technicolor.</title>
+<date>2012</date>
+<booktitle>In Proceedings of ACL.</booktitle>
+<contexts>
+<context position="26166" citStr="Bruni et al., 2012" startWordPosition="4258" endWordPosition="4261"> in contrast to the feature vector baselines, whose performance declines for context window orders larger than 2. This suggests that our approach is able to take advantage of larger contexts in comparison to standard feature vector models. The decline in performance for the independent feature vector baseline (IFV) may be related to the fact that independent features farther away from the target word are generally more loosely related to it. This seems consistent with previous works, where narrow windows of the order of two words performed well (Bullinaria and Levy, 2007; Agirre et al., 2009; Bruni et al., 2012) and in particular so when evaluating semantic similarity rather than relatedness. On the other hand, the decline in performance for the composite feature vector baseline (CFV) may be attributed to the data sparseness phenomenon associated with larger windows. The performance of the word embedding baselines (CBOW and SKIP) starts declining very mildly only for window orders larger than 4. This might be attributed to the fact that these models assign lower weights to context words the farther away they are from the center of the window. The results of our Wordnet-based 1,000 nouns evaluation ar</context>
+</contexts>
+<marker>Bruni, Boleda, Baroni, Tran, 2012</marker>
+<rawString>Elia Bruni, Gemma Boleda, Marco Baroni, and NamKhanh Tran. 2012. Distributional semantics in technicolor. In Proceedings of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alexander Budanitsky</author>
+<author>Graeme Hirst</author>
+</authors>
+<title>Semantic distance in wordnet: An experimental, application-oriented evaluation of five measures.</title>
+<date>2001</date>
+<booktitle>In Workshop on WordNet and Other Lexical Resources.</booktitle>
+<contexts>
+<context position="15792" citStr="Budanitsky and Hirst, 2001" startWordPosition="2528" endWordPosition="2531">del (Kneser and Ney, 1995). We compute pθ(b|c) as follows: pθ(b|c) = pθ(b,c) pθ(c) where pθ(b, c) is the probability of the word sequence comprising the word window c, in which the word b fills the place-holder. For instance, for c = “I drive my to work every” and b = car, pθ(b, c) is the estimated language model probability of “I drive my car to work every”. pθ(c) is the marginal probability of pθ(*, c) over all possible words in the vocabulary. 2 4 Experimental Settings Although sometimes used interchangeably, it is common to distinguish between semantic similarity and semantic relatedness (Budanitsky and Hirst, 2001; Agirre et al., 2009). Semantic similarity is used to describe ‘likeness’ relations, such as the relations between synonyms, hypernymhyponyms, and co-hyponyms. Semantic relatedness refers to a broader range of relations including also meronymy and various other associative relations as in ‘pencil-paper’ or ‘penguinAntarctica’. In this work we focus on semantic similarity and evaluate all compared methods on several semantic similarity tasks. Following previous works (Lin, 1998; Riedl and Biemann, 2013) we use Wordnet to construct large scale gold standards for semantic similarity evaluations.</context>
+</contexts>
+<marker>Budanitsky, Hirst, 2001</marker>
+<rawString>Alexander Budanitsky and Graeme Hirst. 2001. Semantic distance in wordnet: An experimental, application-oriented evaluation of five measures. In Workshop on WordNet and Other Lexical Resources.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>John A Bullinaria</author>
+<author>Joseph P Levy</author>
+</authors>
+<title>Extracting semantic representations from word cooccurrence statistics: A computational study.</title>
+<date>2007</date>
+<journal>Behavior Research Methods,</journal>
+<volume>39</volume>
+<issue>3</issue>
+<contexts>
+<context position="18232" citStr="Bullinaria and Levy, 2007" startWordPosition="2906" endWordPosition="2909">nts matches any word. (5) 184 denote the composite-feature vector baseline by CFV W−k, where CFV stands for “CompositeFeature Vector”. This baseline constructs traditional-like feature vectors, but considers entire word windows around target word tokens as single features. In both of these baselines we use Cosine as the vector similarity measure, and positive pointwise mutual information (PPMI) for the feature vector weights. PPMI is a well-known variant of pointwise mutual information (Church and Hanks, 1990), and the combination of Cosine with PPMI was shown to perform particularly well in (Bullinaria and Levy, 2007). We denote Mikolov’s CBOW and Skip-gram baseline models by CBOWW −k and SKIPW −k respectively, where k denotes again the order of the window used to train these models. We used Mikolov’s word2vec utility3 with standard parameters (600 dimensions, negative sampling 15) to learn the word embeddings, and Cosine as the vector similarity measure between them. As the underlying probabilistic language model for our method we use the Berkeley implementation4 (Pauls and Klein, 2011) of the Kneser-Ney n-gram model with the default discount parameters. We denote our model PDSW −k, where PDS stands for “</context>
+<context position="26124" citStr="Bullinaria and Levy, 2007" startWordPosition="4250" endWordPosition="4253"> words, our PDS model shows improvement. This is in contrast to the feature vector baselines, whose performance declines for context window orders larger than 2. This suggests that our approach is able to take advantage of larger contexts in comparison to standard feature vector models. The decline in performance for the independent feature vector baseline (IFV) may be related to the fact that independent features farther away from the target word are generally more loosely related to it. This seems consistent with previous works, where narrow windows of the order of two words performed well (Bullinaria and Levy, 2007; Agirre et al., 2009; Bruni et al., 2012) and in particular so when evaluating semantic similarity rather than relatedness. On the other hand, the decline in performance for the composite feature vector baseline (CFV) may be attributed to the data sparseness phenomenon associated with larger windows. The performance of the word embedding baselines (CBOW and SKIP) starts declining very mildly only for window orders larger than 4. This might be attributed to the fact that these models assign lower weights to context words the farther away they are from the center of the window. The results of o</context>
+</contexts>
+<marker>Bullinaria, Levy, 2007</marker>
+<rawString>John A. Bullinaria and Joseph P. Levy. 2007. Extracting semantic representations from word cooccurrence statistics: A computational study. Behavior Research Methods, 39(3):510–526.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kenneth W Church</author>
+<author>Patrick Hanks</author>
+</authors>
+<title>Word association norms, mutual information, and lexicography.</title>
+<date>1990</date>
+<journal>Computational Linguistics,</journal>
+<volume>16</volume>
+<issue>1</issue>
+<contexts>
+<context position="18121" citStr="Church and Hanks, 1990" startWordPosition="2888" endWordPosition="2891">al overhead, e.g. by counting the learning corpus occurrences of n-gram templates, in which one of the elements matches any word. (5) 184 denote the composite-feature vector baseline by CFV W−k, where CFV stands for “CompositeFeature Vector”. This baseline constructs traditional-like feature vectors, but considers entire word windows around target word tokens as single features. In both of these baselines we use Cosine as the vector similarity measure, and positive pointwise mutual information (PPMI) for the feature vector weights. PPMI is a well-known variant of pointwise mutual information (Church and Hanks, 1990), and the combination of Cosine with PPMI was shown to perform particularly well in (Bullinaria and Levy, 2007). We denote Mikolov’s CBOW and Skip-gram baseline models by CBOWW −k and SKIPW −k respectively, where k denotes again the order of the window used to train these models. We used Mikolov’s word2vec utility3 with standard parameters (600 dimensions, negative sampling 15) to learn the word embeddings, and Cosine as the vector similarity measure between them. As the underlying probabilistic language model for our method we use the Berkeley implementation4 (Pauls and Klein, 2011) of the Kn</context>
+</contexts>
+<marker>Church, Hanks, 1990</marker>
+<rawString>Kenneth W. Church and Patrick Hanks. 1990. Word association norms, mutual information, and lexicography. Computational Linguistics, 16(1):22–29.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ronan Collobert</author>
+<author>Jason Weston</author>
+</authors>
+<title>A unified architecture for natural language processing: Deep neural networks with multitask learning.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 25th international conference on Machine learning,</booktitle>
+<pages>160--167</pages>
+<publisher>ACM.</publisher>
+<contexts>
+<context position="3393" citStr="Collobert and Weston, 2008" startWordPosition="488" endWordPosition="492">texts as features, while keeping the same computational vector-based model. Although showing interesting potential, this approach suffers from a very high-dimensional feature space resulting in data sparseness problems. Therefore, it requires exceptionally large learning corpora to consider large windows effectively. A parallel line of work adopted richer context representations as well, with a different computational model. These works utilized neural networks to learn low dimensional continuous vector representations for word types, which were found useful for measuring semantic similarity (Collobert and Weston, 2008; Mikolov et al., 2013). These vectors are trained by optimizing the prediction of target words given their observed contexts (or variants of this objective). Most of these models consider each observed context as a joint set of context words within a word window. In this work we follow the motivation in the previous works above to exploit richer joint-context representations for modeling distributional similarity. Under this approach the set of features in the context of each target word token is considered to jointly reflect on the meaning of the target word type. To further facilitate this </context>
+<context position="7781" citStr="Collobert and Weston, 2008" startWordPosition="1180" endWordPosition="1184">antic similarity (to be distinguished from looser semantic relatedness). We are not aware of additional works following this approach, of using entire word windows as features. Neural networks have been used to train language models that are based on low dimensional continuous vector representations for word types, also called word embeddings (Bengio et al., 2003; Mikolov et al., 2010). Although originally designed to improve language models, later works have shown that such word embeddings are useful in various other NLP tasks, including measuring semantic similarity with vector arithmetics (Collobert and Weston, 2008; Mikolov et al., 2013). Specifically, the recent work by Mikolov et al. (2013) introduced the CBOW and Skip-gram models, achieving state-of-the-art results in detecting semantic analogies. The CBOW model is trained to predict a target word given the set of context words in a word window around it, where this context is considered jointly as a bag-of-words. The Skip-gram model is trained to predict each of the context words independently given the target word. 3 Probabilistic Distributional Similarity 3.1 Motivation In this section we briefly demonstrate the benefits of considering joint-conte</context>
+<context position="20460" citStr="Collobert and Weston, 2008" startWordPosition="3283" endWordPosition="3286">tion to all words. Then we represented each word w in the corpus as the pair 3http://code.google.com/p/word2vec 4http://code.google.com/p/berkeleylm/ [pos(w), lemma(w)], where pos(w) is a coarsegrained part-of-speech category and lemma(w) is the lemmatized form of w. Finally, we converted every pair [pos(w), lemma(w)] that occurs less than 100 times in the learning corpus to the pair [pos(w), ? ], which represents all rare words of the same part-of-speech tag. Ignoring rare words is a common practice used in order to clean up the corpus and reduce the vocabulary size (Gorman and Curran, 2006; Collobert and Weston, 2008). The above procedure resulted in a word vocabulary of 27K words. From this vocabulary we constructed a target verb set with over 2.5K verbs by selecting all verbs that exist in Wordnet (Fellbaum, 2010). We repeated this procedure to create a target noun set with over 9K nouns. We used our learning corpus for all compared methods and had them assign a semantic similarity score for every pair of verbs and every pair of nouns in these target sets. These scores were later used in all of our evaluations. 4.2 Wordnet evaluation There is a shortage of large scale test-sets for semantic similarity. P</context>
+</contexts>
+<marker>Collobert, Weston, 2008</marker>
+<rawString>Ronan Collobert and Jason Weston. 2008. A unified architecture for natural language processing: Deep neural networks with multitask learning. In Proceedings of the 25th international conference on Machine learning, pages 160–167. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Georgiana Dinu</author>
+<author>Mirella Lapata</author>
+</authors>
+<title>Measuring distributional similarity in context.</title>
+<date>2010</date>
+<booktitle>In Proceedings of EMNLP.</booktitle>
+<contexts>
+<context position="32220" citStr="Dinu and Lapata, 2010" startWordPosition="5232" endWordPosition="5235">such as class-based (Brown et al., 1992), syntax-based (Pauls and Klein, 2012) or hybrid (Tan et al., 2012). Furthermore, a similar approach to ours could be attempted in word embedding models. For instance, our syntagmatic joint-context modeling approach could be investigated by word embedding models to generate better embeddings for verbs. Another direction relates to the well known tendency of many words, and particularly verbs, to assume different meanings (or senses) under different contexts. To address this phenomenon context sensitive similarity and inference models have been proposed (Dinu and Lapata, 2010; Melamud et al., 2013). Similarly to many semantic similarity models, our current model aggregates information from all observed contexts of a target word type regardless of its different senses. However, we believe that our approach is well suited to address context sensitive similarity with proper enhancements, as it considers joint-contexts that can more accurately disambiguate the meaning of target words. As an example, it is possible to consider the likelihood of word b to occur in a subset of the contexts observed for word a, which is biased towards a particular sense of a. Finally, we </context>
+</contexts>
+<marker>Dinu, Lapata, 2010</marker>
+<rawString>Georgiana Dinu and Mirella Lapata. 2010. Measuring distributional similarity in context. In Proceedings of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Christiane Fellbaum</author>
+</authors>
+<date>2010</date>
+<publisher>WordNet. Springer.</publisher>
+<contexts>
+<context position="20662" citStr="Fellbaum, 2010" startWordPosition="3321" endWordPosition="3322">ch category and lemma(w) is the lemmatized form of w. Finally, we converted every pair [pos(w), lemma(w)] that occurs less than 100 times in the learning corpus to the pair [pos(w), ? ], which represents all rare words of the same part-of-speech tag. Ignoring rare words is a common practice used in order to clean up the corpus and reduce the vocabulary size (Gorman and Curran, 2006; Collobert and Weston, 2008). The above procedure resulted in a word vocabulary of 27K words. From this vocabulary we constructed a target verb set with over 2.5K verbs by selecting all verbs that exist in Wordnet (Fellbaum, 2010). We repeated this procedure to create a target noun set with over 9K nouns. We used our learning corpus for all compared methods and had them assign a semantic similarity score for every pair of verbs and every pair of nouns in these target sets. These scores were later used in all of our evaluations. 4.2 Wordnet evaluation There is a shortage of large scale test-sets for semantic similarity. Popular test-sets such as WordSim353 and the TOEFL synonyms test contain only 353 and 80 test items respectively, and therefore make it difficult to obtain statistically significant results. To automatic</context>
+</contexts>
+<marker>Fellbaum, 2010</marker>
+<rawString>Christiane Fellbaum. 2010. WordNet. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Lev Finkelstein</author>
+<author>Evgeniy Gabrilovich</author>
+<author>Yossi Matias</author>
+<author>Ehud Rivlin</author>
+<author>Zach Solan</author>
+<author>Gadi Wolfman</author>
+<author>Eytan Ruppin</author>
+</authors>
+<title>Placing search in context: The concept revisited.</title>
+<date>2001</date>
+<booktitle>In Proceedings of the 10th international conference on World Wide Web.</booktitle>
+<publisher>ACM.</publisher>
+<contexts>
+<context position="7092" citStr="Finkelstein et al., 2001" startWordPosition="1073" endWordPosition="1076">omposite-feature approach, Ruiz-Casado et al. (2005) used a Web search engine to compare entire window contexts of target word types. For example, a single feature that could be retrieved this way for the target word like is “Children cookies and milk”. They showed good results on detecting synonyms in the 80 multiple-choice questions TOEFL test. Agirre et al. (2009) constructed composite-feature vectors using an exceptionally large 1.6 Teraword learning corpus. They found that this approach outperforms the traditional independent feature vector approach on a subset of the WordSim353 testset (Finkelstein et al., 2001), which is designed to test the more restricted relation of semantic similarity (to be distinguished from looser semantic relatedness). We are not aware of additional works following this approach, of using entire word windows as features. Neural networks have been used to train language models that are based on low dimensional continuous vector representations for word types, also called word embeddings (Bengio et al., 2003; Mikolov et al., 2010). Although originally designed to improve language models, later works have shown that such word embeddings are useful in various other NLP tasks, in</context>
+</contexts>
+<marker>Finkelstein, Gabrilovich, Matias, Rivlin, Solan, Wolfman, Ruppin, 2001</marker>
+<rawString>Lev Finkelstein, Evgeniy Gabrilovich, Yossi Matias, Ehud Rivlin, Zach Solan, Gadi Wolfman, and Eytan Ruppin. 2001. Placing search in context: The concept revisited. In Proceedings of the 10th international conference on World Wide Web. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James Gorman</author>
+<author>James R Curran</author>
+</authors>
+<title>Scaling distributional similarity to large corpora.</title>
+<date>2006</date>
+<booktitle>In Proceedings of ACL.</booktitle>
+<contexts>
+<context position="20431" citStr="Gorman and Curran, 2006" startWordPosition="3279" endWordPosition="3282">ech tagging and lemmatization to all words. Then we represented each word w in the corpus as the pair 3http://code.google.com/p/word2vec 4http://code.google.com/p/berkeleylm/ [pos(w), lemma(w)], where pos(w) is a coarsegrained part-of-speech category and lemma(w) is the lemmatized form of w. Finally, we converted every pair [pos(w), lemma(w)] that occurs less than 100 times in the learning corpus to the pair [pos(w), ? ], which represents all rare words of the same part-of-speech tag. Ignoring rare words is a common practice used in order to clean up the corpus and reduce the vocabulary size (Gorman and Curran, 2006; Collobert and Weston, 2008). The above procedure resulted in a word vocabulary of 27K words. From this vocabulary we constructed a target verb set with over 2.5K verbs by selecting all verbs that exist in Wordnet (Fellbaum, 2010). We repeated this procedure to create a target noun set with over 9K nouns. We used our learning corpus for all compared methods and had them assign a semantic similarity score for every pair of verbs and every pair of nouns in these target sets. These scores were later used in all of our evaluations. 4.2 Wordnet evaluation There is a shortage of large scale test-se</context>
+</contexts>
+<marker>Gorman, Curran, 2006</marker>
+<rawString>James Gorman and James R. Curran. 2006. Scaling distributional similarity to large corpora. In Proceedings of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Patrick Hanks</author>
+</authors>
+<title>Lexical Analysis: Norms and Exploitations.</title>
+<date>2013</date>
+<publisher>Mit Press.</publisher>
+<contexts>
+<context position="5486" citStr="Hanks, 2013" startWordPosition="821" endWordPosition="822">e used to provide the estimates for the likelihood of a target word given a context. This allows concrete semantic similarity models based on this scheme to leverage the capabilities of probabilistic models, such as established language models, which typically address the modeling of joint-contexts. We hypothesize that an underlying model that could capture syntagmatic patterns in large word contexts, yet is flexible enough to deal with data sparseness, is desired. It is generally accepted that the semantics of verbs in particular are correlated with their syntagmatic properties (Levin, 1993; Hanks, 2013). This provides grounds to expect that such model has the potential to excel for verbs. To capture syntagmatic patterns, we choose in this work standard n-gram language models as the basis for a concrete model implementing our scheme. This choice is inspired by recent work on learning syntactic categories (Yatbaz et al., 2012), which successfully utilized such language models to represent word window contexts of target words. However, we note that other richer types of language models, such as class-based (Brown et al., 1992) or hybrid (Tan et al., 2012), can be seamlessly integrated into our </context>
+<context position="29853" citStr="Hanks (2013)" startWordPosition="4868" endWordPosition="4869">ones from the Wordnet evaluation, suggesting that our model performs better than the baselines on measuring verb similarity. In summary, our results suggest that in lack of a robust context modeling scheme it is hard for distributional similarity models to effectively leverage larger word window contexts for measuring semantic similarity. It appears that this is somewhat less of a concern when it comes to noun similarity, as the simple feature vector models reach near-optimal performance with small word windows of order 2, but it is an important factor for verb similarity. In his recent book, Hanks (2013) claims that contrary to nouns, computational models that are to capture the meanings of verbs must consider their syntagmatic patterns in text. Our particularly good results on verb similarity suggest that our modeling approach is able to capture such information in larger context windows. We further conjecture that the reason the word embedding baselines did not do as well as our model on verb similarity might be due to their particular choice of joint-context formulation, which is not sensitive to word order. However, these conjectures should be further validated with additional evaluations</context>
+</contexts>
+<marker>Hanks, 2013</marker>
+<rawString>Patrick Hanks. 2013. Lexical Analysis: Norms and Exploitations. Mit Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Reinhard Kneser</author>
+<author>Hermann Ney</author>
+</authors>
+<title>Improved backing-off for m-gram language modeling.</title>
+<date>1995</date>
+<booktitle>In International Conference on Acoustics, Speech, and Signal Processing.</booktitle>
+<publisher>IEEE.</publisher>
+<contexts>
+<context position="15192" citStr="Kneser and Ney, 1995" startWordPosition="2424" endWordPosition="2427">sequences of words using approximation strategies. In this work we choose n-gram language models, aiming to capture syntagmatic properties of the word contexts, which are sensitive to word order. To approximate the probability of long sequences of words, n-gram language models compute the product of the estimated probability of each word in the sequence conditioned on at most the n − 1 words preceding it. Furthermore, they use ‘discounting’ methods to improve the estimates of conditional probabilities when learning data is sparse. Specifically, in this work we use the Kneser-Ney n-gram model (Kneser and Ney, 1995). We compute pθ(b|c) as follows: pθ(b|c) = pθ(b,c) pθ(c) where pθ(b, c) is the probability of the word sequence comprising the word window c, in which the word b fills the place-holder. For instance, for c = “I drive my to work every” and b = car, pθ(b, c) is the estimated language model probability of “I drive my car to work every”. pθ(c) is the marginal probability of pθ(*, c) over all possible words in the vocabulary. 2 4 Experimental Settings Although sometimes used interchangeably, it is common to distinguish between semantic similarity and semantic relatedness (Budanitsky and Hirst, 2001</context>
+</contexts>
+<marker>Kneser, Ney, 1995</marker>
+<rawString>Reinhard Kneser and Hermann Ney. 1995. Improved backing-off for m-gram language modeling. In International Conference on Acoustics, Speech, and Signal Processing. IEEE.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Beth Levin</author>
+</authors>
+<title>English verb classes and alternations: A preliminary investigation.</title>
+<date>1993</date>
+<institution>University of Chicago press.</institution>
+<contexts>
+<context position="5472" citStr="Levin, 1993" startWordPosition="819" endWordPosition="820"> models can be used to provide the estimates for the likelihood of a target word given a context. This allows concrete semantic similarity models based on this scheme to leverage the capabilities of probabilistic models, such as established language models, which typically address the modeling of joint-contexts. We hypothesize that an underlying model that could capture syntagmatic patterns in large word contexts, yet is flexible enough to deal with data sparseness, is desired. It is generally accepted that the semantics of verbs in particular are correlated with their syntagmatic properties (Levin, 1993; Hanks, 2013). This provides grounds to expect that such model has the potential to excel for verbs. To capture syntagmatic patterns, we choose in this work standard n-gram language models as the basis for a concrete model implementing our scheme. This choice is inspired by recent work on learning syntactic categories (Yatbaz et al., 2012), which successfully utilized such language models to represent word window contexts of target words. However, we note that other richer types of language models, such as class-based (Brown et al., 1992) or hybrid (Tan et al., 2012), can be seamlessly integr</context>
+</contexts>
+<marker>Levin, 1993</marker>
+<rawString>Beth Levin. 1993. English verb classes and alternations: A preliminary investigation. University of Chicago press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dekang Lin</author>
+</authors>
+<title>Automatic retrieval and clustering of similar words.</title>
+<date>1998</date>
+<booktitle>In Proceedings of COLING-ACL.</booktitle>
+<contexts>
+<context position="16274" citStr="Lin, 1998" startWordPosition="2602" endWordPosition="2603">d interchangeably, it is common to distinguish between semantic similarity and semantic relatedness (Budanitsky and Hirst, 2001; Agirre et al., 2009). Semantic similarity is used to describe ‘likeness’ relations, such as the relations between synonyms, hypernymhyponyms, and co-hyponyms. Semantic relatedness refers to a broader range of relations including also meronymy and various other associative relations as in ‘pencil-paper’ or ‘penguinAntarctica’. In this work we focus on semantic similarity and evaluate all compared methods on several semantic similarity tasks. Following previous works (Lin, 1998; Riedl and Biemann, 2013) we use Wordnet to construct large scale gold standards for semantic similarity evaluations. We perform the evaluations separately for nouns and verbs to test our hypothesis that our model is particularly well-suited for verbs. To further evaluate our results on verbs we use the verb similarity test-set released by (Yang and Powers, 2006), which contains pairs of verbs associated with semantic similarity scores based on human judgements. 4.1 Compared methods We compare our model with a traditional feature vector model, the composite-feature model (Agirre et al., 2009)</context>
+<context position="21500" citStr="Lin, 1998" startWordPosition="3461" endWordPosition="3462">these target sets. These scores were later used in all of our evaluations. 4.2 Wordnet evaluation There is a shortage of large scale test-sets for semantic similarity. Popular test-sets such as WordSim353 and the TOEFL synonyms test contain only 353 and 80 test items respectively, and therefore make it difficult to obtain statistically significant results. To automatically construct largerscale test-sets for semantic similarity, we sampled large target word subsets from our corpus and used Wordnet as a gold standard for their semantically similar words, following related previous evaluations (Lin, 1998; Riedl and Biemann, 2013). We constructed two test-sets for our primary evaluation, one for verb similarity and another for noun similarity. To perform the verb similarity evaluation, we randomly sampled 1,000 verbs from the target verb set, where the probability of each verb to be sampled is set to be proportional to its frequency in the learning corpus. Next, for each sampled verb a we constructed a Wordnet-based gold standard set of semantically similar words. In this set each verb a&apos; is annotated as a ‘synonym’ of a if at least one of the senses of a&apos; is a synonym of any of the senses of </context>
+</contexts>
+<marker>Lin, 1998</marker>
+<rawString>Dekang Lin. 1998. Automatic retrieval and clustering of similar words. In Proceedings of COLING-ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kevin Lund</author>
+<author>Curt Burgess</author>
+</authors>
+<title>Producing high-dimensional semantic spaces from lexical cooccurrence.</title>
+<date>1996</date>
+<journal>Behavior Research Methods, Instruments, &amp; Computers.</journal>
+<contexts>
+<context position="1786" citStr="Lund and Burgess, 1996" startWordPosition="240" endWordPosition="243">ls leveraging the substantial body of work that exists in probabilistic language modeling. 1 Introduction The Distributional Hypothesis is commonly phrased as “words which are similar in meaning occur in similar contexts” (Rubenstein and Goodenough, 1965). Distributional similarity models following this hypothesis vary in two major aspects, namely the representation of the context and the respective computational model. Probably the most prominent class of distributional similarity models represents context as a vector of word features and computes similarity using feature vector arithmetics (Lund and Burgess, 1996; Turney et al., 2010). To construct the feature vectors, the context of each target word token1, which is commonly a word window around it, is first broken 1We use word type to denote an entry in the vocabulary, and word token for a particular occurrence of a word type. into a set of individual independent words. Then the weights of the entries in the word feature vector capture the degree of association between the target word type and each of the individual word features, independently of one another. Despite its popularity, it was suggested that the word feature vector approach misses valu</context>
+</contexts>
+<marker>Lund, Burgess, 1996</marker>
+<rawString>Kevin Lund and Curt Burgess. 1996. Producing high-dimensional semantic spaces from lexical cooccurrence. Behavior Research Methods, Instruments, &amp; Computers.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Oren Melamud</author>
+<author>Jonathan Berant</author>
+<author>Ido Dagan</author>
+<author>Jacob Goldberger</author>
+<author>Idan Szpektor</author>
+</authors>
+<title>A two level model for context sensitive inference rules.</title>
+<date>2013</date>
+<booktitle>In Proceedings of ACL.</booktitle>
+<contexts>
+<context position="32243" citStr="Melamud et al., 2013" startWordPosition="5236" endWordPosition="5239">own et al., 1992), syntax-based (Pauls and Klein, 2012) or hybrid (Tan et al., 2012). Furthermore, a similar approach to ours could be attempted in word embedding models. For instance, our syntagmatic joint-context modeling approach could be investigated by word embedding models to generate better embeddings for verbs. Another direction relates to the well known tendency of many words, and particularly verbs, to assume different meanings (or senses) under different contexts. To address this phenomenon context sensitive similarity and inference models have been proposed (Dinu and Lapata, 2010; Melamud et al., 2013). Similarly to many semantic similarity models, our current model aggregates information from all observed contexts of a target word type regardless of its different senses. However, we believe that our approach is well suited to address context sensitive similarity with proper enhancements, as it considers joint-contexts that can more accurately disambiguate the meaning of target words. As an example, it is possible to consider the likelihood of word b to occur in a subset of the contexts observed for word a, which is biased towards a particular sense of a. Finally, we note that our model is </context>
+</contexts>
+<marker>Melamud, Berant, Dagan, Goldberger, Szpektor, 2013</marker>
+<rawString>Oren Melamud, Jonathan Berant, Ido Dagan, Jacob Goldberger, and Idan Szpektor. 2013. A two level model for context sensitive inference rules. In Proceedings of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tomas Mikolov</author>
+<author>Martin Karafi´at</author>
+<author>Lukas Burget</author>
+<author>Jan Cernock`y</author>
+<author>Sanjeev Khudanpur</author>
+</authors>
+<title>Recurrent neural network based language model.</title>
+<date>2010</date>
+<booktitle>In INTERSPEECH.</booktitle>
+<marker>Mikolov, Karafi´at, Burget, Cernock`y, Khudanpur, 2010</marker>
+<rawString>Tomas Mikolov, Martin Karafi´at, Lukas Burget, Jan Cernock`y, and Sanjeev Khudanpur. 2010. Recurrent neural network based language model. In INTERSPEECH.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tomas Mikolov</author>
+<author>Kai Chen</author>
+<author>Greg Corrado</author>
+<author>Jeffrey Dean</author>
+</authors>
+<title>Efficient estimation of word representations in vector space. arXiv preprint arXiv:1301.3781.</title>
+<date>2013</date>
+<contexts>
+<context position="3416" citStr="Mikolov et al., 2013" startWordPosition="493" endWordPosition="496">ping the same computational vector-based model. Although showing interesting potential, this approach suffers from a very high-dimensional feature space resulting in data sparseness problems. Therefore, it requires exceptionally large learning corpora to consider large windows effectively. A parallel line of work adopted richer context representations as well, with a different computational model. These works utilized neural networks to learn low dimensional continuous vector representations for word types, which were found useful for measuring semantic similarity (Collobert and Weston, 2008; Mikolov et al., 2013). These vectors are trained by optimizing the prediction of target words given their observed contexts (or variants of this objective). Most of these models consider each observed context as a joint set of context words within a word window. In this work we follow the motivation in the previous works above to exploit richer joint-context representations for modeling distributional similarity. Under this approach the set of features in the context of each target word token is considered to jointly reflect on the meaning of the target word type. To further facilitate this type of mod181 Proceedi</context>
+<context position="7804" citStr="Mikolov et al., 2013" startWordPosition="1185" endWordPosition="1188">inguished from looser semantic relatedness). We are not aware of additional works following this approach, of using entire word windows as features. Neural networks have been used to train language models that are based on low dimensional continuous vector representations for word types, also called word embeddings (Bengio et al., 2003; Mikolov et al., 2010). Although originally designed to improve language models, later works have shown that such word embeddings are useful in various other NLP tasks, including measuring semantic similarity with vector arithmetics (Collobert and Weston, 2008; Mikolov et al., 2013). Specifically, the recent work by Mikolov et al. (2013) introduced the CBOW and Skip-gram models, achieving state-of-the-art results in detecting semantic analogies. The CBOW model is trained to predict a target word given the set of context words in a word window around it, where this context is considered jointly as a bag-of-words. The Skip-gram model is trained to predict each of the context words independently given the target word. 3 Probabilistic Distributional Similarity 3.1 Motivation In this section we briefly demonstrate the benefits of considering joint-contexts of words. As an ill</context>
+<context position="16972" citStr="Mikolov et al., 2013" startWordPosition="2708" endWordPosition="2711">ards for semantic similarity evaluations. We perform the evaluations separately for nouns and verbs to test our hypothesis that our model is particularly well-suited for verbs. To further evaluate our results on verbs we use the verb similarity test-set released by (Yang and Powers, 2006), which contains pairs of verbs associated with semantic similarity scores based on human judgements. 4.1 Compared methods We compare our model with a traditional feature vector model, the composite-feature model (Agirre et al., 2009), and the recent state-of-the-art word embedding models, CBOW and Skip-gram (Mikolov et al., 2013), all trained on the same learning corpus and evaluated on equal grounds. We denote the traditional feature vector baseline by IFV W−k, where IFV stands for “IndependentFeature Vector” and k is the order of the context word window considered. Similarly, we 2Computing pθ(c) by summing over all possible placeholder filler words, as we did in this work, is computationally intensive. However, this can be done more efficiently by implementing customized versions of (at least some) ngram language models with little computational overhead, e.g. by counting the learning corpus occurrences of n-gram te</context>
+</contexts>
+<marker>Mikolov, Chen, Corrado, Dean, 2013</marker>
+<rawString>Tomas Mikolov, Kai Chen, Greg Corrado, and Jeffrey Dean. 2013. Efficient estimation of word representations in vector space. arXiv preprint arXiv:1301.3781.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jeff Mitchell</author>
+<author>Mirella Lapata</author>
+</authors>
+<title>Vector-based models of semantic composition.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL.</booktitle>
+<marker>Mitchell, Lapata, 2008</marker>
+<rawString>Jeff Mitchell and Mirella Lapata. 2008. Vector-based models of semantic composition. In Proceedings of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adam Pauls</author>
+<author>Dan Klein</author>
+</authors>
+<title>Faster and Smaller N-Gram Language Models.</title>
+<date>2011</date>
+<booktitle>In Proceedings ofACL.</booktitle>
+<contexts>
+<context position="18711" citStr="Pauls and Klein, 2011" startWordPosition="2983" endWordPosition="2986">rmation (Church and Hanks, 1990), and the combination of Cosine with PPMI was shown to perform particularly well in (Bullinaria and Levy, 2007). We denote Mikolov’s CBOW and Skip-gram baseline models by CBOWW −k and SKIPW −k respectively, where k denotes again the order of the window used to train these models. We used Mikolov’s word2vec utility3 with standard parameters (600 dimensions, negative sampling 15) to learn the word embeddings, and Cosine as the vector similarity measure between them. As the underlying probabilistic language model for our method we use the Berkeley implementation4 (Pauls and Klein, 2011) of the Kneser-Ney n-gram model with the default discount parameters. We denote our model PDSW −k, where PDS stands for “Probabilistic Distributional Similarity”, and k is the order of the context word window. In order to avoid giving our model an unfair advantage of tuning the order of the language model n as an additional parameter, we use a fixed n = k + 1. This means that the conditional probabilities that our n-gram model learns consider a scope of up to half the size of the window, which is the distance in words between the target word and either end of the window. We note that this is t</context>
+</contexts>
+<marker>Pauls, Klein, 2011</marker>
+<rawString>Adam Pauls and Dan Klein. 2011. Faster and Smaller N-Gram Language Models. In Proceedings ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adam Pauls</author>
+<author>Dan Klein</author>
+</authors>
+<title>Large-scale syntactic language modeling with treelets.</title>
+<date>2012</date>
+<booktitle>In Proceedings ofACL.</booktitle>
+<contexts>
+<context position="31677" citStr="Pauls and Klein, 2012" startWordPosition="5147" endWordPosition="5150">nt-contexts for the purpose of measuring semantic similarity. Our concrete model utilizing n-gram language models outperforms several competitive baselines on semantic similarity tasks, and appears to be particularly well-suited for verbs. In the remainder of this section we describe some potential future directions that can be pursued. First, the performance of our generic scheme is largely inherited from the nature of its underlying language model. Therefore, we see much potential in exploring the use of other types of language models, such as class-based (Brown et al., 1992), syntax-based (Pauls and Klein, 2012) or hybrid (Tan et al., 2012). Furthermore, a similar approach to ours could be attempted in word embedding models. For instance, our syntagmatic joint-context modeling approach could be investigated by word embedding models to generate better embeddings for verbs. Another direction relates to the well known tendency of many words, and particularly verbs, to assume different meanings (or senses) under different contexts. To address this phenomenon context sensitive similarity and inference models have been proposed (Dinu and Lapata, 2010; Melamud et al., 2013). Similarly to many semantic simil</context>
+</contexts>
+<marker>Pauls, Klein, 2012</marker>
+<rawString>Adam Pauls and Dan Klein. 2012. Large-scale syntactic language modeling with treelets. In Proceedings ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Martin Riedl</author>
+<author>Chris Biemann</author>
+</authors>
+<title>Scaling to largeˆ3 data: An efficient and effective method to compute distributional thesauri.</title>
+<date>2013</date>
+<booktitle>In Proceedings of EMNLP.</booktitle>
+<contexts>
+<context position="16300" citStr="Riedl and Biemann, 2013" startWordPosition="2604" endWordPosition="2607">geably, it is common to distinguish between semantic similarity and semantic relatedness (Budanitsky and Hirst, 2001; Agirre et al., 2009). Semantic similarity is used to describe ‘likeness’ relations, such as the relations between synonyms, hypernymhyponyms, and co-hyponyms. Semantic relatedness refers to a broader range of relations including also meronymy and various other associative relations as in ‘pencil-paper’ or ‘penguinAntarctica’. In this work we focus on semantic similarity and evaluate all compared methods on several semantic similarity tasks. Following previous works (Lin, 1998; Riedl and Biemann, 2013) we use Wordnet to construct large scale gold standards for semantic similarity evaluations. We perform the evaluations separately for nouns and verbs to test our hypothesis that our model is particularly well-suited for verbs. To further evaluate our results on verbs we use the verb similarity test-set released by (Yang and Powers, 2006), which contains pairs of verbs associated with semantic similarity scores based on human judgements. 4.1 Compared methods We compare our model with a traditional feature vector model, the composite-feature model (Agirre et al., 2009), and the recent state-of-</context>
+<context position="21526" citStr="Riedl and Biemann, 2013" startWordPosition="3463" endWordPosition="3466">t sets. These scores were later used in all of our evaluations. 4.2 Wordnet evaluation There is a shortage of large scale test-sets for semantic similarity. Popular test-sets such as WordSim353 and the TOEFL synonyms test contain only 353 and 80 test items respectively, and therefore make it difficult to obtain statistically significant results. To automatically construct largerscale test-sets for semantic similarity, we sampled large target word subsets from our corpus and used Wordnet as a gold standard for their semantically similar words, following related previous evaluations (Lin, 1998; Riedl and Biemann, 2013). We constructed two test-sets for our primary evaluation, one for verb similarity and another for noun similarity. To perform the verb similarity evaluation, we randomly sampled 1,000 verbs from the target verb set, where the probability of each verb to be sampled is set to be proportional to its frequency in the learning corpus. Next, for each sampled verb a we constructed a Wordnet-based gold standard set of semantically similar words. In this set each verb a&apos; is annotated as a ‘synonym’ of a if at least one of the senses of a&apos; is a synonym of any of the senses of a. In addition, each verb </context>
+</contexts>
+<marker>Riedl, Biemann, 2013</marker>
+<rawString>Martin Riedl and Chris Biemann. 2013. Scaling to largeˆ3 data: An efficient and effective method to compute distributional thesauri. In Proceedings of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tony Rose</author>
+<author>Mark Stevenson</author>
+<author>Miles Whitehead</author>
+</authors>
+<title>The Reuters Corpus Volume 1-from Yesterday’s News to Tomorrow’s Language Resources.</title>
+<date>2002</date>
+<booktitle>In LREC.</booktitle>
+<contexts>
+<context position="19642" citStr="Rose et al., 2002" startWordPosition="3156" endWordPosition="3159">n additional parameter, we use a fixed n = k + 1. This means that the conditional probabilities that our n-gram model learns consider a scope of up to half the size of the window, which is the distance in words between the target word and either end of the window. We note that this is the smallest reasonable value for n, as smaller values effectively mean that there will be context words within the window that are more than n words away from the target word, and therefore will not be considered by our model. As learning corpus we used the first CD of the freely available Reuters RCV1 dataset (Rose et al., 2002). This learning corpus contains approximately 100M words, which is comparable in size to the British National Corpus (BNC) (Aston, 1997). We first applied part-of-speech tagging and lemmatization to all words. Then we represented each word w in the corpus as the pair 3http://code.google.com/p/word2vec 4http://code.google.com/p/berkeleylm/ [pos(w), lemma(w)], where pos(w) is a coarsegrained part-of-speech category and lemma(w) is the lemmatized form of w. Finally, we converted every pair [pos(w), lemma(w)] that occurs less than 100 times in the learning corpus to the pair [pos(w), ? ], which re</context>
+</contexts>
+<marker>Rose, Stevenson, Whitehead, 2002</marker>
+<rawString>Tony Rose, Mark Stevenson, and Miles Whitehead. 2002. The Reuters Corpus Volume 1-from Yesterday’s News to Tomorrow’s Language Resources. In LREC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Herbert Rubenstein</author>
+<author>John B Goodenough</author>
+</authors>
+<title>Contextual correlates of synonymy.</title>
+<date>1965</date>
+<journal>Communications of the ACM.</journal>
+<contexts>
+<context position="1419" citStr="Rubenstein and Goodenough, 1965" startWordPosition="187" endWordPosition="191">istic n-gram language models. Our evaluations suggest that this model is particularly wellsuited for measuring similarity for verbs, which are known to exhibit richer syntagmatic patterns, while maintaining comparable or better performance with respect to competitive baselines for nouns. Following this, we propose our scheme as a framework for future semantic similarity models leveraging the substantial body of work that exists in probabilistic language modeling. 1 Introduction The Distributional Hypothesis is commonly phrased as “words which are similar in meaning occur in similar contexts” (Rubenstein and Goodenough, 1965). Distributional similarity models following this hypothesis vary in two major aspects, namely the representation of the context and the respective computational model. Probably the most prominent class of distributional similarity models represents context as a vector of word features and computes similarity using feature vector arithmetics (Lund and Burgess, 1996; Turney et al., 2010). To construct the feature vectors, the context of each target word token1, which is commonly a word window around it, is first broken 1We use word type to denote an entry in the vocabulary, and word token for a</context>
+</contexts>
+<marker>Rubenstein, Goodenough, 1965</marker>
+<rawString>Herbert Rubenstein and John B. Goodenough. 1965. Contextual correlates of synonymy. Communications of the ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Maria Ruiz-Casado</author>
+<author>Enrique Alfonseca</author>
+<author>Pablo Castells</author>
+</authors>
+<title>Using context-window overlapping in synonym discovery and ontology extension.</title>
+<date>2005</date>
+<booktitle>Proceedings of RANLP.</booktitle>
+<contexts>
+<context position="2537" citStr="Ruiz-Casado et al., 2005" startWordPosition="368" endWordPosition="371">dow around it, is first broken 1We use word type to denote an entry in the vocabulary, and word token for a particular occurrence of a word type. into a set of individual independent words. Then the weights of the entries in the word feature vector capture the degree of association between the target word type and each of the individual word features, independently of one another. Despite its popularity, it was suggested that the word feature vector approach misses valuable information, which is embedded in the colocation and inter-relations of words (e.g. word order) within the same context (Ruiz-Casado et al., 2005). Following this motivation, Ruiz-Casado et al. (2005) proposed an alternative compositefeature model, later adopted in (Agirre et al., 2009). This model adopts a richer context representation by considering entire word window contexts as features, while keeping the same computational vector-based model. Although showing interesting potential, this approach suffers from a very high-dimensional feature space resulting in data sparseness problems. Therefore, it requires exceptionally large learning corpora to consider large windows effectively. A parallel line of work adopted richer context repr</context>
+<context position="6519" citStr="Ruiz-Casado et al. (2005)" startWordPosition="981" endWordPosition="984">exts of target words. However, we note that other richer types of language models, such as class-based (Brown et al., 1992) or hybrid (Tan et al., 2012), can be seamlessly integrated into our scheme. Our evaluations suggest that our model is indeed particularly advantageous for measuring semantic similarity for verbs, while maintaining comparable or better performance with respect to competitive baselines for nouns. 2 Background In this section we provide additional details regarding previous works that we later use as baselines in our evaluations. To implement the composite-feature approach, Ruiz-Casado et al. (2005) used a Web search engine to compare entire window contexts of target word types. For example, a single feature that could be retrieved this way for the target word like is “Children cookies and milk”. They showed good results on detecting synonyms in the 80 multiple-choice questions TOEFL test. Agirre et al. (2009) constructed composite-feature vectors using an exceptionally large 1.6 Teraword learning corpus. They found that this approach outperforms the traditional independent feature vector approach on a subset of the WordSim353 testset (Finkelstein et al., 2001), which is designed to test</context>
+</contexts>
+<marker>Ruiz-Casado, Alfonseca, Castells, 2005</marker>
+<rawString>Maria Ruiz-Casado, Enrique Alfonseca, and Pablo Castells. 2005. Using context-window overlapping in synonym discovery and ontology extension. Proceedings of RANLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ming Tan</author>
+<author>Wenli Zhou</author>
+<author>Lei Zheng</author>
+<author>Shaojun Wang</author>
+</authors>
+<title>A scalable distributed syntactic, semantic, and lexical language model.</title>
+<date>2012</date>
+<journal>Computational Linguistics,</journal>
+<volume>38</volume>
+<issue>3</issue>
+<contexts>
+<context position="6046" citStr="Tan et al., 2012" startWordPosition="911" endWordPosition="914">h their syntagmatic properties (Levin, 1993; Hanks, 2013). This provides grounds to expect that such model has the potential to excel for verbs. To capture syntagmatic patterns, we choose in this work standard n-gram language models as the basis for a concrete model implementing our scheme. This choice is inspired by recent work on learning syntactic categories (Yatbaz et al., 2012), which successfully utilized such language models to represent word window contexts of target words. However, we note that other richer types of language models, such as class-based (Brown et al., 1992) or hybrid (Tan et al., 2012), can be seamlessly integrated into our scheme. Our evaluations suggest that our model is indeed particularly advantageous for measuring semantic similarity for verbs, while maintaining comparable or better performance with respect to competitive baselines for nouns. 2 Background In this section we provide additional details regarding previous works that we later use as baselines in our evaluations. To implement the composite-feature approach, Ruiz-Casado et al. (2005) used a Web search engine to compare entire window contexts of target word types. For example, a single feature that could be r</context>
+<context position="31706" citStr="Tan et al., 2012" startWordPosition="5153" endWordPosition="5156">suring semantic similarity. Our concrete model utilizing n-gram language models outperforms several competitive baselines on semantic similarity tasks, and appears to be particularly well-suited for verbs. In the remainder of this section we describe some potential future directions that can be pursued. First, the performance of our generic scheme is largely inherited from the nature of its underlying language model. Therefore, we see much potential in exploring the use of other types of language models, such as class-based (Brown et al., 1992), syntax-based (Pauls and Klein, 2012) or hybrid (Tan et al., 2012). Furthermore, a similar approach to ours could be attempted in word embedding models. For instance, our syntagmatic joint-context modeling approach could be investigated by word embedding models to generate better embeddings for verbs. Another direction relates to the well known tendency of many words, and particularly verbs, to assume different meanings (or senses) under different contexts. To address this phenomenon context sensitive similarity and inference models have been proposed (Dinu and Lapata, 2010; Melamud et al., 2013). Similarly to many semantic similarity models, our current mod</context>
+</contexts>
+<marker>Tan, Zhou, Zheng, Wang, 2012</marker>
+<rawString>Ming Tan, Wenli Zhou, Lei Zheng, and Shaojun Wang. 2012. A scalable distributed syntactic, semantic, and lexical language model. Computational Linguistics, 38(3):631–671.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Peter D Turney</author>
+<author>Patrick Pantel</author>
+</authors>
+<title>From frequency to meaning: Vector space models of semantics.</title>
+<date>2010</date>
+<journal>Journal of artificial intelligence research.</journal>
+<marker>Turney, Pantel, 2010</marker>
+<rawString>Peter D. Turney, Patrick Pantel, et al. 2010. From frequency to meaning: Vector space models of semantics. Journal of artificial intelligence research.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Peter D Turney</author>
+</authors>
+<title>Domain and function: A dual-space model of semantic relations and compositions.</title>
+<date>2012</date>
+<journal>Journal of Artificial Intelligence Researc,</journal>
+<volume>44</volume>
+<issue>1</issue>
+<marker>Turney, 2012</marker>
+<rawString>Peter D. Turney. 2012. Domain and function: A dual-space model of semantic relations and compositions. Journal of Artificial Intelligence Researc, 44(1):533–585, May.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dongqiang Yang</author>
+<author>David M W Powers</author>
+</authors>
+<title>Verb similarity on the taxonomy of wordnet.</title>
+<date>2006</date>
+<booktitle>In the 3rd International WordNet Conference (GWC-06).</booktitle>
+<contexts>
+<context position="16640" citStr="Yang and Powers, 2006" startWordPosition="2659" endWordPosition="2662">ding also meronymy and various other associative relations as in ‘pencil-paper’ or ‘penguinAntarctica’. In this work we focus on semantic similarity and evaluate all compared methods on several semantic similarity tasks. Following previous works (Lin, 1998; Riedl and Biemann, 2013) we use Wordnet to construct large scale gold standards for semantic similarity evaluations. We perform the evaluations separately for nouns and verbs to test our hypothesis that our model is particularly well-suited for verbs. To further evaluate our results on verbs we use the verb similarity test-set released by (Yang and Powers, 2006), which contains pairs of verbs associated with semantic similarity scores based on human judgements. 4.1 Compared methods We compare our model with a traditional feature vector model, the composite-feature model (Agirre et al., 2009), and the recent state-of-the-art word embedding models, CBOW and Skip-gram (Mikolov et al., 2013), all trained on the same learning corpus and evaluated on equal grounds. We denote the traditional feature vector baseline by IFV W−k, where IFV stands for “IndependentFeature Vector” and k is the order of the context word window considered. Similarly, we 2Computing </context>
+<context position="23537" citStr="Yang and Powers, 2006" startWordPosition="3805" endWordPosition="3808">hbors’ task. The synonym detection task is designed to evaluate the ability of the compared methods to identify a more restrictive interpretation of semantic similarity, while the semantic neighbor detection task does the same for a somewhat broader interpretation. We repeated the above procedure for sampling 1,000 target nouns, constructing the noun Wordnet-based gold standards and evaluating on the two semantic similarity tasks. 4.3 VerbSim evaluation The publicly available VerbSim test-set contains 130 verb pairs, each annotated with an average of 6 human judgements of semantic similarity (Yang and Powers, 2006). We extracted a 107 pairs subset of this dataset for which all verbs are in our learning corpus. We followed works such as (Yang and Powers, 2007; Agirre et al., 2009) and compared the Spearman correlations between the verbpair similarity scores assigned by the compared methods and the manually annotated scores in this dataset. 5 Results For each method and verb a in our 1,000 tested verbs, we used the Wordnet gold standard to compute the precision at top-1, top-5 and top-10 of the ranked list generated by this method for a. We then computed mean precision values averaged over all verbs for e</context>
+</contexts>
+<marker>Yang, Powers, 2006</marker>
+<rawString>Dongqiang Yang and David M. W. Powers. 2006. Verb similarity on the taxonomy of wordnet. In the 3rd International WordNet Conference (GWC-06).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dongqiang Yang</author>
+<author>David M W Powers</author>
+</authors>
+<title>An empirical investigation into grammatically constrained contexts in predicting distributional similarity.</title>
+<date>2007</date>
+<booktitle>In Australasian Language Technology Workshop</booktitle>
+<pages>117--124</pages>
+<contexts>
+<context position="23683" citStr="Yang and Powers, 2007" startWordPosition="3833" endWordPosition="3836">f semantic similarity, while the semantic neighbor detection task does the same for a somewhat broader interpretation. We repeated the above procedure for sampling 1,000 target nouns, constructing the noun Wordnet-based gold standards and evaluating on the two semantic similarity tasks. 4.3 VerbSim evaluation The publicly available VerbSim test-set contains 130 verb pairs, each annotated with an average of 6 human judgements of semantic similarity (Yang and Powers, 2006). We extracted a 107 pairs subset of this dataset for which all verbs are in our learning corpus. We followed works such as (Yang and Powers, 2007; Agirre et al., 2009) and compared the Spearman correlations between the verbpair similarity scores assigned by the compared methods and the manually annotated scores in this dataset. 5 Results For each method and verb a in our 1,000 tested verbs, we used the Wordnet gold standard to compute the precision at top-1, top-5 and top-10 of the ranked list generated by this method for a. We then computed mean precision values averaged over all verbs for each of the compared methods, denoted as P@1, P@5 and P@10. The detailed report of P@10 results is omitted for brevity, as they behave very similar</context>
+</contexts>
+<marker>Yang, Powers, 2007</marker>
+<rawString>Dongqiang Yang and David M. W. Powers. 2007. An empirical investigation into grammatically constrained contexts in predicting distributional similarity. In Australasian Language Technology Workshop 2007, pages 117–124.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mehmet Ali Yatbaz</author>
+<author>Enis Sert</author>
+<author>Deniz Yuret</author>
+</authors>
+<title>Learning syntactic categories using paradigmatic representations of word context.</title>
+<date>2012</date>
+<booktitle>In Proceedings of EMNLP.</booktitle>
+<contexts>
+<context position="5814" citStr="Yatbaz et al., 2012" startWordPosition="873" endWordPosition="876"> an underlying model that could capture syntagmatic patterns in large word contexts, yet is flexible enough to deal with data sparseness, is desired. It is generally accepted that the semantics of verbs in particular are correlated with their syntagmatic properties (Levin, 1993; Hanks, 2013). This provides grounds to expect that such model has the potential to excel for verbs. To capture syntagmatic patterns, we choose in this work standard n-gram language models as the basis for a concrete model implementing our scheme. This choice is inspired by recent work on learning syntactic categories (Yatbaz et al., 2012), which successfully utilized such language models to represent word window contexts of target words. However, we note that other richer types of language models, such as class-based (Brown et al., 1992) or hybrid (Tan et al., 2012), can be seamlessly integrated into our scheme. Our evaluations suggest that our model is indeed particularly advantageous for measuring semantic similarity for verbs, while maintaining comparable or better performance with respect to competitive baselines for nouns. 2 Background In this section we provide additional details regarding previous works that we later us</context>
+</contexts>
+<marker>Yatbaz, Sert, Yuret, 2012</marker>
+<rawString>Mehmet Ali Yatbaz, Enis Sert, and Deniz Yuret. 2012. Learning syntactic categories using paradigmatic representations of word context. In Proceedings of EMNLP.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

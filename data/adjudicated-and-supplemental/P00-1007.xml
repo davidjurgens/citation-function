@@ -1,0 +1,1053 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.003280">
+<title confidence="0.9913935">
+Incorporating Compositional Evidence in Memory-Based
+Partial Parsing
+</title>
+<author confidence="0.996542">
+Yuval Krymolowski and Ido Dagan
+</author>
+<affiliation confidence="0.994707">
+Department of Mathematics and Computer Science
+Bar-Ilan University
+</affiliation>
+<address confidence="0.585721">
+52900 Ramat Gan, Israel
+</address>
+<email confidence="0.657975">
+Iyuvalk,daganlOcs.biu.ac.il
+</email>
+<sectionHeader confidence="0.953621" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.99997725">
+In this paper, a memory-based pars-
+ing method is extended for han-
+dling compositional structures. The
+method is oriented for learning to
+parse any selected subset of target
+syntactic structures. It is local, yet
+can handle also compositional struc-
+tures. Parts of speech as well as em-
+bedded instances are being used si-
+multaneously. The output is a par-
+tial parse in which instances of the
+target structures are marked.
+</bodyText>
+<sectionHeader confidence="0.996275" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999970804347826">
+A variety of statistical methods were pro-
+posed over the recent years for learning
+to produce a full parse of free-text sen-
+tences (e.g., Bod (1992), Magerman (1995),
+Collins (1997), Ratnaparkhi (1997), and
+Sekine (1998)). In parallel, a lot of work is
+being done on shallow parsing (Abney, 1991;
+Greffenstette, 1993), focusing on partial
+analysis of sentences at the level of local
+phrases and the relations between them.
+Shallow parsing tasks are often formu-
+lated as dividing the sentence into non-
+overlapping sequences of syntactic struc-
+tures, a task called chunking. Most
+of the chunking works have concentrated
+on noun-phrases (NPs, e.g. Church (1988),
+Ramshaw and Marcus (1995), Cardie and
+Pierce (1998), Veenstra (1998)). Other
+chunking tasks involve recognizing subject-
+verb (SV) and verb-object (VO) pairs (Arga-
+mon et al., 1999; Munoz et al., 1999).
+The output of shallow parsers is useful
+where a complete parse tree is not required
+(e.g., classification, summarization, bilingual
+alignment). The complexity of training full
+parsing algorithms may therefore be avoided
+in such tasks. On the other hand, full pars-
+ing has the advantages of producing composi-
+tional structures, finding multiple structures
+simultaneously, and using sub-structures for
+inference about higher-level ones. While shal-
+low systems typically make use of single-word
+data, a full parser can use higher-level struc-
+tures in a compositional manner, e.g., a NP
+for identifying a VP, or a conjunction of NPs
+in order to identify a longer NP.
+A partial parser is typically concerned only
+with a small number of target syntactic pat-
+terns, and may therefore require less train-
+ing information. That would not be the
+case when evaluating a full parser on selected
+target patterns, because its training mate-
+rial would still include full parse-trees labeled
+with other patterns as well.
+The approach presented here, of trainable
+partial parsing, attempts to reduce the gap
+between shallow and full parsing. It is an ex-
+tension of shallow parsing towards handling
+composite and multiple patterns, while main-
+taining the local nature of the task, and sim-
+plicity of training material.
+One approach to partial parsing was pre-
+sented by Buchholz et al. (1999), who ex-
+tended a shallow-parsing technique to partial
+parsing. The output of NP and VP chunk-
+ing was used as an input to grammatical rela-
+tion inference. The inferences process is cas-
+caded, and a clear improvement was obtained
+by passing results across cascades.
+Another approach for partial parsing
+was presented by Skut and Brants (1998).
+Their method is an extension of that of
+Church (1988) for finding NP&apos;s, achieved by
+extending the feature space to include struc-
+tural information. Processing goes simultane-
+ously for structures at all levels, from left to
+right. Since there are no cascades, the struc-
+tural level of the output is limited by that of
+the feature set.
+This paper presents an extension of the
+algorithm of Argamon et al. (1998, 1999,
+hereafter MBSL), which handles and ex-
+ploits compositional structures. MBSL is a
+memory-based algorithm that uses raw-data
+segments for learning chunks. It works with
+POS tags, and combines segments of various
+lengths in order to decide whether part of the
+sentence may be an instance of a target pat-
+tern. As a memory-based algorithm, it does
+not abstract over the data during training,
+but makes the necessary abstractions during
+inference - for each particular instance.
+In extending MBSL, which is a flat method,
+we have kept the structure of the inference
+mechanism and its local nature. This pa-
+per describes the extended version in a self-
+contained manner, while elaborating mostly
+on the extensions needed to handle composi-
+tional cases. Section 2 describes the partial
+parser. Results for NP and VP are presented
+in Sec. 3, followed by a short discussion in
+Sec. 4.
+</bodyText>
+<sectionHeader confidence="0.987105" genericHeader="introduction">
+2 Algorithm
+</sectionHeader>
+<bodyText confidence="0.999950916666667">
+The training phase receives a list of target
+types of syntactic patterns that need to be
+identified (e.g., NP and VP), and a training
+corpus in which target pattern instances are
+marked with labeled brackets. It then stores
+raw-data statistics about these instances in a
+memory data structure. The parsing phase
+receives a sentence to be parsed and identi-
+fies instances of the target patterns based on
+the information stored in the memory. In the
+remainder of the paper we mostly adopt the
+terminology of the flat version.
+</bodyText>
+<subsectionHeader confidence="0.989823">
+2.1 An Illustrating Example
+</subsectionHeader>
+<bodyText confidence="0.985855666666667">
+Suppose the training data contains the sen-
+tences as in Fig. 1, and the sentence to be
+parsed is:
+</bodyText>
+<equation confidence="0.9973445">
+NN CC NN RB VBZ DT JJ NN
+1 2 3 4 5 6 7 8 9
+</equation>
+<bodyText confidence="0.999941857142857">
+and consider the task of finding VPs.
+Every range of words in the sentence is con-
+sidered a candidate for being a VP. The flat
+MBSL algorithm tries to support that hy-
+pothesis by matching POS subsequences of
+the candidate (and possibly some of its sur-
+rounding context) with subsequences of VPs
+that appeared in the training corpus. These
+subsequences, called tiles, should contain at
+least one VP boundary bracket.
+In the example above, consider the range
+of words 4-8 as a candidate VP. That POS
+sequence does not appear as a complete VP
+in training, but some of its tiles do appear
+and can provide supporting evidence. The tile
+&amp;quot;[VP RB VBZ&amp;quot; provides a positive evidence
+because the only appearance of &amp;quot;RB VBZ&amp;quot; is
+at the beginning of a VP. On the other hand,
+&amp;quot;NN [VP&amp;quot; provides a weaker evidence because
+&amp;quot;NN&amp;quot; appears twice before a VP but three
+times in other positions. Accordingly, each
+tile has a positive count (pos_count), specify-
+ing the number of times the POS sequence ap-
+peared in training at the same position within
+the VP as it appears within the candidate,
+and a negative count (neg_count), specifying
+the number of times the sequence appeared in
+other positions. For &amp;quot;[VP RB VBZ&amp;quot; we have
+pos_count = 1 and neg_count = 0, while for
+&amp;quot;NN [VP&amp;quot; pos _count = 2 and neg_count = 3.
+Tiles in the flat version are comprised of
+POS sequences only. The compositional al-
+gorithm considers also embedded structures,
+hence a tile may accordingly include also pat-
+tern labels that stand for a complete pattern
+instance (typically a phrase).
+Some of the VP tiles used by the composi-
+tional algorithm are presented in Fig. 2. Tiles
+1-5 are composed of POS only, and can be
+used by the flat version too. Among these
+tiles, Tiles 2 and 3 provide evidence for the
+range 4-8 being a VP because together they
+</bodyText>
+<table confidence="0.567151">
+[NP NNS NP] [VP RB VBZ IN [NP JJ NNS NP] VP] .
+[NP DT JJ NN NN NP] [VP VBZ [NP DT NN NP] VP] .
+[NP DT JJ JJ NN NP] [VP VBZ [NP DT JJ NN NP] VP] .
+Figure 1: An example training data pos neg
+1 NN [VP 2 3
+</table>
+<listItem confidence="0.980844">
+2. [VP RB VBZ 1 0
+3. VBZ DT JJ NN VP] 1 0
+4. NN VP] 2 3
+5. NN VP] 2 0
+6. [VP RB VBZ NP VP] 1 0
+7. VBZ NP VP] 2 0
+8. NP VP] 3 6
+</listItem>
+<figureCaption confidence="0.998251">
+Figure 2: Some of the VP tiles derived from the data in Fig. 1
+</figureCaption>
+<bodyText confidence="0.999985083333333">
+cover the whole range. Assuming the inner
+NP was detected, tiles 6-8 reflect the its pres-
+ence within the composite VP. Tile 6 alone
+already provides a positive evidence for the
+entire VP, as it covers the whole range of the
+candidate words. Note that the flat version
+had to rely on Tile 3, originally from Sentence
+3, in order to collect supporting evidence
+that covers the whole range of the candidates
+words. The composite algorithm could pro-
+duce the evidence without this sentence, by
+realizing the compositional evidence.
+</bodyText>
+<subsectionHeader confidence="0.999508">
+2.2 Data Structures and Definitions
+</subsectionHeader>
+<bodyText confidence="0.999790875">
+Each sentence is represented by a sentence
+graph: the nodes of the graph correspond to
+positions between the sentence words, and the
+edges correspond to either POS tags or pat-
+tern instances. Figure 3 shows a sentence
+graph for the example given above.
+We now define the tiles of a pattern in-
+stance in terms of the sentence graph. De-
+note by ConLen the maximal length consid-
+ered for the preceding and following contexts
+of the given instance, and let i and j be the
+starting and ending positions of the instance
+(e.g., 4 and 9 for the VP in Figure 3). In
+these terms, a tile t of the given instance is a
+path in the sentence graph that satisfies the
+following conditions:
+</bodyText>
+<listItem confidence="0.797184">
+1. t is embedded within the range of nodes
+i — C onLen to j ± C onLen; that is, the
+tile is embedded within the pattern in-
+stance and its context.
+2. t includes at least one of the instance
+boundary nodes i, j, which correspond to
+the boundary brackets (e.g., [NP, NP]).
+3. An edge of t that corresponds to a pat-
+tern instance (rather than to a POS)
+must be fully embedded within the range
+of the instance itself (nodes i through j).
+</listItem>
+<subsectionHeader confidence="0.998456">
+2.3 Memory Structure
+</subsectionHeader>
+<bodyText confidence="0.9999946875">
+As illustrated in Section 2.1, the algorithm
+uses the training corpus statistics, pos _count
+and total _count for every tile it encounters.
+The memory encodes these statistics in a trie
+data structure: each path from the root of the
+trie to a certain node corresponds to a tile,
+storing the tile statistics in the corresponding
+node. The arc labels along the path are the
+POS, instance types and labeled brackets of
+the corresponding pattern. Tiles of candidate
+instances can be retrieved from the memory
+during parsing by following the corresponding
+path in the trie. The trie is created during the
+training phase by constructing the sentence
+graph for each sentence and generating all the
+tiles for each pattern instance.
+</bodyText>
+<equation confidence="0.7974948">
+VP
+0 1 2 3 4 5 6 7 8 9 10 11
+.START NN CC NN RB VBZ DT JJ NN . .END
+NP
+NP
+</equation>
+<listItem confidence="0.9837847">
+• The total number of different covers,
+num(c),
+• The length of the shortest cover,
+minsize(c),
+• The maximum amount of total context
+in any cover (left plus right context),
+maxcontext(c), and
+• The maximum over all covers of the total
+number of tile elements that overlap be-
+tween connecting tiles, maxoverlap(c).
+</listItem>
+<bodyText confidence="0.992583">
+The score of the candidate is a linear func-
+tion of its cover statistics:
+</bodyText>
+<equation confidence="0.99841325">
+fc (c) = al totalratio(c) + a, num(c)
+—a3 minsize(c)
+-Fa4 maxcontext(c)
+-Fa5 maxoverlap(c)
+</equation>
+<bodyText confidence="0.9998756">
+If candidate c has no covers, f c (c) = 0. Note
+that minsize is weighted negatively, since a
+cover with fewer tiles provides stronger evi-
+dence for the candidate.
+The weights in the current implementation
+were chosen so as to give a lexicographic or-
+dering on the features, preferring first can-
+didates with a higher grand-total ratio, then
+according to the following order: candidates
+with more covers, with covers containing
+fewer tiles, with larger covered contexts, and
+when all else is equal, candidates whose covers
+have more overlap between connecting tiles.
+The flat version used a similar function
+without using totalratio, hence num was the
+most important quantity. In the composite
+case, inner instances increase the number of
+possible covers to the extent that it no longer
+becomes a good measure of reliability (at least
+not at face value).
+</bodyText>
+<sectionHeader confidence="0.997307" genericHeader="method">
+3 Evaluation
+</sectionHeader>
+<bodyText confidence="0.999837125">
+The system was trained on the Penn Tree-
+bank (Marcus et al., 1993) WSJ Sections 2-
+21 and tested on Section 23 (Table 1), same
+as used by Magerman (1995), Collins (1997),
+and Ratnaparkhi (1997), and became a com-
+mon testbed.
+The tasks were selected so as to demon-
+strate the benefit of using internal structure
+</bodyText>
+<table confidence="0.997923625">
+Train Data, WSJ 02-21, 28884 sentences
+base composite base:all
+NP 166242 61384 73%
+VP 43377 28017 61%
+Test Data, WSJ 23, 2416 sentences
+base composite base:all
+NP 13524 5106 73%
+VP 3496 2267 61%
+</table>
+<tableCaption confidence="0.7957305">
+Table 1: Sizes of training and test data, note
+the similar proportions of base instances
+</tableCaption>
+<bodyText confidence="0.999580282608696">
+data for learning composite structures. We
+have studied the effect of noun-phrase infor-
+mation on learning verb phrases by setting
+limits on the number of embedded instances,
+nemb in a tile. A limit of zero emulates the flat
+version since learning takes place from POS
+tags only. The final output, however, may in-
+clude embedded instances since instances may
+be composite. Results indicate that nemb &gt; 0
+allows for NP information to contribute to VP
+learning.
+A minimal context of one word and up to
+two words on each side was used, and tile
+threshold was set to OT = 0.6 following results
+of the flat version. A minimal context was
+not necessary in the flat version, but here the
+additional evidence from embedded instances
+gives rise to more precision errors - a phe-
+nomenon compensated by setting a minimal
+context. The maximal tile length was set to 5;
+higher values gave a very small improvement
+which did not justify the additional memory.
+Table 2 presents results for simultaneous
+NP and VP learning, and for learning VP
+without NP. For nemb = 0, NPs do not con-
+tribute to inference; the small performance
+difference results from NP influence on con-
+flict resolution. The effect of NPs is clearly
+visible when nemb = 1 is allowed, yielding 24%
+more recall and an improvement of 10% in F.
+For NPs only (Table 3), allowing embedded
+instances improved the recall in expense of
+precision. We have experimented with seper-
+ating NPs from base-NPs 1. As Table 3 shows,
+&apos;when scoring non-recursive patterns. num was
+the leading quantity and totalratio the second. based
+on flat-version experience
+seperating the tasks improved the overall pre-
+cision for NPs. When nemb = 0, there was a
+2.5% recall decrease, whereas when nemb = 1,
+the recall decrease was only 0.4%. The ef-
+fect of modeling the internal NP structure
+(nemb = 1) clearly shows for composite NP&apos;s.
+The table also shows that VP information in
+did not have a significant impact on NP learn-
+ing.
+</bodyText>
+<table confidence="0.986517166666667">
+max. rec. prec. Fo
+nemb
+VP only 0 47.1 76.2 58.2
+VP only 1 58.9 62.8 60.7
+VP with NP 0 45.4 77.4 57.2
+VP with NP 1 82.6 61.5 70.5
+</table>
+<tableCaption confidence="0.985742">
+Table 2: VP Results, OT = 0.6, tile length&lt; 5
+</tableCaption>
+<table confidence="0.999216230769231">
+max. rec. prec. Fo
+nemb
+NP only 0 81.8 76.8 79.2
+1 87.6 65.8 75.2
+NP with VP 0 81.7 77.1 79.3
+1 86.0 66.0 74.7
+base NP 0 93.4 93.6 93.5
+composite 42.0 67.1 51.7
+all NP 79.3 88.5 83.7
+base NP 1 93.2 93.5 93.3
+composite 71.4 49.0 58.1
+all NP 87.2 77.7 82.2
+NP (TKS99) 76.1 91.3 83.0
+</table>
+<tableCaption confidence="0.994496">
+Table 3: NP Results, OT = 0.6, tile length&lt; 5.
+</tableCaption>
+<bodyText confidence="0.973217166666667">
+Rows 5-10 refer to experiments where base-
+NPs were distinguished from composite ones.
+There are currently no other partial parsers
+on these tasks to compare the combined VP
+and NP results to. Tjong Kim Sang (1999)
+presented result for composite NP, obtained
+by repeated cascading, similar to our results
+with seperate base and composite NPs and no
+internal structure. Our results are lower than
+those of full parsers, e.g., Collins (1997) - as
+might be expected since much less structural
+data, and no lexical data are being used.
+</bodyText>
+<sectionHeader confidence="0.985787" genericHeader="conclusions">
+4 Discussion
+</sectionHeader>
+<bodyText confidence="0.9989005">
+We have presented a memory-based learning
+method for partial parsing which can handle
+and exploit compositional information. Like
+other shallow-parsing systems, it is most use-
+ful when the number of target patterns is
+small. In particular, the method does not re-
+quire fully-parsed sentences as training, un-
+like trainable full parsing methods.
+The training material has to contain only
+bracketing of the target patterns, implying
+much simpler training material when the
+parsing task is limited. This and similar
+methods are, accordingly, attractive in cases
+where a fully parsed corpus is not available for
+training, or when a full parse is not necessary
+for handling the problem.
+Scha et al. (1999) provide a thorough com-
+parison of the flat MBSL method with DOP.
+Considering POS data only, the composi-
+tional method resembles the DOP1 model in
+that it uses sub-constituent information in
+order to construct evidence for higher-level
+structures. There are, however, some differ-
+ences:
+</bodyText>
+<listItem confidence="0.996395590909091">
+• Consider the input [VP A [NP B C NP]
+VP] . In DOP, B and C will be leaves in the
+tree whose root is NP, and will contribute
+to VP via that inner NP. In MBSL, these
+tags will participate in NP tiles as well as
+in VP tiles. That is, VP would be consid-
+ered as comprised of [ A NP ] as well as
+[ A B C ] .
+• Even supposing B and C do not contribute
+to evidence for VP, the MBSL score of VP
+will be calculated with NP regarded as a
+terminal. That is, the internal structure
+and score of NP is not taken into account.
+In DOP, the probability of the VP node
+would be calculated from that of its con-
+stituents.
+• The scoring process of DOP is based on a
+statistical model, whereas in MBSL, it is
+based on properties calculated from the
+cover graph.
+• In MBSL it is possible to specify if tiles
+of a composite instance will be created
+</listItem>
+<bodyText confidence="0.9585695">
+bottom-up or top-down, and limit the
+level. This can be useful in highly-nested
+instances, where going all the way top-
+down will create a lot of tiles.
+• DOP can be naturally formulated to al-
+low for wildcards, as in the DOP3 model,
+by allowing some of the leaves to be un-
+known. Allowing wildcards in MBSL
+would be more complicated because it re-
+lies on tiling of continuous sequences.
+A property both methods share is that they
+will work harder when there is plenty of ev-
+idence for a candidate (Sima&apos;an, p.c.). This
+contradicts the intuition that more &apos;straight-
+forward&apos; candidates would be identified faster.
+We plan to tackle this problem in the future.
+Another related algorithm was presented
+by Sekine and Grishman (1995, Apple Pie
+Parser) and Sekine (1998). The algorithm
+extracts grammar rules with S and NP (and
+possibly other structures) as non-terminals.
+Both Apple Pie (hereafter APP) and MBSL
+use raw-data examples for parsing, and can be
+restricted to specified target non-terminals or
+patterns. The differences lie in:
+• MBSL recombines fragments of instances
+for generalizations, while APP uses rules
+derived from complete instances.
+• The grammar rules of APP do not in-
+clude context, which is taken into ac-
+count when generating the non-terminal
+S. In MBSL, the context is consulted for
+each instance candidate.
+• APP, like DOP, uses a probabilistic
+model. The probability of a grammar
+rule X Y is Freq(X y)/Freq(X). Anal-
+ogously, the denominator in MBSL would
+be Freq(Y).
+The presented method concerns primarily
+with phrases, which can be represented by a
+tree structure. It is not aimed at handling
+dependencies, which require heavy use of lex-
+ical information (Hindle and Rooth, 1993, for
+PP attachment). As (Daelemans et al., 1999)
+show, lexical information improves on NP and
+VP chunking as well. Since our method uses
+raw data, representing lexical entries will re-
+quire a lot of memory.
+In a future work, we plan to use the system
+for providing instance candidates, and disam-
+biguate them using an algorithm more suit-
+able for handling lexical information. An ad-
+ditional possibility is to use word-types, such
+as a special tag for be-verbs, or for preposi-
+tions like &apos;of&apos; which attaches mainly to nouns
+(Sekine and Grishman, 1995).
+In a similar vain to Skut and Brants (1998)
+and Buchholz et al. (1999), the method ex-
+tends an existing flat shallow-parsing method
+to handle composite structures. It yields a
+significant improvement over the flat method,
+especially for long and more complex struc-
+tures. As can be expected, the performance
+of the partial method is still lower than that of
+full parsers, which exploit (and require) much
+richer information. The results of this line of
+research enrich the space of alternative pars-
+ing approaches, aiming to reduce the gap be-
+tween shallow and full parsing.
+Acknowledgements Y. K. thanks Jorn
+Veenstra, Sabine Buchholz, and Khalil
+Sima&apos;an for thorough and helpful discussions,
+as well as Walter Daelemans and Antal van
+der Bosch for helpful comments.
+</bodyText>
+<sectionHeader confidence="0.998085" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.992714663043478">
+S. P. Abney. 1991. Parsing by chunks. In
+R. C. Berwick, S. P. Abney, and C. Tenny,
+editors, Principle-Based Parsing: Computation
+and Psycholinguistics, pages 257-278. Kluwer,
+Dordrecht.
+S. Argamon, I. Dagan, and Y. Krymolowski. 1998.
+A memory-based approach to learning shallow
+natural language patterns. In Proc. of COL-
+ING/ACL, pages 67-73, Montreal, Canada.
+S. Argamon, I. Dagan, and Y. Krymolowski. 1999.
+A memory-based approach to learning shallow
+natural language patterns. Journal of Experi-
+mental and Theoretical Al, 11:369-390. CMP-
+LG/9806011.
+R. Bod. 1992. A computational model of lan-
+guage performance: Data oriented parsing. In
+Coling, pages 855-859, Nantes, France.
+S. Buchholz, J. Veenstra, and W. Daelemans.
+1999. Cascaded grammatical relation assign-
+ment. In Proeedings of EMNLP/VL C-99, pages
+239-246, University of Maryland, USA, June.
+C. Cardie and D. Pierce. 1998. Error-driven prun-
+ing of treebank grammars for base noun phrase
+identification. In Proc. of COLING/ACL,
+pages 218-224, Montreal, Canada.
+Kenneth W. Church. 1988. A stochastic parts
+program and noun phrase parser for unre-
+stricted text. In proc. of ACL Conference on
+Applied Natural Language Processing.
+M. Collins. 1997. Three generative, lexicalised
+models for statistical parsing. In Proc. of
+the ACL/EACL Annual Meeting, pages 16-23,
+Madrid, Spain, July.
+Walter Daelemans, Sabine Buchholz, and Jorn
+Veenstra. 1999. Memory-based shallow pars-
+ing. In Proeedings of CoNLL-99, Bergen, Nor-
+way, June.
+Gregory Greffenstette. 1993. Evaluation
+techniques for automatic semantic extraction:
+Comparing syntactic and window based ap-
+proaches. In ACL Workshop on Acquisition of
+Lexical Knowledge From Text, Ohio State Uni-
+versity, June.
+D. Hindle and M. Rooth. 1993. Structural ambi-
+guity and lexical relations. Computational Lin-
+guistics, 19(1):103-120.
+David M. Magerman. 1995. Statistical decision-
+tree models for parsing. In Proc. of the 33rd
+Annual Meeting of the Association for Compu-
+tational Linguistics. Cambridge. MA, 26-30.
+M. P. Marcus, B. Santorini, and
+M. Marcinkiewicz. 1993. Building a large
+annotated corpus of English: The Penn Tree-
+bank. Computational Linguistics, 19(2):313-
+330, June.
+M. Munoz, V. Punyakanok, D. Roth, and D. Zi-
+mak. 1999. A learning approach to shallow
+parsing. In EMNLP-VLC*99. the Joint SIG-
+DAT Conference on Empirical Methods in Nat-
+ural Language Processing and Very Large Cor-
+pora, pages 168-178, June.
+L. A. Ramshaw and M. P. Marcus. 1995. Text
+chunking using transformation-based learning.
+In Proceedings of the Third Workshop on Very
+Large Corpora.
+A. Ratnaparkhi. 1997. A linear observed time
+statistical parser based on maximum entropy
+models. In EMNLP2, Providence, RI, March.
+Remko Scha, Rens Bod, and Khalil Sima&apos;an.
+1999. A memory-based model of syntactic anal-
+ysis: Data-oriented parsing. Journal of Exper-
+imental and Theoretical Al, 11:409-440.
+Satoshi Sekine and Ralph Grishman. 1995. A
+corpus-based probabilistic grammar with only
+two non-terminals. In Fourth International
+Workshop on Parsing Technology — IWPT,
+Prague.
+Satoshi Sekine. 1998. Corpus-Based Parsing and
+Sublanguage Studies. Ph.D. thesis, New York
+University.
+W. Skut and T. Brants. 1998. A maximum-
+entropy partial parser for unrestricted text. In
+Proc. of the sixth Workshop on Very Large Cor-
+pora, Montreal, Canada.
+E. F. Tjong Kim Sang. 1999. Noun phrase de-
+tection by repeated chunking. In Proeedings of
+CoNLL-99, Bergen, Norway, June.
+J. Veenstra. 1998. Fast NP chunking using
+memory-based learning techniques. In F. Ver-
+denius and W. van den Broek, editors, Proceed-
+ings of Benelearn, pages 71-79, Wageningen,
+the Netherlands.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.963471">
+<title confidence="0.999061">Incorporating Compositional Evidence in Memory-Based Partial Parsing</title>
+<author confidence="0.999159">Yuval Krymolowski</author>
+<author confidence="0.999159">Ido Dagan</author>
+<affiliation confidence="0.9998025">Department of Mathematics and Computer Science Bar-Ilan University</affiliation>
+<address confidence="0.999826">52900 Ramat Gan, Israel</address>
+<email confidence="0.973511">Iyuvalk,daganlOcs.biu.ac.il</email>
+<abstract confidence="0.999398230769231">In this paper, a memory-based parsing method is extended for handling compositional structures. The method is oriented for learning to parse any selected subset of target syntactic structures. It is local, yet can handle also compositional structures. Parts of speech as well as embedded instances are being used simultaneously. The output is a partial parse in which instances of the target structures are marked.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>S P Abney</author>
+</authors>
+<title>Parsing by chunks. In</title>
+<date>1991</date>
+<booktitle>Principle-Based Parsing: Computation and Psycholinguistics,</booktitle>
+<pages>257--278</pages>
+<editor>R. C. Berwick, S. P. Abney, and C. Tenny, editors,</editor>
+<publisher>Kluwer,</publisher>
+<location>Dordrecht.</location>
+<contexts>
+<context position="952" citStr="Abney, 1991" startWordPosition="145" endWordPosition="146">iented for learning to parse any selected subset of target syntactic structures. It is local, yet can handle also compositional structures. Parts of speech as well as embedded instances are being used simultaneously. The output is a partial parse in which instances of the target structures are marked. 1 Introduction A variety of statistical methods were proposed over the recent years for learning to produce a full parse of free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb (SV) and verb-object (VO) pairs (Argamon et al., 1999; Munoz et al., 1999). The output of shallow parsers is usefu</context>
+</contexts>
+<marker>Abney, 1991</marker>
+<rawString>S. P. Abney. 1991. Parsing by chunks. In R. C. Berwick, S. P. Abney, and C. Tenny, editors, Principle-Based Parsing: Computation and Psycholinguistics, pages 257-278. Kluwer, Dordrecht.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Argamon</author>
+<author>I Dagan</author>
+<author>Y Krymolowski</author>
+</authors>
+<title>A memory-based approach to learning shallow natural language patterns.</title>
+<date>1998</date>
+<booktitle>In Proc. of COLING/ACL,</booktitle>
+<pages>67--73</pages>
+<location>Montreal, Canada.</location>
+<contexts>
+<context position="3618" citStr="Argamon et al. (1998" startWordPosition="572" endWordPosition="575">mmatical relation inference. The inferences process is cascaded, and a clear improvement was obtained by passing results across cascades. Another approach for partial parsing was presented by Skut and Brants (1998). Their method is an extension of that of Church (1988) for finding NP&apos;s, achieved by extending the feature space to include structural information. Processing goes simultaneously for structures at all levels, from left to right. Since there are no cascades, the structural level of the output is limited by that of the feature set. This paper presents an extension of the algorithm of Argamon et al. (1998, 1999, hereafter MBSL), which handles and exploits compositional structures. MBSL is a memory-based algorithm that uses raw-data segments for learning chunks. It works with POS tags, and combines segments of various lengths in order to decide whether part of the sentence may be an instance of a target pattern. As a memory-based algorithm, it does not abstract over the data during training, but makes the necessary abstractions during inference - for each particular instance. In extending MBSL, which is a flat method, we have kept the structure of the inference mechanism and its local nature. T</context>
+</contexts>
+<marker>Argamon, Dagan, Krymolowski, 1998</marker>
+<rawString>S. Argamon, I. Dagan, and Y. Krymolowski. 1998. A memory-based approach to learning shallow natural language patterns. In Proc. of COLING/ACL, pages 67-73, Montreal, Canada.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Argamon</author>
+<author>I Dagan</author>
+<author>Y Krymolowski</author>
+</authors>
+<title>A memory-based approach to learning shallow natural language patterns.</title>
+<date>1999</date>
+<journal>Journal of Experimental and Theoretical Al,</journal>
+<pages>11--369</pages>
+<contexts>
+<context position="1491" citStr="Argamon et al., 1999" startWordPosition="224" endWordPosition="228">(1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb (SV) and verb-object (VO) pairs (Argamon et al., 1999; Munoz et al., 1999). The output of shallow parsers is useful where a complete parse tree is not required (e.g., classification, summarization, bilingual alignment). The complexity of training full parsing algorithms may therefore be avoided in such tasks. On the other hand, full parsing has the advantages of producing compositional structures, finding multiple structures simultaneously, and using sub-structures for inference about higher-level ones. While shallow systems typically make use of single-word data, a full parser can use higher-level structures in a compositional manner, e.g., a N</context>
+</contexts>
+<marker>Argamon, Dagan, Krymolowski, 1999</marker>
+<rawString>S. Argamon, I. Dagan, and Y. Krymolowski. 1999. A memory-based approach to learning shallow natural language patterns. Journal of Experimental and Theoretical Al, 11:369-390. CMPLG/9806011.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Bod</author>
+</authors>
+<title>A computational model of language performance: Data oriented parsing.</title>
+<date>1992</date>
+<booktitle>In Coling,</booktitle>
+<pages>855--859</pages>
+<location>Nantes, France.</location>
+<contexts>
+<context position="805" citStr="Bod (1992)" startWordPosition="122" endWordPosition="123">valk,daganlOcs.biu.ac.il Abstract In this paper, a memory-based parsing method is extended for handling compositional structures. The method is oriented for learning to parse any selected subset of target syntactic structures. It is local, yet can handle also compositional structures. Parts of speech as well as embedded instances are being used simultaneously. The output is a partial parse in which instances of the target structures are marked. 1 Introduction A variety of statistical methods were proposed over the recent years for learning to produce a full parse of free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks</context>
+</contexts>
+<marker>Bod, 1992</marker>
+<rawString>R. Bod. 1992. A computational model of language performance: Data oriented parsing. In Coling, pages 855-859, Nantes, France.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Buchholz</author>
+<author>J Veenstra</author>
+<author>W Daelemans</author>
+</authors>
+<title>Cascaded grammatical relation assignment.</title>
+<date>1999</date>
+<booktitle>In Proeedings of EMNLP/VL C-99,</booktitle>
+<pages>239--246</pages>
+<location>University of Maryland, USA,</location>
+<contexts>
+<context position="2875" citStr="Buchholz et al. (1999)" startWordPosition="446" endWordPosition="449">ctic patterns, and may therefore require less training information. That would not be the case when evaluating a full parser on selected target patterns, because its training material would still include full parse-trees labeled with other patterns as well. The approach presented here, of trainable partial parsing, attempts to reduce the gap between shallow and full parsing. It is an extension of shallow parsing towards handling composite and multiple patterns, while maintaining the local nature of the task, and simplicity of training material. One approach to partial parsing was presented by Buchholz et al. (1999), who extended a shallow-parsing technique to partial parsing. The output of NP and VP chunking was used as an input to grammatical relation inference. The inferences process is cascaded, and a clear improvement was obtained by passing results across cascades. Another approach for partial parsing was presented by Skut and Brants (1998). Their method is an extension of that of Church (1988) for finding NP&apos;s, achieved by extending the feature space to include structural information. Processing goes simultaneously for structures at all levels, from left to right. Since there are no cascades, the </context>
+<context position="18917" citStr="Buchholz et al. (1999)" startWordPosition="3314" endWordPosition="3317">993, for PP attachment). As (Daelemans et al., 1999) show, lexical information improves on NP and VP chunking as well. Since our method uses raw data, representing lexical entries will require a lot of memory. In a future work, we plan to use the system for providing instance candidates, and disambiguate them using an algorithm more suitable for handling lexical information. An additional possibility is to use word-types, such as a special tag for be-verbs, or for prepositions like &apos;of&apos; which attaches mainly to nouns (Sekine and Grishman, 1995). In a similar vain to Skut and Brants (1998) and Buchholz et al. (1999), the method extends an existing flat shallow-parsing method to handle composite structures. It yields a significant improvement over the flat method, especially for long and more complex structures. As can be expected, the performance of the partial method is still lower than that of full parsers, which exploit (and require) much richer information. The results of this line of research enrich the space of alternative parsing approaches, aiming to reduce the gap between shallow and full parsing. Acknowledgements Y. K. thanks Jorn Veenstra, Sabine Buchholz, and Khalil Sima&apos;an for thorough and h</context>
+</contexts>
+<marker>Buchholz, Veenstra, Daelemans, 1999</marker>
+<rawString>S. Buchholz, J. Veenstra, and W. Daelemans. 1999. Cascaded grammatical relation assignment. In Proeedings of EMNLP/VL C-99, pages 239-246, University of Maryland, USA, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Cardie</author>
+<author>D Pierce</author>
+</authors>
+<title>Error-driven pruning of treebank grammars for base noun phrase identification.</title>
+<date>1998</date>
+<booktitle>In Proc. of COLING/ACL,</booktitle>
+<pages>218--224</pages>
+<location>Montreal, Canada.</location>
+<contexts>
+<context position="1365" citStr="Cardie and Pierce (1998)" startWordPosition="206" endWordPosition="209">to produce a full parse of free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb (SV) and verb-object (VO) pairs (Argamon et al., 1999; Munoz et al., 1999). The output of shallow parsers is useful where a complete parse tree is not required (e.g., classification, summarization, bilingual alignment). The complexity of training full parsing algorithms may therefore be avoided in such tasks. On the other hand, full parsing has the advantages of producing compositional structures, finding multiple structures simultaneously, and using sub-structures for inference about higher-level ones. While shallow syst</context>
+</contexts>
+<marker>Cardie, Pierce, 1998</marker>
+<rawString>C. Cardie and D. Pierce. 1998. Error-driven pruning of treebank grammars for base noun phrase identification. In Proc. of COLING/ACL, pages 218-224, Montreal, Canada.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kenneth W Church</author>
+</authors>
+<title>A stochastic parts program and noun phrase parser for unrestricted text.</title>
+<date>1988</date>
+<booktitle>In proc. of ACL Conference on Applied Natural Language Processing.</booktitle>
+<contexts>
+<context position="1312" citStr="Church (1988)" startWordPosition="200" endWordPosition="201">oposed over the recent years for learning to produce a full parse of free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb (SV) and verb-object (VO) pairs (Argamon et al., 1999; Munoz et al., 1999). The output of shallow parsers is useful where a complete parse tree is not required (e.g., classification, summarization, bilingual alignment). The complexity of training full parsing algorithms may therefore be avoided in such tasks. On the other hand, full parsing has the advantages of producing compositional structures, finding multiple structures simultaneously, and using sub-structures for </context>
+<context position="3267" citStr="Church (1988)" startWordPosition="514" endWordPosition="515">hallow parsing towards handling composite and multiple patterns, while maintaining the local nature of the task, and simplicity of training material. One approach to partial parsing was presented by Buchholz et al. (1999), who extended a shallow-parsing technique to partial parsing. The output of NP and VP chunking was used as an input to grammatical relation inference. The inferences process is cascaded, and a clear improvement was obtained by passing results across cascades. Another approach for partial parsing was presented by Skut and Brants (1998). Their method is an extension of that of Church (1988) for finding NP&apos;s, achieved by extending the feature space to include structural information. Processing goes simultaneously for structures at all levels, from left to right. Since there are no cascades, the structural level of the output is limited by that of the feature set. This paper presents an extension of the algorithm of Argamon et al. (1998, 1999, hereafter MBSL), which handles and exploits compositional structures. MBSL is a memory-based algorithm that uses raw-data segments for learning chunks. It works with POS tags, and combines segments of various lengths in order to decide wheth</context>
+</contexts>
+<marker>Church, 1988</marker>
+<rawString>Kenneth W. Church. 1988. A stochastic parts program and noun phrase parser for unrestricted text. In proc. of ACL Conference on Applied Natural Language Processing.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Collins</author>
+</authors>
+<title>Three generative, lexicalised models for statistical parsing.</title>
+<date>1997</date>
+<booktitle>In Proc. of the ACL/EACL Annual Meeting,</booktitle>
+<pages>16--23</pages>
+<location>Madrid, Spain,</location>
+<contexts>
+<context position="838" citStr="Collins (1997)" startWordPosition="126" endWordPosition="127">ract In this paper, a memory-based parsing method is extended for handling compositional structures. The method is oriented for learning to parse any selected subset of target syntactic structures. It is local, yet can handle also compositional structures. Parts of speech as well as embedded instances are being used simultaneously. The output is a partial parse in which instances of the target structures are marked. 1 Introduction A variety of statistical methods were proposed over the recent years for learning to produce a full parse of free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb </context>
+<context position="11378" citStr="Collins (1997)" startWordPosition="1986" endWordPosition="1987">ining fewer tiles, with larger covered contexts, and when all else is equal, candidates whose covers have more overlap between connecting tiles. The flat version used a similar function without using totalratio, hence num was the most important quantity. In the composite case, inner instances increase the number of possible covers to the extent that it no longer becomes a good measure of reliability (at least not at face value). 3 Evaluation The system was trained on the Penn Treebank (Marcus et al., 1993) WSJ Sections 2- 21 and tested on Section 23 (Table 1), same as used by Magerman (1995), Collins (1997), and Ratnaparkhi (1997), and became a common testbed. The tasks were selected so as to demonstrate the benefit of using internal structure Train Data, WSJ 02-21, 28884 sentences base composite base:all NP 166242 61384 73% VP 43377 28017 61% Test Data, WSJ 23, 2416 sentences base composite base:all NP 13524 5106 73% VP 3496 2267 61% Table 1: Sizes of training and test data, note the similar proportions of base instances data for learning composite structures. We have studied the effect of noun-phrase information on learning verb phrases by setting limits on the number of embedded instances, ne</context>
+<context position="14689" citStr="Collins (1997)" startWordPosition="2580" endWordPosition="2581">67.1 51.7 all NP 79.3 88.5 83.7 base NP 1 93.2 93.5 93.3 composite 71.4 49.0 58.1 all NP 87.2 77.7 82.2 NP (TKS99) 76.1 91.3 83.0 Table 3: NP Results, OT = 0.6, tile length&lt; 5. Rows 5-10 refer to experiments where baseNPs were distinguished from composite ones. There are currently no other partial parsers on these tasks to compare the combined VP and NP results to. Tjong Kim Sang (1999) presented result for composite NP, obtained by repeated cascading, similar to our results with seperate base and composite NPs and no internal structure. Our results are lower than those of full parsers, e.g., Collins (1997) - as might be expected since much less structural data, and no lexical data are being used. 4 Discussion We have presented a memory-based learning method for partial parsing which can handle and exploit compositional information. Like other shallow-parsing systems, it is most useful when the number of target patterns is small. In particular, the method does not require fully-parsed sentences as training, unlike trainable full parsing methods. The training material has to contain only bracketing of the target patterns, implying much simpler training material when the parsing task is limited. T</context>
+</contexts>
+<marker>Collins, 1997</marker>
+<rawString>M. Collins. 1997. Three generative, lexicalised models for statistical parsing. In Proc. of the ACL/EACL Annual Meeting, pages 16-23, Madrid, Spain, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Walter Daelemans</author>
+<author>Sabine Buchholz</author>
+<author>Jorn Veenstra</author>
+</authors>
+<title>Memory-based shallow parsing.</title>
+<date>1999</date>
+<booktitle>In Proeedings of CoNLL-99,</booktitle>
+<location>Bergen, Norway,</location>
+<contexts>
+<context position="18347" citStr="Daelemans et al., 1999" startWordPosition="3215" endWordPosition="3218">rom complete instances. • The grammar rules of APP do not include context, which is taken into account when generating the non-terminal S. In MBSL, the context is consulted for each instance candidate. • APP, like DOP, uses a probabilistic model. The probability of a grammar rule X Y is Freq(X y)/Freq(X). Analogously, the denominator in MBSL would be Freq(Y). The presented method concerns primarily with phrases, which can be represented by a tree structure. It is not aimed at handling dependencies, which require heavy use of lexical information (Hindle and Rooth, 1993, for PP attachment). As (Daelemans et al., 1999) show, lexical information improves on NP and VP chunking as well. Since our method uses raw data, representing lexical entries will require a lot of memory. In a future work, we plan to use the system for providing instance candidates, and disambiguate them using an algorithm more suitable for handling lexical information. An additional possibility is to use word-types, such as a special tag for be-verbs, or for prepositions like &apos;of&apos; which attaches mainly to nouns (Sekine and Grishman, 1995). In a similar vain to Skut and Brants (1998) and Buchholz et al. (1999), the method extends an existi</context>
+</contexts>
+<marker>Daelemans, Buchholz, Veenstra, 1999</marker>
+<rawString>Walter Daelemans, Sabine Buchholz, and Jorn Veenstra. 1999. Memory-based shallow parsing. In Proeedings of CoNLL-99, Bergen, Norway, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gregory Greffenstette</author>
+</authors>
+<title>Evaluation techniques for automatic semantic extraction: Comparing syntactic and window based approaches.</title>
+<date>1993</date>
+<booktitle>In ACL Workshop on Acquisition of Lexical Knowledge</booktitle>
+<institution>From Text, Ohio State University,</institution>
+<contexts>
+<context position="974" citStr="Greffenstette, 1993" startWordPosition="147" endWordPosition="148">arning to parse any selected subset of target syntactic structures. It is local, yet can handle also compositional structures. Parts of speech as well as embedded instances are being used simultaneously. The output is a partial parse in which instances of the target structures are marked. 1 Introduction A variety of statistical methods were proposed over the recent years for learning to produce a full parse of free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb (SV) and verb-object (VO) pairs (Argamon et al., 1999; Munoz et al., 1999). The output of shallow parsers is useful where a complete par</context>
+</contexts>
+<marker>Greffenstette, 1993</marker>
+<rawString>Gregory Greffenstette. 1993. Evaluation techniques for automatic semantic extraction: Comparing syntactic and window based approaches. In ACL Workshop on Acquisition of Lexical Knowledge From Text, Ohio State University, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Hindle</author>
+<author>M Rooth</author>
+</authors>
+<title>Structural ambiguity and lexical relations.</title>
+<date>1993</date>
+<journal>Computational Linguistics,</journal>
+<pages>19--1</pages>
+<contexts>
+<context position="18298" citStr="Hindle and Rooth, 1993" startWordPosition="3207" endWordPosition="3210"> generalizations, while APP uses rules derived from complete instances. • The grammar rules of APP do not include context, which is taken into account when generating the non-terminal S. In MBSL, the context is consulted for each instance candidate. • APP, like DOP, uses a probabilistic model. The probability of a grammar rule X Y is Freq(X y)/Freq(X). Analogously, the denominator in MBSL would be Freq(Y). The presented method concerns primarily with phrases, which can be represented by a tree structure. It is not aimed at handling dependencies, which require heavy use of lexical information (Hindle and Rooth, 1993, for PP attachment). As (Daelemans et al., 1999) show, lexical information improves on NP and VP chunking as well. Since our method uses raw data, representing lexical entries will require a lot of memory. In a future work, we plan to use the system for providing instance candidates, and disambiguate them using an algorithm more suitable for handling lexical information. An additional possibility is to use word-types, such as a special tag for be-verbs, or for prepositions like &apos;of&apos; which attaches mainly to nouns (Sekine and Grishman, 1995). In a similar vain to Skut and Brants (1998) and Buc</context>
+</contexts>
+<marker>Hindle, Rooth, 1993</marker>
+<rawString>D. Hindle and M. Rooth. 1993. Structural ambiguity and lexical relations. Computational Linguistics, 19(1):103-120.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David M Magerman</author>
+</authors>
+<title>Statistical decisiontree models for parsing.</title>
+<date>1995</date>
+<booktitle>In Proc. of the 33rd Annual Meeting of the Association for Computational Linguistics.</booktitle>
+<pages>26--30</pages>
+<location>Cambridge. MA,</location>
+<contexts>
+<context position="822" citStr="Magerman (1995)" startWordPosition="124" endWordPosition="125">cs.biu.ac.il Abstract In this paper, a memory-based parsing method is extended for handling compositional structures. The method is oriented for learning to parse any selected subset of target syntactic structures. It is local, yet can handle also compositional structures. Parts of speech as well as embedded instances are being used simultaneously. The output is a partial parse in which instances of the target structures are marked. 1 Introduction A variety of statistical methods were proposed over the recent years for learning to produce a full parse of free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recogniz</context>
+<context position="11362" citStr="Magerman (1995)" startWordPosition="1984" endWordPosition="1985">with covers containing fewer tiles, with larger covered contexts, and when all else is equal, candidates whose covers have more overlap between connecting tiles. The flat version used a similar function without using totalratio, hence num was the most important quantity. In the composite case, inner instances increase the number of possible covers to the extent that it no longer becomes a good measure of reliability (at least not at face value). 3 Evaluation The system was trained on the Penn Treebank (Marcus et al., 1993) WSJ Sections 2- 21 and tested on Section 23 (Table 1), same as used by Magerman (1995), Collins (1997), and Ratnaparkhi (1997), and became a common testbed. The tasks were selected so as to demonstrate the benefit of using internal structure Train Data, WSJ 02-21, 28884 sentences base composite base:all NP 166242 61384 73% VP 43377 28017 61% Test Data, WSJ 23, 2416 sentences base composite base:all NP 13524 5106 73% VP 3496 2267 61% Table 1: Sizes of training and test data, note the similar proportions of base instances data for learning composite structures. We have studied the effect of noun-phrase information on learning verb phrases by setting limits on the number of embedd</context>
+</contexts>
+<marker>Magerman, 1995</marker>
+<rawString>David M. Magerman. 1995. Statistical decisiontree models for parsing. In Proc. of the 33rd Annual Meeting of the Association for Computational Linguistics. Cambridge. MA, 26-30.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M P Marcus</author>
+<author>B Santorini</author>
+<author>M Marcinkiewicz</author>
+</authors>
+<title>Building a large annotated corpus of English: The Penn Treebank. Computational Linguistics,</title>
+<date>1993</date>
+<contexts>
+<context position="11275" citStr="Marcus et al., 1993" startWordPosition="1965" endWordPosition="1968">gher grand-total ratio, then according to the following order: candidates with more covers, with covers containing fewer tiles, with larger covered contexts, and when all else is equal, candidates whose covers have more overlap between connecting tiles. The flat version used a similar function without using totalratio, hence num was the most important quantity. In the composite case, inner instances increase the number of possible covers to the extent that it no longer becomes a good measure of reliability (at least not at face value). 3 Evaluation The system was trained on the Penn Treebank (Marcus et al., 1993) WSJ Sections 2- 21 and tested on Section 23 (Table 1), same as used by Magerman (1995), Collins (1997), and Ratnaparkhi (1997), and became a common testbed. The tasks were selected so as to demonstrate the benefit of using internal structure Train Data, WSJ 02-21, 28884 sentences base composite base:all NP 166242 61384 73% VP 43377 28017 61% Test Data, WSJ 23, 2416 sentences base composite base:all NP 13524 5106 73% VP 3496 2267 61% Table 1: Sizes of training and test data, note the similar proportions of base instances data for learning composite structures. We have studied the effect of nou</context>
+</contexts>
+<marker>Marcus, Santorini, Marcinkiewicz, 1993</marker>
+<rawString>M. P. Marcus, B. Santorini, and M. Marcinkiewicz. 1993. Building a large annotated corpus of English: The Penn Treebank. Computational Linguistics, 19(2):313-330, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Munoz</author>
+<author>V Punyakanok</author>
+<author>D Roth</author>
+<author>D Zimak</author>
+</authors>
+<title>A learning approach to shallow parsing.</title>
+<date>1999</date>
+<booktitle>In EMNLP-VLC*99. the Joint SIGDAT Conference on Empirical Methods in Natural Language Processing and Very Large Corpora,</booktitle>
+<pages>168--178</pages>
+<contexts>
+<context position="1512" citStr="Munoz et al., 1999" startWordPosition="229" endWordPosition="232">a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb (SV) and verb-object (VO) pairs (Argamon et al., 1999; Munoz et al., 1999). The output of shallow parsers is useful where a complete parse tree is not required (e.g., classification, summarization, bilingual alignment). The complexity of training full parsing algorithms may therefore be avoided in such tasks. On the other hand, full parsing has the advantages of producing compositional structures, finding multiple structures simultaneously, and using sub-structures for inference about higher-level ones. While shallow systems typically make use of single-word data, a full parser can use higher-level structures in a compositional manner, e.g., a NP for identifying a V</context>
+</contexts>
+<marker>Munoz, Punyakanok, Roth, Zimak, 1999</marker>
+<rawString>M. Munoz, V. Punyakanok, D. Roth, and D. Zimak. 1999. A learning approach to shallow parsing. In EMNLP-VLC*99. the Joint SIGDAT Conference on Empirical Methods in Natural Language Processing and Very Large Corpora, pages 168-178, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L A Ramshaw</author>
+<author>M P Marcus</author>
+</authors>
+<title>Text chunking using transformation-based learning.</title>
+<date>1995</date>
+<booktitle>In Proceedings of the Third Workshop on Very Large Corpora.</booktitle>
+<contexts>
+<context position="1339" citStr="Ramshaw and Marcus (1995)" startWordPosition="202" endWordPosition="205"> recent years for learning to produce a full parse of free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb (SV) and verb-object (VO) pairs (Argamon et al., 1999; Munoz et al., 1999). The output of shallow parsers is useful where a complete parse tree is not required (e.g., classification, summarization, bilingual alignment). The complexity of training full parsing algorithms may therefore be avoided in such tasks. On the other hand, full parsing has the advantages of producing compositional structures, finding multiple structures simultaneously, and using sub-structures for inference about higher-leve</context>
+</contexts>
+<marker>Ramshaw, Marcus, 1995</marker>
+<rawString>L. A. Ramshaw and M. P. Marcus. 1995. Text chunking using transformation-based learning. In Proceedings of the Third Workshop on Very Large Corpora.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Ratnaparkhi</author>
+</authors>
+<title>A linear observed time statistical parser based on maximum entropy models.</title>
+<date>1997</date>
+<booktitle>In EMNLP2,</booktitle>
+<location>Providence, RI,</location>
+<contexts>
+<context position="858" citStr="Ratnaparkhi (1997)" startWordPosition="128" endWordPosition="129">er, a memory-based parsing method is extended for handling compositional structures. The method is oriented for learning to parse any selected subset of target syntactic structures. It is local, yet can handle also compositional structures. Parts of speech as well as embedded instances are being used simultaneously. The output is a partial parse in which instances of the target structures are marked. 1 Introduction A variety of statistical methods were proposed over the recent years for learning to produce a full parse of free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb (SV) and verb-object</context>
+<context position="11402" citStr="Ratnaparkhi (1997)" startWordPosition="1989" endWordPosition="1990">ith larger covered contexts, and when all else is equal, candidates whose covers have more overlap between connecting tiles. The flat version used a similar function without using totalratio, hence num was the most important quantity. In the composite case, inner instances increase the number of possible covers to the extent that it no longer becomes a good measure of reliability (at least not at face value). 3 Evaluation The system was trained on the Penn Treebank (Marcus et al., 1993) WSJ Sections 2- 21 and tested on Section 23 (Table 1), same as used by Magerman (1995), Collins (1997), and Ratnaparkhi (1997), and became a common testbed. The tasks were selected so as to demonstrate the benefit of using internal structure Train Data, WSJ 02-21, 28884 sentences base composite base:all NP 166242 61384 73% VP 43377 28017 61% Test Data, WSJ 23, 2416 sentences base composite base:all NP 13524 5106 73% VP 3496 2267 61% Table 1: Sizes of training and test data, note the similar proportions of base instances data for learning composite structures. We have studied the effect of noun-phrase information on learning verb phrases by setting limits on the number of embedded instances, nemb in a tile. A limit of</context>
+</contexts>
+<marker>Ratnaparkhi, 1997</marker>
+<rawString>A. Ratnaparkhi. 1997. A linear observed time statistical parser based on maximum entropy models. In EMNLP2, Providence, RI, March.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Remko Scha</author>
+<author>Rens Bod</author>
+<author>Khalil Sima&apos;an</author>
+</authors>
+<title>A memory-based model of syntactic analysis: Data-oriented parsing.</title>
+<date>1999</date>
+<journal>Journal of Experimental and Theoretical Al,</journal>
+<pages>11--409</pages>
+<contexts>
+<context position="15492" citStr="Scha et al. (1999)" startWordPosition="2707" endWordPosition="2710">handle and exploit compositional information. Like other shallow-parsing systems, it is most useful when the number of target patterns is small. In particular, the method does not require fully-parsed sentences as training, unlike trainable full parsing methods. The training material has to contain only bracketing of the target patterns, implying much simpler training material when the parsing task is limited. This and similar methods are, accordingly, attractive in cases where a fully parsed corpus is not available for training, or when a full parse is not necessary for handling the problem. Scha et al. (1999) provide a thorough comparison of the flat MBSL method with DOP. Considering POS data only, the compositional method resembles the DOP1 model in that it uses sub-constituent information in order to construct evidence for higher-level structures. There are, however, some differences: • Consider the input [VP A [NP B C NP] VP] . In DOP, B and C will be leaves in the tree whose root is NP, and will contribute to VP via that inner NP. In MBSL, these tags will participate in NP tiles as well as in VP tiles. That is, VP would be considered as comprised of [ A NP ] as well as [ A B C ] . • Even suppo</context>
+</contexts>
+<marker>Scha, Bod, Sima&apos;an, 1999</marker>
+<rawString>Remko Scha, Rens Bod, and Khalil Sima&apos;an. 1999. A memory-based model of syntactic analysis: Data-oriented parsing. Journal of Experimental and Theoretical Al, 11:409-440.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Satoshi Sekine</author>
+<author>Ralph Grishman</author>
+</authors>
+<title>A corpus-based probabilistic grammar with only two non-terminals.</title>
+<date>1995</date>
+<booktitle>In Fourth International Workshop on Parsing Technology — IWPT,</booktitle>
+<location>Prague.</location>
+<contexts>
+<context position="17324" citStr="Sekine and Grishman (1995" startWordPosition="3050" endWordPosition="3053"> going all the way topdown will create a lot of tiles. • DOP can be naturally formulated to allow for wildcards, as in the DOP3 model, by allowing some of the leaves to be unknown. Allowing wildcards in MBSL would be more complicated because it relies on tiling of continuous sequences. A property both methods share is that they will work harder when there is plenty of evidence for a candidate (Sima&apos;an, p.c.). This contradicts the intuition that more &apos;straightforward&apos; candidates would be identified faster. We plan to tackle this problem in the future. Another related algorithm was presented by Sekine and Grishman (1995, Apple Pie Parser) and Sekine (1998). The algorithm extracts grammar rules with S and NP (and possibly other structures) as non-terminals. Both Apple Pie (hereafter APP) and MBSL use raw-data examples for parsing, and can be restricted to specified target non-terminals or patterns. The differences lie in: • MBSL recombines fragments of instances for generalizations, while APP uses rules derived from complete instances. • The grammar rules of APP do not include context, which is taken into account when generating the non-terminal S. In MBSL, the context is consulted for each instance candidate</context>
+<context position="18845" citStr="Sekine and Grishman, 1995" startWordPosition="3300" endWordPosition="3303">dencies, which require heavy use of lexical information (Hindle and Rooth, 1993, for PP attachment). As (Daelemans et al., 1999) show, lexical information improves on NP and VP chunking as well. Since our method uses raw data, representing lexical entries will require a lot of memory. In a future work, we plan to use the system for providing instance candidates, and disambiguate them using an algorithm more suitable for handling lexical information. An additional possibility is to use word-types, such as a special tag for be-verbs, or for prepositions like &apos;of&apos; which attaches mainly to nouns (Sekine and Grishman, 1995). In a similar vain to Skut and Brants (1998) and Buchholz et al. (1999), the method extends an existing flat shallow-parsing method to handle composite structures. It yields a significant improvement over the flat method, especially for long and more complex structures. As can be expected, the performance of the partial method is still lower than that of full parsers, which exploit (and require) much richer information. The results of this line of research enrich the space of alternative parsing approaches, aiming to reduce the gap between shallow and full parsing. Acknowledgements Y. K. than</context>
+</contexts>
+<marker>Sekine, Grishman, 1995</marker>
+<rawString>Satoshi Sekine and Ralph Grishman. 1995. A corpus-based probabilistic grammar with only two non-terminals. In Fourth International Workshop on Parsing Technology — IWPT, Prague.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Satoshi Sekine</author>
+</authors>
+<title>Corpus-Based Parsing and Sublanguage Studies.</title>
+<date>1998</date>
+<tech>Ph.D. thesis,</tech>
+<institution>New York University.</institution>
+<contexts>
+<context position="877" citStr="Sekine (1998)" startWordPosition="131" endWordPosition="132">ng method is extended for handling compositional structures. The method is oriented for learning to parse any selected subset of target syntactic structures. It is local, yet can handle also compositional structures. Parts of speech as well as embedded instances are being used simultaneously. The output is a partial parse in which instances of the target structures are marked. 1 Introduction A variety of statistical methods were proposed over the recent years for learning to produce a full parse of free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb (SV) and verb-object (VO) pairs (Argamo</context>
+<context position="17361" citStr="Sekine (1998)" startWordPosition="3058" endWordPosition="3059">iles. • DOP can be naturally formulated to allow for wildcards, as in the DOP3 model, by allowing some of the leaves to be unknown. Allowing wildcards in MBSL would be more complicated because it relies on tiling of continuous sequences. A property both methods share is that they will work harder when there is plenty of evidence for a candidate (Sima&apos;an, p.c.). This contradicts the intuition that more &apos;straightforward&apos; candidates would be identified faster. We plan to tackle this problem in the future. Another related algorithm was presented by Sekine and Grishman (1995, Apple Pie Parser) and Sekine (1998). The algorithm extracts grammar rules with S and NP (and possibly other structures) as non-terminals. Both Apple Pie (hereafter APP) and MBSL use raw-data examples for parsing, and can be restricted to specified target non-terminals or patterns. The differences lie in: • MBSL recombines fragments of instances for generalizations, while APP uses rules derived from complete instances. • The grammar rules of APP do not include context, which is taken into account when generating the non-terminal S. In MBSL, the context is consulted for each instance candidate. • APP, like DOP, uses a probabilist</context>
+</contexts>
+<marker>Sekine, 1998</marker>
+<rawString>Satoshi Sekine. 1998. Corpus-Based Parsing and Sublanguage Studies. Ph.D. thesis, New York University.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W Skut</author>
+<author>T Brants</author>
+</authors>
+<title>A maximumentropy partial parser for unrestricted text.</title>
+<date>1998</date>
+<booktitle>In Proc. of the sixth Workshop on Very Large Corpora,</booktitle>
+<location>Montreal, Canada.</location>
+<contexts>
+<context position="3212" citStr="Skut and Brants (1998)" startWordPosition="502" endWordPosition="505">he gap between shallow and full parsing. It is an extension of shallow parsing towards handling composite and multiple patterns, while maintaining the local nature of the task, and simplicity of training material. One approach to partial parsing was presented by Buchholz et al. (1999), who extended a shallow-parsing technique to partial parsing. The output of NP and VP chunking was used as an input to grammatical relation inference. The inferences process is cascaded, and a clear improvement was obtained by passing results across cascades. Another approach for partial parsing was presented by Skut and Brants (1998). Their method is an extension of that of Church (1988) for finding NP&apos;s, achieved by extending the feature space to include structural information. Processing goes simultaneously for structures at all levels, from left to right. Since there are no cascades, the structural level of the output is limited by that of the feature set. This paper presents an extension of the algorithm of Argamon et al. (1998, 1999, hereafter MBSL), which handles and exploits compositional structures. MBSL is a memory-based algorithm that uses raw-data segments for learning chunks. It works with POS tags, and combin</context>
+<context position="18890" citStr="Skut and Brants (1998)" startWordPosition="3309" endWordPosition="3312">mation (Hindle and Rooth, 1993, for PP attachment). As (Daelemans et al., 1999) show, lexical information improves on NP and VP chunking as well. Since our method uses raw data, representing lexical entries will require a lot of memory. In a future work, we plan to use the system for providing instance candidates, and disambiguate them using an algorithm more suitable for handling lexical information. An additional possibility is to use word-types, such as a special tag for be-verbs, or for prepositions like &apos;of&apos; which attaches mainly to nouns (Sekine and Grishman, 1995). In a similar vain to Skut and Brants (1998) and Buchholz et al. (1999), the method extends an existing flat shallow-parsing method to handle composite structures. It yields a significant improvement over the flat method, especially for long and more complex structures. As can be expected, the performance of the partial method is still lower than that of full parsers, which exploit (and require) much richer information. The results of this line of research enrich the space of alternative parsing approaches, aiming to reduce the gap between shallow and full parsing. Acknowledgements Y. K. thanks Jorn Veenstra, Sabine Buchholz, and Khalil</context>
+</contexts>
+<marker>Skut, Brants, 1998</marker>
+<rawString>W. Skut and T. Brants. 1998. A maximumentropy partial parser for unrestricted text. In Proc. of the sixth Workshop on Very Large Corpora, Montreal, Canada.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E F Tjong Kim Sang</author>
+</authors>
+<title>Noun phrase detection by repeated chunking.</title>
+<date>1999</date>
+<booktitle>In Proeedings of CoNLL-99,</booktitle>
+<location>Bergen, Norway,</location>
+<contexts>
+<context position="14464" citStr="Sang (1999)" startWordPosition="2545" endWordPosition="2546">with NP 1 82.6 61.5 70.5 Table 2: VP Results, OT = 0.6, tile length&lt; 5 max. rec. prec. Fo nemb NP only 0 81.8 76.8 79.2 1 87.6 65.8 75.2 NP with VP 0 81.7 77.1 79.3 1 86.0 66.0 74.7 base NP 0 93.4 93.6 93.5 composite 42.0 67.1 51.7 all NP 79.3 88.5 83.7 base NP 1 93.2 93.5 93.3 composite 71.4 49.0 58.1 all NP 87.2 77.7 82.2 NP (TKS99) 76.1 91.3 83.0 Table 3: NP Results, OT = 0.6, tile length&lt; 5. Rows 5-10 refer to experiments where baseNPs were distinguished from composite ones. There are currently no other partial parsers on these tasks to compare the combined VP and NP results to. Tjong Kim Sang (1999) presented result for composite NP, obtained by repeated cascading, similar to our results with seperate base and composite NPs and no internal structure. Our results are lower than those of full parsers, e.g., Collins (1997) - as might be expected since much less structural data, and no lexical data are being used. 4 Discussion We have presented a memory-based learning method for partial parsing which can handle and exploit compositional information. Like other shallow-parsing systems, it is most useful when the number of target patterns is small. In particular, the method does not require fu</context>
+</contexts>
+<marker>Sang, 1999</marker>
+<rawString>E. F. Tjong Kim Sang. 1999. Noun phrase detection by repeated chunking. In Proeedings of CoNLL-99, Bergen, Norway, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Veenstra</author>
+</authors>
+<title>Fast NP chunking using memory-based learning techniques.</title>
+<date>1998</date>
+<booktitle>Proceedings of Benelearn,</booktitle>
+<pages>71--79</pages>
+<editor>In F. Verdenius and W. van den Broek, editors,</editor>
+<location>Wageningen, the Netherlands.</location>
+<contexts>
+<context position="1382" citStr="Veenstra (1998)" startWordPosition="210" endWordPosition="211"> free-text sentences (e.g., Bod (1992), Magerman (1995), Collins (1997), Ratnaparkhi (1997), and Sekine (1998)). In parallel, a lot of work is being done on shallow parsing (Abney, 1991; Greffenstette, 1993), focusing on partial analysis of sentences at the level of local phrases and the relations between them. Shallow parsing tasks are often formulated as dividing the sentence into nonoverlapping sequences of syntactic structures, a task called chunking. Most of the chunking works have concentrated on noun-phrases (NPs, e.g. Church (1988), Ramshaw and Marcus (1995), Cardie and Pierce (1998), Veenstra (1998)). Other chunking tasks involve recognizing subjectverb (SV) and verb-object (VO) pairs (Argamon et al., 1999; Munoz et al., 1999). The output of shallow parsers is useful where a complete parse tree is not required (e.g., classification, summarization, bilingual alignment). The complexity of training full parsing algorithms may therefore be avoided in such tasks. On the other hand, full parsing has the advantages of producing compositional structures, finding multiple structures simultaneously, and using sub-structures for inference about higher-level ones. While shallow systems typically mak</context>
+</contexts>
+<marker>Veenstra, 1998</marker>
+<rawString>J. Veenstra. 1998. Fast NP chunking using memory-based learning techniques. In F. Verdenius and W. van den Broek, editors, Proceedings of Benelearn, pages 71-79, Wageningen, the Netherlands.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

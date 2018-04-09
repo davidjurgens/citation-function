@@ -1,0 +1,1115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.008633">
+<title confidence="0.9991625">
+A comparison of Bayesian estimators for
+unsupervised Hidden Markov Model POS taggers
+</title>
+<author confidence="0.99868">
+Jianfeng Gao Mark Johnson
+</author>
+<affiliation confidence="0.992244">
+Microsoft Research Brown Univeristy
+</affiliation>
+<address confidence="0.978742">
+Redmond, WA, USA Providence, RI, USA
+</address>
+<email confidence="0.999176">
+jfgao@microsoft.com Mark−Johnson@Brown.edu
+</email>
+<sectionHeader confidence="0.998598" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.99965325">
+There is growing interest in applying Bayesian
+techniques to NLP problems. There are a
+number of different estimators for Bayesian
+models, and it is useful to know what kinds of
+tasks each does well on. This paper compares
+a variety of different Bayesian estimators for
+Hidden Markov Model POS taggers with var-
+ious numbers of hidden states on data sets of
+different sizes. Recent papers have given con-
+tradictory results when comparing Bayesian
+estimators to Expectation Maximization (EM)
+for unsupervised HMM POS tagging, and we
+show that the difference in reported results is
+largely due to differences in the size of the
+training data and the number of states in the
+HMM. We invesigate a variety of samplers for
+HMMs, including some that these earlier pa-
+pers did not study. We find that all of Gibbs
+samplers do well with small data sets and few
+states, and that Variational Bayes does well
+on large data sets and is competitive with the
+Gibbs samplers. In terms of times of conver-
+gence, we find that Variational Bayes was the
+fastest of all the estimators, especially on large
+data sets, and that explicit Gibbs sampler (both
+pointwise and sentence-blocked) were gener-
+ally faster than their collapsed counterparts on
+large data sets.
+</bodyText>
+<sectionHeader confidence="0.999629" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999837264705882">
+Probabilistic models now play a central role in com-
+putational linguistics. These models define a prob-
+ability distribution P(x) over structures or analyses
+x. For example, in the part-of-speech (POS) tag-
+ging application described in this paper, which in-
+volves predicting the part-of-speech tag ti of each
+word wi in the sentence w = (w1,... , wn), the
+structure x = (w, t) consists of the words w in a
+sentence together with their corresponding parts-of-
+speech t = (t1, ... , tn).
+In general the probabilistic models used in com-
+putational linguistics have adjustable parameters 0
+which determine the distribution P(x 1 0). In this
+paper we focus on bitag Hidden Markov Models
+(HMMs). Since our goal here is to compare algo-
+rithms rather than achieve the best performance, we
+keep the models simple by ignoring morphology and
+capitalization (two very strong cues in English) and
+treat each word as an atomic entity. This means that
+the model parameters 0 consist of the HMM state-
+to-state transition probabilities and the state-to-word
+emission probabilities.
+In virtually all statistical approaches the parame-
+ters 0 are chosen or estimated on the basis of training
+data d. This paper studies unsupervised estimation,
+so d = w = (w1, ... , wn) consists of a sequence
+of words wi containing all of the words of training
+corpus appended into a single string, as explained
+below.
+Maximum Likelihood (ML) is the most common
+estimation method in computational linguistics. A
+Maximum Likelihood estimator sets the parameters
+to the value 0� that makes the likelihood Ld of the
+data d as large as possible:
+</bodyText>
+<equation confidence="0.871186333333333">
+Ld(0) = P(d 1 0)
+0 = arg max Ld(0)
+0
+</equation>
+<bodyText confidence="0.9429735">
+In this paper we use the Inside-Outside algo-
+rithm, which is a specialized form of Expectation-
+</bodyText>
+<page confidence="0.978471">
+344
+</page>
+<note confidence="0.9639585">
+Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 344–352,
+Honolulu, October 2008.c�2008 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.990219444444444">
+Maximization, to find HMM parameters which (at
+least locally) maximize the likelihood function Ld.
+Recently there is increasing interest in Bayesian
+methods in computational linguistics, and the pri-
+mary goal of this paper is to compare the perfor-
+mance of various Bayesian estimators with each
+other and with EM.
+A Bayesian approach uses Bayes theorem to fac-
+torize the posterior distribution P(0  |d) into the
+</bodyText>
+<equation confidence="0.864274">
+likelihood P(d  |0) and the prior P(0).
+P(0  |d) ∝ P(d  |0) P(0)
+</equation>
+<bodyText confidence="0.997863036144579">
+Priors can be useful because they can express pref-
+erences for certain types of models. To take an
+example from our POS-tagging application, most
+words belong to relatively few parts-of-speech (e.g.,
+most words belong to a single POS, and while there
+are some words which are both nouns and verbs,
+very few are prepositions and adjectives as well).
+One might express this using a prior which prefers
+HMMs in which the state-to-word emissions are
+sparse, i.e., each state emits few words. An appro-
+priate Dirichlet prior can express this preference.
+While it is possible to use Bayesian inference to
+find a single model, such as the Maximum A Pos-
+teriori or MAP value of 0 which maximizes the
+posterior P(0  |d), this is not necessarily the best
+approach (Bishop, 2006; MacKay, 2003). Instead,
+rather than commiting to a single value for the pa-
+rameters 0 many Bayesians often prefer to work
+with the full posterior distribution P(0  |d), as this
+naturally reflects the uncertainty in 0’s value.
+In all but the simplest models there is no known
+closed form for the posterior distribution. However,
+the Bayesian literature describes a number of meth-
+ods for approximating the posterior P(0  |d). Monte
+Carlo sampling methods and Variational Bayes are
+two kinds of approximate inference methods that
+have been applied to Bayesian inference of unsu-
+pervised HMM POS taggers (Goldwater and Grif-
+fiths, 2007; Johnson, 2007). These methods can also
+be used to approximate other distributions that are
+important to us, such as the conditional distribution
+P(t  |w) of POS tags (i.e., HMM hidden states) t
+given words w.
+This recent literature reports contradictory results
+about these Bayesian inference methods. John-
+son (2007) compared two Bayesian inference algo-
+rithms, Variational Bayes and what we call here a
+point-wise collapsed Gibbs sampler, and found that
+Variational Bayes produced the best solution, and
+that the Gibbs sampler was extremely slow to con-
+verge and produced a worse solution than EM. On
+the other hand, Goldwater and Griffiths (2007) re-
+ported that the same kind of Gibbs sampler produced
+much better results than EM on their unsupervised
+POS tagging task. One of the primary motivations
+for this paper was to understand and resolve the dif-
+ference in these results. We replicate the results of
+both papers and show that the difference in their re-
+sults stems from differences in the sizes of the train-
+ing data and numbers of states in their models.
+It turns out that the Gibbs sampler used in these
+earlier papers is not the only kind of sampler for
+HMMs. This paper compares the performance of
+four different kinds of Gibbs samplers, Variational
+Bayes and Expectation Maximization on unsuper-
+vised POS tagging problems of various sizes. Our
+goal here is to try to learn how the performance of
+these different estimators varies as we change the
+number of hidden states in the HMMs and the size
+of the training data.
+In theory, the Gibbs samplers produce streams
+of samples that eventually converge on the true
+posterior distribution, while the Variational Bayes
+(VB) estimator only produces an approximation to
+the posterior. However, as the size of the training
+data distribution increases the likelihood function
+and therefore the posterior distribution becomes in-
+creasingly peaked, so one would expect this varia-
+tional approximation to become increasingly accu-
+rate. Further the Gibbs samplers used in this paper
+should exhibit reduced mobility as the size of train-
+ing data increases, so as the size of the training data
+increases eventually the Variational Bayes estimator
+should prove to be superior.
+However the two point-wise Gibbs samplers in-
+vestigated here, which resample the label of each
+word conditioned on the labels of its neighbours
+(amongst other things) only require O(m) steps per
+sample (where m is the number of HMM states),
+while EM, VB and the sentence-blocked Gibbs sam-
+plers require O(m2) steps per sample. Thus for
+HMMs with many states it is possible to perform one
+or two orders of magnitude more iterations of the
+</bodyText>
+<page confidence="0.998393">
+345
+</page>
+<bodyText confidence="0.958825666666667">
+point-wise Gibbs samplers in the same run-time as
+the other samplers, so it is plausible that they would
+yield better results.
+</bodyText>
+<sectionHeader confidence="0.993871" genericHeader="method">
+2 Inference for HMMs
+</sectionHeader>
+<bodyText confidence="0.997149227272727">
+There are a number of excellent textbook presen-
+tations of Hidden Markov Models (Jelinek, 1997;
+Manning and Sch¨utze, 1999), so we do not present
+them in detail here. Conceptually, a Hidden Markov
+Model uses a Markov model to generate the se-
+quence of states t = (t1,... , tn) (which will be in-
+terpreted as POS tags), and then generates each word
+wi conditioned on the corresponding state ti.
+We insert endmarkers at the beginning and end
+of the corpus and between sentence boundaries,
+and constrain the estimators to associate endmarkers
+with a special HMM state that never appears else-
+where in the corpus (we ignore these endmarkers
+during evaluation). This means that we can formally
+treat the training corpus as one long string, yet each
+sentence can be processed independently by a first-
+order HMM.
+In more detail, the HMM is specified by a pair of
+multinomials θt and φt associated with each state t,
+where θt specifies the distribution over states t0 fol-
+lowing t and φt specifies the distribution over words
+w given state t.
+</bodyText>
+<equation confidence="0.9666955">
+ti ti−1 = t — Multi(θt) (1)
+wi ti = t — Multi(φt)
+</equation>
+<bodyText confidence="0.99976825">
+The Bayesian model we consider here puts a fixed
+uniform Dirichlet prior on these multinomials. Be-
+cause Dirichlets are conjugate to multinomials, this
+greatly simplifies inference.
+</bodyText>
+<equation confidence="0.963876">
+θt α — Dir(α)
+φt α0 — Dir(α0)
+</equation>
+<bodyText confidence="0.9225035">
+A multinomial θ is distributed according to the
+Dirichlet distribution Dir(α) iff:
+</bodyText>
+<subsectionHeader confidence="0.518069">
+P(θ α) a
+</subsectionHeader>
+<bodyText confidence="0.999954818181818">
+In our experiments we set α and α0 to the uniform
+values (i.e., all components have the same value α or
+α0), but it is possible to estimate these as well (Gold-
+water and Griffiths, 2007). Informally, α controls
+the sparsity of the state-to-state transition probabil-
+ities while α0 controls the sparsity of the state-to-
+word emission probabilities. As α0 approaches zero
+the prior strongly prefers models in which each state
+emits as few words as possible, capturing the intu-
+ition that most word types only belong to one POS
+mentioned earlier.
+</bodyText>
+<subsectionHeader confidence="0.985198">
+2.1 Expectation Maximization
+</subsectionHeader>
+<bodyText confidence="0.9864986">
+Expectation-Maximization is a procedure that iter-
+atively re-estimates the model parameters (θ, φ),
+converging on a local maximum of the likelihood.
+Specifically, if the parameter estimate at iteration `
+is (θ(`), φ(`)), then the re-estimated parameters at it-
+</bodyText>
+<equation confidence="0.9642274">
+eration ` + 1 are:
+θ(`+1) = E[nt,,t]/E[nt] (2)
+t, |t
+φ(`+1)
+w|t = E[n0w,t]/E[nt]
+</equation>
+<bodyText confidence="0.999842363636364">
+where n0w,t is the number of times word w occurs
+with state t, nt,,t is the number of times state t0 fol-
+lows t and nt is the number of occurences of state t;
+all expectations are taken with respect to the model
+(θ(`),φ(`)).
+The experiments below used the Forward-
+Backward algorithm (Jelinek, 1997), which is a dy-
+namic programming algorithm for calculating the
+likelihood and the expectations in (2) in O(nm2)
+time, where n is the number of words in the train-
+ing corpus and m is the number of HMM states.
+</bodyText>
+<subsectionHeader confidence="0.998012">
+2.2 Variational Bayes
+</subsectionHeader>
+<bodyText confidence="0.996127666666667">
+Variational Bayesian inference attempts to find a
+function Q(t, θ, φ) that minimizes an upper bound
+(3) to the negative log likelihood.
+</bodyText>
+<equation confidence="0.997901">
+— log P(w)
+� Q(t, θ, φ)P(w, t, θ, φ)
+= � log Q(t, θ, φ) dt dθ dφ
+� Q(t, θ, φ) log P(w, t, θ, φ)
+&lt; � dt dθ dφ (3)
+Q(t, θ, φ)
+</equation>
+<bodyText confidence="0.9997736">
+The upper bound (3) is called the Variational Free
+Energy. We make a “mean-field” assumption that
+the posterior can be well approximated by a factor-
+ized model Q in which the state sequence t does not
+covary with the model parameters θ, φ:
+</bodyText>
+<equation confidence="0.9478978">
+P(t, θ, φ w) ^ Q(t, θ, φ) = Q1(t)Q2(θ, φ)
+m
+H
+j=1
+αj−1
+θj
+346
+n0wi,ti + α0 / ( nti ti−1 + α) ( nti+1 ti + I(ti−1 = ti = ti+1) + α
+P(ti  |w, t−i, α, α0) a ( J
+nti + m&apos;a&apos; nti_1 + ma nti + I(ti−1 = ti) + mα
+</equation>
+<figureCaption confidence="0.939274">
+Figure 1: The conditional distribution for state ti used in the pointwise collapsed Gibbs sampler, which conditions on
+all states t_i except ti (i.e., the counts n do not include ti). Here m&apos; is the size of the vocabulary, m is the number of
+HMM states and I(·) is the indicator function (i.e., equal to one if its argument is true and zero otherwise),
+</figureCaption>
+<bodyText confidence="0.9999646">
+The calculus of variations is used to minimize the
+KL divergence between the desired posterior distri-
+bution and the factorized approximation. It turns
+out that if the likelihood and conjugate prior be-
+long to exponential families then the optimal Q1 and
+Q2 do too, and there is an EM-like iterative pro-
+cedure that finds locally-optimal model parameters
+(Bishop, 2006).
+This procedure is especially attractive for HMM
+inference, since it involves only a minor modifica-
+tion to the M-step of the Forward-Backward algo-
+rithm. MacKay (1997) and Beal (2003) describe
+Variational Bayesian (VB) inference for HMMs. In
+general, the E-step for VB inference for HMMs is
+the same as in EM, while the M-step is as follows:
+</bodyText>
+<equation confidence="0.9996048">
+�θ(`+1)
+t�|t = f(E[nt&apos;,t] + α)/f(E[nt] + mα) (4)
+�φ(`+1)
+w|t = f(E[n0w,t] + α0)/f(E[nt] + m0α0)
+f(v) = exp(IF(v))
+</equation>
+<bodyText confidence="0.9999892">
+where m0 and m are the number of word types and
+states respectively, IF is the digamma function and
+the remaining quantities are as in (2). This means
+that a single iteration can be performed in O(nm2)
+time, just as for the EM algorithm.
+</bodyText>
+<subsectionHeader confidence="0.991258">
+2.3 MCMC sampling algorithms
+</subsectionHeader>
+<bodyText confidence="0.999793302325581">
+The goal of Markov Chain Monte Carlo (MCMC)
+algorithms is to produce a stream of samples from
+the posterior distribution P(t  |w, α). Besag (2004)
+provides a tutorial on MCMC techniques for HMM
+inference.
+A Gibbs sampler is a simple kind of MCMC
+algorithm that is well-suited to sampling high-
+dimensional spaces. A Gibbs sampler for P(z)
+where z = (z1, ... , zn) proceeds by sampling and
+updating each zi in turn from P(zi  |z−i), where
+z−i = (z1,... , zi−1, zi+1, ... , zn), i.e., all of the
+z except zi (Geman and Geman, 1984; Robert and
+Casella, 2004).
+We evaluate four different Gibbs samplers in this
+paper, which vary along two dimensions. First, the
+sampler can either be pointwise or blocked. A point-
+wise sampler resamples a single state ti (labeling a
+single word wi) at each step, while a blocked sam-
+pler resamples the labels for all of the words in a
+sentence at a single step using a dynamic program-
+ming algorithm based on the Forward-Backward al-
+gorithm. (In principle it is possible to use block
+sizes other than the sentence, but we did not explore
+this here). A pointwise sampler requires O(nm)
+time per iteration, while a blocked sampler requires
+O(nm2) time per iteration, where m is the number
+of HMM states and n is the length of the training
+corpus.
+Second, the sampler can either be explicit or col-
+lapsed. An explicit sampler represents and sam-
+ples the HMM parameters 0 and 0 in addition to
+the states t, while in a collapsed sampler the HMM
+parameters are integrated out, and only the states t
+are sampled. The difference between explicit and
+collapsed samplers corresponds exactly to the dif-
+ference between the two PCFG sampling algorithms
+presented in Johnson et al. (2007).
+An iteration of the pointwise explicit Gibbs sam-
+pler consists of resampling 0 and 0 given the state-
+to-state transition counts n and state-to-word emis-
+sion counts n0 using (5), and then resampling each
+state ti given the corresponding word wi and the
+neighboring states ti−1 and ti+1 using (6).
+</bodyText>
+<equation confidence="0.99939">
+0t  |nt, α — Dir(nt + α) (5)
+fit  |n0t,α0 — Dir(n0t + α0)
+P(ti  |wi, t−i, 0, 0) a θti|ti−1φwi|tiθti+1|ti (6)
+</equation>
+<bodyText confidence="0.989992333333333">
+The Dirichlet distributions in (5) are non-uniform;
+nt is the vector of state-to-state transition counts in
+t leaving state t in the current state vector t, while
+</bodyText>
+<page confidence="0.996839">
+347
+</page>
+<bodyText confidence="0.999961428571428">
+n0t is the vector of state-to-word emission counts for
+state t. See Johnson et al. (2007) for a more detailed
+explanation, as well as an algorithm for sampling
+from the Dirichlet distributions in (5).
+The samplers that Goldwater and Griffiths (2007)
+and Johnson (2007) describe are pointwise collapsed
+Gibbs samplers. Figure 1 gives the sampling distri-
+bution for this sampler. As Johnson et al. (2007)
+explains, samples of the HMM parameters 0 and 0
+can be obtained using (5) if required.
+The blocked Gibbs samplers differ from the point-
+wise Gibbs samplers in that they resample the POS
+tags for an entire sentence at a time. Besag (2004)
+describes the well-known dynamic programming
+algorithm (based on the Forward-Backward algo-
+rithm) for sampling a state sequence t given the
+words w and the transition and emission probabil-
+ities 0 and 0.
+At each iteration the explicit blocked Gibbs sam-
+pler resamples 0 and 0 using (5), just as the explicit
+pointwise sampler does. Then it uses the new HMM
+parameters to resample the states t for the training
+corpus using the algorithm just mentioned. This can
+be done in parallel for each sentence in the training
+corpus.
+The collapsed blocked Gibbs sampler is a
+straight-forward application of the Metropolis-
+within-Gibbs approach proposed by Johnson et al.
+(2007) for PCFGs, so we only sketch it here. We
+iterate through the sentences of the training data, re-
+sampling the states for each sentence conditioned
+on the state-to-state transition counts n and state-
+to-word emission counts n0 for the other sentences
+in the corpus. This is done by first computing the
+parameters 0* and 0* of a proposal HMM using (7).
+</bodyText>
+<equation confidence="0.99925">
+nt&apos;,t + α
+�*
+t&apos;|t = (7)
+nt + mα
+</equation>
+<bodyText confidence="0.999220444444444">
+scribed above to produce a proposal state sequence
+t* for the words in the sentence. Finally, we use
+a Metropolis-Hastings accept-reject step to decide
+whether to update the current state sequence for the
+sentence with the proposal t*, or whether to keep the
+current state sequence. In practice, with all but the
+very smallest training corpora the acceptance rate is
+very high; the acceptance rate for all of our collapsed
+blocked Gibbs samplers was over 99%.
+</bodyText>
+<sectionHeader confidence="0.998703" genericHeader="evaluation">
+3 Evaluation
+</sectionHeader>
+<bodyText confidence="0.999992720930233">
+The previous section described six different unsu-
+pervised estimators for HMMs. In this section
+we compare their performance for English part-of-
+speech tagging. One of the difficulties in evalu-
+ating unsupervised taggers such as these is map-
+ping the system’s states to the gold-standard parts-
+of-speech. Goldwater and Griffiths (2007) proposed
+an information-theoretic measure known as the Vari-
+ation ofInformation (VI) described by Meilˇa (2003)
+as an evaluation of an unsupervised tagging. How-
+ever as Goldwater (p.c.) points out, this may not be
+an ideal evaluation measure; e.g., a tagger which as-
+signs all words the same single part-of-speech tag
+does disturbingly well under Variation of Informa-
+tion, suggesting that a poor tagger may score well
+under VI.
+In order to avoid this problem we focus here on
+evaluation measures that construct an explicit map-
+ping between the gold-standard part-of-speech tags
+and the HMM’s states. Perhaps the most straight-
+forward approach is to map each HMM state to the
+part-of-speech tag it co-occurs with most frequently,
+and use this mapping to map each HMM state se-
+quence t to a sequence of part-of-speech tags. But as
+Clark (2003) observes, this approach has several de-
+fects. If a system is permitted to posit an unbounded
+number of states (which is not the case here) it can
+achieve a perfect score on by assigning each word
+token its own unique state.
+We can partially address this by cross-validation.
+We divide the corpus into two equal parts, and from
+the first part we extract a mapping from HMM states
+to the parts-of-speech they co-occur with most fre-
+quently, and use that mapping to map the states of
+the second part of the corpus to parts-of-speech. We
+call the accuracy of the resulting tagging the cross-
+validation accuracy.
+Finally, following Haghighi and Klein (2006) and
+Johnson (2007) we can instead insist that at most
+one HMM state can be mapped to any part-of-speech
+tag. Following these authors, we used a greedy algo-
+rithm to associate states with POS tags; the accuracy
+of the resulting tagging is called the greedy 1-to-1
+</bodyText>
+<equation confidence="0.991161666666667">
+n0w, t + α0
+*
+Ow|t = nt + m0α
+</equation>
+<bodyText confidence="0.894985">
+Then we use the dynamic programming sampler de-
+</bodyText>
+<page confidence="0.992633">
+348
+</page>
+<table confidence="0.999135142857143">
+All − 50 All − 17 120K − 50 120K − 17 24K − 50 24K − 17
+EM 0.40527 0.43101 0.29303 0.35202 0.18618 0.28165
+VB 0.46123 0.51379 0.34679 0.36010 0.23823 0.36599
+GSe,p 0.47826 0.43424 0.36984 0.44125 0.29953 0.36811
+GSe,b 0.49371 0.46568 0.38888 0.44341 0.34404 0.37032
+GSc,p 0.49910* 0.45028 0.42785 0.43652 0.39182 0.39164
+GSc,b 0.49486* 0.46193 0.41162 0.42278 0.38497 0.36793
+</table>
+<figureCaption confidence="0.787120333333333">
+Figure 2: Average greedy 1-to-1 accuracy of state sequences produced by HMMs estimated by the various estimators.
+The column heading indicates the size of the corpus and the number of HMM states. In the Gibbs sampler (GS) results
+the subscript “e” indicates that the parameters 0 and 0 were explicitly sampled while the subscript “c” indicates that
+they were integrated out, and the subscript “p” indicates pointwise sampling, while “b” indicates sentence-blocked
+sampling. Entries tagged with a star indicate that the estimator had not converged after weeks of run-time, but was
+still slowly improving.
+</figureCaption>
+<table confidence="0.996929857142857">
+All − 50 All − 17 120K − 50 120K − 17 24K − 50 24K − 17
+EM 0.62115 0.64651 0.44135 0.56215 0.28576 0.46669
+VB 0.60484 0.63652 0.48427 0.36458 0.35946 0.36926
+GSe,p 0.64190 0.63057 0.53571 0.46986 0.41620 0.37165
+GSe,b 0.65953 0.65606 0.57918 0.48975 0.47228 0.37311
+GSc,p 0.61391* 0.67414 0.65285 0.65012 0.58153 0.62254
+GSc,b 0.60551* 0.65516 0.62167 0.58271 0.55006 0.58728
+</table>
+<figureCaption confidence="0.8523425">
+Figure 3: Average cross-validation accuracy of state sequences produced by HMMs estimated by the various estima-
+tors. The table headings follow those used in Figure 2.
+</figureCaption>
+<table confidence="0.844368285714286">
+All − 50 All − 17 120K − 50 120K − 17 24K − 50 24K − 17
+EM 4.47555 3.86326 6.16499 4.55681 7.72465 5.42815
+VB 4.27911 3.44029 5.00509 3.19670 4.80778 3.14557
+GSe,p 4.24919 3.53024 4.30457 3.23082 4.24368 3.17076
+GSe,b 4.04123 3.46179 4.22590 3.20276 4.29474 3.10609
+GSc,p 4.03886* 3.52185 4.21259 3.17586 4.30928 3.18273
+GSc,b 4.11272* 3.61516 4.36595 3.23630 4.32096 3.17780
+</table>
+<figureCaption confidence="0.947707">
+Figure 4: Average Variation of Information between the state sequences produced by HMMs estimated by the various
+estimators and the gold tags (smaller is better). The table headings follow those used in Figure 2.
+</figureCaption>
+<table confidence="0.971309">
+All − 50 All − 17 120K − 50 120K − 17 24K − 50 24K − 17
+EM 558 346 648 351 142 125
+VB 473 123 337 24 183 20
+GSe,p 2863 382 3709 63 2500 177
+GSe,b 3846 286 5169 154 4856 139
+GSc,p * 34325 44864 40088 45285 43208
+GSc,b * 6948 7502 7782 7342 7985
+</table>
+<figureCaption confidence="0.8184675">
+Figure 5: Average number of iterations until the negative logarithm of the posterior probability (or likelihood) changes
+by less than 0.5% (smaller is better) per at least 2,000 iterations. No annealing was used.
+</figureCaption>
+<page confidence="0.951776">
+349
+</page>
+<figure confidence="0.992530666666667">
+All data, 50 states, α = α&apos; = 0.1
+collapsed,blocked
+collapsed, pointwise
+explicit, blocked
+explicit, pointwise
+8.1e+06
+8.05e+06
+8e+06
+7.95e+06
+7.9e+06
+7.85e+06
+– log posterior probability
+0 10000 20000 30000 40000 50000
+computing time (seconds)
+computing time (seconds)
+</figure>
+<figureCaption confidence="0.998391">
+Figure 6: Variation in (a) negative log likelihood and (b) 1-to-1 accuracy as a function of running time on a 3GHz
+dual quad-core Pentium for the four different Gibbs samplers on all data and 50 hidden states. Each iteration took
+approximately 96 sec. for the collapsed blocked sampler, 7.5 sec. for the collapsed pointwise sampler, 25 sec. for the
+explicit blocked sampler and 4.4 sec. for the explicit pointwise sampler.
+</figureCaption>
+<figure confidence="0.967451470588235">
+Greedy 1-to-1 accuracy
+All data, 50 states, α = α&apos; = 0.1
+collapsed,blocked
+collapsed, pointwise
+explicit, blocked
+explicit, pointwise
+0.58
+0.56
+0.54
+0.52
+0.5
+0.48
+0.46
+0.44
+0.42
+0.4
+0 10000 20000 30000 40000 50000
+</figure>
+<page confidence="0.977145">
+350
+</page>
+<bodyText confidence="0.999383375">
+accuracy.
+The studies presented by Goldwater and Griffiths
+(2007) and Johnson (2007) differed in the number of
+states that they used. Goldwater and Griffiths (2007)
+evaluated against the reduced tag set of 17 tags de-
+veloped by Smith and Eisner (2005), while Johnson
+(2007) evaluated against the full Penn Treebank tag
+set. We ran all our estimators in both conditions here
+(thanks to Noah Smith for supplying us with his tag
+set).
+Also, the studies differed in the size of the corpora
+used. The largest corpus that Goldwater and Grif-
+fiths (2007) studied contained 96,000 words, while
+Johnson (2007) used all of the 1,173,766 words
+in the full Penn WSJ treebank. For that reason
+we ran all our estimators on corpora containing
+24,000 words and 120,000 words as well as the full
+treebank.
+We ran each estimator with the eight different
+combinations of values for the hyperparameters α
+and α&apos; listed below, which include the optimal
+values for the hyperparameters found by Johnson
+(2007), and report results for the best combination
+for each estimator below 1.
+</bodyText>
+<table confidence="0.987958333333333">
+α α&apos;
+1 1
+1 0.5
+0.5 1
+0.5 0.5
+0.1 0.1
+0.1 0.0001
+0.0001 0.1
+0.0001 0.0001
+</table>
+<bodyText confidence="0.995957">
+Further, we ran each setting of each estimator at
+least 10 times (from randomly jittered initial start-
+ing points) for at least 1,000 iterations, as Johnson
+(2007) showed that some estimators require many it-
+erations to converge. The results of our experiments
+are summarized in Figures 2–5.
+1We found that on some data sets the results are sensitive to
+the values of the hyperparameters. So, there is a bit uncertainty
+in our comparison results because it is possible that the values
+we tried were good for one estimator and bad for others. Un-
+fortunately, we do not know any efficient way of searching the
+optimal hyperparameters in a much wider and more fine-grained
+space. We leave it to future work.
+</bodyText>
+<sectionHeader confidence="0.989093" genericHeader="conclusions">
+4 Conclusion and future work
+</sectionHeader>
+<bodyText confidence="0.99997752173913">
+As might be expected, our evaluation measures dis-
+agree somewhat, but the following broad tendancies
+seem clear. On small data sets all of the Bayesian
+estimators strongly outperform EM (and, to a lesser
+extent, VB) with respect to all of our evaluation
+measures, confirming the results reported in Gold-
+water and Griffiths (2007). This is perhaps not too
+surprising, as the Bayesian prior plays a compara-
+tively stronger role with a smaller training corpus
+(which makes the likelihood term smaller) and the
+approximation used by Variational Bayes is likely to
+be less accurate on smaller data sets.
+But on larger data sets, which Goldwater et al did
+not study, the results are much less clear, and depend
+on which evaluation measure is used. Expectation
+Maximization does surprisingly well on larger data
+sets and is competitive with the Bayesian estimators
+at least in terms of cross-validation accuracy, con-
+firming the results reported by Johnson (2007).
+Variational Bayes converges faster than all of the
+other estimators we examined here. We found that
+the speed of convergence of our samplers depends
+to a large degree upon the values of the hyperparam-
+eters α and α&apos;, with larger values leading to much
+faster convergence. This is not surprising, as the α
+and α&apos; specify how likely the samplers are to con-
+sider novel tags, and therefore directly influence the
+sampler’s mobility. However, in our experiments the
+best results are obtained in most settings with small
+values for α and α&apos;, usually between 0.1 and 0.0001.
+In terms of time to convergence, on larger data
+sets we found that the blocked samplers were gen-
+erally faster than the pointwise samplers, and that
+the explicit samplers (which represented and sam-
+pled 0 and 0) were faster than the collapsed sam-
+plers, largely because the time saved in not com-
+puting probabilities on the fly overwhelmed the time
+spent resampling the parameters.
+Of course these experiments only scratch the sur-
+face of what is possible. Figure 6 shows that
+pointwise-samplers initially converge faster, but are
+overtaken later by the blocked samplers. Inspired
+by this, one can devise hybrid strategies that inter-
+leave blocked and pointwise sampling; these might
+perform better than both the blocked and pointwise
+samplers described here.
+</bodyText>
+<page confidence="0.998182">
+351
+</page>
+<sectionHeader confidence="0.998341" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999968055555556">
+Matthew J. Beal. 2003. Variational Algorithms for Ap-
+proximate Bayesian Inference. Ph.D. thesis, Gatsby
+Computational Neuroscience unit, University College
+London.
+Julian Besag. 2004. An introduction to Markov Chain
+Monte Carlo methods. In Mark Johnson, Sanjeev P.
+Khudanpur, Mari Ostendorf, and Roni Rosenfeld, ed-
+itors, Mathematical Foundations of Speech and Lan-
+guage Processing, pages 247–270. Springer, New
+York.
+Christopher M. Bishop. 2006. Pattern Recognition and
+Machine Learning. Springer.
+Alexander Clark. 2003. Combining distributional and
+morphological information for part of speech induc-
+tion. In 10th Conference of the European Chapter of
+the Association for Computational Linguistics, pages
+59–66. Association for Computational Linguistics.
+Stuart Geman and Donald Geman. 1984. Stochastic re-
+laxation, Gibbs distributions, and the Bayesian restora-
+tion of images. IEEE Transactions on Pattern Analysis
+and Machine Intelligence, 6:721–741.
+Sharon Goldwater and Tom Griffiths. 2007. A fully
+Bayesian approach to unsupervised part-of-speech tag-
+ging. In Proceedings of the 45th Annual Meeting of
+the Association of Computational Linguistics, pages
+744–751, Prague, Czech Republic, June. Association
+for Computational Linguistics.
+Aria Haghighi and Dan Klein. 2006. Prototype-driven
+learning for sequence models. In Proceedings of
+the Human Language Technology Conference of the
+NAACL, Main Conference, pages 320–327, New York
+City, USA, June. Association for Computational Lin-
+guistics.
+Frederick Jelinek. 1997. Statistical Methods for Speech
+Recognition. The MIT Press, Cambridge, Mas-
+sachusetts.
+Mark Johnson, Thomas Griffiths, and Sharon Goldwa-
+ter. 2007. Bayesian inference for PCFGs via Markov
+chain Monte Carlo. In Human Language Technologies
+2007: The Conference of the North American Chap-
+ter of the Association for Computational Linguistics;
+Proceedings of the Main Conference, pages 139–146,
+Rochester, New York, April. Association for Compu-
+tational Linguistics.
+Mark Johnson. 2007. Why doesn’t EM find good
+HMM POS-taggers? In Proceedings of the 2007 Joint
+Conference on Empirical Methods in Natural Lan-
+guage Processing and Computational Natural Lan-
+guage Learning (EMNLP-CoNLL), pages 296–305.
+David J.C. MacKay. 1997. Ensemble learning for hidden
+Markov models. Technical report, Cavendish Labora-
+tory, Cambridge.
+David J.C. MacKay. 2003. Information Theory, Infer-
+ence, and Learning Algorithms. Cambridge Univer-
+sity Press.
+Chris Manning and Hinrich Sch¨utze. 1999. Foundations
+of Statistical Natural Language Processing. The MIT
+Press, Cambridge, Massachusetts.
+Marina Meilˇa. 2003. Comparing clusterings by the vari-
+ation of information. In Bernhard Sch¨olkopf and Man-
+fred K. Warmuth, editors, COLT 2003: The Sixteenth
+Annual Conference on Learning Theory, volume 2777
+of Lecture Notes in Computer Science, pages 173–187.
+Springer.
+Christian P. Robert and George Casella. 2004. Monte
+Carlo Statistical Methods. Springer.
+Noah A. Smith and Jason Eisner. 2005. Contrastive
+estimation: Training log-linear models on unlabeled
+data. In Proceedings ofthe 43rd Annual Meeting ofthe
+Association for Computational Linguistics (ACL’05),
+pages 354–362, Ann Arbor, Michigan, June. Associa-
+tion for Computational Linguistics.
+</reference>
+<page confidence="0.998261">
+352
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.902252">
+<title confidence="0.9540515">A comparison of Bayesian estimators unsupervised Hidden Markov Model POS taggers</title>
+<author confidence="0.999415">Jianfeng Gao Mark Johnson</author>
+<affiliation confidence="0.999335">Microsoft Research Brown Univeristy</affiliation>
+<address confidence="0.999625">Redmond, WA, USA Providence, RI, USA</address>
+<abstract confidence="0.999763103448276">There is growing interest in applying Bayesian techniques to NLP problems. There are a number of different estimators for Bayesian models, and it is useful to know what kinds of tasks each does well on. This paper compares a variety of different Bayesian estimators for Hidden Markov Model POS taggers with various numbers of hidden states on data sets of different sizes. Recent papers have given contradictory results when comparing Bayesian estimators to Expectation Maximization (EM) for unsupervised HMM POS tagging, and we show that the difference in reported results is largely due to differences in the size of the training data and the number of states in the HMM. We invesigate a variety of samplers for HMMs, including some that these earlier papers did not study. We find that all of Gibbs samplers do well with small data sets and few states, and that Variational Bayes does well on large data sets and is competitive with the Gibbs samplers. In terms of times of convergence, we find that Variational Bayes was the fastest of all the estimators, especially on large data sets, and that explicit Gibbs sampler (both pointwise and sentence-blocked) were generally faster than their collapsed counterparts on large data sets.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Matthew J Beal</author>
+</authors>
+<title>Variational Algorithms for Approximate Bayesian Inference.</title>
+<date>2003</date>
+<tech>Ph.D. thesis,</tech>
+<institution>Gatsby Computational Neuroscience unit, University College London.</institution>
+<contexts>
+<context position="12476" citStr="Beal (2003)" startWordPosition="2120" endWordPosition="2121">e., equal to one if its argument is true and zero otherwise), The calculus of variations is used to minimize the KL divergence between the desired posterior distribution and the factorized approximation. It turns out that if the likelihood and conjugate prior belong to exponential families then the optimal Q1 and Q2 do too, and there is an EM-like iterative procedure that finds locally-optimal model parameters (Bishop, 2006). This procedure is especially attractive for HMM inference, since it involves only a minor modification to the M-step of the Forward-Backward algorithm. MacKay (1997) and Beal (2003) describe Variational Bayesian (VB) inference for HMMs. In general, the E-step for VB inference for HMMs is the same as in EM, while the M-step is as follows: �θ(`+1) t�|t = f(E[nt&apos;,t] + α)/f(E[nt] + mα) (4) �φ(`+1) w|t = f(E[n0w,t] + α0)/f(E[nt] + m0α0) f(v) = exp(IF(v)) where m0 and m are the number of word types and states respectively, IF is the digamma function and the remaining quantities are as in (2). This means that a single iteration can be performed in O(nm2) time, just as for the EM algorithm. 2.3 MCMC sampling algorithms The goal of Markov Chain Monte Carlo (MCMC) algorithms is to</context>
+</contexts>
+<marker>Beal, 2003</marker>
+<rawString>Matthew J. Beal. 2003. Variational Algorithms for Approximate Bayesian Inference. Ph.D. thesis, Gatsby Computational Neuroscience unit, University College London.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Julian Besag</author>
+</authors>
+<title>An introduction to Markov Chain Monte Carlo methods.</title>
+<date>2004</date>
+<booktitle>Mathematical Foundations of Speech and Language Processing,</booktitle>
+<pages>247--270</pages>
+<editor>In Mark Johnson, Sanjeev P. Khudanpur, Mari Ostendorf, and Roni Rosenfeld, editors,</editor>
+<publisher>Springer,</publisher>
+<location>New York.</location>
+<contexts>
+<context position="13161" citStr="Besag (2004)" startWordPosition="2241" endWordPosition="2242">-step for VB inference for HMMs is the same as in EM, while the M-step is as follows: �θ(`+1) t�|t = f(E[nt&apos;,t] + α)/f(E[nt] + mα) (4) �φ(`+1) w|t = f(E[n0w,t] + α0)/f(E[nt] + m0α0) f(v) = exp(IF(v)) where m0 and m are the number of word types and states respectively, IF is the digamma function and the remaining quantities are as in (2). This means that a single iteration can be performed in O(nm2) time, just as for the EM algorithm. 2.3 MCMC sampling algorithms The goal of Markov Chain Monte Carlo (MCMC) algorithms is to produce a stream of samples from the posterior distribution P(t |w, α). Besag (2004) provides a tutorial on MCMC techniques for HMM inference. A Gibbs sampler is a simple kind of MCMC algorithm that is well-suited to sampling highdimensional spaces. A Gibbs sampler for P(z) where z = (z1, ... , zn) proceeds by sampling and updating each zi in turn from P(zi |z−i), where z−i = (z1,... , zi−1, zi+1, ... , zn), i.e., all of the z except zi (Geman and Geman, 1984; Robert and Casella, 2004). We evaluate four different Gibbs samplers in this paper, which vary along two dimensions. First, the sampler can either be pointwise or blocked. A pointwise sampler resamples a single state ti</context>
+<context position="15917" citStr="Besag (2004)" startWordPosition="2723" endWordPosition="2724">-to-word emission counts for state t. See Johnson et al. (2007) for a more detailed explanation, as well as an algorithm for sampling from the Dirichlet distributions in (5). The samplers that Goldwater and Griffiths (2007) and Johnson (2007) describe are pointwise collapsed Gibbs samplers. Figure 1 gives the sampling distribution for this sampler. As Johnson et al. (2007) explains, samples of the HMM parameters 0 and 0 can be obtained using (5) if required. The blocked Gibbs samplers differ from the pointwise Gibbs samplers in that they resample the POS tags for an entire sentence at a time. Besag (2004) describes the well-known dynamic programming algorithm (based on the Forward-Backward algorithm) for sampling a state sequence t given the words w and the transition and emission probabilities 0 and 0. At each iteration the explicit blocked Gibbs sampler resamples 0 and 0 using (5), just as the explicit pointwise sampler does. Then it uses the new HMM parameters to resample the states t for the training corpus using the algorithm just mentioned. This can be done in parallel for each sentence in the training corpus. The collapsed blocked Gibbs sampler is a straight-forward application of the M</context>
+</contexts>
+<marker>Besag, 2004</marker>
+<rawString>Julian Besag. 2004. An introduction to Markov Chain Monte Carlo methods. In Mark Johnson, Sanjeev P. Khudanpur, Mari Ostendorf, and Roni Rosenfeld, editors, Mathematical Foundations of Speech and Language Processing, pages 247–270. Springer, New York.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Christopher M Bishop</author>
+</authors>
+<date>2006</date>
+<booktitle>Pattern Recognition and Machine Learning.</booktitle>
+<publisher>Springer.</publisher>
+<contexts>
+<context position="4625" citStr="Bishop, 2006" startWordPosition="761" endWordPosition="762">belong to relatively few parts-of-speech (e.g., most words belong to a single POS, and while there are some words which are both nouns and verbs, very few are prepositions and adjectives as well). One might express this using a prior which prefers HMMs in which the state-to-word emissions are sparse, i.e., each state emits few words. An appropriate Dirichlet prior can express this preference. While it is possible to use Bayesian inference to find a single model, such as the Maximum A Posteriori or MAP value of 0 which maximizes the posterior P(0 |d), this is not necessarily the best approach (Bishop, 2006; MacKay, 2003). Instead, rather than commiting to a single value for the parameters 0 many Bayesians often prefer to work with the full posterior distribution P(0 |d), as this naturally reflects the uncertainty in 0’s value. In all but the simplest models there is no known closed form for the posterior distribution. However, the Bayesian literature describes a number of methods for approximating the posterior P(0 |d). Monte Carlo sampling methods and Variational Bayes are two kinds of approximate inference methods that have been applied to Bayesian inference of unsupervised HMM POS taggers (G</context>
+<context position="12293" citStr="Bishop, 2006" startWordPosition="2091" endWordPosition="2092">onditions on all states t_i except ti (i.e., the counts n do not include ti). Here m&apos; is the size of the vocabulary, m is the number of HMM states and I(·) is the indicator function (i.e., equal to one if its argument is true and zero otherwise), The calculus of variations is used to minimize the KL divergence between the desired posterior distribution and the factorized approximation. It turns out that if the likelihood and conjugate prior belong to exponential families then the optimal Q1 and Q2 do too, and there is an EM-like iterative procedure that finds locally-optimal model parameters (Bishop, 2006). This procedure is especially attractive for HMM inference, since it involves only a minor modification to the M-step of the Forward-Backward algorithm. MacKay (1997) and Beal (2003) describe Variational Bayesian (VB) inference for HMMs. In general, the E-step for VB inference for HMMs is the same as in EM, while the M-step is as follows: �θ(`+1) t�|t = f(E[nt&apos;,t] + α)/f(E[nt] + mα) (4) �φ(`+1) w|t = f(E[n0w,t] + α0)/f(E[nt] + m0α0) f(v) = exp(IF(v)) where m0 and m are the number of word types and states respectively, IF is the digamma function and the remaining quantities are as in (2). This</context>
+</contexts>
+<marker>Bishop, 2006</marker>
+<rawString>Christopher M. Bishop. 2006. Pattern Recognition and Machine Learning. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alexander Clark</author>
+</authors>
+<title>Combining distributional and morphological information for part of speech induction.</title>
+<date>2003</date>
+<booktitle>In 10th Conference of the European Chapter of the Association for Computational Linguistics,</booktitle>
+<pages>59--66</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="18601" citStr="Clark (2003)" startWordPosition="3168" endWordPosition="3169">aluation measure; e.g., a tagger which assigns all words the same single part-of-speech tag does disturbingly well under Variation of Information, suggesting that a poor tagger may score well under VI. In order to avoid this problem we focus here on evaluation measures that construct an explicit mapping between the gold-standard part-of-speech tags and the HMM’s states. Perhaps the most straightforward approach is to map each HMM state to the part-of-speech tag it co-occurs with most frequently, and use this mapping to map each HMM state sequence t to a sequence of part-of-speech tags. But as Clark (2003) observes, this approach has several defects. If a system is permitted to posit an unbounded number of states (which is not the case here) it can achieve a perfect score on by assigning each word token its own unique state. We can partially address this by cross-validation. We divide the corpus into two equal parts, and from the first part we extract a mapping from HMM states to the parts-of-speech they co-occur with most frequently, and use that mapping to map the states of the second part of the corpus to parts-of-speech. We call the accuracy of the resulting tagging the crossvalidation accu</context>
+</contexts>
+<marker>Clark, 2003</marker>
+<rawString>Alexander Clark. 2003. Combining distributional and morphological information for part of speech induction. In 10th Conference of the European Chapter of the Association for Computational Linguistics, pages 59–66. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stuart Geman</author>
+<author>Donald Geman</author>
+</authors>
+<title>Stochastic relaxation, Gibbs distributions, and the Bayesian restoration of images.</title>
+<date>1984</date>
+<journal>IEEE Transactions on Pattern Analysis and Machine Intelligence,</journal>
+<pages>6--721</pages>
+<contexts>
+<context position="13540" citStr="Geman and Geman, 1984" startWordPosition="2311" endWordPosition="2314">tion can be performed in O(nm2) time, just as for the EM algorithm. 2.3 MCMC sampling algorithms The goal of Markov Chain Monte Carlo (MCMC) algorithms is to produce a stream of samples from the posterior distribution P(t |w, α). Besag (2004) provides a tutorial on MCMC techniques for HMM inference. A Gibbs sampler is a simple kind of MCMC algorithm that is well-suited to sampling highdimensional spaces. A Gibbs sampler for P(z) where z = (z1, ... , zn) proceeds by sampling and updating each zi in turn from P(zi |z−i), where z−i = (z1,... , zi−1, zi+1, ... , zn), i.e., all of the z except zi (Geman and Geman, 1984; Robert and Casella, 2004). We evaluate four different Gibbs samplers in this paper, which vary along two dimensions. First, the sampler can either be pointwise or blocked. A pointwise sampler resamples a single state ti (labeling a single word wi) at each step, while a blocked sampler resamples the labels for all of the words in a sentence at a single step using a dynamic programming algorithm based on the Forward-Backward algorithm. (In principle it is possible to use block sizes other than the sentence, but we did not explore this here). A pointwise sampler requires O(nm) time per iteratio</context>
+</contexts>
+<marker>Geman, Geman, 1984</marker>
+<rawString>Stuart Geman and Donald Geman. 1984. Stochastic relaxation, Gibbs distributions, and the Bayesian restoration of images. IEEE Transactions on Pattern Analysis and Machine Intelligence, 6:721–741.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Sharon Goldwater</author>
+<author>Tom Griffiths</author>
+</authors>
+<title>A fully Bayesian approach to unsupervised part-of-speech tagging.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 45th Annual Meeting of the Association of Computational Linguistics,</booktitle>
+<pages>744--751</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Prague, Czech Republic,</location>
+<contexts>
+<context position="5253" citStr="Goldwater and Griffiths, 2007" startWordPosition="859" endWordPosition="863">6; MacKay, 2003). Instead, rather than commiting to a single value for the parameters 0 many Bayesians often prefer to work with the full posterior distribution P(0 |d), as this naturally reflects the uncertainty in 0’s value. In all but the simplest models there is no known closed form for the posterior distribution. However, the Bayesian literature describes a number of methods for approximating the posterior P(0 |d). Monte Carlo sampling methods and Variational Bayes are two kinds of approximate inference methods that have been applied to Bayesian inference of unsupervised HMM POS taggers (Goldwater and Griffiths, 2007; Johnson, 2007). These methods can also be used to approximate other distributions that are important to us, such as the conditional distribution P(t |w) of POS tags (i.e., HMM hidden states) t given words w. This recent literature reports contradictory results about these Bayesian inference methods. Johnson (2007) compared two Bayesian inference algorithms, Variational Bayes and what we call here a point-wise collapsed Gibbs sampler, and found that Variational Bayes produced the best solution, and that the Gibbs sampler was extremely slow to converge and produced a worse solution than EM. On</context>
+<context position="9624" citStr="Goldwater and Griffiths, 2007" startWordPosition="1597" endWordPosition="1601">on over states t0 following t and φt specifies the distribution over words w given state t. ti ti−1 = t — Multi(θt) (1) wi ti = t — Multi(φt) The Bayesian model we consider here puts a fixed uniform Dirichlet prior on these multinomials. Because Dirichlets are conjugate to multinomials, this greatly simplifies inference. θt α — Dir(α) φt α0 — Dir(α0) A multinomial θ is distributed according to the Dirichlet distribution Dir(α) iff: P(θ α) a In our experiments we set α and α0 to the uniform values (i.e., all components have the same value α or α0), but it is possible to estimate these as well (Goldwater and Griffiths, 2007). Informally, α controls the sparsity of the state-to-state transition probabilities while α0 controls the sparsity of the state-toword emission probabilities. As α0 approaches zero the prior strongly prefers models in which each state emits as few words as possible, capturing the intuition that most word types only belong to one POS mentioned earlier. 2.1 Expectation Maximization Expectation-Maximization is a procedure that iteratively re-estimates the model parameters (θ, φ), converging on a local maximum of the likelihood. Specifically, if the parameter estimate at iteration ` is (θ(`), φ(`</context>
+<context position="15528" citStr="Goldwater and Griffiths (2007)" startWordPosition="2654" endWordPosition="2657">esampling each state ti given the corresponding word wi and the neighboring states ti−1 and ti+1 using (6). 0t |nt, α — Dir(nt + α) (5) fit |n0t,α0 — Dir(n0t + α0) P(ti |wi, t−i, 0, 0) a θti|ti−1φwi|tiθti+1|ti (6) The Dirichlet distributions in (5) are non-uniform; nt is the vector of state-to-state transition counts in t leaving state t in the current state vector t, while 347 n0t is the vector of state-to-word emission counts for state t. See Johnson et al. (2007) for a more detailed explanation, as well as an algorithm for sampling from the Dirichlet distributions in (5). The samplers that Goldwater and Griffiths (2007) and Johnson (2007) describe are pointwise collapsed Gibbs samplers. Figure 1 gives the sampling distribution for this sampler. As Johnson et al. (2007) explains, samples of the HMM parameters 0 and 0 can be obtained using (5) if required. The blocked Gibbs samplers differ from the pointwise Gibbs samplers in that they resample the POS tags for an entire sentence at a time. Besag (2004) describes the well-known dynamic programming algorithm (based on the Forward-Backward algorithm) for sampling a state sequence t given the words w and the transition and emission probabilities 0 and 0. At each </context>
+<context position="17765" citStr="Goldwater and Griffiths (2007)" startWordPosition="3028" endWordPosition="3031"> current state sequence for the sentence with the proposal t*, or whether to keep the current state sequence. In practice, with all but the very smallest training corpora the acceptance rate is very high; the acceptance rate for all of our collapsed blocked Gibbs samplers was over 99%. 3 Evaluation The previous section described six different unsupervised estimators for HMMs. In this section we compare their performance for English part-ofspeech tagging. One of the difficulties in evaluating unsupervised taggers such as these is mapping the system’s states to the gold-standard partsof-speech. Goldwater and Griffiths (2007) proposed an information-theoretic measure known as the Variation ofInformation (VI) described by Meilˇa (2003) as an evaluation of an unsupervised tagging. However as Goldwater (p.c.) points out, this may not be an ideal evaluation measure; e.g., a tagger which assigns all words the same single part-of-speech tag does disturbingly well under Variation of Information, suggesting that a poor tagger may score well under VI. In order to avoid this problem we focus here on evaluation measures that construct an explicit mapping between the gold-standard part-of-speech tags and the HMM’s states. Per</context>
+<context position="23143" citStr="Goldwater and Griffiths (2007)" startWordPosition="3924" endWordPosition="3927">s a function of running time on a 3GHz dual quad-core Pentium for the four different Gibbs samplers on all data and 50 hidden states. Each iteration took approximately 96 sec. for the collapsed blocked sampler, 7.5 sec. for the collapsed pointwise sampler, 25 sec. for the explicit blocked sampler and 4.4 sec. for the explicit pointwise sampler. Greedy 1-to-1 accuracy All data, 50 states, α = α&apos; = 0.1 collapsed,blocked collapsed, pointwise explicit, blocked explicit, pointwise 0.58 0.56 0.54 0.52 0.5 0.48 0.46 0.44 0.42 0.4 0 10000 20000 30000 40000 50000 350 accuracy. The studies presented by Goldwater and Griffiths (2007) and Johnson (2007) differed in the number of states that they used. Goldwater and Griffiths (2007) evaluated against the reduced tag set of 17 tags developed by Smith and Eisner (2005), while Johnson (2007) evaluated against the full Penn Treebank tag set. We ran all our estimators in both conditions here (thanks to Noah Smith for supplying us with his tag set). Also, the studies differed in the size of the corpora used. The largest corpus that Goldwater and Griffiths (2007) studied contained 96,000 words, while Johnson (2007) used all of the 1,173,766 words in the full Penn WSJ treebank. For</context>
+<context position="25268" citStr="Goldwater and Griffiths (2007)" startWordPosition="4286" endWordPosition="4290">arison results because it is possible that the values we tried were good for one estimator and bad for others. Unfortunately, we do not know any efficient way of searching the optimal hyperparameters in a much wider and more fine-grained space. We leave it to future work. 4 Conclusion and future work As might be expected, our evaluation measures disagree somewhat, but the following broad tendancies seem clear. On small data sets all of the Bayesian estimators strongly outperform EM (and, to a lesser extent, VB) with respect to all of our evaluation measures, confirming the results reported in Goldwater and Griffiths (2007). This is perhaps not too surprising, as the Bayesian prior plays a comparatively stronger role with a smaller training corpus (which makes the likelihood term smaller) and the approximation used by Variational Bayes is likely to be less accurate on smaller data sets. But on larger data sets, which Goldwater et al did not study, the results are much less clear, and depend on which evaluation measure is used. Expectation Maximization does surprisingly well on larger data sets and is competitive with the Bayesian estimators at least in terms of cross-validation accuracy, confirming the results r</context>
+</contexts>
+<marker>Goldwater, Griffiths, 2007</marker>
+<rawString>Sharon Goldwater and Tom Griffiths. 2007. A fully Bayesian approach to unsupervised part-of-speech tagging. In Proceedings of the 45th Annual Meeting of the Association of Computational Linguistics, pages 744–751, Prague, Czech Republic, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Aria Haghighi</author>
+<author>Dan Klein</author>
+</authors>
+<title>Prototype-driven learning for sequence models.</title>
+<date>2006</date>
+<booktitle>In Proceedings of the Human Language Technology Conference of the NAACL, Main Conference,</booktitle>
+<pages>320--327</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>New York City, USA,</location>
+<contexts>
+<context position="19251" citStr="Haghighi and Klein (2006)" startWordPosition="3278" endWordPosition="3281">has several defects. If a system is permitted to posit an unbounded number of states (which is not the case here) it can achieve a perfect score on by assigning each word token its own unique state. We can partially address this by cross-validation. We divide the corpus into two equal parts, and from the first part we extract a mapping from HMM states to the parts-of-speech they co-occur with most frequently, and use that mapping to map the states of the second part of the corpus to parts-of-speech. We call the accuracy of the resulting tagging the crossvalidation accuracy. Finally, following Haghighi and Klein (2006) and Johnson (2007) we can instead insist that at most one HMM state can be mapped to any part-of-speech tag. Following these authors, we used a greedy algorithm to associate states with POS tags; the accuracy of the resulting tagging is called the greedy 1-to-1 n0w, t + α0 * Ow|t = nt + m0α Then we use the dynamic programming sampler de348 All − 50 All − 17 120K − 50 120K − 17 24K − 50 24K − 17 EM 0.40527 0.43101 0.29303 0.35202 0.18618 0.28165 VB 0.46123 0.51379 0.34679 0.36010 0.23823 0.36599 GSe,p 0.47826 0.43424 0.36984 0.44125 0.29953 0.36811 GSe,b 0.49371 0.46568 0.38888 0.44341 0.34404</context>
+</contexts>
+<marker>Haghighi, Klein, 2006</marker>
+<rawString>Aria Haghighi and Dan Klein. 2006. Prototype-driven learning for sequence models. In Proceedings of the Human Language Technology Conference of the NAACL, Main Conference, pages 320–327, New York City, USA, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Frederick Jelinek</author>
+</authors>
+<title>Statistical Methods for Speech Recognition.</title>
+<date>1997</date>
+<publisher>The MIT Press,</publisher>
+<location>Cambridge, Massachusetts.</location>
+<contexts>
+<context position="8150" citStr="Jelinek, 1997" startWordPosition="1339" endWordPosition="1340">esample the label of each word conditioned on the labels of its neighbours (amongst other things) only require O(m) steps per sample (where m is the number of HMM states), while EM, VB and the sentence-blocked Gibbs samplers require O(m2) steps per sample. Thus for HMMs with many states it is possible to perform one or two orders of magnitude more iterations of the 345 point-wise Gibbs samplers in the same run-time as the other samplers, so it is plausible that they would yield better results. 2 Inference for HMMs There are a number of excellent textbook presentations of Hidden Markov Models (Jelinek, 1997; Manning and Sch¨utze, 1999), so we do not present them in detail here. Conceptually, a Hidden Markov Model uses a Markov model to generate the sequence of states t = (t1,... , tn) (which will be interpreted as POS tags), and then generates each word wi conditioned on the corresponding state ti. We insert endmarkers at the beginning and end of the corpus and between sentence boundaries, and constrain the estimators to associate endmarkers with a special HMM state that never appears elsewhere in the corpus (we ignore these endmarkers during evaluation). This means that we can formally treat th</context>
+<context position="10643" citStr="Jelinek, 1997" startWordPosition="1766" endWordPosition="1767">ion is a procedure that iteratively re-estimates the model parameters (θ, φ), converging on a local maximum of the likelihood. Specifically, if the parameter estimate at iteration ` is (θ(`), φ(`)), then the re-estimated parameters at iteration ` + 1 are: θ(`+1) = E[nt,,t]/E[nt] (2) t, |t φ(`+1) w|t = E[n0w,t]/E[nt] where n0w,t is the number of times word w occurs with state t, nt,,t is the number of times state t0 follows t and nt is the number of occurences of state t; all expectations are taken with respect to the model (θ(`),φ(`)). The experiments below used the ForwardBackward algorithm (Jelinek, 1997), which is a dynamic programming algorithm for calculating the likelihood and the expectations in (2) in O(nm2) time, where n is the number of words in the training corpus and m is the number of HMM states. 2.2 Variational Bayes Variational Bayesian inference attempts to find a function Q(t, θ, φ) that minimizes an upper bound (3) to the negative log likelihood. — log P(w) � Q(t, θ, φ)P(w, t, θ, φ) = � log Q(t, θ, φ) dt dθ dφ � Q(t, θ, φ) log P(w, t, θ, φ) &lt; � dt dθ dφ (3) Q(t, θ, φ) The upper bound (3) is called the Variational Free Energy. We make a “mean-field” assumption that the posterior</context>
+</contexts>
+<marker>Jelinek, 1997</marker>
+<rawString>Frederick Jelinek. 1997. Statistical Methods for Speech Recognition. The MIT Press, Cambridge, Massachusetts.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mark Johnson</author>
+<author>Thomas Griffiths</author>
+<author>Sharon Goldwater</author>
+</authors>
+<title>Bayesian inference for PCFGs via Markov chain Monte Carlo.</title>
+<date>2007</date>
+<booktitle>In Human Language Technologies 2007: The Conference of the North American Chapter of the Association for Computational Linguistics; Proceedings of the Main Conference,</booktitle>
+<pages>139--146</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Rochester, New York,</location>
+<contexts>
+<context position="14710" citStr="Johnson et al. (2007)" startWordPosition="2513" endWordPosition="2516"> pointwise sampler requires O(nm) time per iteration, while a blocked sampler requires O(nm2) time per iteration, where m is the number of HMM states and n is the length of the training corpus. Second, the sampler can either be explicit or collapsed. An explicit sampler represents and samples the HMM parameters 0 and 0 in addition to the states t, while in a collapsed sampler the HMM parameters are integrated out, and only the states t are sampled. The difference between explicit and collapsed samplers corresponds exactly to the difference between the two PCFG sampling algorithms presented in Johnson et al. (2007). An iteration of the pointwise explicit Gibbs sampler consists of resampling 0 and 0 given the stateto-state transition counts n and state-to-word emission counts n0 using (5), and then resampling each state ti given the corresponding word wi and the neighboring states ti−1 and ti+1 using (6). 0t |nt, α — Dir(nt + α) (5) fit |n0t,α0 — Dir(n0t + α0) P(ti |wi, t−i, 0, 0) a θti|ti−1φwi|tiθti+1|ti (6) The Dirichlet distributions in (5) are non-uniform; nt is the vector of state-to-state transition counts in t leaving state t in the current state vector t, while 347 n0t is the vector of state-to-w</context>
+<context position="16581" citStr="Johnson et al. (2007)" startWordPosition="2829" endWordPosition="2832">ng algorithm (based on the Forward-Backward algorithm) for sampling a state sequence t given the words w and the transition and emission probabilities 0 and 0. At each iteration the explicit blocked Gibbs sampler resamples 0 and 0 using (5), just as the explicit pointwise sampler does. Then it uses the new HMM parameters to resample the states t for the training corpus using the algorithm just mentioned. This can be done in parallel for each sentence in the training corpus. The collapsed blocked Gibbs sampler is a straight-forward application of the Metropoliswithin-Gibbs approach proposed by Johnson et al. (2007) for PCFGs, so we only sketch it here. We iterate through the sentences of the training data, resampling the states for each sentence conditioned on the state-to-state transition counts n and stateto-word emission counts n0 for the other sentences in the corpus. This is done by first computing the parameters 0* and 0* of a proposal HMM using (7). nt&apos;,t + α �* t&apos;|t = (7) nt + mα scribed above to produce a proposal state sequence t* for the words in the sentence. Finally, we use a Metropolis-Hastings accept-reject step to decide whether to update the current state sequence for the sentence with </context>
+</contexts>
+<marker>Johnson, Griffiths, Goldwater, 2007</marker>
+<rawString>Mark Johnson, Thomas Griffiths, and Sharon Goldwater. 2007. Bayesian inference for PCFGs via Markov chain Monte Carlo. In Human Language Technologies 2007: The Conference of the North American Chapter of the Association for Computational Linguistics; Proceedings of the Main Conference, pages 139–146, Rochester, New York, April. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mark Johnson</author>
+</authors>
+<title>Why doesn’t EM find good HMM POS-taggers?</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 2007 Joint Conference on Empirical Methods in Natural Language Processing and Computational Natural Language Learning (EMNLP-CoNLL),</booktitle>
+<pages>296--305</pages>
+<contexts>
+<context position="5269" citStr="Johnson, 2007" startWordPosition="864" endWordPosition="865">er than commiting to a single value for the parameters 0 many Bayesians often prefer to work with the full posterior distribution P(0 |d), as this naturally reflects the uncertainty in 0’s value. In all but the simplest models there is no known closed form for the posterior distribution. However, the Bayesian literature describes a number of methods for approximating the posterior P(0 |d). Monte Carlo sampling methods and Variational Bayes are two kinds of approximate inference methods that have been applied to Bayesian inference of unsupervised HMM POS taggers (Goldwater and Griffiths, 2007; Johnson, 2007). These methods can also be used to approximate other distributions that are important to us, such as the conditional distribution P(t |w) of POS tags (i.e., HMM hidden states) t given words w. This recent literature reports contradictory results about these Bayesian inference methods. Johnson (2007) compared two Bayesian inference algorithms, Variational Bayes and what we call here a point-wise collapsed Gibbs sampler, and found that Variational Bayes produced the best solution, and that the Gibbs sampler was extremely slow to converge and produced a worse solution than EM. On the other hand,</context>
+<context position="15547" citStr="Johnson (2007)" startWordPosition="2659" endWordPosition="2660">orresponding word wi and the neighboring states ti−1 and ti+1 using (6). 0t |nt, α — Dir(nt + α) (5) fit |n0t,α0 — Dir(n0t + α0) P(ti |wi, t−i, 0, 0) a θti|ti−1φwi|tiθti+1|ti (6) The Dirichlet distributions in (5) are non-uniform; nt is the vector of state-to-state transition counts in t leaving state t in the current state vector t, while 347 n0t is the vector of state-to-word emission counts for state t. See Johnson et al. (2007) for a more detailed explanation, as well as an algorithm for sampling from the Dirichlet distributions in (5). The samplers that Goldwater and Griffiths (2007) and Johnson (2007) describe are pointwise collapsed Gibbs samplers. Figure 1 gives the sampling distribution for this sampler. As Johnson et al. (2007) explains, samples of the HMM parameters 0 and 0 can be obtained using (5) if required. The blocked Gibbs samplers differ from the pointwise Gibbs samplers in that they resample the POS tags for an entire sentence at a time. Besag (2004) describes the well-known dynamic programming algorithm (based on the Forward-Backward algorithm) for sampling a state sequence t given the words w and the transition and emission probabilities 0 and 0. At each iteration the expli</context>
+<context position="19270" citStr="Johnson (2007)" startWordPosition="3283" endWordPosition="3284">em is permitted to posit an unbounded number of states (which is not the case here) it can achieve a perfect score on by assigning each word token its own unique state. We can partially address this by cross-validation. We divide the corpus into two equal parts, and from the first part we extract a mapping from HMM states to the parts-of-speech they co-occur with most frequently, and use that mapping to map the states of the second part of the corpus to parts-of-speech. We call the accuracy of the resulting tagging the crossvalidation accuracy. Finally, following Haghighi and Klein (2006) and Johnson (2007) we can instead insist that at most one HMM state can be mapped to any part-of-speech tag. Following these authors, we used a greedy algorithm to associate states with POS tags; the accuracy of the resulting tagging is called the greedy 1-to-1 n0w, t + α0 * Ow|t = nt + m0α Then we use the dynamic programming sampler de348 All − 50 All − 17 120K − 50 120K − 17 24K − 50 24K − 17 EM 0.40527 0.43101 0.29303 0.35202 0.18618 0.28165 VB 0.46123 0.51379 0.34679 0.36010 0.23823 0.36599 GSe,p 0.47826 0.43424 0.36984 0.44125 0.29953 0.36811 GSe,b 0.49371 0.46568 0.38888 0.44341 0.34404 0.37032 GSc,p 0.49</context>
+<context position="23162" citStr="Johnson (2007)" startWordPosition="3929" endWordPosition="3930">GHz dual quad-core Pentium for the four different Gibbs samplers on all data and 50 hidden states. Each iteration took approximately 96 sec. for the collapsed blocked sampler, 7.5 sec. for the collapsed pointwise sampler, 25 sec. for the explicit blocked sampler and 4.4 sec. for the explicit pointwise sampler. Greedy 1-to-1 accuracy All data, 50 states, α = α&apos; = 0.1 collapsed,blocked collapsed, pointwise explicit, blocked explicit, pointwise 0.58 0.56 0.54 0.52 0.5 0.48 0.46 0.44 0.42 0.4 0 10000 20000 30000 40000 50000 350 accuracy. The studies presented by Goldwater and Griffiths (2007) and Johnson (2007) differed in the number of states that they used. Goldwater and Griffiths (2007) evaluated against the reduced tag set of 17 tags developed by Smith and Eisner (2005), while Johnson (2007) evaluated against the full Penn Treebank tag set. We ran all our estimators in both conditions here (thanks to Noah Smith for supplying us with his tag set). Also, the studies differed in the size of the corpora used. The largest corpus that Goldwater and Griffiths (2007) studied contained 96,000 words, while Johnson (2007) used all of the 1,173,766 words in the full Penn WSJ treebank. For that reason we ran</context>
+<context position="25893" citStr="Johnson (2007)" startWordPosition="4390" endWordPosition="4391">erhaps not too surprising, as the Bayesian prior plays a comparatively stronger role with a smaller training corpus (which makes the likelihood term smaller) and the approximation used by Variational Bayes is likely to be less accurate on smaller data sets. But on larger data sets, which Goldwater et al did not study, the results are much less clear, and depend on which evaluation measure is used. Expectation Maximization does surprisingly well on larger data sets and is competitive with the Bayesian estimators at least in terms of cross-validation accuracy, confirming the results reported by Johnson (2007). Variational Bayes converges faster than all of the other estimators we examined here. We found that the speed of convergence of our samplers depends to a large degree upon the values of the hyperparameters α and α&apos;, with larger values leading to much faster convergence. This is not surprising, as the α and α&apos; specify how likely the samplers are to consider novel tags, and therefore directly influence the sampler’s mobility. However, in our experiments the best results are obtained in most settings with small values for α and α&apos;, usually between 0.1 and 0.0001. In terms of time to convergence</context>
+</contexts>
+<marker>Johnson, 2007</marker>
+<rawString>Mark Johnson. 2007. Why doesn’t EM find good HMM POS-taggers? In Proceedings of the 2007 Joint Conference on Empirical Methods in Natural Language Processing and Computational Natural Language Learning (EMNLP-CoNLL), pages 296–305.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David J C MacKay</author>
+</authors>
+<title>Ensemble learning for hidden Markov models.</title>
+<date>1997</date>
+<tech>Technical report,</tech>
+<institution>Cavendish Laboratory,</institution>
+<location>Cambridge.</location>
+<contexts>
+<context position="12460" citStr="MacKay (1997)" startWordPosition="2117" endWordPosition="2118">cator function (i.e., equal to one if its argument is true and zero otherwise), The calculus of variations is used to minimize the KL divergence between the desired posterior distribution and the factorized approximation. It turns out that if the likelihood and conjugate prior belong to exponential families then the optimal Q1 and Q2 do too, and there is an EM-like iterative procedure that finds locally-optimal model parameters (Bishop, 2006). This procedure is especially attractive for HMM inference, since it involves only a minor modification to the M-step of the Forward-Backward algorithm. MacKay (1997) and Beal (2003) describe Variational Bayesian (VB) inference for HMMs. In general, the E-step for VB inference for HMMs is the same as in EM, while the M-step is as follows: �θ(`+1) t�|t = f(E[nt&apos;,t] + α)/f(E[nt] + mα) (4) �φ(`+1) w|t = f(E[n0w,t] + α0)/f(E[nt] + m0α0) f(v) = exp(IF(v)) where m0 and m are the number of word types and states respectively, IF is the digamma function and the remaining quantities are as in (2). This means that a single iteration can be performed in O(nm2) time, just as for the EM algorithm. 2.3 MCMC sampling algorithms The goal of Markov Chain Monte Carlo (MCMC) </context>
+</contexts>
+<marker>MacKay, 1997</marker>
+<rawString>David J.C. MacKay. 1997. Ensemble learning for hidden Markov models. Technical report, Cavendish Laboratory, Cambridge.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David J C MacKay</author>
+</authors>
+<title>Information Theory, Inference, and Learning Algorithms.</title>
+<date>2003</date>
+<publisher>Cambridge University Press.</publisher>
+<contexts>
+<context position="4640" citStr="MacKay, 2003" startWordPosition="763" endWordPosition="764">tively few parts-of-speech (e.g., most words belong to a single POS, and while there are some words which are both nouns and verbs, very few are prepositions and adjectives as well). One might express this using a prior which prefers HMMs in which the state-to-word emissions are sparse, i.e., each state emits few words. An appropriate Dirichlet prior can express this preference. While it is possible to use Bayesian inference to find a single model, such as the Maximum A Posteriori or MAP value of 0 which maximizes the posterior P(0 |d), this is not necessarily the best approach (Bishop, 2006; MacKay, 2003). Instead, rather than commiting to a single value for the parameters 0 many Bayesians often prefer to work with the full posterior distribution P(0 |d), as this naturally reflects the uncertainty in 0’s value. In all but the simplest models there is no known closed form for the posterior distribution. However, the Bayesian literature describes a number of methods for approximating the posterior P(0 |d). Monte Carlo sampling methods and Variational Bayes are two kinds of approximate inference methods that have been applied to Bayesian inference of unsupervised HMM POS taggers (Goldwater and Gr</context>
+</contexts>
+<marker>MacKay, 2003</marker>
+<rawString>David J.C. MacKay. 2003. Information Theory, Inference, and Learning Algorithms. Cambridge University Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chris Manning</author>
+<author>Hinrich Sch¨utze</author>
+</authors>
+<title>Foundations of Statistical Natural Language Processing.</title>
+<date>1999</date>
+<publisher>The MIT Press,</publisher>
+<location>Cambridge, Massachusetts.</location>
+<marker>Manning, Sch¨utze, 1999</marker>
+<rawString>Chris Manning and Hinrich Sch¨utze. 1999. Foundations of Statistical Natural Language Processing. The MIT Press, Cambridge, Massachusetts.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Marina Meilˇa</author>
+</authors>
+<title>Comparing clusterings by the variation of information.</title>
+<date>2003</date>
+<booktitle>COLT 2003: The Sixteenth Annual Conference on Learning Theory,</booktitle>
+<volume>2777</volume>
+<pages>173--187</pages>
+<editor>In Bernhard Sch¨olkopf and Manfred K. Warmuth, editors,</editor>
+<publisher>Springer.</publisher>
+<marker>Meilˇa, 2003</marker>
+<rawString>Marina Meilˇa. 2003. Comparing clusterings by the variation of information. In Bernhard Sch¨olkopf and Manfred K. Warmuth, editors, COLT 2003: The Sixteenth Annual Conference on Learning Theory, volume 2777 of Lecture Notes in Computer Science, pages 173–187. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Christian P Robert</author>
+<author>George Casella</author>
+</authors>
+<title>Monte Carlo Statistical Methods.</title>
+<date>2004</date>
+<publisher>Springer.</publisher>
+<contexts>
+<context position="13567" citStr="Robert and Casella, 2004" startWordPosition="2315" endWordPosition="2318">n O(nm2) time, just as for the EM algorithm. 2.3 MCMC sampling algorithms The goal of Markov Chain Monte Carlo (MCMC) algorithms is to produce a stream of samples from the posterior distribution P(t |w, α). Besag (2004) provides a tutorial on MCMC techniques for HMM inference. A Gibbs sampler is a simple kind of MCMC algorithm that is well-suited to sampling highdimensional spaces. A Gibbs sampler for P(z) where z = (z1, ... , zn) proceeds by sampling and updating each zi in turn from P(zi |z−i), where z−i = (z1,... , zi−1, zi+1, ... , zn), i.e., all of the z except zi (Geman and Geman, 1984; Robert and Casella, 2004). We evaluate four different Gibbs samplers in this paper, which vary along two dimensions. First, the sampler can either be pointwise or blocked. A pointwise sampler resamples a single state ti (labeling a single word wi) at each step, while a blocked sampler resamples the labels for all of the words in a sentence at a single step using a dynamic programming algorithm based on the Forward-Backward algorithm. (In principle it is possible to use block sizes other than the sentence, but we did not explore this here). A pointwise sampler requires O(nm) time per iteration, while a blocked sampler </context>
+</contexts>
+<marker>Robert, Casella, 2004</marker>
+<rawString>Christian P. Robert and George Casella. 2004. Monte Carlo Statistical Methods. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Noah A Smith</author>
+<author>Jason Eisner</author>
+</authors>
+<title>Contrastive estimation: Training log-linear models on unlabeled data.</title>
+<date>2005</date>
+<booktitle>In Proceedings ofthe 43rd Annual Meeting ofthe Association for Computational Linguistics (ACL’05),</booktitle>
+<pages>354--362</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Ann Arbor, Michigan,</location>
+<contexts>
+<context position="23328" citStr="Smith and Eisner (2005)" startWordPosition="3956" endWordPosition="3959">d blocked sampler, 7.5 sec. for the collapsed pointwise sampler, 25 sec. for the explicit blocked sampler and 4.4 sec. for the explicit pointwise sampler. Greedy 1-to-1 accuracy All data, 50 states, α = α&apos; = 0.1 collapsed,blocked collapsed, pointwise explicit, blocked explicit, pointwise 0.58 0.56 0.54 0.52 0.5 0.48 0.46 0.44 0.42 0.4 0 10000 20000 30000 40000 50000 350 accuracy. The studies presented by Goldwater and Griffiths (2007) and Johnson (2007) differed in the number of states that they used. Goldwater and Griffiths (2007) evaluated against the reduced tag set of 17 tags developed by Smith and Eisner (2005), while Johnson (2007) evaluated against the full Penn Treebank tag set. We ran all our estimators in both conditions here (thanks to Noah Smith for supplying us with his tag set). Also, the studies differed in the size of the corpora used. The largest corpus that Goldwater and Griffiths (2007) studied contained 96,000 words, while Johnson (2007) used all of the 1,173,766 words in the full Penn WSJ treebank. For that reason we ran all our estimators on corpora containing 24,000 words and 120,000 words as well as the full treebank. We ran each estimator with the eight different combinations of </context>
+</contexts>
+<marker>Smith, Eisner, 2005</marker>
+<rawString>Noah A. Smith and Jason Eisner. 2005. Contrastive estimation: Training log-linear models on unlabeled data. In Proceedings ofthe 43rd Annual Meeting ofthe Association for Computational Linguistics (ACL’05), pages 354–362, Ann Arbor, Michigan, June. Association for Computational Linguistics.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

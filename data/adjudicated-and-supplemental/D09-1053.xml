@@ -1,0 +1,1531 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.001851">
+<title confidence="0.932734">
+Model Adaptation via Model Interpolation and Boosting
+for Web Search Ranking
+</title>
+<author confidence="0.9734285">
+Jianfeng Gao&amp;quot;, Qiang Wu&amp;quot;, Chris Burges&amp;quot;, Krysta Svore&amp;quot;,
+Yi Su#, Nazan Khan$, Shalin Shah$, Hongyan Zhou$
+</author>
+<affiliation confidence="0.979333">
+*Microsoft Research, Redmond, USA
+</affiliation>
+<email confidence="0.7904">
+{jfgao; qiangwu; cburges; ksvore}@microsoft.com
+</email>
+<affiliation confidence="0.798082">
+#Johns Hopkins University, USA
+</affiliation>
+<email confidence="0.986902">
+suy@jhu.edu
+</email>
+<author confidence="0.442087">
+$Microsoft Bing Search, Redmond, USA
+</author>
+<email confidence="0.987651">
+{nazanka; a-shas; honzhou}@microsoft.com
+</email>
+<sectionHeader confidence="0.997354" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999948214285714">
+This paper explores two classes of model adapta-
+tion methods for Web search ranking: Model In-
+terpolation and error-driven learning approaches
+based on a boosting algorithm. The results show
+that model interpolation, though simple, achieves
+the best results on all the open test sets where the
+test data is very different from the training data.
+The tree-based boosting algorithm achieves the
+best performance on most of the closed test sets
+where the test data and the training data are sim-
+ilar, but its performance drops significantly on
+the open test sets due to the instability of trees.
+Several methods are explored to improve the
+robustness of the algorithm, with limited success.
+</bodyText>
+<sectionHeader confidence="0.998429" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.9999705">
+We consider the task of ranking Web search
+results, i.e., a set of retrieved Web documents
+(URLs) are ordered by relevance to a query is-
+sued by a user. In this paper we assume that the
+task is performed using a ranking model (also
+called ranker for short) that is learned on labeled
+training data (e.g., human-judged
+query-document pairs). The ranking model acts
+as a function that maps the feature vector of a
+query-document pair to a real-valued score of
+relevance.
+Recent research shows that such a learned
+ranker is superior to classical retrieval models in
+two aspects (Burges et al., 2005; 2006; Gao et al.,
+2005). First, the ranking model can use arbitrary
+features. Both traditional criteria such as TF-IDF
+and BM25, and non-traditional features such as
+hyperlinks can be incorporated as features in the
+ranker. Second, if large amounts of high-quality
+human-judged query-document pairs were
+available for model training, the ranker could
+achieve significantly better retrieval results than
+the traditional retrieval models that cannot ben-
+efit from training data effectively. However,
+such training data is not always available for
+many search domains, such as non-English
+search markets or person name search.
+One of the most widely used strategies to re-
+medy this problem is model adaptation, which
+attempts to adjust the parameters and/or struc-
+ture of a model trained on one domain (called the
+background domain), for which large amounts of
+training data are available, to a different domain
+(the adaptation domain), for which only small
+amounts of training data are available. In Web
+search applications, domains can be defined by
+query types (e.g., person name queries), or lan-
+guages, etc.
+In this paper we investigate two classes of
+model adaptation methods for Web search
+ranking: Model Interpolation approaches and
+error-driven learning approaches. In model
+interpolation approaches, the adaptation data is
+used to derive a domain-specific model (also
+called in-domain model), which is then com-
+bined with the background model trained on the
+background data. This appealingly simple con-
+cept provides fertile ground for experimentation,
+depending on the level at which the combination
+is implemented (Bellegarda, 2004). In er-
+ror-driven learning approaches, the background
+model is adjusted so as to minimize the ranking
+errors the model makes on the adaptation data
+(Bacchiani et al., 2004; Gao et al. 2006). This is
+arguably more powerful than model interpola-
+tion for two reasons. First, by defining a proper
+error function, the method can optimize more
+directly the measure used to assess the final
+quality of the Web search system, e.g., Normalized
+Discounted Cumulative Gain (Javelin &amp; Kekalainen,
+2000) in this study. Second, in this framework,
+the model can be adjusted to be as fine-grained as
+necessary. In this study we developed a set of
+error-driven learning methods based on a
+boosting algorithm where, in an incremental
+manner, not only each feature weight could be
+</bodyText>
+<page confidence="0.967735">
+505
+</page>
+<note confidence="0.9966205">
+Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing, pages 505–513,
+Singapore, 6-7 August 2009. c�2009 ACL and AFNLP
+</note>
+<bodyText confidence="0.998900294117647">
+changed separately, but new features could be
+constructed.
+We focus our experiments on the robustness
+of the adaptation methods. A model is robust if it
+performs reasonably well on unseen test data
+that could be significantly different from training
+data. Robustness is important in Web search
+applications. Labeling training data takes time.
+As a result of the dynamic nature of Web, by the
+time the ranker is trained and deployed, the
+training data may be more or less out of date.
+Our results show that the model interpolation is
+much more robust than the boosting-based me-
+thods. We then explore several methods to im-
+prove the robustness of the methods, including
+regularization, randomization, and using shal-
+low trees, with limited success.
+</bodyText>
+<sectionHeader confidence="0.715902" genericHeader="method">
+2 Ranking Model and Quality
+Measure in Web Search
+</sectionHeader>
+<bodyText confidence="0.99966528125">
+This section reviews briefly a particular example
+of rankers, called LambdaRank (Burges et al.,
+2006), which serves as the baseline ranker in our
+study.
+Assume that training data is a set of input/
+output pairs (x, y). x is a feature vector extracted
+from a query-document pair. We use approx-
+imately 400 features, including dynamic ranking
+features such as term frequency and BM25, and
+statistic ranking features such as PageRank. y is
+a human-judged relevance score, 0 to 4, with 4 as
+the most relevant.
+LambdaRank is a neural net ranker that maps
+a feature vector x to a real value y that indicates
+the relevance of the document given the query
+(relevance score). For example, a linear Lamb-
+daRank simply maps x to y with a learned weight
+vector w such that y = W • X. (We used nonli-
+near LambdaRank in our experiments). Lamb-
+daRank is particularly interesting to us due to the
+way w is learned. Typically, w is optimized w.r.t.
+a cost function using numerical methods if the
+cost function is smooth and its gradient w.r.t. w
+can be computed easily. In order for the ranker
+to achieve the best performance in document
+retrieval, the cost function used in training
+should be the same as, or as close as possible to,
+the measure used to assess the quality of the
+system. In Web search, Normalized Discounted
+Cumulative Gain (NDCG) (Jarvelin and Kekalai-
+nen, 2000) is widely used as quality measure. For
+a query, NDCG is computed as
+</bodyText>
+<equation confidence="0.807014333333333">
+2r(j) − 1
+, (1)
+j=1
+</equation>
+<bodyText confidence="0.999979961538461">
+where r(j) is the relevance level of the j-th doc-
+ument, and the normalization constant Ni is
+chosen so that a perfect ordering would result in
+N = 1. Here L is the ranking truncation level at
+which NDCG is computed. The N are then av-
+eraged over a query set. However, NDCG, if it
+were to be used as a cost function, is either flat or
+discontinuous everywhere, and thus presents
+challenges to most optimization approaches that
+require the computation of the gradient of the
+cost function.
+LambdaRank solves the problem by using an
+implicit cost function whose gradients are speci-
+fied by rules. These rules are called a-functions.
+Burges et al. (2006) studied several a-functions
+that were designed with the NDCG cost function
+in mind. They showed that LambdaRank with
+the best a-function outperforms significantly a
+similar neural net ranker, RankNet (Burges et al.,
+2005), whose parameters are optimized using the
+cost function based on cross-entropy.
+The superiority of LambdaRank illustrates the
+key idea based on which we develop the model
+adaptation methods. We should always adapt
+the ranking models in such a way that the NDCG
+can be optimized as directly as possible.
+</bodyText>
+<sectionHeader confidence="0.98378" genericHeader="method">
+3 Model Interpolation
+</sectionHeader>
+<bodyText confidence="0.999748">
+One of the simplest model interpolation methods
+is to combine an in-domain model with a back-
+ground model at the model level via linear in-
+terpolation. In practice we could combine more
+than two in-domain/background models. Let-
+ting Score(q, d) be a ranking model that maps a
+query-document pair to a relevance score, the
+general form of the interpolation model is
+</bodyText>
+<equation confidence="0.996105333333333">
+N
+Score(q, d) = I aiScorei(q, d), (2)
+i=1
+</equation>
+<bodyText confidence="0.9999736875">
+where the ’s are interpolation weights, opti-
+mized on validation data with respect to a pre-
+defined objective, which is NDCG in our case.
+As mentioned in Section 2, NDCG is not easy to
+optimize, for which we resort to two solutions,
+both of which achieve similar results in our ex-
+periments.
+The first solution is to view the interpolation
+model of Equation (2) as a linear neural net
+ranker where each component model Scorei(.) is
+defined as a feature function. Then, we can use
+the LambdaRank algorithm described in Section
+2 to find the optimal weights.
+An alternative solution is to view interpola-
+tion weight estimation as a multi-dimensional
+optimization problem, with each model as a
+</bodyText>
+<equation confidence="0.994520333333333">
+L
+N = Ni
+log (1 + j
+</equation>
+<page confidence="0.990933">
+506
+</page>
+<bodyText confidence="0.999963767857143">
+dimension. Since NCDG is not differentiable, we
+tried in our experiments the numerical algo-
+rithms that do not require the computation of
+gradient. Among the best performers is the
+Powell Search algorithm (Press et al., 1992). It
+first constructs a set of N virtual directions that
+are conjugate (i.e., independent with each other),
+then it uses line search N times, each on one vir-
+tual direction, to find the optimum. Line search
+is a one-dimensional optimization algorithm.
+Our implementation follows the one described in
+Gao et al. (2005), which is used to optimize the
+averaged precision.
+The performance of model interpolation de-
+pends to a large degree upon the quality and the
+size of adaptation data. First of all, the adaptation
+data has to be “rich” enough to suitably charac-
+terize the new domain. This can only be
+achieved by collecting more in-domain data.
+Second, once the domain has been characterized,
+the adaptation data has to be “large” enough to
+have a model reliably trained. For this, we de-
+veloped a method, which attempts to augment
+adaptation data by gathering similar data from
+background data sets.
+The method is based on the k-nearest-neighbor
+(kNN) algorithm, and is inspired by Bishop
+(1995). We use the small in-domain data set D1
+as a seed, and expand it using the large back-
+ground data set D2. When the relevance labels
+are assigned by humans, it is reasonable to as-
+sume that queries with the lowest information
+entropy of labels are the least noisy. That is, for
+such a query most of the URLs are labeled as
+highly relevant/not relevant documents rather
+than as moderately relevance/not relevant
+documents.
+Due to computational limitations of
+kNN-based algorithms, a small subset of queries
+from D1 which are least noisy are selected. This
+data set is called S1. For each sample in D2, its
+3-nearest neighbors in S1 are found using a co-
+sine-similarity metric. If the three neighbors are
+within a very small distance from the sample in
+D2, and one of the labels of the nearest neighbors
+matches exactly, the training sample is selected
+and is added to the expanded set E2, in its own
+query. This way, S1 is used to choose training
+data from D2, which are found to be close in
+some space.
+This process effectively creates several data
+points in close neighborhood of the points in the
+original small data set D1, thus expanding the
+set, by jittering each training sample a little. This
+is equivalent to training with noise (Bishop,
+1995), except that the training samples used are
+</bodyText>
+<figure confidence="0.7856386">
+1 Set F0(x) be the background ranking model
+2 for m = 1 to M do
+3 ′ = − 𝑦𝑖 , for i = 1... N
+𝜕𝐿 𝑦𝑖,𝐹 𝐱𝑖
+𝜕𝐹 𝐱𝑖
+𝐹 𝐱 =𝐹𝑚 −1 𝐱
+𝑁 2
+4 (ℎ𝑚, 𝛽𝑚) = argmin 𝑦𝑖 ′ − 𝛽ℎ(𝐱𝑖)
+ℎ,𝛽 𝑖=1
+5 𝐹𝑚 𝐱 = 𝐹𝑚−1 𝐱 + 𝛽 𝑚 ℎ(𝐱)
+</figure>
+<figureCaption confidence="0.9857655">
+Figure 1. The generic boosting algorithm for model
+adaptation
+</figureCaption>
+<bodyText confidence="0.998007">
+actual queries judged by a human. This is found
+to increase the NDCG in our experiments.
+</bodyText>
+<sectionHeader confidence="0.998137" genericHeader="method">
+4 Error-Driven Learning
+</sectionHeader>
+<bodyText confidence="0.999915076923077">
+Our error-drive learning approaches to ranking
+modeling adaptation are based on the Stochastic
+Gradient Boosting algorithm (or the boosting
+algorithm for short) described in Friedman
+(1999). Below, we follow the notations in Fried-
+man (2001).
+Let adaptation data (also called training data in
+this section) be a set of input/output pairs {xi, yi},
+i = 1...N. In error-driven learning approaches,
+model adaptation is performed by adjusting the
+background model into a new in-domain model
+𝐹: 𝑥 → 𝑦 that minimizes a loss function L(y, F(x))
+over all samples in training data
+</bodyText>
+<equation confidence="0.996781333333333">
+𝑁
+𝐹∗ = argmin 𝐿(𝑦𝑖, 𝐹(𝐱𝑖)) . (3)
+𝐹 𝑖=1
+</equation>
+<bodyText confidence="0.9528495">
+We further assume that F(x) takes the form of
+additive expansion as
+</bodyText>
+<equation confidence="0.984264">
+𝑀
+𝐹 𝐱 = 𝛽𝑚 ℎ 𝐱; 𝐚𝑚 , (4)
+𝑚=0
+</equation>
+<bodyText confidence="0.999843761904762">
+where h(x; a) is called basis function, and is
+usually a simple parameterized function of the
+input x, characterized by parameters a. In what
+follows, we drop a, and use h(x) for short. In
+practice, the form of h has to be restricted to a
+specific function family to allow for a practically
+efficient procedure of model adaptation. β is a
+real-valued coefficient.
+Figure 1 is the generic algorithm. It starts
+with a base model F0, which is a background
+model. Then for m = 1, 2, ..., M, the algorithm
+takes three steps to adapt the base model so as to
+best fit the adaptation data: (1) compute the re-
+sidual of the current base model (line 3), (2) select
+the optimal basis function (line 4) that best fits
+the residual, and (3) update the base model by
+adding the optimal basis function (line 5). The
+two model adaptation algorithms that will be
+described below follow the same 3-step adapta-
+tion procedure. They only differ in the choice of
+h. In the LambdaBoost algorithm (Section 4.1) h
+</bodyText>
+<page confidence="0.964856">
+507
+</page>
+<figure confidence="0.983589833333333">
+1 Set F0(x) to be the background ranking model
+2 for m = 1 to M do
+3 compute residuals according to Equation (5)
+4 select best hm (with its best βm), according to LS,
+computed by Equations (8) and (9)
+5 𝐹𝑚 𝐱 = 𝐹𝑚−1 𝐱 + 𝜐𝛽𝑚 ℎ(𝐱)
+</figure>
+<figureCaption confidence="0.999989">
+Figure 2. The LambdaBoost algorithm for model adaptation.
+</figureCaption>
+<bodyText confidence="0.999861210526316">
+is defined as a single feature, and in LambdaS-
+MART (Section 4.2), h is a regression tree.
+Now, we describe the way residual is com-
+puted, the step that is identical in both algo-
+rithms. Intuitively, the residual, denoted by y’
+(line 3 in Figure 1), measures the amount of er-
+rors (or loss) the base model makes on the train-
+ing samples. If the loss function in Equation (3) is
+differentiable, the residual can be computed
+easily as the negative
+gradient of the loss function. As discussed in
+Section 2, we want to directly optimize the
+NDCD, whose gradient is approximated via the
+λ-function. Following Burges et al. (2006), the
+gradient of a training sample (xi, yi), where xi is a
+feature vector representing the query-document
+pair (qi, di), w.r.t. the current base model is com-
+puted by marginalizing the λ-functions of all
+document pairs, (di, dj), of the query, qi, as
+</bodyText>
+<equation confidence="0.975225">
+𝑦𝑖 ′ = ∆NDCG ∙ 𝜕𝐶𝑖𝑗 , (5)
+𝑗 ≠𝑖 𝜕𝑜𝑖𝑗
+</equation>
+<bodyText confidence="0.9999384">
+where ∆NDCG is the NDCG gained by swapping
+those two documents (after sorting all docu-
+ments by their current scores); 𝑜𝑖𝑗 ≡ 𝑠𝑖 − 𝑠𝑗 is the
+difference in ranking scores of di and dj given qi;
+and Cij is the cross entropy cost defined as
+</bodyText>
+<equation confidence="0.9991172">
+𝐶𝑖𝑗 ≡ 𝐶 𝑜𝑖𝑗 = 𝑠𝑗 − 𝑠𝑖 (6)
++ log(1 + exp(𝑠𝑖 − 𝑠𝑗)).
+−1
+= . (7)
+1 + exp 𝑜𝑖𝑗
+</equation>
+<bodyText confidence="0.999889333333333">
+This λ-function essentially uses the cross en-
+tropy cost to smooth the change in NDCG ob-
+tained by swapping the two documents. A key
+intuition behind the λ-function is the observation
+that NDCG does not treat all pairs equally; for
+example, it costs more to incorrectly order a pair,
+where the irrelevant document is ranked higher
+than a highly relevant document, than it does to
+swap a moderately relevant/not relevant pair.
+</bodyText>
+<subsectionHeader confidence="0.997122">
+4.1 The LambdaBoost Algorithm
+</subsectionHeader>
+<bodyText confidence="0.999987538461538">
+In LambdaBoost, the basis function h is defined
+as a single feature (i.e., an element feature in the
+feature vector x). The algorithm is summarized
+in Figure 2. It iteratively adapts a background
+model to training data using the 3-step proce-
+dure, as in Figure 1. Step 1 (line 3 in Figure 2) has
+been described.
+Step 2 (line 4 in Figure 2) finds the optimal
+basis function h, as well as its optimal coefficient
+β, that best fits the residual according to the
+least-squares (LS) criterion. Formally, let h and β
+denote the candidate basis function and its op-
+timal coefficient. The LS error on training data
+</bodyText>
+<equation confidence="0.987695">
+is 𝐿𝑆 ℎ; 𝛽 = 𝑦𝑖
+𝑁 ′ − 𝛽ℎ 2 , where 𝑦𝑖 ′ is com-
+𝑖=0
+puted as Equation (5). The optimal coefficient of
+𝑁 ′ −
+h is estimated by solving the equation 𝜕 𝑦𝑖
+𝑖=1
+𝛽ℎ2/𝜕𝛽=0. Then, β is computed as
+𝛽 = 𝑁𝑖=1 𝑦𝑖 ℎ(𝐱𝑖)
+𝑁. (8)
+Z𝑖=1 ( 𝑖)
+ℎ 𝐱
+</equation>
+<bodyText confidence="0.674161">
+Finally, given its optimal coefficient β, the op-
+timal LS loss of h is
+</bodyText>
+<equation confidence="0.997543">
+𝑁 𝑁
+𝐿𝑆 ℎ; 𝛽 = 𝑦𝑖 ′ × 𝑦𝑖 ′ 𝑁
+𝑖=1
+</equation>
+<bodyText confidence="0.999843322580645">
+Step 3 (line 5 in Figure 2) updates the base
+model by adding the chosen optimal basis func-
+tion with its optimal coefficient. As shown in
+Step 2, the optimal coefficient of each candidate
+basis function is computed when the basis func-
+tion is evaluated. However, adding the basis
+function using its optimal efficient is prone to
+overfitting. We thus add a shrinkage coefficient 0
+&lt; υ &lt; 1 – the fraction of the optimal line step
+taken. The update equation is thus rewritten in
+line 5 in Figure 2.
+Notice that if the background model contains
+all the input features in x, then LambdaBoost
+does not add any new features but adjust the
+weights of existing features. If the background
+model does not contain all of the input features,
+then LambdaBoost can be viewed as a feature
+selection method, similar to Collins (2000), where
+at each iteration the feature that has the largest
+impact on reducing training loss is selected and
+added to the background model. In either case,
+LambdaBoost adapts the background model by
+adding a model whose form is a (weighted) li-
+near combination of input features. The property
+of linearity makes LambdaBoost robust and less
+likely to overfit in Web search applications. But
+this also limits the adaptation capacity. A simple
+method that allows us to go beyond linear
+adaptation is to define h as nonlinear terms of the
+input features, such as regression trees in
+LambdaSMART.
+</bodyText>
+<subsectionHeader confidence="0.994974">
+4.2 The LambdaSMART Algorithm
+</subsectionHeader>
+<bodyText confidence="0.9925785">
+LambdaSMART was originally proposed in Wu
+et al. (2008). It is built on MART (Friedman, 2001)
+but uses the λ-function (Burges et a., 2006) to
+Thus, we have
+</bodyText>
+<equation confidence="0.971006375">
+𝜕 𝐶𝑖𝑗
+𝜕𝑜𝑖𝑗
+𝑖=1
+−
+𝑖=1
+𝑦𝑖 ′ℎ 𝐱𝑖 2
+ℎ2(𝐱𝑖)
+. (9)
+</equation>
+<page confidence="0.927815">
+508
+</page>
+<figure confidence="0.959698555555556">
+1 Set F0(x) to be the background ranking model
+2 for m = 1 to M do
+3 compute residuals according to Equation (5)
+4 create a L-terminal node tree, ℎ𝑚 ≡ 𝑅𝑙𝑚 𝑙=1...𝐿
+5 for l = 1 to L do
+6 compute the optimal βlm according to Equation
+(10), based on approximate Newton step.
+7 𝐹𝑚 𝐱 = 𝐹𝑚−1 𝑥 + 𝜐 𝛽𝑙𝑚 1(𝑥 ∈ 𝑅𝑙𝑚 )
+𝑙=1...𝐿
+</figure>
+<figureCaption confidence="0.999986">
+Figure 3. The LambdaSMART algorithm for model adaptation.
+</figureCaption>
+<bodyText confidence="0.983374814814815">
+compute gradients. The algorithm is summa-
+rized in Figure 3. Similar to LambdaBoost, it
+takes M rounds, and at each boosting iteration, it
+adapts the background model to training data
+using the 3-step procedure. Step 1 (line 3 in Fig-
+ure 3) has been described.
+Step 2 (lines 4 to 6) searches for the optimal
+basis function h to best fit the residual. Unlike
+LambdaBoost where there are a finite number of
+candidate basis functions, the function space of
+regression trees is infinite. We define h as a re-
+gression tree with L terminal nodes. In line 4, a
+regression tree is built using Mean Square Error
+to determine the best split at any node in the tree.
+The value associated with a leaf (i.e., terminal
+node) of the trained tree is computed first as the
+residual (computed via λ-function) for the train-
+ing samples that land at that leaf. Then, since
+each leaf corresponds to a different mean, a
+one-dimensional Newton-Raphson line step is
+computed for each leaf (lines 5 and 6). These line
+steps may be simply computed as the derivatives
+of the LambdaRank gradients w.r.t. the model
+scores si. Formally, the value of the l-th leaf, βml,
+is computed as
+where 𝑦𝑖′ is the residual of training sample i,
+computed in Equation (5), and 𝑤𝑖 is the deriva-
+tive of 𝑦𝑖′, i.e., 𝑤𝑖 = 𝜕𝑦𝑖′/𝜕𝐹(𝐱𝑖).
+In Step 3 (line 7), the regression tree is added
+to the current base model, weighted by the
+shrinkage coefficient 0 &lt; v &lt; 1.
+Notice that since a regression tree can be
+viewed as a complex feature that combines mul-
+tiple input features, LambdaSMART can be used
+as a feature generation method. LambdaSMART
+is arguably more powerful than LambdaBoost in
+that it introduces new complex features and thus
+adjusts not only the parameters but also the
+structure of the background model1. However,
+1 Note that in a sense our proposed LambdaBoost
+algorithm is the same as LambdaSMART, but using a
+single feature at each iteration, rather than a tree. In
+particular, they share the trick of using the Lambda
+one problem of trees is their high variance.
+Often a small change in the data can result in a
+very different series of splits. As a result,
+tree-based ranking models are much less robust
+to noise, as we will show in our experiments. In
+addition to the use of shrinkage coefficient 0 &lt; v
+&lt; 1, which is a form of model regularization
+according to Hastie, et al., (2001), we will ex-
+plore in Section 5.3 other methods of improving
+the model robustness, including randomization
+and using shallow trees.
+</bodyText>
+<sectionHeader confidence="0.997964" genericHeader="evaluation">
+5 Experiments
+</sectionHeader>
+<subsectionHeader confidence="0.897642">
+5.1 The Data
+</subsectionHeader>
+<bodyText confidence="0.992780815789474">
+We evaluated the ranking model adaptation
+methods on two Web search domains, namely (1)
+a name query domain, which consists of only
+person name queries, and (2) a Korean query
+domain, which consists of queries that users
+submitted to the Korean market.
+For each domain, we used two in-domain
+data sets that contain queries sampled respec-
+tively from the query log of a commercial Web
+search engine that were collected in two
+non-overlapping periods of time. We used the
+more recent one as open test set, and split the
+other into three non-overlapping data sets,
+namely training, validation and closed test sets,
+respectively. This setting provides a good si-
+mulation to the realistic Web search scenario,
+where the rankers in use are usually trained on
+early collected data, and thus helps us investigate
+the robustness of these model adaptation me-
+thods.
+The statistics of the data sets used in our per-
+son name domain adaptation experiments are
+shown in Table 1. The names query set serves as
+the adaptation domains, and Web-1 as the back-
+ground domain. Since Web-1 is used to train a
+background ranker, we did not split it to
+train/valid/test sets. We used 416 input features
+in these experiments.
+For cross-domain adaptation experiments
+from non-Korean to Korean markets, Korean
+data serves as the adaptation domain, and Eng-
+lish, Chinese, and Japanese data sets as the
+background domain. Again, we did not split the
+data sets in the background domain to
+train/valid/test sets. The statistics of these data
+sets are shown in Table 2. We used 425 input
+features in these experiments.
+gradients to learn NDCG.
+</bodyText>
+<equation confidence="0.8851335">
+𝑥∈𝑅𝑙 𝑦𝑖
+𝛽𝑚𝑙 = , (10)
+𝑤𝑖
+𝑥∈𝑅𝑙𝑚
+</equation>
+<page confidence="0.994222">
+509
+</page>
+<table confidence="0.998995285714286">
+Coll. Description #qry. # url/qry
+Web-1 Background training data 31555 134
+Names-1-Train In-domain training data 5752 85
+(adaptation data)
+Names-1-Valid In-domain validation data 158 154
+Names-1-Test Closed test data 318 153
+Names-2-Test Open test data 4370 84
+</table>
+<tableCaption confidence="0.955685333333333">
+Table 1. Data sets in the names query domain experiments,
+where # qry is number of queries, and # url/qry is number
+of documents per query.
+</tableCaption>
+<table confidence="0.998838888888889">
+Coll. Description # qry. # url/qry
+Web-En Background En training data 6167 198
+Web-Ja Background Ja training data 45012 58
+Web-Cn Background Ch training data 32827 72
+Kokr-1-Train In-domain Ko training data 3724 64
+(adaptation data)
+Kokr-1-Valid In-domain validation data 334 130
+Kokr-1-Test Korean closed test data 372 126
+Kokr-2-Test Korean open test data 871 171
+</table>
+<tableCaption confidence="0.995316">
+Table 2. Data sets in the Korean domain experiments.
+</tableCaption>
+<table confidence="0.998380285714286">
+# Models NDCG@1 NDCG@3 NDCG@10 AveNDCG
+1 Back. 0.4575 0.4952 0.5446 0.5092
+2 In-domain 0.4921 0.5296 0.5774 0.5433
+3 2W-Interp. 0.4745 0.5254 0.5747 0.5391
+4 3W-Interp. 0.4829 0.5333 0.5814 0.5454
+5 A-Boost 0.4706 0.5011 0.5569 0.5192
+6 A-SMART 0.5042 0.5449 0.5951 0.5623
+</table>
+<tableCaption confidence="0.998976">
+Table 3. Close test results on Names-1-Test.
+</tableCaption>
+<table confidence="0.997712285714286">
+# Models NDCG@1 NDCG@3 NDCG@10 AveNDCG
+1 Back. 0.5472 0.5347 0.5731 0.5510
+2 In-domain 0.5216 0.5266 0.5789 0.5472
+3 2W-Interp. 0.5452 0.5414 0.5891 0.5604
+4 3W-Interp. 0.5474 0.5470 0.5951 0.5661
+5 A-Boost 0.5269 0.5233 0.5716 0.5428
+6 A-SMART 0.5200 0.5331 0.5875 0.5538
+</table>
+<tableCaption confidence="0.999975">
+Table 4. Open test results on Names-2-Test.
+</tableCaption>
+<bodyText confidence="0.999969578947368">
+In each domain, the in-domain training data is
+used to train in-domain rankers, and the back-
+ground data for background rankers. Validation
+data is used to learn the best training parameters
+of the boosting algorithms, i.e., M, the total
+number of boosting iterations, , the shrinkage
+coefficient, and L, the number of leaf nodes for
+each regression tree (L=1 in LambdaBoost).
+Model performance is evaluated on the
+closed/open test sets.
+All data sets contain samples labeled on a
+5-level relevance scale, 0 to 4, with 4 as most
+relevant and 0 as irrelevant. The performance of
+rankers is measured through NDCG evaluated
+against closed/open test sets. We report NDCG
+scores at positions 1, 3 and 10, and the averaged
+NDCG score (Ave-NDCG), the arithmetic mean
+of the NDCG scores at 1 to 10. Significance test
+(i.e., t-test) was also employed.
+</bodyText>
+<subsectionHeader confidence="0.999229">
+5.2 Model Adaptation Results
+</subsectionHeader>
+<bodyText confidence="0.999991796296297">
+This section reports the results on two adapta-
+tion experiments. The first uses a large set of
+Web data, Web-1, as background domain and
+uses the name query data set as adaptation data.
+The results are summarized in Tables 3 and 4.
+We compared the three model adaptation me-
+thods against two baselines: (1) the background
+ranker (Row 1 in Tables 3 and 4), a 2-layer
+LambdaRank model with 15 hidden nodes and a
+learning rate of 10-5 trained on Web-1; and (2) the
+In-domain Ranker (Row 2), a 2-layer Lambda-
+Rank model with 10 hidden nodes and a learning
+rate of 10-5 trained on Names-1-Train. We built
+two interpolated rankers. The 2-way interpo-
+lated ranker (Row 3) is a linear combination of
+the two baseline rankers, where the interpolation
+weights were optimized on Names-1-Valid. To
+build the 3-way interpolated ranker (Row 4), we
+linearly interpolated three rankers. In addition
+to the two baseline rankers, the third ranker is
+trained on an augmented training data, which
+was created using the kNN method described in
+Section 3.
+In LambdaBoost (Row 5) and LambdaSMART
+(Row 6), we adapted the background ranker to
+name queries by boosting the background ranker
+with Names-1-Train. We trained LambdaBoost
+with the setting M = 500,  = 0.5, optimized on
+Names-1-Valid. Since the background ranker
+uses all of the 416 input features, in each boosting
+iteration, LambdaBoost in fact selects one exist-
+ing feature in the background ranker and adjusts
+its weight. We trained LambdaSMART with M =
+500, L = 20,  = 0.5, optimized on Names-1-Valid.
+We see that the results on the closed test set
+(Table 3) are quite different from the results on
+the open test set (Table 4). The in-domain ranker
+outperforms the background ranker on the
+closed test set, but underperforms significantly
+the background ranker on the open test set. The
+interpretation is that the training set and the
+closed test set are sampled from the same data
+set and are very similar, but the open test set is a
+very different data set, as described in Section 5.1.
+Similarly, on the closed test set, LambdaSMART
+outperforms LambdaBoost with a big margin
+due to its superior adaptation capacity; but on
+the open test set their performance difference is
+much smaller due to the instability of the trees in
+LambdaSMART, as we will investigate in detail
+later. Interestingly, model interpolation, though
+simple, leads to the two best rankers on the open
+test set. In particular, the 3-way interpolated
+ranker outperforms the two baseline rankers
+</bodyText>
+<page confidence="0.992154">
+510
+</page>
+<table confidence="0.9999438">
+# Ranker NDCG@1 NDCG@3 NDCG@10 AveNDCG
+1 Back. (En) 0.5371 0.5413 0.5873 0.5616
+2 Back. (Ja) 0.5640 0.5684 0.6027 0.5808
+3 Back. (Cn) 0.4966 0.5105 0.5761 0.5393
+4 In-domain 0.5927 0.5824 0.6291 0.6055
+</table>
+<tableCaption confidence="0.999132">
+Table 5. Close test results of baseline rankers, on Kokr-1-Test
+</tableCaption>
+<table confidence="0.999968">
+# Ranker NDCG@1 NDCG@3 NDCG@10 AveNDCG
+1 Back. (En) 0.4991 0.5242 0.5397 0.5278
+2 Back. (Ja) 0.5052 0.5092 0.5377 0.5194
+3 Back. (Cn) 0.4779 0.4855 0.5114 0.4942
+4 In-domain 0.5164 0.5295 0.5675 0.5430
+</table>
+<tableCaption confidence="0.975808">
+Table 6. Open test results of baseline rankers, on Kokr-2-Test
+</tableCaption>
+<table confidence="0.9999018">
+# Ranker NDCG@1 NDCG@3 NDCG@10 AveNDCG
+1 Interp. (En) 0.5954 0.5893 0.6335 0.6088
+2 Interp. (Ja) 0.6047 0.5898 0.6339 0.6116
+3 Interp. (Cn) 0.5812 0.5807 0.6268 0.6024
+4 4W-Interp. 0.5878 0.5870 0.6289 0.6054
+</table>
+<tableCaption confidence="0.974349">
+Table 7. Close test results of interpolated rankers, on
+Kokr-1-Test.
+</tableCaption>
+<table confidence="0.9998742">
+# Ranker NDCG@1 NDCG@3 NDCG@10 AveNDCG
+1 Interp. (En) 0.5178 0.5369 0.5768 0.5500
+2 Interp. (Ja) 0.5274 0.5416 0.5788 0.5531
+3 Interp. (Cn) 0.5224 0.5339 0.5766 0.5487
+4 4W-Interp. 0.5278 0.5414 0.5823 0.5549
+</table>
+<tableCaption confidence="0.9743815">
+Table 8. Open test results of interpolated rankers, on
+Kokr-2-Test.
+</tableCaption>
+<table confidence="0.999476">
+# Ranker NDCG@1 NDCG@3 NDCG@10 AveNDCG
+1 A-Boost (En) 0.5757 0.5716 0.6197 0.5935
+2 A-Boost (Ja) 0.5801 0.5807 0.6225 0.5982
+3 A-Boost (Cn) 0.5731 0.5793 0.6226 0.5972
+</table>
+<tableCaption confidence="0.999048">
+Table 9. Close test results of A-Boost rankers, on Kokr-1-Test.
+</tableCaption>
+<table confidence="0.9995585">
+# Ranker NDCG@1 NDCG@3 NDCG@10 AveNDCG
+1 A-Boost (En) 0.4960 0.5203 0.5486 0.5281
+2 A-Boost (Ja) 0.5090 0.5167 0.5374 0.5233
+3 A-Boost (Cn) 0.5177 0.5324 0.5673 0.5439
+</table>
+<tableCaption confidence="0.999832">
+Table 10. Open test results of A-Boost rankers, on Kokr-2-Test.
+</tableCaption>
+<table confidence="0.999897">
+# Ranker NDCG@1 NDCG@3 NDCG@10 AveNDCG
+1 A-SMART 0.6096 0.6057 0.6454 0.6238
+(En)
+2 A- SMART 0.6014 0.5966 0.6385 0.6172
+(Ja)
+3 A- SMART 0.5955 0.6095 0.6415 0.6209
+(Cn)
+</table>
+<tableCaption confidence="0.969155">
+Table 11. Close test results of A-SMART rankers, on
+Kokr-1-Test.
+</tableCaption>
+<table confidence="0.999920285714286">
+# Ranker NDCG@1 NDCG@3 NDCG@10 AveNDCG
+1 A- SMART 0.5177 0.5297 0.5563 0.5391
+(En)
+2 A- SMART 0.5205 0.5317 0.5522 0.5368
+(Ja)
+3 A- SMART 0.5198 0.5305 0.5644 0.5410
+(Cn)
+</table>
+<tableCaption confidence="0.985836">
+Table 12. Open test results of A-SMART rankers, on
+Kokr-2-Test.
+</tableCaption>
+<bodyText confidence="0.999648435897436">
+significantly (i.e., p-value &lt; 0.05 according to
+t-test) on both the open and closed test sets.
+The second adaptation experiment involves
+data sets from several languages (Table 2).
+2-layer LambdaRank baseline rankers were first
+built from Korean, English, Japanese, and Chi-
+nese training data and tested on Korean test sets
+(Tables 5 and 6). These baseline rankers then
+serve as in-domain ranker and background
+rankers for model adaptation. For model inter-
+polation (Tables 7 and 8), Rows 1 to 4 are three
+2-way interpolated rankers built by linearly in-
+terpolating
+each of the three background rankers with the
+in-domain ranker, respectively. Row 4 is a 4-way
+interpolated ranker built by interpolating the
+in-domain ranker with the three background
+rankers. For LambdaBoost (Tables 9 and 10) and
+LambdaSMART (Tables 11 and 12), we used the
+same parameter settings as those in the name
+query experiments, and adapted the three back-
+ground rankers, to the Korean training data,
+Kokr-1-Train.
+The results in Tables 7 to 12 confirm what we
+learned in the name query experiments. There
+are three main conclusions. (1) Model interpola-
+tion is an effective method of ranking model
+adaptation. E.g., the 4-way interpolated ranker
+outperforms other ranker significantly. (2)
+LambdaSMART is the best performer on the
+closed test set, but its performance drops signif-
+icantly on the open test set due to the instability
+of trees. (3) LambdaBoost does not use trees. So
+its modeling capacity is weaker than Lamb-
+daSMART (e.g., it always underperforms
+LambdaSMART significantly on the closed test
+sets), but it is more robust due to its linearity (e.g.,
+it performs similarly to LambdaSMART on the
+open test set).
+</bodyText>
+<subsectionHeader confidence="0.999637">
+5.3 Robustness of Boosting Algorithms
+</subsectionHeader>
+<bodyText confidence="0.999940238095238">
+This section investigates the robustness issue
+of the boosting algorithms in more detail. We
+compared LambdaSMART with different values
+of L (i.e., the number of leaf nodes), and with and
+without randomization. Our assumptions are (1)
+allowing more leaf nodes would lead to deeper
+trees, and as a result, would make the resulting
+ranking models less robust; and (2) injecting
+randomness into the basis function (i.e. regres-
+sion tree) estimation procedure would improve
+the robustness of the trained models (Breiman,
+2001; Friedman, 1999). In LambdaSMART, the
+randomness can be injected at different levels of
+tree construction. We found that the most effec-
+tive method is to introduce the randomness at
+the node level (in Step 4 in Figure 3). Before each
+node split, a subsample of the training data and a
+subsample of the features are drawn randomly.
+(The sample rate is 0.7). Then, the two randomly
+selected subsamples, instead of the full samples,
+are used to determine the best split.
+</bodyText>
+<page confidence="0.978378">
+511
+</page>
+<figure confidence="0.998037166666667">
+0.57
+0.56
+0.55
+0.54
+0.53
+0.52
+0.51
+0.50
+0.49
+0.55
+0.55
+0.54
+0.54
+0.53
+1 2 4 10 20 1 2 4 10 20
+(a) (b)
+0.55
+0.55 0.54
+0.54 0.53
+0.54
+0.53
+0.52
+0.51
+0.50
+0.52 0.53
+0.51 0.52
+0.50 0.51
+0.49
+1 2 4
+(c) (d) 10 20(e)
+</figure>
+<figureCaption confidence="0.940417666666667">
+Figure 4. AveNDCG results (y-axis) of LambdaSMART with different values of L (x-axis), where L=1 is LambdaBoost; (a) and (b) are
+the results on closed and open tests using Names-1-Train as adaptation data, respectively; (d), (e) and (f) are the results on the
+Korean open test set, using background models trained on Web-En, Web-Ja, and Web-Cn data sets, respectively.
+</figureCaption>
+<figure confidence="0.945128">
+1 2 4 10 20
+1 2 4 10 20
+</figure>
+<bodyText confidence="0.9998471">
+We first performed the experiments on name
+queries. The results on the closed and open test sets
+are shown in Figures 4 (a) and 4 (b), respectively.
+The results are consistent with our assumptions.
+There are three main observations. First, the gray
+bars in Figures 4 (a) and 4 (b) (boosting without
+randomization) show that on the closed test set, as
+expected, NDCG increases with the value of L, but
+the correlation does not hold on the open test set.
+Second, the black bars in these figures (boosting
+with randomization) show that in both closed and
+open test sets, NDCG increases with the value of L.
+Finally, comparing the gray bars with their cor-
+responding black bars, we see that randomization
+consistently improves NDCG on the open test set,
+with a larger margin of gain for the boosting algo-
+rithms with deeper trees (L &gt; 5).
+These results are very encouraging. Randomi-
+zation seems to work like a charm. Unfortunately,
+it does not work well enough to help the boosting
+algorithm beat model interpolation on the open test
+sets. Notice that all the LambdaSMART results
+reported in Section 5.2 use randomization with the
+same sampling rate of 0.7. We repeated the com-
+parison in the cross-domain adaptation experi-
+ments. As shown in Figure 4, results in 4 (c) and 4
+(d) are consistent with those on names queries in 4
+(b). Results in 4 (f) show a visible performance drop
+from LambdaBoost to LambdaSMART with L = 2,
+indicating again the instability of trees.
+</bodyText>
+<sectionHeader confidence="0.998784" genericHeader="conclusions">
+6 Conclusions and Future Work
+</sectionHeader>
+<bodyText confidence="0.999894931034483">
+In this paper, we extend two classes of model
+adaptation methods (i.e., model interpolation and
+error-driven learning), which have been well stu-
+died in statistical language modeling for speech
+and natural language applications (e.g., Bacchiani
+et al., 2004; Bellegarda, 2004; Gao et al., 2006), to
+ranking models for Web search applications.
+We have evaluated our methods on two adap-
+tation experiments over a wide variety of datasets
+where the in-domain datasets bear different levels
+of similarities to their background datasets. We
+reach different conclusions from the results of the
+open and close tests, respectively. Our open test
+results show that in the cases where the in-domain
+data is dramatically different from the background
+data, model interpolation is very robust and out-
+performs the baseline and the error-driven learning
+methods significantly; whereas our close test re-
+sults show that in the cases where the in-domain
+data is similar to the background data, the tree-
+based boosting algorithm (i.e. LambdaSMART) is
+the best performer, and achieves a significant im-
+provement over the baselines. We also show that
+these different conclusions are largely due to the
+instability of the use of trees in the boosting algo-
+rithm. We thus explore several methods of im-
+proving the robustness of the algorithm, such as
+randomization, regularization, using shallow trees,
+with limited success. Of course, our experiments,
+</bodyText>
+<page confidence="0.987812">
+512
+</page>
+<bodyText confidence="0.99897235">
+described in Section 5.3, only scratch the surface of
+what is possible. Robustness deserves more inves-
+tigation and forms one area of our future work.
+Another family of model adaptation methods
+that we have not studied in this paper is transfer
+learning, which has been well-studied in the ma-
+chine learning community (e.g., Caruana, 1997;
+Marx et al., 2008). We leave it to future work.
+To solve the issue of inadequate training data, in
+addition to model adaptation, researchers have
+also been exploring the use of implicit user feed-
+back data (extracted from log files) for ranking
+model training (e.g., Joachims et al., 2005; Radlinski
+et al., 2008). Although such data is very noisy, it is
+of a much larger amount and is cheaper to obtain
+than human-labeled data. It will be interesting to
+apply the model adaptation methods described in
+this paper to adapt a ranker which is trained on a
+large amount of automatically extracted data to a
+relatively small amount of human-labeled data.
+</bodyText>
+<sectionHeader confidence="0.998436" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.896091">
+This work was done while Yi Su was visiting Mi-
+crosoft Research, Redmond. We thank Steven Yao&apos;s
+group at Microsoft Bing Search for their help with
+the experiments.
+</bodyText>
+<sectionHeader confidence="0.991603" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999719721311475">
+Bacchiani, M., Roark, B. and Saraclar, M. 2004.
+Language model adaptation with MAP estima-
+tion and the Perceptron algorithm. In
+HLT-NAACL, 21-24.
+Bellegarda, J. R. 2004. Statistical language model
+adaptation: review and perspectives. Speech
+Communication, 42: 93-108.
+Breiman, L. 2001. Random forests. Machine Learning,
+45, 5-23.
+Bishop, C.M. 1995. Training with noise is equiva-
+lent to Tikhonov regularization. Neural Computa-
+tion, 7, 108-116.
+Burges, C. J., Ragno, R., &amp; Le, Q. V. 2006. Learning
+to rank with nonsmooth cost functions. In ICML.
+Burges, C., Shaked, T., Renshaw, E., Lazier, A.,
+Deeds, M., Hamilton, and Hullender, G. 2005.
+Learning to rank using gradient descent. In
+ICML.
+Caruana, R. 1997. Multitask learning. Machine
+Learning, 28(1): 41-70.
+Collins, M. 2000. Discriminative reranking for nat-
+ural language parsing. In ICML.
+Donmea, P., Svore, K. and Burges. 2008. On the
+local optimality for NDCG. Microsoft Technical
+Report, MSR-TR-2008-179.
+Friedman, J. 1999. Stochastic gradient boosting.
+Technical report, Dept. Statistics, Stanford.
+Friedman, J. 2001. Greedy function approximation:
+a gradient boosting machine. Annals of Statistics,
+29(5).
+Gao, J., Qin, H., Xia, X. and Nie, J-Y. 2005. Linear
+discriminative models for information retrieval.
+In SIGIR.
+Gao, J., Suzuki, H. and Yuan, W. 2006. An empirical
+study on language model adaptation. ACM Trans
+on Asian Language Processing, 5(3):207-227.
+Hastie, T., Tibshirani, R. and Friedman, J. 2001. The
+elements of statistical learning. Springer-Verlag,
+New York.
+Jarvelin, K. and Kekalainen, J. 2000. IR evaluation
+methods for retrieving highly relevant docu-
+ments. In SIGIR.
+Joachims, T., Granka, L., Pan, B., Hembrooke, H.
+and Gay, G. 2005. Accurately interpreting click-
+through data as implicit feedback. In SIGIR.
+Marx, Z., Rosenstein, M.T., Dietterich, T.G. and
+Kaelbling, L.P. 2008. Two algorithms for transfer
+learning. To appear in Inductive Transfer: 10 years
+later.
+Press, W. H., S. A. Teukolsky, W. T. Vetterling and
+B. P. Flannery. 1992. Numerical Recipes In C.
+Cambridge Univ. Press.
+Radlinski, F., Kurup, M. and Joachims, T. 2008.
+How does clickthrough data reflect retrieval
+quality? In CIKM.
+Thrun, S. 1996. Is learning the n-th thing any easier
+than learning the first. In NIPS.
+Wu, Q., Burges, C.J.C., Svore, K.M. and Gao, J.
+2008. Ranking, boosting, and model adaptation.
+Technical Report MSR-TR-2008-109, Microsoft
+Research.
+</reference>
+<page confidence="0.998846">
+513
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.996484">Model Adaptation via Model Interpolation and Boosting for Web Search Ranking</title>
+<author confidence="0.8032905">Qiang Chris Krysta Nazan Shalin Hongyan</author>
+<address confidence="0.609724">Research, Redmond,</address>
+<email confidence="0.93499">{jfgao;qiangwu;cburges;</email>
+<affiliation confidence="0.999941">Hopkins University,</affiliation>
+<address confidence="0.575984">Bing Search, Redmond,</address>
+<email confidence="0.999425">{nazanka; a-shas; honzhou}@microsoft.com</email>
+<abstract confidence="0.987961484962406">This paper explores two classes of model adaptation methods for Web search ranking: Model Interpolation and error-driven learning approaches based on a boosting algorithm. The results show that model interpolation, though simple, achieves the best results on all the open test sets where the test data is very different from the training data. The tree-based boosting algorithm achieves the best performance on most of the closed test sets where the test data and the training data are similar, but its performance drops significantly on the open test sets due to the instability of trees. Several methods are explored to improve the robustness of the algorithm, with limited success. We consider the task of ranking Web search results, i.e., a set of retrieved Web documents (URLs) are ordered by relevance to a query issued by a user. In this paper we assume that the is performed using a model short) that is learned on labeled training data (e.g., query-document pairs). The ranking model acts as a function that maps the feature vector of a query-document pair to a real-valued score of relevance. Recent research shows that such a learned ranker is superior to classical retrieval models in two aspects (Burges et al., 2005; 2006; Gao et al., 2005). First, the ranking model can use arbitrary features. Both traditional criteria such as TF-IDF and BM25, and non-traditional features such as hyperlinks can be incorporated as features in the ranker. Second, if large amounts of high-quality human-judged query-document pairs were available for model training, the ranker could achieve significantly better retrieval results than the traditional retrieval models that cannot benefit from training data effectively. However, such training data is not always available for many search domains, such as non-English search markets or person name search. One of the most widely used strategies to remedy this problem is model adaptation, which attempts to adjust the parameters and/or structure of a model trained on one domain (called the for which large amounts of training data are available, to a different domain for which only small amounts of training data are available. In Web search applications, domains can be defined by query types (e.g., person name queries), or languages, etc. In this paper we investigate two classes of model adaptation methods for Web search ranking: Model Interpolation approaches and error-driven learning approaches. In model interpolation approaches, the adaptation data is used to derive a domain-specific model (also called in-domain model), which is then combined with the background model trained on the background data. This appealingly simple concept provides fertile ground for experimentation, depending on the level at which the combination implemented (Bellegarda, 2004). In ror-driven learning approaches, the background model is adjusted so as to minimize the ranking errors the model makes on the adaptation data (Bacchiani et al., 2004; Gao et al. 2006). This is arguably more powerful than model interpolation for two reasons. First, by defining a proper error function, the method can optimize more directly the measure used to assess the final of the Web search system, e.g., Cumulative Gain &amp; Kekalainen, 2000) in this study. Second, in this framework, the model can be adjusted to be as fine-grained as necessary. In this study we developed a set of error-driven learning methods based on a boosting algorithm where, in an incremental manner, not only each feature weight could be 505 of the 2009 Conference on Empirical Methods in Natural Language pages 505–513, 6-7 August 2009. ACL and AFNLP changed separately, but new features could be constructed. We focus our experiments on the robustness of the adaptation methods. A model is robust if it performs reasonably well on unseen test data that could be significantly different from training data. Robustness is important in Web search applications. Labeling training data takes time. As a result of the dynamic nature of Web, by the time the ranker is trained and deployed, the training data may be more or less out of date. Our results show that the model interpolation is much more robust than the boosting-based methods. We then explore several methods to improve the robustness of the methods, including regularization, randomization, and using shallow trees, with limited success. Model and Quality Measure in Web Search This section reviews briefly a particular example of rankers, called LambdaRank (Burges et al., 2006), which serves as the baseline ranker in our study. Assume that training data is a set of input/ pairs a feature vector extracted from a query-document pair. We use approximately 400 features, including dynamic ranking features such as term frequency and BM25, and ranking features such as PageRank. a human-judged relevance score, 0 to 4, with 4 as the most relevant. LambdaRank is a neural net ranker that maps feature vector a real value indicates the relevance of the document given the query (relevance score). For example, a linear Lambsimply maps a learned weight that • (We used nonlinear LambdaRank in our experiments). LambdaRank is particularly interesting to us due to the learned. Typically, optimized w.r.t. a cost function using numerical methods if the function is smooth and its gradient w.r.t. can be computed easily. In order for the ranker to achieve the best performance in document retrieval, the cost function used in training should be the same as, or as close as possible to, the measure used to assess the quality of the In Web search, Discounted Gain (Jarvelin and Kekalainen, 2000) is widely used as quality measure. For a query, NDCG is computed as , the relevance level of the docand the normalization constant chosen so that a perfect ordering would result in 1. the ranking truncation level at NDCG is computed. The then averaged over a query set. However, NDCG, if it were to be used as a cost function, is either flat or discontinuous everywhere, and thus presents challenges to most optimization approaches that require the computation of the gradient of the cost function. LambdaRank solves the problem by using an implicit cost function whose gradients are speciby rules. These rules are called et al. (2006) studied several that were designed with the NDCG cost function in mind. They showed that LambdaRank with best outperforms significantly a similar neural net ranker, RankNet (Burges et al., 2005), whose parameters are optimized using the cost function based on cross-entropy. The superiority of LambdaRank illustrates the key idea based on which we develop the model adaptation methods. We should always adapt the ranking models in such a way that the NDCG can be optimized as directly as possible. Interpolation One of the simplest model interpolation methods is to combine an in-domain model with a background model at the model level via linear interpolation. In practice we could combine more than two in-domain/background models. Letbe a ranking model that maps a query-document pair to a relevance score, the general form of the interpolation model is N = the interpolation optimized on validation data with respect to a predefined objective, which is NDCG in our case. As mentioned in Section 2, NDCG is not easy to optimize, for which we resort to two solutions, both of which achieve similar results in our experiments. The first solution is to view the interpolation model of Equation (2) as a linear neural net where each component model is defined as a feature function. Then, we can use the LambdaRank algorithm described in Section 2 to find the optimal weights. An alternative solution is to view interpolation weight estimation as a multi-dimensional optimization problem, with each model as a L + 506 dimension. Since NCDG is not differentiable, we tried in our experiments the numerical algorithms that do not require the computation of gradient. Among the best performers is the Powell Search algorithm (Press et al., 1992). It constructs a set of directions that are conjugate (i.e., independent with each other), it uses search N each on one virtual direction, to find the optimum. Line search is a one-dimensional optimization algorithm. Our implementation follows the one described in Gao et al. (2005), which is used to optimize the averaged precision. The performance of model interpolation depends to a large degree upon the quality and the size of adaptation data. First of all, the adaptation has to be “rich” enough to suitably terize the new domain. This can only be achieved by collecting more in-domain data. Second, once the domain has been characterized, adaptation data to be “large” enough to have a model reliably trained. For this, we developed a method, which attempts to augment adaptation data by gathering similar data from background data sets. method is based on the (kNN) algorithm, and is inspired by Bishop We use the small in-domain data set as a seed, and expand it using the large backdata set When the relevance labels are assigned by humans, it is reasonable to assume that queries with the lowest information entropy of labels are the least noisy. That is, for such a query most of the URLs are labeled as highly relevant/not relevant documents rather than as moderately relevance/not relevant documents. Due to computational limitations of kNN-based algorithms, a small subset of queries are least noisy are selected. This set is called For each sample in its neighbors in found using a cosine-similarity metric. If the three neighbors are within a very small distance from the sample in and one of the labels of the nearest neighbors matches exactly, the training sample is selected is added to the expanded set in its own This way, used to choose training from which are found to be close in some space. This process effectively creates several data points in close neighborhood of the points in the small data set thus expanding the set, by jittering each training sample a little. This is equivalent to training with noise (Bishop, 1995), except that the training samples used are 1 be the background ranking model 1 2 3 − for 1... 𝐹 𝐱 =𝐹𝑚 𝑁 2 4 = argmin 5 𝛽 1. generic boosting algorithm for model adaptation actual queries judged by a human. This is found to increase the NDCG in our experiments. Learning Our error-drive learning approaches to ranking modeling adaptation are based on the Stochastic Gradient Boosting algorithm (or the boosting algorithm for short) described in Friedman (1999). Below, we follow the notations in Friedman (2001). adaptation data (also called data section) be a set of input/output pairs In error-driven learning approaches, model adaptation is performed by adjusting the background model into a new in-domain model → 𝑦 minimizes a loss function over all samples in training data 𝑁 argmin . 𝐹 further assume that takes the form of additive expansion as 𝑀 𝐹 𝐱 is called and is usually a simple parameterized function of the characterized by parameters In what we drop and use for short. In the form of to be restricted to a specific function family to allow for a practically procedure of model adaptation. a real-valued coefficient. Figure 1 is the generic algorithm. It starts a base model which is a background Then for 1, 2, ..., the algorithm takes three steps to adapt the base model so as to best fit the adaptation data: (1) compute the residual of the current base model (line 3), (2) select the optimal basis function (line 4) that best fits the residual, and (3) update the base model by adding the optimal basis function (line 5). The two model adaptation algorithms that will be described below follow the same 3-step adaptation procedure. They only differ in the choice of In the LambdaBoost algorithm (Section 4.1) 507 to be the background ranking model 1 residuals according to Equation (5) best its best according to computed by Equations (8) and (9) 2. LambdaBoost algorithm for model adaptation. is defined as a single feature, and in LambdaS- (Section 4.2), a regression tree. Now, we describe the way residual is computed, the step that is identical in both algo- Intuitively, the residual, denoted by (line 3 in Figure 1), measures the amount of errors (or loss) the base model makes on the training samples. If the loss function in Equation (3) is differentiable, the residual can be computed easily as the negative gradient of the loss function. As discussed in Section 2, we want to directly optimize the NDCD, whose gradient is approximated via the Following Burges et al. (2006), the of a training sample where a feature vector representing the query-document w.r.t. the current base model is comby marginalizing the of all pairs, of the query, as ′ ≠𝑖 the NDCG gained by swapping those two documents (after sorting all docuby their current scores); the in ranking scores of the cross entropy cost defined as 𝐶 log(1 + . + exp essentially uses the cross entropy cost to smooth the change in NDCG obtained by swapping the two documents. A key behind the is the observation that NDCG does not treat all pairs equally; for example, it costs more to incorrectly order a pair, where the irrelevant document is ranked higher than a highly relevant document, than it does to swap a moderately relevant/not relevant pair. LambdaBoost Algorithm LambdaBoost, the basis function defined as a single feature (i.e., an element feature in the vector The algorithm is summarized in Figure 2. It iteratively adapts a background to training data using the 3-step procedure, as in Figure 1. Step 1 (line 3 in Figure 2) has been described. Step 2 (line 4 in Figure 2) finds the optimal function as well as its optimal coefficient that best fits the residual according to the (LS) criterion. Formally, let denote the candidate basis function and its optimal coefficient. The LS error on training data ′ 𝛽ℎ where ′ puted as Equation (5). The optimal coefficient of ′ estimated by solving the equation Then, computed as ℎ 𝐱 given its optimal coefficient the op- LS loss of 𝑁 𝑁 ′ ′ 𝑁 Step 3 (line 5 in Figure 2) updates the base model by adding the chosen optimal basis function with its optimal coefficient. As shown in Step 2, the optimal coefficient of each candidate basis function is computed when the basis function is evaluated. However, adding the basis function using its optimal efficient is prone to overfitting. We thus add a shrinkage coefficient 0 fraction of the optimal line step taken. The update equation is thus rewritten in line 5 in Figure 2. Notice that if the background model contains the input features in then LambdaBoost does not add any new features but adjust the weights of existing features. If the background model does not contain all of the input features, then LambdaBoost can be viewed as a feature selection method, similar to Collins (2000), where at each iteration the feature that has the largest impact on reducing training loss is selected and added to the background model. In either case, LambdaBoost adapts the background model by adding a model whose form is a (weighted) linear combination of input features. The property of linearity makes LambdaBoost robust and less likely to overfit in Web search applications. But this also limits the adaptation capacity. A simple method that allows us to go beyond linear is to define nonlinear terms of the input features, such as regression trees in LambdaSMART. LambdaSMART Algorithm LambdaSMART was originally proposed in Wu et al. (2008). It is built on MART (Friedman, 2001) uses the (Burges et a., 2006) to Thus, we have − 508 to be the background ranking model 1 residuals according to Equation (5) a node tree, the optimal to Equation (10), based on approximate Newton step. ∈ 3. LambdaSMART algorithm for model adaptation. compute gradients. The algorithm is summarized in Figure 3. Similar to LambdaBoost, it and at each boosting iteration, it adapts the background model to training data using the 3-step procedure. Step 1 (line 3 in Figure 3) has been described. Step 2 (lines 4 to 6) searches for the optimal function best fit the residual. Unlike LambdaBoost where there are a finite number of candidate basis functions, the function space of trees is infinite. We define a retree with nodes. In line 4, a regression tree is built using Mean Square Error to determine the best split at any node in the tree. The value associated with a leaf (i.e., terminal node) of the trained tree is computed first as the (computed via for the training samples that land at that leaf. Then, since each leaf corresponds to a different mean, a one-dimensional Newton-Raphson line step is computed for each leaf (lines 5 and 6). These line steps may be simply computed as the derivatives of the LambdaRank gradients w.r.t. the model Formally, the value of the leaf, is computed as the residual of training sample in Equation (5), and the derivaof i.e., In Step 3 (line 7), the regression tree is added to the current base model, weighted by the coefficient 0 &lt; 1. Notice that since a regression tree can be viewed as a complex feature that combines multiple input features, LambdaSMART can be used as a feature generation method. LambdaSMART is arguably more powerful than LambdaBoost in that it introduces new complex features and thus adjusts not only the parameters but also the of the background However, 1Note that in a sense our proposed LambdaBoost algorithm is the same as LambdaSMART, but using a single feature at each iteration, rather than a tree. In particular, they share the trick of using the Lambda one problem of trees is their high variance. Often a small change in the data can result in a very different series of splits. As a result, tree-based ranking models are much less robust to noise, as we will show in our experiments. In to the use of shrinkage coefficient 0 &lt; &lt; 1, which is a form of model regularization according to Hastie, et al., (2001), we will explore in Section 5.3 other methods of improving the model robustness, including randomization and using shallow trees. Data We evaluated the ranking model adaptation methods on two Web search domains, namely (1) a name query domain, which consists of only person name queries, and (2) a Korean query domain, which consists of queries that users submitted to the Korean market. For each domain, we used two in-domain data sets that contain queries sampled respectively from the query log of a commercial Web search engine that were collected in two non-overlapping periods of time. We used the recent one as test and split the other into three non-overlapping data sets, training, validation and test respectively. This setting provides a good simulation to the realistic Web search scenario, where the rankers in use are usually trained on early collected data, and thus helps us investigate the robustness of these model adaptation methods. The statistics of the data sets used in our person name domain adaptation experiments are shown in Table 1. The names query set serves as the adaptation domains, and Web-1 as the background domain. Since Web-1 is used to train a background ranker, we did not split it to train/valid/test sets. We used 416 input features in these experiments. For cross-domain adaptation experiments from non-Korean to Korean markets, Korean data serves as the adaptation domain, and English, Chinese, and Japanese data sets as the background domain. Again, we did not split the data sets in the background domain to train/valid/test sets. The statistics of these data sets are shown in Table 2. We used 425 input features in these experiments. gradients to learn NDCG. , 509 Coll. Description #qry. # url/qry Web-1 Background training data 31555 134 Names-1-Train In-domain training data 5752 85 (adaptation data) Names-1-Valid In-domain validation data 158 154 Names-1-Test Closed test data 318 153 Names-2-Test Open test data 4370 84 1. sets in the names query domain experiments, where # qry is number of queries, and # url/qry is number of documents per query. Coll. Description # qry. # url/qry Web-En Background En training data 6167 198 Web-Ja Background Ja training data 45012 58 Web-Cn Background Ch training data 32827 72 Kokr-1-Train In-domain Ko training data 3724 64 (adaptation data) Kokr-1-Valid In-domain validation data 334 130 Kokr-1-Test Korean closed test data 372 126 Kokr-2-Test Korean open test data 871 171 2. sets in the Korean domain experiments.</abstract>
+<address confidence="0.6774842">1 Back. 0.4575 0.4952 0.5446 0.5092 2 In-domain 0.4921 0.5296 0.5774 0.5433 3 2W-Interp. 0.4745 0.5254 0.5747 0.5391 4 3W-Interp. 0.4829 0.5333 0.5814 0.5454 0.4706 0.5011 0.5569 0.5192</address>
+<phone confidence="0.56437">0.5042 0.5449 0.5951 0.5623</phone>
+<abstract confidence="0.504783">3. test results on Names-1-Test.</abstract>
+<address confidence="0.7476868">1 Back. 0.5472 0.5347 0.5731 0.5510 2 In-domain 0.5216 0.5266 0.5789 0.5472 3 2W-Interp. 0.5452 0.5414 0.5891 0.5604 4 3W-Interp. 0.5474 0.5470 0.5951 0.5661 0.5269 0.5233 0.5716 0.5428</address>
+<phone confidence="0.595343">0.5200 0.5331 0.5875 0.5538</phone>
+<abstract confidence="0.996670223684211">4. test results on Names-2-Test. In each domain, the in-domain training data is used to train in-domain rankers, and the background data for background rankers. Validation data is used to learn the best training parameters the boosting algorithms, the total of boosting iterations, the shrinkage and the number of leaf nodes for regression tree in Model performance is evaluated on the closed/open test sets. All data sets contain samples labeled on a 5-level relevance scale, 0 to 4, with 4 as most relevant and 0 as irrelevant. The performance of rankers is measured through NDCG evaluated against closed/open test sets. We report NDCG scores at positions 1, 3 and 10, and the averaged NDCG score (Ave-NDCG), the arithmetic mean of the NDCG scores at 1 to 10. Significance test (i.e., t-test) was also employed. Adaptation Results This section reports the results on two adaptation experiments. The first uses a large set of Web data, Web-1, as background domain and uses the name query data set as adaptation data. The results are summarized in Tables 3 and 4. We compared the three model adaptation methods against two baselines: (1) the background ranker (Row 1 in Tables 3 and 4), a 2-layer LambdaRank model with 15 hidden nodes and a rate of trained on Web-1; and (2) the In-domain Ranker (Row 2), a 2-layer Lambda- Rank model with 10 hidden nodes and a learning of trained on Names-1-Train. We built two interpolated rankers. The 2-way interpolated ranker (Row 3) is a linear combination of the two baseline rankers, where the interpolation weights were optimized on Names-1-Valid. To build the 3-way interpolated ranker (Row 4), we linearly interpolated three rankers. In addition to the two baseline rankers, the third ranker is trained on an augmented training data, which was created using the kNN method described in Section 3. In LambdaBoost (Row 5) and LambdaSMART (Row 6), we adapted the background ranker to name queries by boosting the background ranker with Names-1-Train. We trained LambdaBoost the setting 500, 0.5, optimized on Names-1-Valid. Since the background ranker uses all of the 416 input features, in each boosting iteration, LambdaBoost in fact selects one existing feature in the background ranker and adjusts weight. We trained LambdaSMART with 20, 0.5, optimized on Names-1-Valid. We see that the results on the closed test set (Table 3) are quite different from the results on the open test set (Table 4). The in-domain ranker outperforms the background ranker on the closed test set, but underperforms significantly the background ranker on the open test set. The interpretation is that the training set and the closed test set are sampled from the same data set and are very similar, but the open test set is a very different data set, as described in Section 5.1. Similarly, on the closed test set, LambdaSMART outperforms LambdaBoost with a big margin due to its superior adaptation capacity; but on the open test set their performance difference is much smaller due to the instability of the trees in LambdaSMART, as we will investigate in detail later. Interestingly, model interpolation, though simple, leads to the two best rankers on the open test set. In particular, the 3-way interpolated ranker outperforms the two baseline rankers 510</abstract>
+<address confidence="0.676299785714286">1 Back. (En) 0.5371 0.5413 0.5873 0.5616 2 Back. (Ja) 0.5640 0.5684 0.6027 0.5808 3 Back. (Cn) 0.4966 0.5105 0.5761 0.5393 4 In-domain 0.5927 0.5824 0.6291 0.6055 Table 5. Close test results of baseline rankers, on Kokr-1-Test 1 Back. (En) 0.4991 0.5242 0.5397 0.5278 2 Back. (Ja) 0.5052 0.5092 0.5377 0.5194 3 Back. (Cn) 0.4779 0.4855 0.5114 0.4942 4 In-domain 0.5164 0.5295 0.5675 0.5430 Table 6. Open test results of baseline rankers, on Kokr-2-Test 1 Interp. (En) 0.5954 0.5893 0.6335 0.6088 2 Interp. (Ja) 0.6047 0.5898 0.6339 0.6116 3 Interp. (Cn) 0.5812 0.5807 0.6268 0.6024 4 4W-Interp. 0.5878 0.5870 0.6289 0.6054</address>
+<note confidence="0.8342856875">Table 7. Close test results of interpolated rankers, on Kokr-1-Test. 1 Interp. (En) 0.5178 0.5369 0.5768 0.5500 2 Interp. (Ja) 0.5274 0.5416 0.5788 0.5531 3 Interp. (Cn) 0.5224 0.5339 0.5766 0.5487 4 4W-Interp. 0.5278 0.5414 0.5823 0.5549 Table 8. Open test results of interpolated rankers, on Kokr-2-Test. (En) 0.5757 0.5716 0.6197 0.5935 (Ja) 0.5801 0.5807 0.6225 0.5982 (Cn) 0.5731 0.5793 0.6226 0.5972 9. Close test results of rankers, on Kokr-1-Test. (En) 0.4960 0.5203 0.5486 0.5281 (Ja) 0.5090 0.5167 0.5374 0.5233 (Cn) 0.5177 0.5324 0.5673 0.5439 10. Open test results of rankers, on Kokr-2-Test. 0.6096 0.6057 0.6454 0.6238 (En) SMART 0.6014 0.5966 0.6385 0.6172 (Ja) SMART 0.5955 0.6095 0.6415 0.6209 (Cn) 11. Close test results of rankers, on Kokr-1-Test. SMART 0.5177 0.5297 0.5563 0.5391 (En) SMART 0.5205 0.5317 0.5522 0.5368 (Ja) SMART 0.5198 0.5305 0.5644 0.5410 (Cn) Open test results of rankers, on Kokr-2-Test.</note>
+<abstract confidence="0.883159319148936">(i.e., &lt; 0.05 according to t-test) on both the open and closed test sets. The second adaptation experiment involves data sets from several languages (Table 2). 2-layer LambdaRank baseline rankers were first built from Korean, English, Japanese, and Chinese training data and tested on Korean test sets (Tables 5 and 6). These baseline rankers then serve as in-domain ranker and background rankers for model adaptation. For model interpolation (Tables 7 and 8), Rows 1 to 4 are three 2-way interpolated rankers built by linearly interpolating each of the three background rankers with the in-domain ranker, respectively. Row 4 is a 4-way interpolated ranker built by interpolating the in-domain ranker with the three background rankers. For LambdaBoost (Tables 9 and 10) and LambdaSMART (Tables 11 and 12), we used the same parameter settings as those in the name query experiments, and adapted the three background rankers, to the Korean training data, Kokr-1-Train. The results in Tables 7 to 12 confirm what we learned in the name query experiments. There are three main conclusions. (1) Model interpolation is an effective method of ranking model adaptation. E.g., the 4-way interpolated ranker outperforms other ranker significantly. (2) LambdaSMART is the best performer on the closed test set, but its performance drops significantly on the open test set due to the instability of trees. (3) LambdaBoost does not use trees. So its modeling capacity is weaker than LambdaSMART (e.g., it always underperforms LambdaSMART significantly on the closed test sets), but it is more robust due to its linearity (e.g., it performs similarly to LambdaSMART on the open test set). of Boosting Algorithms This section investigates the robustness issue of the boosting algorithms in more detail. We compared LambdaSMART with different values the number of leaf nodes), and with and without randomization. Our assumptions are (1) allowing more leaf nodes would lead to deeper trees, and as a result, would make the resulting ranking models less robust; and (2) injecting randomness into the basis function (i.e. regression tree) estimation procedure would improve the robustness of the trained models (Breiman, 2001; Friedman, 1999). In LambdaSMART, the randomness can be injected at different levels of tree construction. We found that the most effective method is to introduce the randomness at the node level (in Step 4 in Figure 3). Before each node split, a subsample of the training data and a subsample of the features are drawn randomly. (The sample rate is 0.7). Then, the two randomly selected subsamples, instead of the full samples, are used to determine the best split. 511 0.57 0.56 0.55 0.54 0.53 0.52 0.51 0.50 0.49 0.55 0.55 0.54 0.54 0.53 1 2 4 10 20 1 2 4 10 20 (a) (b) 0.55 0.55 0.54 0.54 0.53 0.54 0.53 0.52 0.51 0.50 0.52 0.51 0.50 0.49 0.53 0.52 0.51 1 2 4 (d) 4. results of LambdaSMART with different values of where is LambdaBoost; (a) and (b) are the results on closed and open tests using Names-1-Train as adaptation data, respectively; (d), (e) and (f) are the results on the Korean open test set, using background models trained on Web-En, Web-Ja, and Web-Cn data sets, respectively. 1 2 4 10 20 1 2 4 10 20 We first performed the experiments on name queries. The results on the closed and open test sets are shown in Figures 4 (a) and 4 (b), respectively. The results are consistent with our assumptions. There are three main observations. First, the gray bars in Figures 4 (a) and 4 (b) (boosting without randomization) show that on the closed test set, as NDCG increases with the value of but the correlation does not hold on the open test set. Second, the black bars in these figures (boosting with randomization) show that in both closed and test sets, NDCG increases with the value of Finally, comparing the gray bars with their corresponding black bars, we see that randomization consistently improves NDCG on the open test set, with a larger margin of gain for the boosting algowith deeper trees 5). These results are very encouraging. Randomization seems to work like a charm. Unfortunately, it does not work well enough to help the boosting algorithm beat model interpolation on the open test sets. Notice that all the LambdaSMART results reported in Section 5.2 use randomization with the same sampling rate of 0.7. We repeated the comparison in the cross-domain adaptation experiments. As shown in Figure 4, results in 4 (c) and 4 (d) are consistent with those on names queries in 4 (b). Results in 4 (f) show a visible performance drop LambdaBoost to LambdaSMART with 2, indicating again the instability of trees. and Future Work In this paper, we extend two classes of model adaptation methods (i.e., model interpolation and error-driven learning), which have been well studied in statistical language modeling for speech and natural language applications (e.g., Bacchiani et al., 2004; Bellegarda, 2004; Gao et al., 2006), to ranking models for Web search applications. We have evaluated our methods on two adaptation experiments over a wide variety of datasets where the in-domain datasets bear different levels of similarities to their background datasets. We reach different conclusions from the results of the open and close tests, respectively. Our open test results show that in the cases where the in-domain data is dramatically different from the background data, model interpolation is very robust and outperforms the baseline and the error-driven learning methods significantly; whereas our close test results show that in the cases where the in-domain data is similar to the background data, the treebased boosting algorithm (i.e. LambdaSMART) is the best performer, and achieves a significant improvement over the baselines. We also show that these different conclusions are largely due to the instability of the use of trees in the boosting algorithm. We thus explore several methods of improving the robustness of the algorithm, such as randomization, regularization, using shallow trees, with limited success. Of course, our experiments, 512 described in Section 5.3, only scratch the surface of what is possible. Robustness deserves more investigation and forms one area of our future work. Another family of model adaptation methods that we have not studied in this paper is transfer learning, which has been well-studied in the machine learning community (e.g., Caruana, 1997; Marx et al., 2008). We leave it to future work. To solve the issue of inadequate training data, in addition to model adaptation, researchers have also been exploring the use of implicit user feedback data (extracted from log files) for ranking model training (e.g., Joachims et al., 2005; Radlinski et al., 2008). Although such data is very noisy, it is of a much larger amount and is cheaper to obtain than human-labeled data. It will be interesting to apply the model adaptation methods described in this paper to adapt a ranker which is trained on a large amount of automatically extracted data to a relatively small amount of human-labeled data. Acknowledgments This work was done while Yi Su was visiting Microsoft Research, Redmond. We thank Steven Yao&apos;s group at Microsoft Bing Search for their help with the experiments. References Bacchiani, M., Roark, B. and Saraclar, M. 2004. Language model adaptation with MAP estimation and the Perceptron algorithm. In 21-24. Bellegarda, J. R. 2004. Statistical language model review and perspectives. 42: 93-108. L. 2001. Random forests.</abstract>
+<note confidence="0.872563692307692">45, 5-23. Bishop, C.M. 1995. Training with noise is equivato Tikhonov regularization. Computa- 7, 108-116. Burges, C. J., Ragno, R., &amp; Le, Q. V. 2006. Learning rank with nonsmooth cost functions. In Burges, C., Shaked, T., Renshaw, E., Lazier, A., Deeds, M., Hamilton, and Hullender, G. 2005. Learning to rank using gradient descent. In ICML. R. 1997. Multitask learning. 28(1): 41-70. Collins, M. 2000. Discriminative reranking for natlanguage parsing. In Donmea, P., Svore, K. and Burges. 2008. On the optimality for NDCG. Technical MSR-TR-2008-179. Friedman, J. 1999. Stochastic gradient boosting. Dept. Statistics, Stanford. Friedman, J. 2001. Greedy function approximation: gradient boosting machine. of Statistics, 29(5). Gao, J., Qin, H., Xia, X. and Nie, J-Y. 2005. Linear discriminative models for information retrieval. Gao, J., Suzuki, H. and Yuan, W. 2006. An empirical on language model adaptation. Trans Asian Language 5(3):207-227. T., Tibshirani, R. and Friedman, J. 2001. of statistical Springer-Verlag, New York. Jarvelin, K. and Kekalainen, J. 2000. IR evaluation methods for retrieving highly relevant docu- In Joachims, T., Granka, L., Pan, B., Hembrooke, H. and Gay, G. 2005. Accurately interpreting clickdata as implicit feedback. In Marx, Z., Rosenstein, M.T., Dietterich, T.G. and Kaelbling, L.P. 2008. Two algorithms for transfer To appear in Transfer: 10 years Press, W. H., S. A. Teukolsky, W. T. Vetterling and P. Flannery. 1992. Recipes In C. Cambridge Univ. Press. Radlinski, F., Kurup, M. and Joachims, T. 2008. How does clickthrough data reflect retrieval In S. 1996. Is learning the thing any easier learning the first. In Wu, Q., Burges, C.J.C., Svore, K.M. and Gao, J. 2008. Ranking, boosting, and model adaptation. Report Microsoft Research. 513</note>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>M Bacchiani</author>
+<author>B Roark</author>
+<author>M Saraclar</author>
+</authors>
+<title>Language model adaptation with MAP estimation and the Perceptron algorithm.</title>
+<date>2004</date>
+<booktitle>In HLT-NAACL,</booktitle>
+<pages>21--24</pages>
+<contexts>
+<context position="3496" citStr="Bacchiani et al., 2004" startWordPosition="535" endWordPosition="538">earch ranking: Model Interpolation approaches and error-driven learning approaches. In model interpolation approaches, the adaptation data is used to derive a domain-specific model (also called in-domain model), which is then combined with the background model trained on the background data. This appealingly simple concept provides fertile ground for experimentation, depending on the level at which the combination is implemented (Bellegarda, 2004). In error-driven learning approaches, the background model is adjusted so as to minimize the ranking errors the model makes on the adaptation data (Bacchiani et al., 2004; Gao et al. 2006). This is arguably more powerful than model interpolation for two reasons. First, by defining a proper error function, the method can optimize more directly the measure used to assess the final quality of the Web search system, e.g., Normalized Discounted Cumulative Gain (Javelin &amp; Kekalainen, 2000) in this study. Second, in this framework, the model can be adjusted to be as fine-grained as necessary. In this study we developed a set of error-driven learning methods based on a boosting algorithm where, in an incremental manner, not only each feature weight could be 505 Procee</context>
+<context position="34351" citStr="Bacchiani et al., 2004" startWordPosition="5872" endWordPosition="5875">same sampling rate of 0.7. We repeated the comparison in the cross-domain adaptation experiments. As shown in Figure 4, results in 4 (c) and 4 (d) are consistent with those on names queries in 4 (b). Results in 4 (f) show a visible performance drop from LambdaBoost to LambdaSMART with L = 2, indicating again the instability of trees. 6 Conclusions and Future Work In this paper, we extend two classes of model adaptation methods (i.e., model interpolation and error-driven learning), which have been well studied in statistical language modeling for speech and natural language applications (e.g., Bacchiani et al., 2004; Bellegarda, 2004; Gao et al., 2006), to ranking models for Web search applications. We have evaluated our methods on two adaptation experiments over a wide variety of datasets where the in-domain datasets bear different levels of similarities to their background datasets. We reach different conclusions from the results of the open and close tests, respectively. Our open test results show that in the cases where the in-domain data is dramatically different from the background data, model interpolation is very robust and outperforms the baseline and the error-driven learning methods significan</context>
+</contexts>
+<marker>Bacchiani, Roark, Saraclar, 2004</marker>
+<rawString>Bacchiani, M., Roark, B. and Saraclar, M. 2004. Language model adaptation with MAP estimation and the Perceptron algorithm. In HLT-NAACL, 21-24.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J R Bellegarda</author>
+</authors>
+<title>Statistical language model adaptation: review and perspectives.</title>
+<date>2004</date>
+<journal>Speech Communication,</journal>
+<volume>42</volume>
+<pages>93--108</pages>
+<contexts>
+<context position="3325" citStr="Bellegarda, 2004" startWordPosition="509" endWordPosition="510">, domains can be defined by query types (e.g., person name queries), or languages, etc. In this paper we investigate two classes of model adaptation methods for Web search ranking: Model Interpolation approaches and error-driven learning approaches. In model interpolation approaches, the adaptation data is used to derive a domain-specific model (also called in-domain model), which is then combined with the background model trained on the background data. This appealingly simple concept provides fertile ground for experimentation, depending on the level at which the combination is implemented (Bellegarda, 2004). In error-driven learning approaches, the background model is adjusted so as to minimize the ranking errors the model makes on the adaptation data (Bacchiani et al., 2004; Gao et al. 2006). This is arguably more powerful than model interpolation for two reasons. First, by defining a proper error function, the method can optimize more directly the measure used to assess the final quality of the Web search system, e.g., Normalized Discounted Cumulative Gain (Javelin &amp; Kekalainen, 2000) in this study. Second, in this framework, the model can be adjusted to be as fine-grained as necessary. In thi</context>
+<context position="34369" citStr="Bellegarda, 2004" startWordPosition="5876" endWordPosition="5877">7. We repeated the comparison in the cross-domain adaptation experiments. As shown in Figure 4, results in 4 (c) and 4 (d) are consistent with those on names queries in 4 (b). Results in 4 (f) show a visible performance drop from LambdaBoost to LambdaSMART with L = 2, indicating again the instability of trees. 6 Conclusions and Future Work In this paper, we extend two classes of model adaptation methods (i.e., model interpolation and error-driven learning), which have been well studied in statistical language modeling for speech and natural language applications (e.g., Bacchiani et al., 2004; Bellegarda, 2004; Gao et al., 2006), to ranking models for Web search applications. We have evaluated our methods on two adaptation experiments over a wide variety of datasets where the in-domain datasets bear different levels of similarities to their background datasets. We reach different conclusions from the results of the open and close tests, respectively. Our open test results show that in the cases where the in-domain data is dramatically different from the background data, model interpolation is very robust and outperforms the baseline and the error-driven learning methods significantly; whereas our c</context>
+</contexts>
+<marker>Bellegarda, 2004</marker>
+<rawString>Bellegarda, J. R. 2004. Statistical language model adaptation: review and perspectives. Speech Communication, 42: 93-108.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Breiman</author>
+</authors>
+<title>Random forests.</title>
+<date>2001</date>
+<journal>Machine Learning,</journal>
+<volume>45</volume>
+<pages>5--23</pages>
+<contexts>
+<context position="31529" citStr="Breiman, 2001" startWordPosition="5377" endWordPosition="5378">rforms similarly to LambdaSMART on the open test set). 5.3 Robustness of Boosting Algorithms This section investigates the robustness issue of the boosting algorithms in more detail. We compared LambdaSMART with different values of L (i.e., the number of leaf nodes), and with and without randomization. Our assumptions are (1) allowing more leaf nodes would lead to deeper trees, and as a result, would make the resulting ranking models less robust; and (2) injecting randomness into the basis function (i.e. regression tree) estimation procedure would improve the robustness of the trained models (Breiman, 2001; Friedman, 1999). In LambdaSMART, the randomness can be injected at different levels of tree construction. We found that the most effective method is to introduce the randomness at the node level (in Step 4 in Figure 3). Before each node split, a subsample of the training data and a subsample of the features are drawn randomly. (The sample rate is 0.7). Then, the two randomly selected subsamples, instead of the full samples, are used to determine the best split. 511 0.57 0.56 0.55 0.54 0.53 0.52 0.51 0.50 0.49 0.55 0.55 0.54 0.54 0.53 1 2 4 10 20 1 2 4 10 20 (a) (b) 0.55 0.55 0.54 0.54 0.53 0</context>
+</contexts>
+<marker>Breiman, 2001</marker>
+<rawString>Breiman, L. 2001. Random forests. Machine Learning, 45, 5-23.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C M Bishop</author>
+</authors>
+<title>Training with noise is equivalent to Tikhonov regularization.</title>
+<date>1995</date>
+<journal>Neural Computation,</journal>
+<volume>7</volume>
+<pages>108--116</pages>
+<contexts>
+<context position="10014" citStr="Bishop (1995)" startWordPosition="1641" endWordPosition="1642">nce of model interpolation depends to a large degree upon the quality and the size of adaptation data. First of all, the adaptation data has to be “rich” enough to suitably characterize the new domain. This can only be achieved by collecting more in-domain data. Second, once the domain has been characterized, the adaptation data has to be “large” enough to have a model reliably trained. For this, we developed a method, which attempts to augment adaptation data by gathering similar data from background data sets. The method is based on the k-nearest-neighbor (kNN) algorithm, and is inspired by Bishop (1995). We use the small in-domain data set D1 as a seed, and expand it using the large background data set D2. When the relevance labels are assigned by humans, it is reasonable to assume that queries with the lowest information entropy of labels are the least noisy. That is, for such a query most of the URLs are labeled as highly relevant/not relevant documents rather than as moderately relevance/not relevant documents. Due to computational limitations of kNN-based algorithms, a small subset of queries from D1 which are least noisy are selected. This data set is called S1. For each sample in D2, i</context>
+<context position="11262" citStr="Bishop, 1995" startWordPosition="1860" endWordPosition="1861">und using a cosine-similarity metric. If the three neighbors are within a very small distance from the sample in D2, and one of the labels of the nearest neighbors matches exactly, the training sample is selected and is added to the expanded set E2, in its own query. This way, S1 is used to choose training data from D2, which are found to be close in some space. This process effectively creates several data points in close neighborhood of the points in the original small data set D1, thus expanding the set, by jittering each training sample a little. This is equivalent to training with noise (Bishop, 1995), except that the training samples used are 1 Set F0(x) be the background ranking model 2 for m = 1 to M do 3 ′ = − 𝑦𝑖 , for i = 1... N 𝜕𝐿 𝑦𝑖,𝐹 𝐱𝑖 𝜕𝐹 𝐱𝑖 𝐹 𝐱 =𝐹𝑚 −1 𝐱 𝑁 2 4 (ℎ𝑚, 𝛽𝑚) = argmin 𝑦𝑖 ′ − 𝛽ℎ(𝐱𝑖) ℎ,𝛽 𝑖=1 5 𝐹𝑚 𝐱 = 𝐹𝑚−1 𝐱 + 𝛽 𝑚 ℎ(𝐱) Figure 1. The generic boosting algorithm for model adaptation actual queries judged by a human. This is found to increase the NDCG in our experiments. 4 Error-Driven Learning Our error-drive learning approaches to ranking modeling adaptation are based on the Stochastic Gradient Boosting algorithm (or the boosting algorithm for short) described in Friedman (19</context>
+</contexts>
+<marker>Bishop, 1995</marker>
+<rawString>Bishop, C.M. 1995. Training with noise is equivalent to Tikhonov regularization. Neural Computation, 7, 108-116.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C J Burges</author>
+<author>R Ragno</author>
+<author>Q V Le</author>
+</authors>
+<title>Learning to rank with nonsmooth cost functions.</title>
+<date>2006</date>
+<booktitle>In ICML.</booktitle>
+<contexts>
+<context position="5138" citStr="Burges et al., 2006" startWordPosition="800" endWordPosition="803">ant in Web search applications. Labeling training data takes time. As a result of the dynamic nature of Web, by the time the ranker is trained and deployed, the training data may be more or less out of date. Our results show that the model interpolation is much more robust than the boosting-based methods. We then explore several methods to improve the robustness of the methods, including regularization, randomization, and using shallow trees, with limited success. 2 Ranking Model and Quality Measure in Web Search This section reviews briefly a particular example of rankers, called LambdaRank (Burges et al., 2006), which serves as the baseline ranker in our study. Assume that training data is a set of input/ output pairs (x, y). x is a feature vector extracted from a query-document pair. We use approximately 400 features, including dynamic ranking features such as term frequency and BM25, and statistic ranking features such as PageRank. y is a human-judged relevance score, 0 to 4, with 4 as the most relevant. LambdaRank is a neural net ranker that maps a feature vector x to a real value y that indicates the relevance of the document given the query (relevance score). For example, a linear LambdaRank si</context>
+<context position="7133" citStr="Burges et al. (2006)" startWordPosition="1157" endWordPosition="1160">level of the j-th document, and the normalization constant Ni is chosen so that a perfect ordering would result in N = 1. Here L is the ranking truncation level at which NDCG is computed. The N are then averaged over a query set. However, NDCG, if it were to be used as a cost function, is either flat or discontinuous everywhere, and thus presents challenges to most optimization approaches that require the computation of the gradient of the cost function. LambdaRank solves the problem by using an implicit cost function whose gradients are specified by rules. These rules are called a-functions. Burges et al. (2006) studied several a-functions that were designed with the NDCG cost function in mind. They showed that LambdaRank with the best a-function outperforms significantly a similar neural net ranker, RankNet (Burges et al., 2005), whose parameters are optimized using the cost function based on cross-entropy. The superiority of LambdaRank illustrates the key idea based on which we develop the model adaptation methods. We should always adapt the ranking models in such a way that the NDCG can be optimized as directly as possible. 3 Model Interpolation One of the simplest model interpolation methods is t</context>
+<context position="14280" citStr="Burges et al. (2006)" startWordPosition="2424" endWordPosition="2427"> is defined as a single feature, and in LambdaSMART (Section 4.2), h is a regression tree. Now, we describe the way residual is computed, the step that is identical in both algorithms. Intuitively, the residual, denoted by y’ (line 3 in Figure 1), measures the amount of errors (or loss) the base model makes on the training samples. If the loss function in Equation (3) is differentiable, the residual can be computed easily as the negative gradient of the loss function. As discussed in Section 2, we want to directly optimize the NDCD, whose gradient is approximated via the λ-function. Following Burges et al. (2006), the gradient of a training sample (xi, yi), where xi is a feature vector representing the query-document pair (qi, di), w.r.t. the current base model is computed by marginalizing the λ-functions of all document pairs, (di, dj), of the query, qi, as 𝑦𝑖 ′ = ∆NDCG ∙ 𝜕𝐶𝑖𝑗 , (5) 𝑗 ≠𝑖 𝜕𝑜𝑖𝑗 where ∆NDCG is the NDCG gained by swapping those two documents (after sorting all documents by their current scores); 𝑜𝑖𝑗 ≡ 𝑠𝑖 − 𝑠𝑗 is the difference in ranking scores of di and dj given qi; and Cij is the cross entropy cost defined as 𝐶𝑖𝑗 ≡ 𝐶 𝑜𝑖𝑗 = 𝑠𝑗 − 𝑠𝑖 (6) + log(1 + exp(𝑠𝑖 − 𝑠𝑗)). −1 = . (7) 1 + exp 𝑜𝑖𝑗 Thi</context>
+</contexts>
+<marker>Burges, Ragno, Le, 2006</marker>
+<rawString>Burges, C. J., Ragno, R., &amp; Le, Q. V. 2006. Learning to rank with nonsmooth cost functions. In ICML.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Burges</author>
+<author>T Shaked</author>
+<author>E Renshaw</author>
+<author>A Lazier</author>
+<author>M Deeds</author>
+<author>Hamilton</author>
+<author>G Hullender</author>
+</authors>
+<title>Learning to rank using gradient descent.</title>
+<date>2005</date>
+<booktitle>In ICML.</booktitle>
+<contexts>
+<context position="1688" citStr="Burges et al., 2005" startWordPosition="260" endWordPosition="263"> success. 1 Introduction We consider the task of ranking Web search results, i.e., a set of retrieved Web documents (URLs) are ordered by relevance to a query issued by a user. In this paper we assume that the task is performed using a ranking model (also called ranker for short) that is learned on labeled training data (e.g., human-judged query-document pairs). The ranking model acts as a function that maps the feature vector of a query-document pair to a real-valued score of relevance. Recent research shows that such a learned ranker is superior to classical retrieval models in two aspects (Burges et al., 2005; 2006; Gao et al., 2005). First, the ranking model can use arbitrary features. Both traditional criteria such as TF-IDF and BM25, and non-traditional features such as hyperlinks can be incorporated as features in the ranker. Second, if large amounts of high-quality human-judged query-document pairs were available for model training, the ranker could achieve significantly better retrieval results than the traditional retrieval models that cannot benefit from training data effectively. However, such training data is not always available for many search domains, such as non-English search market</context>
+<context position="7355" citStr="Burges et al., 2005" startWordPosition="1190" endWordPosition="1193">ry set. However, NDCG, if it were to be used as a cost function, is either flat or discontinuous everywhere, and thus presents challenges to most optimization approaches that require the computation of the gradient of the cost function. LambdaRank solves the problem by using an implicit cost function whose gradients are specified by rules. These rules are called a-functions. Burges et al. (2006) studied several a-functions that were designed with the NDCG cost function in mind. They showed that LambdaRank with the best a-function outperforms significantly a similar neural net ranker, RankNet (Burges et al., 2005), whose parameters are optimized using the cost function based on cross-entropy. The superiority of LambdaRank illustrates the key idea based on which we develop the model adaptation methods. We should always adapt the ranking models in such a way that the NDCG can be optimized as directly as possible. 3 Model Interpolation One of the simplest model interpolation methods is to combine an in-domain model with a background model at the model level via linear interpolation. In practice we could combine more than two in-domain/background models. Letting Score(q, d) be a ranking model that maps a q</context>
+</contexts>
+<marker>Burges, Shaked, Renshaw, Lazier, Deeds, Hamilton, Hullender, 2005</marker>
+<rawString>Burges, C., Shaked, T., Renshaw, E., Lazier, A., Deeds, M., Hamilton, and Hullender, G. 2005. Learning to rank using gradient descent. In ICML.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Caruana</author>
+</authors>
+<title>Multitask learning.</title>
+<date>1997</date>
+<booktitle>Machine Learning,</booktitle>
+<volume>28</volume>
+<issue>1</issue>
+<pages>41--70</pages>
+<contexts>
+<context position="35860" citStr="Caruana, 1997" startWordPosition="6113" endWordPosition="6114">ns are largely due to the instability of the use of trees in the boosting algorithm. We thus explore several methods of improving the robustness of the algorithm, such as randomization, regularization, using shallow trees, with limited success. Of course, our experiments, 512 described in Section 5.3, only scratch the surface of what is possible. Robustness deserves more investigation and forms one area of our future work. Another family of model adaptation methods that we have not studied in this paper is transfer learning, which has been well-studied in the machine learning community (e.g., Caruana, 1997; Marx et al., 2008). We leave it to future work. To solve the issue of inadequate training data, in addition to model adaptation, researchers have also been exploring the use of implicit user feedback data (extracted from log files) for ranking model training (e.g., Joachims et al., 2005; Radlinski et al., 2008). Although such data is very noisy, it is of a much larger amount and is cheaper to obtain than human-labeled data. It will be interesting to apply the model adaptation methods described in this paper to adapt a ranker which is trained on a large amount of automatically extracted data </context>
+</contexts>
+<marker>Caruana, 1997</marker>
+<rawString>Caruana, R. 1997. Multitask learning. Machine Learning, 28(1): 41-70.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Collins</author>
+</authors>
+<title>Discriminative reranking for natural language parsing.</title>
+<date>2000</date>
+<booktitle>In ICML.</booktitle>
+<contexts>
+<context position="17079" citStr="Collins (2000)" startWordPosition="2960" endWordPosition="2961"> is computed when the basis function is evaluated. However, adding the basis function using its optimal efficient is prone to overfitting. We thus add a shrinkage coefficient 0 &lt; υ &lt; 1 – the fraction of the optimal line step taken. The update equation is thus rewritten in line 5 in Figure 2. Notice that if the background model contains all the input features in x, then LambdaBoost does not add any new features but adjust the weights of existing features. If the background model does not contain all of the input features, then LambdaBoost can be viewed as a feature selection method, similar to Collins (2000), where at each iteration the feature that has the largest impact on reducing training loss is selected and added to the background model. In either case, LambdaBoost adapts the background model by adding a model whose form is a (weighted) linear combination of input features. The property of linearity makes LambdaBoost robust and less likely to overfit in Web search applications. But this also limits the adaptation capacity. A simple method that allows us to go beyond linear adaptation is to define h as nonlinear terms of the input features, such as regression trees in LambdaSMART. 4.2 The La</context>
+</contexts>
+<marker>Collins, 2000</marker>
+<rawString>Collins, M. 2000. Discriminative reranking for natural language parsing. In ICML.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Donmea</author>
+<author>K Svore</author>
+<author>Burges</author>
+</authors>
+<title>On the local optimality for NDCG.</title>
+<date>2008</date>
+<tech>Microsoft Technical Report,</tech>
+<pages>2008--179</pages>
+<marker>Donmea, Svore, Burges, 2008</marker>
+<rawString>Donmea, P., Svore, K. and Burges. 2008. On the local optimality for NDCG. Microsoft Technical Report, MSR-TR-2008-179.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Friedman</author>
+</authors>
+<title>Stochastic gradient boosting.</title>
+<date>1999</date>
+<tech>Technical report, Dept. Statistics,</tech>
+<location>Stanford.</location>
+<contexts>
+<context position="11865" citStr="Friedman (1999)" startWordPosition="1981" endWordPosition="1982">ishop, 1995), except that the training samples used are 1 Set F0(x) be the background ranking model 2 for m = 1 to M do 3 ′ = − 𝑦𝑖 , for i = 1... N 𝜕𝐿 𝑦𝑖,𝐹 𝐱𝑖 𝜕𝐹 𝐱𝑖 𝐹 𝐱 =𝐹𝑚 −1 𝐱 𝑁 2 4 (ℎ𝑚, 𝛽𝑚) = argmin 𝑦𝑖 ′ − 𝛽ℎ(𝐱𝑖) ℎ,𝛽 𝑖=1 5 𝐹𝑚 𝐱 = 𝐹𝑚−1 𝐱 + 𝛽 𝑚 ℎ(𝐱) Figure 1. The generic boosting algorithm for model adaptation actual queries judged by a human. This is found to increase the NDCG in our experiments. 4 Error-Driven Learning Our error-drive learning approaches to ranking modeling adaptation are based on the Stochastic Gradient Boosting algorithm (or the boosting algorithm for short) described in Friedman (1999). Below, we follow the notations in Friedman (2001). Let adaptation data (also called training data in this section) be a set of input/output pairs {xi, yi}, i = 1...N. In error-driven learning approaches, model adaptation is performed by adjusting the background model into a new in-domain model 𝐹: 𝑥 → 𝑦 that minimizes a loss function L(y, F(x)) over all samples in training data 𝑁 𝐹∗ = argmin 𝐿(𝑦𝑖, 𝐹(𝐱𝑖)) . (3) 𝐹 𝑖=1 We further assume that F(x) takes the form of additive expansion as 𝑀 𝐹 𝐱 = 𝛽𝑚 ℎ 𝐱; 𝐚𝑚 , (4) 𝑚=0 where h(x; a) is called basis function, and is usually a simple parameterized func</context>
+<context position="31546" citStr="Friedman, 1999" startWordPosition="5379" endWordPosition="5380">y to LambdaSMART on the open test set). 5.3 Robustness of Boosting Algorithms This section investigates the robustness issue of the boosting algorithms in more detail. We compared LambdaSMART with different values of L (i.e., the number of leaf nodes), and with and without randomization. Our assumptions are (1) allowing more leaf nodes would lead to deeper trees, and as a result, would make the resulting ranking models less robust; and (2) injecting randomness into the basis function (i.e. regression tree) estimation procedure would improve the robustness of the trained models (Breiman, 2001; Friedman, 1999). In LambdaSMART, the randomness can be injected at different levels of tree construction. We found that the most effective method is to introduce the randomness at the node level (in Step 4 in Figure 3). Before each node split, a subsample of the training data and a subsample of the features are drawn randomly. (The sample rate is 0.7). Then, the two randomly selected subsamples, instead of the full samples, are used to determine the best split. 511 0.57 0.56 0.55 0.54 0.53 0.52 0.51 0.50 0.49 0.55 0.55 0.54 0.54 0.53 1 2 4 10 20 1 2 4 10 20 (a) (b) 0.55 0.55 0.54 0.54 0.53 0.54 0.53 0.52 0.5</context>
+</contexts>
+<marker>Friedman, 1999</marker>
+<rawString>Friedman, J. 1999. Stochastic gradient boosting. Technical report, Dept. Statistics, Stanford.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Friedman</author>
+</authors>
+<title>Greedy function approximation: a gradient boosting machine.</title>
+<date>2001</date>
+<journal>Annals of Statistics,</journal>
+<volume>29</volume>
+<issue>5</issue>
+<contexts>
+<context position="11916" citStr="Friedman (2001)" startWordPosition="1989" endWordPosition="1991"> are 1 Set F0(x) be the background ranking model 2 for m = 1 to M do 3 ′ = − 𝑦𝑖 , for i = 1... N 𝜕𝐿 𝑦𝑖,𝐹 𝐱𝑖 𝜕𝐹 𝐱𝑖 𝐹 𝐱 =𝐹𝑚 −1 𝐱 𝑁 2 4 (ℎ𝑚, 𝛽𝑚) = argmin 𝑦𝑖 ′ − 𝛽ℎ(𝐱𝑖) ℎ,𝛽 𝑖=1 5 𝐹𝑚 𝐱 = 𝐹𝑚−1 𝐱 + 𝛽 𝑚 ℎ(𝐱) Figure 1. The generic boosting algorithm for model adaptation actual queries judged by a human. This is found to increase the NDCG in our experiments. 4 Error-Driven Learning Our error-drive learning approaches to ranking modeling adaptation are based on the Stochastic Gradient Boosting algorithm (or the boosting algorithm for short) described in Friedman (1999). Below, we follow the notations in Friedman (2001). Let adaptation data (also called training data in this section) be a set of input/output pairs {xi, yi}, i = 1...N. In error-driven learning approaches, model adaptation is performed by adjusting the background model into a new in-domain model 𝐹: 𝑥 → 𝑦 that minimizes a loss function L(y, F(x)) over all samples in training data 𝑁 𝐹∗ = argmin 𝐿(𝑦𝑖, 𝐹(𝐱𝑖)) . (3) 𝐹 𝑖=1 We further assume that F(x) takes the form of additive expansion as 𝑀 𝐹 𝐱 = 𝛽𝑚 ℎ 𝐱; 𝐚𝑚 , (4) 𝑚=0 where h(x; a) is called basis function, and is usually a simple parameterized function of the input x, characterized by parameters a.</context>
+<context position="17792" citStr="Friedman, 2001" startWordPosition="3077" endWordPosition="3078">ected and added to the background model. In either case, LambdaBoost adapts the background model by adding a model whose form is a (weighted) linear combination of input features. The property of linearity makes LambdaBoost robust and less likely to overfit in Web search applications. But this also limits the adaptation capacity. A simple method that allows us to go beyond linear adaptation is to define h as nonlinear terms of the input features, such as regression trees in LambdaSMART. 4.2 The LambdaSMART Algorithm LambdaSMART was originally proposed in Wu et al. (2008). It is built on MART (Friedman, 2001) but uses the λ-function (Burges et a., 2006) to Thus, we have 𝜕 𝐶𝑖𝑗 𝜕𝑜𝑖𝑗 𝑖=1 − 𝑖=1 𝑦𝑖 ′ℎ 𝐱𝑖 2 ℎ2(𝐱𝑖) . (9) 508 1 Set F0(x) to be the background ranking model 2 for m = 1 to M do 3 compute residuals according to Equation (5) 4 create a L-terminal node tree, ℎ𝑚 ≡ 𝑅𝑙𝑚 𝑙=1...𝐿 5 for l = 1 to L do 6 compute the optimal βlm according to Equation (10), based on approximate Newton step. 7 𝐹𝑚 𝐱 = 𝐹𝑚−1 𝑥 + 𝜐 𝛽𝑙𝑚 1(𝑥 ∈ 𝑅𝑙𝑚 ) 𝑙=1...𝐿 Figure 3. The LambdaSMART algorithm for model adaptation. compute gradients. The algorithm is summarized in Figure 3. Similar to LambdaBoost, it takes M rounds, and at each </context>
+</contexts>
+<marker>Friedman, 2001</marker>
+<rawString>Friedman, J. 2001. Greedy function approximation: a gradient boosting machine. Annals of Statistics, 29(5).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Gao</author>
+<author>H Qin</author>
+<author>X Xia</author>
+<author>J-Y Nie</author>
+</authors>
+<title>Linear discriminative models for information retrieval.</title>
+<date>2005</date>
+<booktitle>In SIGIR.</booktitle>
+<contexts>
+<context position="1713" citStr="Gao et al., 2005" startWordPosition="265" endWordPosition="268"> consider the task of ranking Web search results, i.e., a set of retrieved Web documents (URLs) are ordered by relevance to a query issued by a user. In this paper we assume that the task is performed using a ranking model (also called ranker for short) that is learned on labeled training data (e.g., human-judged query-document pairs). The ranking model acts as a function that maps the feature vector of a query-document pair to a real-valued score of relevance. Recent research shows that such a learned ranker is superior to classical retrieval models in two aspects (Burges et al., 2005; 2006; Gao et al., 2005). First, the ranking model can use arbitrary features. Both traditional criteria such as TF-IDF and BM25, and non-traditional features such as hyperlinks can be incorporated as features in the ranker. Second, if large amounts of high-quality human-judged query-document pairs were available for model training, the ranker could achieve significantly better retrieval results than the traditional retrieval models that cannot benefit from training data effectively. However, such training data is not always available for many search domains, such as non-English search markets or person name search. </context>
+<context position="9337" citStr="Gao et al. (2005)" startWordPosition="1526" endWordPosition="1529">mensional optimization problem, with each model as a L N = Ni log (1 + j 506 dimension. Since NCDG is not differentiable, we tried in our experiments the numerical algorithms that do not require the computation of gradient. Among the best performers is the Powell Search algorithm (Press et al., 1992). It first constructs a set of N virtual directions that are conjugate (i.e., independent with each other), then it uses line search N times, each on one virtual direction, to find the optimum. Line search is a one-dimensional optimization algorithm. Our implementation follows the one described in Gao et al. (2005), which is used to optimize the averaged precision. The performance of model interpolation depends to a large degree upon the quality and the size of adaptation data. First of all, the adaptation data has to be “rich” enough to suitably characterize the new domain. This can only be achieved by collecting more in-domain data. Second, once the domain has been characterized, the adaptation data has to be “large” enough to have a model reliably trained. For this, we developed a method, which attempts to augment adaptation data by gathering similar data from background data sets. The method is base</context>
+</contexts>
+<marker>Gao, Qin, Xia, Nie, 2005</marker>
+<rawString>Gao, J., Qin, H., Xia, X. and Nie, J-Y. 2005. Linear discriminative models for information retrieval. In SIGIR.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Gao</author>
+<author>H Suzuki</author>
+<author>W Yuan</author>
+</authors>
+<title>An empirical study on language model adaptation.</title>
+<date>2006</date>
+<journal>ACM Trans on Asian Language Processing,</journal>
+<pages>5--3</pages>
+<contexts>
+<context position="3514" citStr="Gao et al. 2006" startWordPosition="539" endWordPosition="542">erpolation approaches and error-driven learning approaches. In model interpolation approaches, the adaptation data is used to derive a domain-specific model (also called in-domain model), which is then combined with the background model trained on the background data. This appealingly simple concept provides fertile ground for experimentation, depending on the level at which the combination is implemented (Bellegarda, 2004). In error-driven learning approaches, the background model is adjusted so as to minimize the ranking errors the model makes on the adaptation data (Bacchiani et al., 2004; Gao et al. 2006). This is arguably more powerful than model interpolation for two reasons. First, by defining a proper error function, the method can optimize more directly the measure used to assess the final quality of the Web search system, e.g., Normalized Discounted Cumulative Gain (Javelin &amp; Kekalainen, 2000) in this study. Second, in this framework, the model can be adjusted to be as fine-grained as necessary. In this study we developed a set of error-driven learning methods based on a boosting algorithm where, in an incremental manner, not only each feature weight could be 505 Proceedings of the 2009 </context>
+<context position="34388" citStr="Gao et al., 2006" startWordPosition="5878" endWordPosition="5881"> comparison in the cross-domain adaptation experiments. As shown in Figure 4, results in 4 (c) and 4 (d) are consistent with those on names queries in 4 (b). Results in 4 (f) show a visible performance drop from LambdaBoost to LambdaSMART with L = 2, indicating again the instability of trees. 6 Conclusions and Future Work In this paper, we extend two classes of model adaptation methods (i.e., model interpolation and error-driven learning), which have been well studied in statistical language modeling for speech and natural language applications (e.g., Bacchiani et al., 2004; Bellegarda, 2004; Gao et al., 2006), to ranking models for Web search applications. We have evaluated our methods on two adaptation experiments over a wide variety of datasets where the in-domain datasets bear different levels of similarities to their background datasets. We reach different conclusions from the results of the open and close tests, respectively. Our open test results show that in the cases where the in-domain data is dramatically different from the background data, model interpolation is very robust and outperforms the baseline and the error-driven learning methods significantly; whereas our close test results s</context>
+</contexts>
+<marker>Gao, Suzuki, Yuan, 2006</marker>
+<rawString>Gao, J., Suzuki, H. and Yuan, W. 2006. An empirical study on language model adaptation. ACM Trans on Asian Language Processing, 5(3):207-227.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Hastie</author>
+<author>R Tibshirani</author>
+<author>J Friedman</author>
+</authors>
+<title>The elements of statistical learning.</title>
+<date>2001</date>
+<publisher>Springer-Verlag,</publisher>
+<location>New York.</location>
+<contexts>
+<context position="20622" citStr="Hastie, et al., (2001)" startWordPosition="3596" endWordPosition="3599">e structure of the background model1. However, 1 Note that in a sense our proposed LambdaBoost algorithm is the same as LambdaSMART, but using a single feature at each iteration, rather than a tree. In particular, they share the trick of using the Lambda one problem of trees is their high variance. Often a small change in the data can result in a very different series of splits. As a result, tree-based ranking models are much less robust to noise, as we will show in our experiments. In addition to the use of shrinkage coefficient 0 &lt; v &lt; 1, which is a form of model regularization according to Hastie, et al., (2001), we will explore in Section 5.3 other methods of improving the model robustness, including randomization and using shallow trees. 5 Experiments 5.1 The Data We evaluated the ranking model adaptation methods on two Web search domains, namely (1) a name query domain, which consists of only person name queries, and (2) a Korean query domain, which consists of queries that users submitted to the Korean market. For each domain, we used two in-domain data sets that contain queries sampled respectively from the query log of a commercial Web search engine that were collected in two non-overlapping pe</context>
+</contexts>
+<marker>Hastie, Tibshirani, Friedman, 2001</marker>
+<rawString>Hastie, T., Tibshirani, R. and Friedman, J. 2001. The elements of statistical learning. Springer-Verlag, New York.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Jarvelin</author>
+<author>J Kekalainen</author>
+</authors>
+<title>IR evaluation methods for retrieving highly relevant documents.</title>
+<date>2000</date>
+<booktitle>In SIGIR.</booktitle>
+<contexts>
+<context position="6396" citStr="Jarvelin and Kekalainen, 2000" startWordPosition="1023" endWordPosition="1027">ned weight vector w such that y = W • X. (We used nonlinear LambdaRank in our experiments). LambdaRank is particularly interesting to us due to the way w is learned. Typically, w is optimized w.r.t. a cost function using numerical methods if the cost function is smooth and its gradient w.r.t. w can be computed easily. In order for the ranker to achieve the best performance in document retrieval, the cost function used in training should be the same as, or as close as possible to, the measure used to assess the quality of the system. In Web search, Normalized Discounted Cumulative Gain (NDCG) (Jarvelin and Kekalainen, 2000) is widely used as quality measure. For a query, NDCG is computed as 2r(j) − 1 , (1) j=1 where r(j) is the relevance level of the j-th document, and the normalization constant Ni is chosen so that a perfect ordering would result in N = 1. Here L is the ranking truncation level at which NDCG is computed. The N are then averaged over a query set. However, NDCG, if it were to be used as a cost function, is either flat or discontinuous everywhere, and thus presents challenges to most optimization approaches that require the computation of the gradient of the cost function. LambdaRank solves the pr</context>
+</contexts>
+<marker>Jarvelin, Kekalainen, 2000</marker>
+<rawString>Jarvelin, K. and Kekalainen, J. 2000. IR evaluation methods for retrieving highly relevant documents. In SIGIR.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Joachims</author>
+<author>L Granka</author>
+<author>B Pan</author>
+<author>H Hembrooke</author>
+<author>G Gay</author>
+</authors>
+<title>Accurately interpreting clickthrough data as implicit feedback.</title>
+<date>2005</date>
+<booktitle>In SIGIR.</booktitle>
+<marker>Joachims, Granka, Pan, Hembrooke, Gay, 2005</marker>
+<rawString>Joachims, T., Granka, L., Pan, B., Hembrooke, H. and Gay, G. 2005. Accurately interpreting clickthrough data as implicit feedback. In SIGIR.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Z Marx</author>
+<author>M T Rosenstein</author>
+<author>T G Dietterich</author>
+<author>L P Kaelbling</author>
+</authors>
+<title>Two algorithms for transfer learning.</title>
+<date>2008</date>
+<note>To appear in Inductive Transfer: 10 years later.</note>
+<contexts>
+<context position="35880" citStr="Marx et al., 2008" startWordPosition="6115" endWordPosition="6118">due to the instability of the use of trees in the boosting algorithm. We thus explore several methods of improving the robustness of the algorithm, such as randomization, regularization, using shallow trees, with limited success. Of course, our experiments, 512 described in Section 5.3, only scratch the surface of what is possible. Robustness deserves more investigation and forms one area of our future work. Another family of model adaptation methods that we have not studied in this paper is transfer learning, which has been well-studied in the machine learning community (e.g., Caruana, 1997; Marx et al., 2008). We leave it to future work. To solve the issue of inadequate training data, in addition to model adaptation, researchers have also been exploring the use of implicit user feedback data (extracted from log files) for ranking model training (e.g., Joachims et al., 2005; Radlinski et al., 2008). Although such data is very noisy, it is of a much larger amount and is cheaper to obtain than human-labeled data. It will be interesting to apply the model adaptation methods described in this paper to adapt a ranker which is trained on a large amount of automatically extracted data to a relatively smal</context>
+</contexts>
+<marker>Marx, Rosenstein, Dietterich, Kaelbling, 2008</marker>
+<rawString>Marx, Z., Rosenstein, M.T., Dietterich, T.G. and Kaelbling, L.P. 2008. Two algorithms for transfer learning. To appear in Inductive Transfer: 10 years later.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W H Press</author>
+<author>S A Teukolsky</author>
+<author>W T Vetterling</author>
+<author>B P Flannery</author>
+</authors>
+<title>Numerical Recipes In C.</title>
+<date>1992</date>
+<publisher>Cambridge Univ. Press.</publisher>
+<contexts>
+<context position="9021" citStr="Press et al., 1992" startWordPosition="1474" endWordPosition="1477">ew the interpolation model of Equation (2) as a linear neural net ranker where each component model Scorei(.) is defined as a feature function. Then, we can use the LambdaRank algorithm described in Section 2 to find the optimal weights. An alternative solution is to view interpolation weight estimation as a multi-dimensional optimization problem, with each model as a L N = Ni log (1 + j 506 dimension. Since NCDG is not differentiable, we tried in our experiments the numerical algorithms that do not require the computation of gradient. Among the best performers is the Powell Search algorithm (Press et al., 1992). It first constructs a set of N virtual directions that are conjugate (i.e., independent with each other), then it uses line search N times, each on one virtual direction, to find the optimum. Line search is a one-dimensional optimization algorithm. Our implementation follows the one described in Gao et al. (2005), which is used to optimize the averaged precision. The performance of model interpolation depends to a large degree upon the quality and the size of adaptation data. First of all, the adaptation data has to be “rich” enough to suitably characterize the new domain. This can only be a</context>
+</contexts>
+<marker>Press, Teukolsky, Vetterling, Flannery, 1992</marker>
+<rawString>Press, W. H., S. A. Teukolsky, W. T. Vetterling and B. P. Flannery. 1992. Numerical Recipes In C. Cambridge Univ. Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F Radlinski</author>
+<author>M Kurup</author>
+<author>T Joachims</author>
+</authors>
+<title>How does clickthrough data reflect retrieval quality?</title>
+<date>2008</date>
+<booktitle>In CIKM.</booktitle>
+<marker>Radlinski, Kurup, Joachims, 2008</marker>
+<rawString>Radlinski, F., Kurup, M. and Joachims, T. 2008. How does clickthrough data reflect retrieval quality? In CIKM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Thrun</author>
+</authors>
+<title>Is learning the n-th thing any easier than learning the first.</title>
+<date>1996</date>
+<booktitle>In NIPS.</booktitle>
+<marker>Thrun, 1996</marker>
+<rawString>Thrun, S. 1996. Is learning the n-th thing any easier than learning the first. In NIPS.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Q Wu</author>
+<author>C J C Burges</author>
+<author>K M Svore</author>
+<author>J Gao</author>
+</authors>
+<title>Ranking, boosting, and model adaptation.</title>
+<date>2008</date>
+<tech>Technical Report MSR-TR-2008-109, Microsoft Research.</tech>
+<contexts>
+<context position="17754" citStr="Wu et al. (2008)" startWordPosition="3068" endWordPosition="3071">impact on reducing training loss is selected and added to the background model. In either case, LambdaBoost adapts the background model by adding a model whose form is a (weighted) linear combination of input features. The property of linearity makes LambdaBoost robust and less likely to overfit in Web search applications. But this also limits the adaptation capacity. A simple method that allows us to go beyond linear adaptation is to define h as nonlinear terms of the input features, such as regression trees in LambdaSMART. 4.2 The LambdaSMART Algorithm LambdaSMART was originally proposed in Wu et al. (2008). It is built on MART (Friedman, 2001) but uses the λ-function (Burges et a., 2006) to Thus, we have 𝜕 𝐶𝑖𝑗 𝜕𝑜𝑖𝑗 𝑖=1 − 𝑖=1 𝑦𝑖 ′ℎ 𝐱𝑖 2 ℎ2(𝐱𝑖) . (9) 508 1 Set F0(x) to be the background ranking model 2 for m = 1 to M do 3 compute residuals according to Equation (5) 4 create a L-terminal node tree, ℎ𝑚 ≡ 𝑅𝑙𝑚 𝑙=1...𝐿 5 for l = 1 to L do 6 compute the optimal βlm according to Equation (10), based on approximate Newton step. 7 𝐹𝑚 𝐱 = 𝐹𝑚−1 𝑥 + 𝜐 𝛽𝑙𝑚 1(𝑥 ∈ 𝑅𝑙𝑚 ) 𝑙=1...𝐿 Figure 3. The LambdaSMART algorithm for model adaptation. compute gradients. The algorithm is summarized in Figure 3. Similar to Lambda</context>
+</contexts>
+<marker>Wu, Burges, Svore, Gao, 2008</marker>
+<rawString>Wu, Q., Burges, C.J.C., Svore, K.M. and Gao, J. 2008. Ranking, boosting, and model adaptation. Technical Report MSR-TR-2008-109, Microsoft Research.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

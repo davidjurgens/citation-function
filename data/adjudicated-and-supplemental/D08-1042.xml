@@ -1,0 +1,1453 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.021060">
+<title confidence="0.993693">
+A Dependency-based Word Subsequence Kernel
+</title>
+<author confidence="0.898316">
+Rohit J. Kate
+</author>
+<affiliation confidence="0.935965">
+Department of Computer Sciences
+The University of Texas at Austin
+1 University Station C0500
+</affiliation>
+<address confidence="0.682099">
+Austin, TX 78712-0233, USA
+</address>
+<email confidence="0.998707">
+rjkate@cs.utexas.edu
+</email>
+<sectionHeader confidence="0.996661" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999306357142857">
+This paper introduces a new kernel which
+computes similarity between two natural lan-
+guage sentences as the number of paths shared
+by their dependency trees. The paper gives a
+very efficient algorithm to compute it. This
+kernel is also an improvement over the word
+subsequence kernel because it only counts
+linguistically meaningful word subsequences
+which are based on word dependencies. It
+overcomes some of the difficulties encoun-
+tered by syntactic tree kernels as well. Ex-
+perimental results demonstrate the advantage
+of this kernel over word subsequence and syn-
+tactic tree kernels.
+</bodyText>
+<sectionHeader confidence="0.998499" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.998496204081633">
+Kernel-based learning methods (Vapnik, 1998) are
+becoming increasingly popular in natural language
+processing (NLP) because they allow one to work
+with potentially infinite number of features with-
+out explicitly constructing or manipulating them. In
+most NLP problems, the data is present in structured
+forms, like strings or trees, and this structural infor-
+mation can be effectively passed to a kernel-based
+learning algorithm using an appropriate kernel, like
+a string kernel (Lodhi et al., 2002) or a tree kernel
+(Collins and Duffy, 2001). In contrast, feature-based
+methods require reducing the data to a pre-defined
+set of features often leading to some loss of the use-
+ful structural information present in the data.
+A kernel is a measure of similarity between ev-
+ery pair of examples in the data and a kernel-based
+machine learning algorithm accesses the data only
+through these kernel values. For example, the string
+kernel (Lodhi et al., 2002; Cancedda et al., 2003)
+computes the similarity between two natural lan-
+guage strings as the number of common word sub-
+sequences between them. A subsequence allows
+gaps between the common words which are penal-
+ized according to a parameter. Each word subse-
+quence hence becomes an implicit feature used by
+the kernel-based machine learning algorithm. A
+problem with this kernel is that many of these word
+subsequences common between two strings may not
+be semantically expressive or linguistically mean-
+ingful1. Another problem with this kernel is that
+if there are long-range dependencies between the
+words in a common word subsequence, then they
+will unfairly get heavily penalized because of the
+presence of word gaps.
+The syntactic tree kernel presented in (Collins and
+Duffy, 2001) captures the structural similarity be-
+tween two syntactic trees as the number of syntac-
+tic subtrees common between them. However, of-
+ten syntactic parse trees may share syntactic sub-
+trees which correspond to very different semantics
+based on what words they represent in the sentence.
+On the other hand, some subtrees may differ syn-
+tactically but may represent similar underlying se-
+mantics. These differences can become particularly
+problematic if the tree kernel is to be used for tasks
+which require semantic processing.
+This paper presents a new kernel which computes
+similarity between two sentences as the the number
+of paths common between their dependency trees.
+</bodyText>
+<note confidence="0.8027755">
+1(Lodhi et al., 2002) use character subsequences instead of
+word subsequences which are even less meaningful.
+</note>
+<page confidence="0.921845">
+400
+</page>
+<note confidence="0.970905">
+Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 400–409,
+Honolulu, October 2008.c�2008 Association for Computational Linguistics
+</note>
+<figure confidence="0.987364">
+(a) A fat cat was chased by a dog.
+(b) A cat with a red collar was chased two days ago
+by a fat dog.
+</figure>
+<figureCaption confidence="0.999853">
+Figure 1: Two natural language sentences.
+</figureCaption>
+<bodyText confidence="0.999923347826087">
+It improves over the word subsequence kernel be-
+cause it only counts the word subsequences which
+are linked by dependencies. It also circumvents
+some of the difficulties encountered with the syntac-
+tic tree kernel when applied for semantic processing
+tasks.
+Although several dependency-tree-based kernels
+and modifications to syntactic tree kernels have been
+proposed which we briefly discuss in the Related
+Work section, to our best knowledge no previous
+work has presented a kernel based on dependency
+paths which offers some unique advantages. We also
+give a very efficient algorithm to compute this ker-
+nel. We present experimental results on the task of
+domain-specific semantic parsing demonstrating the
+advantage of this kernel over word subsequence and
+syntactic tree kernels.
+The following section gives some background on
+string and tree kernels. Section 3 then introduces
+the dependency-based word subsequence kernel and
+gives an efficient algorithm to compute it. Some of
+the related work is discussed next, followed by ex-
+periments, future work and conclusions.
+</bodyText>
+<sectionHeader confidence="0.852211" genericHeader="introduction">
+2 String and Tree Kernels
+</sectionHeader>
+<subsectionHeader confidence="0.778629">
+2.1 Word-Subsequence Kernel
+</subsectionHeader>
+<bodyText confidence="0.998961220338983">
+A kernel between two sentences measures the simi-
+larity between them. Lodhi et al. (2002) presented a
+string kernel which measures the similarity between
+two sentences, or two documents in general, as the
+number of character subsequences shared between
+them. This was extended by Cancedda et al. (2003)
+to the number of common word subsequences be-
+tween them. We will refer to this kernel as the word
+subsequence kernel.
+Consider the two sentences shown in Figure 1.
+Some common word subsequences between them
+are “a cat”, “was chased by”, “by a dog”, “a cat
+chased by a dog”, etc. Note that the subsequence
+“was chased by” is present in the second sentence
+but it requires skipping the words “two days ago” or
+has a gap of three words present in it. The kernel
+downweights the presence of gaps by a decay fac-
+tor Aǫ(0,1]. If g1 and g2 are the sum totals of gaps
+for a subsequence present in the two sentences re-
+spectively, then the contribution of this subsequence
+towards the kernel value will be A91+92. The ker-
+nel can be normalized to have values in the range
+of [0, 1] to remove any bias due to different sen-
+tence lengths. Lodhi et al. (2002) give a dynamic
+programming algorithm to compute string subse-
+quence kernels in O(nst) time where s and t are the
+lengths of the two input strings and n is the maxi-
+mum length of common subsequences one wants to
+consider. Rousu and Shawe-Taylor (2005) present
+an improved algorithm which works faster when the
+vocabulary size is large. Subsequence kernels have
+been used with success in NLP for text classification
+(Lodhi et al., 2002; Cancedda et al., 2003), informa-
+tion extraction (Bunescu and Mooney, 2005b) and
+semantic parsing (Kate and Mooney, 2006).
+There are, however, some shortcomings of this
+word subsequence kernel as a measure of similarity
+between two sentences. Firstly, since it considers all
+possible common subsequences, it is not sensitive
+to whether the subsequence is linguistically mean-
+ingful or not. For example, the meaningless sub-
+sequences “cat was by” and “a was a” will also be
+considered common between the two sentences by
+this kernel. Since these subsequences will be used as
+implicit features by the kernel-based machine learn-
+ing algorithm, their presence can only hurt the per-
+formance. Secondly, if there are long distance de-
+pendencies between the words of the subsequence
+present in a sentence then the subsequence will get
+unfairly penalized. For example, the most important
+word subsequence shared between the two sentences
+shown in Figure 1 is “a cat was chased by a dog”
+which will get penalized by total gap of eight words
+coming from the second sentence and a gap of one
+word from the first sentence. Finally, the kernel is
+not sensitive to the relations between the words, for
+example, the kernel will consider “a fat dog” as a
+common subsequence although in the first sentence
+“a fat” relates to the cat and not to the dog.
+</bodyText>
+<subsectionHeader confidence="0.997348">
+2.2 Syntactic Tree Kernel
+</subsectionHeader>
+<bodyText confidence="0.982015">
+Syntactic tree kernels were first introduced by
+Collins and Duffy (2001) and were also used by
+</bodyText>
+<page confidence="0.99719">
+401
+</page>
+<figure confidence="0.9804075">
+S
+NP VP
+</figure>
+<figureCaption confidence="0.9776">
+Figure 3: Syntactic parse tree of the sentence shown in Figure 1 (b).
+</figureCaption>
+<figure confidence="0.999909102564103">
+NP
+PP
+with
+a
+red
+collar
+chased
+RB
+NP
+NP
+IN
+ago
+by
+DT
+NN
+JJ
+AUX
+VP
+A
+cat
+JJ
+DT
+NN
+ADVP
+VBD
+PP
+dog
+fat
+a
+DT
+NN
+IN
+NP
+was
+CD
+NNS
+two
+days
+a dog
+</figure>
+<figureCaption confidence="0.999999">
+Figure 2: Syntactic parse tree of the sentence shown in
+Figure 1 (a).
+</figureCaption>
+<bodyText confidence="0.999964195652174">
+Collins (2002) for the task of re-ranking syntactic
+parse trees. They define a kernel between two trees
+as the number of subtrees shared between them. A
+subtree is defined as any subgraph of the tree which
+includes more than one node, with the restriction
+that entire productions must be included at every
+node. The kernel defined this way captures most
+of the structural information present in the syntac-
+tic parse trees in the form of tree fragments which
+the kernelized learning algorithms can then implic-
+itly use as features. The kernel can be computed
+in O(|N1||N2|) time, where |N1 |and |N2 |are the
+number of nodes of the two trees. An efficient al-
+gorithm to compute tree kernels was given by Mos-
+chitti (2006a) which runs in close to linear time in
+the size of the input trees.
+One drawback of this tree kernel, though, partic-
+ularly when used for any task requiring semantic
+processing, is that it may match syntactic subtrees
+between two trees even though they represent very
+dissimilar things in the sentence. For example, be-
+tween the syntactic parse trees shown in Figures 2
+and 3 for the two sentences shown in Figure 1, the
+syntactic tree kernel will find (NP (DT a) JJ NN) as a
+common subtree but in the first sentence it represents
+“cat” while in the second it represents “collar” and
+“dog”. It will also find “(NP (DT a) (JJ fat) NN)”
+as a common subtree which again refers to “cat” in
+the first sentence and “dog” in the second sentence.
+As another example, consider two simple sentences:
+(S (NP Chip) (VP (V saw) (NP Dale))) and (S (NP
+Mary) (VP (V heard) (NP Sally))). Even though se-
+mantically nothing is similar between them, the syn-
+tactic tree kernel will still find common subtrees (S
+NP VP), (VP N NP) and (S NP (VP V NP)). The
+underlying problem is that the syntactic tree kernel
+tends to overlook the words of the sentences which,
+in fact, carry the essential semantics. On the other
+hand, although (NP (DT a) (NN cat)) and (NP (DT
+a) (JJ fat) (NN cat)) represent very similar concepts
+but the kernel will not capture this high level sim-
+ilarity between the two constituents, and will only
+find (DT a) and (NN cat) as the common substruc-
+tures. Finally, the most important similarity between
+the two sentences is “a cat was chased by a dog”
+which will not be captured by this kernel because
+</bodyText>
+<figure confidence="0.984973391304348">
+S
+AUX
+JJ
+NN
+NP
+VP
+VP
+DT
+A
+VBD
+PP
+was
+cat
+fat
+chased
+NP
+IN
+by
+DT
+NN
+402
+was
+a
+</figure>
+<figureCaption confidence="0.993596">
+Figure 4: Dependency tree of the sentence shown in Fig-
+ure 1 (a).
+</figureCaption>
+<figure confidence="0.993935">
+(b)
+</figure>
+<figureCaption confidence="0.996877">
+Figure 5: Dependency tree of the sentence shown in Fig-
+ure 1 (b).
+</figureCaption>
+<bodyText confidence="0.999412666666667">
+there is no common subtree which covers it. The
+Related Work section discusses some modifications
+that have been proposed to the syntactic tree kernel.
+</bodyText>
+<sectionHeader confidence="0.988372" genericHeader="method">
+3 A Dependency-based Word Subsequence
+Kernel
+</sectionHeader>
+<bodyText confidence="0.99988265625">
+A dependency tree encodes functional relationships
+between the words in a sentence (Hudson, 1984).
+The words of the sentence are the nodes and if a
+word complements or modifies another word then
+there is a child to parent edge from the first word to
+the second word. Every word in a dependency tree
+has exactly one parent except for the root word. Fig-
+ures 4 and 5 show dependency trees for the two sen-
+tences shown in Figure 1. There has been a lot of
+progress in learning dependency tree parsers (Mc-
+Donald et al., 2005; Koo et al., 2008; Wang et al.,
+2008). They can also be obtained indirectly from
+syntactic parse trees utilizing the head words of the
+constituents.
+We introduce a new kernel which takes the words
+into account like the word-subsequence kernel and
+also takes the syntactic relations between them into
+account like the syntactic tree kernel, however, it
+does not have the shortcomings of the two kernels
+pointed out in the previous section. This kernel
+counts the number of common paths between the de-
+pendency trees of the two sentences. Another way
+to look at this kernel is that it counts all the common
+word subsequences which are linked by dependen-
+cies. Hence we will call it a dependency-based word
+subsequence kernel. Since the implicit features it
+uses are dependency paths which are enumerable, it
+is a well defined kernel. In other words, an example
+gets implicitly mapped to the feature space in which
+each dependency path is a dimension.
+The dependency-based word subsequence kernel
+will find the common paths ‘a —* cat’, ‘cat —* was
++— chased’, ‘chased +— by +— dog’ among many oth-
+ers between the dependency trees shown in Figures 4
+and 5. The arrows are always shown from child node
+to the parent node. A common path takes into ac-
+count the direction between the words as well. Also
+note that it will find the important subsequence ‘a
+—* cat —* was +— chased +— by +— dog +— a’ as a
+common path.
+It can be seen that the word subsequences this
+kernel considers as common paths are linguistically
+meaningful. It is also not affected by long-range de-
+pendencies between words because those words are
+always directly linked in a dependency tree. There
+is no need to allow gaps in this kernel either because
+related words are always linked. It also won’t find
+‘a fat’ as a common path because in the first tree
+“cat” is between the two words and in the second
+sentence “dog” is between them. Thus it does not
+have the shortcomings of the word subsequence ker-
+nel. It also avoids the shortcomings of the syntac-
+tic tree kernel because the common paths are words
+themselves and syntactic labels do not interfere in
+capturing the similarity between the two sentences.
+It will not find anything common between depen-
+dency trees for the sentences “Chip saw Dale” and
+“Mary heard Sally”. But it will find ‘a —* cat’ as a
+common path between “a cat” and “a fat cat”. We
+however note that this kernel does not use general
+syntactic categories, unlike the syntactic tree kernel,
+which will limit its applicability to the tasks which
+depend on the syntactic categories, like re-ranking
+syntactic parse trees.
+</bodyText>
+<figure confidence="0.999579294117647">
+a fat
+cat
+chased
+by
+dog
+was
+cat
+a with
+collar
+a red
+chased
+by
+dog
+a fat
+ago
+days
+two
+</figure>
+<page confidence="0.997962">
+403
+</page>
+<bodyText confidence="0.999700871794872">
+We now give an efficient algorithm to compute
+all the common paths between two trees. To our
+best knowledge, no previous work has considered
+this problem. The key observation for this algo-
+rithm is that a path in a tree always has a structure in
+which nodes (possibly none) go up to a highest node
+followed by nodes (possibly none) coming down.
+Based on this observation we compute two quanti-
+ties for every pair of nodes between the two trees.
+We call the first quantity common downward paths
+(CDP) between two nodes, one from each tree, and
+it counts the number of common paths between the
+two trees which originate from those two nodes and
+which always go downward. For example, the com-
+mon downward paths between the ‘chased’ node of
+the tree in Figure 4 and the ‘chased’ node of the
+tree in Figure 5 are ‘chased ← by’, ‘chased ← by
+← dog’ and ‘chased ← by ← dog ← a’. Hence
+CDP(chased, chased) = 3. A word may occur
+multiple times in a sentence so the CDP values will
+be computed separately for each occurrence. We
+will shortly give a fast recursive algorithm to com-
+pute CDP values.
+Once these CDP values are known, using these
+the second quantity is computed which we call com-
+mon peak paths (CPP) between every two nodes,
+one from each tree. This counts the number of com-
+mon paths between the two trees which peak at those
+two nodes, i.e. these nodes are the highest nodes in
+those paths. For example, ‘was’ is the peak for the
+path ‘a → cat → was ← chased’. Since every com-
+mon path between the two trees has a unique highest
+node, once these CPP values have been computed,
+the number of common paths between the two trees
+is simply the sum of all these CPP values.
+We now describe how all these values are effi-
+ciently computed. The CDP values between every
+two nodes n1 and n2 of the trees T1 and T2 respec-
+tively, is recursively computed as follows:
+</bodyText>
+<equation confidence="0.996441666666667">
+CDP(n1, n2) = 0 if n1.w =6 n2.w
+otherwise,
+CDP(n1, n2) = � (1 + CDP(c1, c2))
+c1EC(n1)
+c2EC(n2)
+c1.w = c2.w
+</equation>
+<bodyText confidence="0.9999765">
+In the first equation, n.w stands for the word at
+the node n. If the words are not equal then there
+cannot be any common downward paths originating
+from the nodes. In the second equation, C(n) rep-
+resents the set of children nodes of the node n in a
+tree. If the words at two children nodes are the same,
+then the number of common downward paths from
+the parent will include all the common downward
+paths at the two children nodes incremented with the
+link from the parent to the children. In addition the
+path from parent to the child node is also a common
+downward path. For example, in the trees shown
+in Figures 4 and 5, the nodes with word ‘was’ have
+‘chased’ as a common child. Hence all the common
+downward paths originating from ‘chased’ (namely
+‘chased ← by’, ‘chased ← by ← dog’ and ‘chased
+← by ← dog ← a’) when incremented with ‘was
+← chased’ become common downward paths orig-
+inating from ‘was’. In addition, the path ‘was ←
+chased’ itself is a common downward path. Since
+‘cat’ is also a common child at ‘was’, it’s common
+downward paths will also be added.
+The CDP values thus computed are then used to
+compute the CPP values as follows:
+</bodyText>
+<equation confidence="0.999248777777778">
+CPP(n1,n2) = 0 if n1.w =6 n2.w
+otherwise,
+CPP(n1, n2) = CDP(n1, n2) +
+( 1 + CDP(c1, c2) + CDP( C1, c2)+ )
+CDP(c1, c2) * CDP( C1 , c2)
+c1, C1EC(n1)
+c2, 62EC(n2)
+c1.w = c2.w
+C1.w = C2.w
+</equation>
+<bodyText confidence="0.999933666666667">
+If the two nodes are not equal then the number of
+common paths that peak at them will be zero. If
+the nodes are equal, then all the common downward
+paths between them will also be the paths that peak
+at them, hence it is the first term in the above equa-
+tion. Next, the remaining paths that peak at them
+can be counted by considering every pair of common
+children nodes represented by c1 &amp; c2 and C1 &amp; 62.
+For example, for the common node ‘was’ in Figures
+4 and 5, the children nodes ‘cat’ and ‘chased’ are
+common. The path ‘cat → was ← chased’ is a path
+that peaks at ‘was’, hence 1 is added in the second
+</bodyText>
+<page confidence="0.998119">
+404
+</page>
+<bodyText confidence="0.999292523809524">
+term. All the downward paths from ‘cat’ when in-
+cremented up to ‘was’ and down to ‘chased’ are also
+the paths that peak at ‘was’ (namely ‘a → cat → was
+← chased’). Similarly, all the downward paths from
+‘chased’ when incremented up to ‘was’ and down to
+‘cat’ are also paths that peak at ‘was’ (‘cat → was
+← chased ← by’, ‘cat → was ← chased ← by ←
+dog’, etc.). Hence the next two terms are present in
+the equation. Finally, all the downward paths from
+‘cat’ when incremented up to ‘was’ and down to ev-
+ery downward path from ‘chased’ are also the paths
+that peak at ‘was’ (‘a → cat → was ← chased ←
+by’, ‘a → cat → was ← chased ← by ← dog’ etc.).
+Hence there is the product term present in the equa-
+tion. It is important not to re-count a path from the
+opposite direction hence the two pairs of common
+children are considered only once (i.e. not reconsid-
+ered symmetrically).
+The dependency word subsequence kernel be-
+tween two dependency trees T1 and T2 is then sim-
+ply:
+</bodyText>
+<equation confidence="0.99861625">
+K(T1, T2) = E (1 + CPP(n1, n2))
+n1ǫT1
+n2ǫT2
+n1.w = n2.w
+</equation>
+<bodyText confidence="0.9999962">
+We also want to count the number of common
+words between the two trees in addition to the num-
+ber of common paths, hence 1 is added in the equa-
+tion. The kernel is normalized to remove any bias
+due to different tree sizes:
+</bodyText>
+<equation confidence="0.999392">
+Knormalized(T1,T2) = �IK(T1,T1) ∗ K(T2,T2)
+</equation>
+<bodyText confidence="0.999855545454546">
+Since for any long path common between two
+trees, there will be many shorter paths within it
+which will be also common between the two trees,
+it is reasonable to downweight the contribution of
+long paths. We do this by introducing a parameter
+αǫ(0,1] and by downweighting a path of length l by
+αl. A similar mechanism was also used in the syn-
+tactic tree kernel (Collins and Duffy, 2001).
+The equations for computing CDP and CPP
+are accordingly modified as follows to accommodate
+this downweighting.
+</bodyText>
+<equation confidence="0.95891375">
+CDP(n1, n2) = 0 if n1.w =6 n2.w
+otherwise,
+CDP(n1, n2) = E (α + α ∗ CDP(c1, c2))
+c1ǫC(n1)
+c2ǫC(n2)
+c1.w = c2.w
+CPP(n1,n2) = 0 if n1.w =6 n2.w
+otherwise,
+</equation>
+<bodyText confidence="0.999979611111111">
+This algorithm to compute all the common paths
+between two trees has worst time complexity of
+O(|T1||T2|), where |T1 |and |T2 |are the number of
+nodes of the two trees T1 and T2 respectively. This
+is because CDP computations are needed for every
+pairs of nodes between the two trees and is recur-
+sively computed. Using dynamic programming their
+recomputations can be easily avoided. The CPP
+computations then simply add the CDP values2. If
+the nodes common between the two trees are sparse
+then the algorithm will run much faster. Since the
+algorithm only needs to store the CDP values, its
+space complexity is O(|T1||T2|). Also note that this
+algorithm computes the number of common paths
+of all lengths unlike the word subsequence kernel
+in which the maximum subsequence length needs to
+be specified and the time complexity then depends
+on this length.
+</bodyText>
+<sectionHeader confidence="0.999977" genericHeader="method">
+4 Related Work
+</sectionHeader>
+<bodyText confidence="0.999843714285714">
+Several modifications to the syntactic tree kernels
+have been proposed to overcome the type of prob-
+lems pointed out in Subsection 2.2. Zhang et al.
+(2007) proposed a grammar-driven syntactic tree
+kernel which allows soft matching between the sub-
+trees of the trees if that is deemed appropriate by
+the grammar. For example, their kernel will be able
+</bodyText>
+<footnote confidence="0.744275">
+2This analysis uses the fact that any node in a tree on average
+</footnote>
+<equation confidence="0.9500208">
+has 0(1) number of children.
+K(T1, T2)
+CPP(n1, n2) = CDP(n1, n2) +
+c1, 61ǫC(n1)
+c2, �c2ǫC(n2)
+c1.w = c2.w
+61.w = 62.w
+( α * CDP( c1, C2)+ )
+α2 * CDP(c1, c2) * CDP( c1, c2)
+α2 + α * CDP(c1, c2)+
+</equation>
+<page confidence="0.995019">
+405
+</page>
+<bodyText confidence="0.999947854166667">
+to match the subtrees (NP (DT a) (NN cat)) and
+(NP (DT a ) (JJ fat) (NN cat)) with some penalty.
+Moschitti (2006b) proposed a partial tree kernel
+which can partially match subtrees. Moschitti et
+al. (2007) proposed a tree kernel over predicate-
+argument structures of sentences based on the Prob-
+Bank labels. Che et al. (2006) presented a hy-
+brid tree kernel which combines a constituent and
+a path kernel. We however note that the paths in this
+kernel link predicates and their arguments and are
+very different from general paths in a tree that our
+dependency-based word subsequence kernel uses.
+Shen et al. (2003) proposed a lexicalized syntac-
+tic tree kernel which utilizes LTAG-based features.
+Toutanova et al. (2004) compute similarity between
+two HPSG parse trees by finding similarity between
+the leaf projection paths using string kernels.
+A few kernels based on dependency trees have
+also been proposed. Zelenko et al. (2003) pro-
+posed a tree kernel over shallow parse tree represen-
+tations of sentences. This tree kernel was slightly
+generalized by Culotta and Sorensen (2004) to com-
+pute similarity between two dependency trees. In
+addition to the words, this kernel also incorporates
+word classes into the kernel. The kernel is based
+on counting matching subsequences of children of
+matching nodes. But as was also noted in (Bunescu
+and Mooney, 2005a), this kernel is opaque i.e. it is
+not obvious what the implicit features are and the
+authors do not describe it either. In contrast, our
+dependency-based word subsequence kernel, which
+also computes similarity between two dependency
+trees, is very transparent with the implicit features
+being simply the dependency paths. Their kernel is
+also very time consuming and in their more general
+sparse setting it requires O(mn3) time and O(mn2)
+space, where m and n are the number of nodes of
+the two trees (m &gt;= n) (Zelenko et al., 2003).
+Bunescu and Mooney (2005a) give a shortest path
+dependency kernel for relation extraction. Their ker-
+nel, however, does not find similarity between two
+sentences but between the shortest dependency paths
+connecting the two entities of interests in the sen-
+tences. This kernel uses general dependency graphs
+but if the graph is a tree then the shortest path is
+the only path between the entities. Their kernel also
+uses word classes in addition to the words them-
+selves.
+</bodyText>
+<sectionHeader confidence="0.998486" genericHeader="method">
+5 Experiments
+</sectionHeader>
+<bodyText confidence="0.99987925">
+We show that the new dependency-based word sub-
+sequence kernel performs better than word subse-
+quence kernel and syntactic tree kernel on the task
+of domain-specific semantic parsing.
+</bodyText>
+<subsectionHeader confidence="0.997793">
+5.1 Semantic Parsing
+</subsectionHeader>
+<bodyText confidence="0.999991275">
+Semantic parsing is the task of converting natu-
+ral language sentences into their domain-specific
+complete formal meaning representations which an
+application can execute, for example, to answer
+database queries or to control a robot. A learn-
+ing system for semantic parsing induces a seman-
+tic parser from the training data of natural language
+sentences paired with their respective meaning rep-
+resentations. KRISP (Kate and Mooney, 2006)
+is a semantic parser learning system which uses
+word subsequence kernel based SVM (Cristianini
+and Shawe-Taylor, 2000) classifiers and was shown
+to be robust to noise compared to other semantic
+parser learners. The system learns an SVM classi-
+fier for every production of the meaning representa-
+tion grammar which tells the probability with which
+a substring of the sentence represents the semantic
+concept of the production. Using these classifiers
+a complete meaning representation of an input sen-
+tence is obtained by finding the most probable parse
+which covers the whole sentence. For details please
+refer to (Kate and Mooney, 2006).
+The key operation in KRISP is to find the sim-
+ilarity between any two substrings of two natural
+language sentences. Word subsequence kernel was
+employed in (Kate and Mooney, 2006) to compute
+the similarity between two substrings. We modi-
+fied KRISP so that the similarity between two sub-
+strings can also be computed using the syntactic tree
+kernel and the dependency-based word subsequence
+kernel. For applying the syntactic tree kernel, the
+syntactic subtree over a substring of a sentence is de-
+termined from the syntactic tree of the sentence by
+finding the lowest common ancestor of the words in
+this substring and then considering the smallest sub-
+tree rooted at this node which includes all the words
+of the substring. For applying the dependency-based
+word subsequence kernel to two substrings of a sen-
+tence, the kernel computation was suitably modified
+so that the common paths between the two depen-
+</bodyText>
+<page confidence="0.99714">
+406
+</page>
+<bodyText confidence="0.999836142857143">
+dency trees always begin and end with the words
+present in the substrings. This is achieved by in-
+cluding only those downward paths in computations
+of CDP which end with words within the given
+substrings. These paths relate the words within the
+substrings perhaps using words outside of these sub-
+strings.
+</bodyText>
+<subsectionHeader confidence="0.979689">
+5.2 Methodology
+</subsectionHeader>
+<bodyText confidence="0.999987846153846">
+We measure the performance of KRISP obtained us-
+ing the three types of kernels on the GEOQUERY
+corpus which has been used previously by several
+semantic parsing learning systems. It contains 880
+natural language questions about the US geogra-
+phy paired with their executable meaning represen-
+tations in a functional query language (Kate et al.,
+2005). Since the purpose of the experiments is to
+compare different kernels and not different seman-
+tic parsers, we do not compare the performance with
+other semantic parser learning systems. The train-
+ing and testing was done using standard 10-fold
+cross-validation and the performance was measured
+in terms of precision (the percentage of generated
+meaning representations that were correct) and re-
+call (the percentage of all sentences for which cor-
+rect meaning representations were obtained). Since
+KRISP assigns confidences to the meaning represen-
+tations it outputs, an entire range of precision-recall
+trade-off can be obtained. We measure the best F-
+measure (harmonic mean of precision and recall) ob-
+tained when the system is trained using increasing
+amounts of training data.
+Since we were not interested in the accuracy of
+dependency trees or syntactic trees but in the com-
+parison between various kernels, we worked with
+gold-standard syntactic trees. We did not have gold-
+standard dependency trees available for this cor-
+pus so we obtained them indirectly from the gold-
+standard syntactic trees using the head-rules from
+(Collins, 1999). We however note that accurate syn-
+tactic trees can be obtained by training a syntac-
+tic parser on WSJ treebank and gold-standard parse
+trees of some domain-specific sentences (Kate et al.,
+2005).
+In the experiments, the α parameter of the
+dependency-based word subsequence kernel was set
+to 0.25, the A parameter of the word subsequence
+kernel was fixed to 0.75 and the downweighting pa-
+</bodyText>
+<table confidence="0.999454857142857">
+Examples Dependency Word Syntactic
+40 25.62 21.51 23.65
+80 45.30 42.77 43.14
+160 63.78 61.22 59.66
+320 72.44 70.36 67.05
+640 77.32 77.82 74.26
+792 79.79 79.09 76.62
+</table>
+<tableCaption confidence="0.994598">
+Table 1: Results on the semantic parsing task with in-
+creasing number of training examples using dependency-
+based word subsequence kernel, word subsequence ker-
+nel and syntactic tree kernel.
+</tableCaption>
+<bodyText confidence="0.999863285714286">
+rameter for the syntactic tree kernel was fixed to 0.4.
+These were determined through pilot experiments
+with a smaller portion of the data set. The maxi-
+mum length of subsequences required by the word
+subsequence kernel was fixed to 3, a longer length
+was not found to improve the performance and was
+only increasing the running time.
+</bodyText>
+<sectionHeader confidence="0.574432" genericHeader="evaluation">
+5.3 Results
+</sectionHeader>
+<bodyText confidence="0.999964727272727">
+Table 1 shows the results. The dependency-based
+word subsequence kernel always performs better
+than the syntactic tree kernel. All the numbers
+under the dependency kernel were found statisti-
+cally significant (p &lt; 0.05) over the correspond-
+ing numbers under the syntactic tree kernel based on
+paired t-tests. The improvement of the dependency-
+based word subsequence kernel over the word sub-
+sequence kernel is greater with less training data,
+showing that the dependency information is more
+useful when the training data is limited. The per-
+formance converges with higher amounts of training
+data. The numbers shown in bold were found statis-
+tically significant over the corresponding numbers
+under the word subsequence kernel.
+It may be noted that syntactic tree kernel is mostly
+doing worse than the word subsequence kernel. We
+believe this is because of the shortcomings of the
+syntactic tree kernel pointed out in Subsection 2.2.
+Since this is a semantic processing task, the words
+play an important role and the generalized syntactic
+categories are not very helpful.
+</bodyText>
+<sectionHeader confidence="0.999753" genericHeader="discussions">
+6 Future Work
+</sectionHeader>
+<bodyText confidence="0.9988795">
+In future, the dependency-based word subsequence
+kernel could be extended to incorporate word classes
+</bodyText>
+<page confidence="0.994706">
+407
+</page>
+<bodyText confidence="0.999594266666667">
+like the kernels presented in (Bunescu and Mooney,
+2005a; Zelenko et al., 2003). It should be possible to
+achieve this by incorporating matches between word
+classes in addition to the exact word matches in the
+kernel computations similar to the way in which the
+word subsequence kernel was extended to incorpo-
+rate word classes in (Bunescu and Mooney, 2005b).
+This will generalize the kernel and make it more ro-
+bust to data sparsity.
+The dependency-based word subsequence kernel
+could be tested on other tasks which require comput-
+ing similarity between sentences or texts, like text
+classification, paraphrasing, summarization etc. We
+believe this kernel will help improve performance on
+those tasks.
+</bodyText>
+<sectionHeader confidence="0.999807" genericHeader="conclusions">
+7 Conclusions
+</sectionHeader>
+<bodyText confidence="0.9999934">
+We introduced a new kernel which finds similarity
+between two sentences as the number of common
+paths shared between their dependency trees. This
+kernel can also be looked upon as an improved word
+subsequence kernels which only counts the common
+word subsequences which are related by dependen-
+cies. We also gave an efficient algorithm to compute
+this kernel. The kernel was shown to out-perform
+the word subsequence kernel and the syntactic tree
+kernel on the task of semantic parsing.
+</bodyText>
+<sectionHeader confidence="0.999523" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999687315068493">
+Razvan C. Bunescu and Raymond J. Mooney. 2005a.
+A shortest path dependency kernel for relation extrac-
+tion. In Proc. of HLT/EMNLP-05, pages 724–731,
+Vancouver, BC, October.
+Razvan C. Bunescu and Raymond J. Mooney. 2005b.
+Subsequence kernels for relation extraction. In
+Y. Weiss, B. Sch¨olkopf, and J. Platt, editors, Advances
+in Neural Information Processing Systems 18, Vancou-
+ver, BC.
+Nicola Cancedda, Eric Gaussier, Cyril Goutte, and
+Jean Michel Renders. 2003. Word sequence kernels.
+Journal of Machine Learning Research, Special Issue
+on Machine Learning Methods for Text and Images,
+3:1059–1082, February.
+Wanxiang Che, Min Zhang, Ting Liu, and Sheng Li.
+2006. A hybrid convolution tree kernel for semantic
+role labeling. In Proc. of COLING/ACL-06, pages 73–
+80, Sydney, Australia, July.
+Michael Collins and Nigel Duffy. 2001. Convolution
+kernels for natural language. In Proc. of NIPS-2001.
+Michael Collins. 1999. Head-driven Statistical Models
+for Natural Language Parsing. Ph.D. thesis, Univer-
+sity of Pennsylvania.
+Michael Collins. 2002. New ranking algorithms for pars-
+ing and tagging: Kernels over discrete structures, and
+the voted perceptron. In Proc. of ACL-2002, pages
+263–270, Philadelphia, PA, July.
+Nello Cristianini and John Shawe-Taylor. 2000. An
+Introduction to Support Vector Machines and Other
+Kernel-based Learning Methods. Cambridge Univer-
+sity Press.
+Aron Culotta and Jeffrey Sorensen. 2004. Dependency
+tree kernels for relation extraction. In Proc. of ACL-
+04, pages 423–429, Barcelona, Spain, July.
+Richard Hudson. 1984. Word Grammar. Blackwell.
+Rohit J. Kate and Raymond J. Mooney. 2006. Us-
+ing string-kernels for learning semantic parsers. In
+Proc. of COLING/ACl-06, pages 913–920, Sydney,
+Australia, July.
+Rohit J. Kate, Yuk Wah Wong, and Raymond J. Mooney.
+2005. Learning to transform natural to formal lan-
+guages. In Proc. AAAI-2005, pages 1062–1068, Pitts-
+burgh, PA, July.
+Terry Koo, Xavier Carreras, and Michael Collins. 2008.
+Simple semi-supervised dependency parsing. In Proc.
+of ACL-08, pages 595–603, Columbus, Ohio, June.
+Huma Lodhi, Craig Saunders, John Shawe-Taylor, Nello
+Cristianini, and Chris Watkins. 2002. Text classifica-
+tion using string kernels. Journal ofMachine Learning
+Research, 2:419–444.
+Ryan McDonald, Fernando Pereira, Kiril Ribarov, and
+Jan Haji˘c. 2005. Non-projective dependency pars-
+ing using spanning tree algorithms. In Proc. of
+HLT/EMNLP-05, pages 523–530, Vancouver, BC.
+Alessandro Moschitti, Silvia Quarteroni, Roberto Basili,
+and Suresh Manandhar. 2007. Exploiting syntactic
+and shallow semantic kernels for question answer clas-
+sification. In Proc. ofACL-07, pages 776–783, Prague,
+Czech Republic, June.
+Alessandro Moschitti. 2006a. Making tree kernels prac-
+tical for natural language learning. In Proc. of EACL-
+06, pages 113–120, Trento, Italy, April.
+Alessandro Moschitti. 2006b. Syntactic kernels for natu-
+ral language learning: the semantic role labeling case.
+In Proc. of HLT/NAACL-06, short papers, pages 97–
+100, New York City, USA, June.
+Juho Rousu and John Shawe-Taylor. 2005. Efficient
+computation of gapped substring kernels on large al-
+phabets. Journal of Machine Learning Research,
+6:1323–1344.
+Libin Shen, Anoop Sarkar, and Aravind Joshi. 2003. Us-
+ing ltag based features in parse reranking. In Proc. of
+EMNLP-2003, pages 89–96, Sapporo, Japan, July.
+</reference>
+<page confidence="0.983191">
+408
+</page>
+<reference confidence="0.999648894736842">
+Kristina Toutanova, Penka Markova, and Christopher
+Manning. 2004. The leaf projection path view
+of parse trees: Exploring string kernels for HPSG
+parse selection. In Proc. EMNLP-04, pages 166–173,
+Barcelona, Spain, July.
+Vladimir N. Vapnik. 1998. Statistical Learning Theory.
+John Wiley &amp; Sons.
+Qin Iris Wang, Dale Schuurmans, and Dekang Lin. 2008.
+Semi-supervised convex training for dependency pars-
+ing. In Proceedings of ACL-08: HLT, pages 532–540,
+Columbus, Ohio, June.
+D. Zelenko, C. Aone, and A. Richardella. 2003. Kernel
+methods for relation extraction. Journal of Machine
+Learning Research, 3:1083–1106.
+Min Zhang, Wanxiang Che, Aiti Aw, Chew Lim Tan,
+Guodong Zhou, Ting Liu, and Sheng Li. 2007. A
+grammar-driven convolution tree kernel for semantic
+role classification. In Proc. of ACL-2007, pages 200–
+207, Prague, Czech Republic, June.
+</reference>
+<page confidence="0.999109">
+409
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.516201">
+<title confidence="0.999578">A Dependency-based Word Subsequence Kernel</title>
+<author confidence="0.999456">J Rohit</author>
+<affiliation confidence="0.8820145">Department of Computer The University of Texas at 1 University Station Austin, TX 78712-0233,</affiliation>
+<email confidence="0.999835">rjkate@cs.utexas.edu</email>
+<abstract confidence="0.9984196">This paper introduces a new kernel which computes similarity between two natural language sentences as the number of paths shared by their dependency trees. The paper gives a very efficient algorithm to compute it. This kernel is also an improvement over the word subsequence kernel because it only counts linguistically meaningful word subsequences which are based on word dependencies. It overcomes some of the difficulties encountered by syntactic tree kernels as well. Experimental results demonstrate the advantage of this kernel over word subsequence and syntactic tree kernels.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Razvan C Bunescu</author>
+<author>Raymond J Mooney</author>
+</authors>
+<title>A shortest path dependency kernel for relation extraction.</title>
+<date>2005</date>
+<booktitle>In Proc. of HLT/EMNLP-05,</booktitle>
+<pages>724--731</pages>
+<location>Vancouver, BC,</location>
+<contexts>
+<context position="6413" citStr="Bunescu and Mooney, 2005" startWordPosition="1025" endWordPosition="1028">alized to have values in the range of [0, 1] to remove any bias due to different sentence lengths. Lodhi et al. (2002) give a dynamic programming algorithm to compute string subsequence kernels in O(nst) time where s and t are the lengths of the two input strings and n is the maximum length of common subsequences one wants to consider. Rousu and Shawe-Taylor (2005) present an improved algorithm which works faster when the vocabulary size is large. Subsequence kernels have been used with success in NLP for text classification (Lodhi et al., 2002; Cancedda et al., 2003), information extraction (Bunescu and Mooney, 2005b) and semantic parsing (Kate and Mooney, 2006). There are, however, some shortcomings of this word subsequence kernel as a measure of similarity between two sentences. Firstly, since it considers all possible common subsequences, it is not sensitive to whether the subsequence is linguistically meaningful or not. For example, the meaningless subsequences “cat was by” and “a was a” will also be considered common between the two sentences by this kernel. Since these subsequences will be used as implicit features by the kernel-based machine learning algorithm, their presence can only hurt the per</context>
+<context position="22689" citStr="Bunescu and Mooney, 2005" startWordPosition="3993" endWordPosition="3996">larity between two HPSG parse trees by finding similarity between the leaf projection paths using string kernels. A few kernels based on dependency trees have also been proposed. Zelenko et al. (2003) proposed a tree kernel over shallow parse tree representations of sentences. This tree kernel was slightly generalized by Culotta and Sorensen (2004) to compute similarity between two dependency trees. In addition to the words, this kernel also incorporates word classes into the kernel. The kernel is based on counting matching subsequences of children of matching nodes. But as was also noted in (Bunescu and Mooney, 2005a), this kernel is opaque i.e. it is not obvious what the implicit features are and the authors do not describe it either. In contrast, our dependency-based word subsequence kernel, which also computes similarity between two dependency trees, is very transparent with the implicit features being simply the dependency paths. Their kernel is also very time consuming and in their more general sparse setting it requires O(mn3) time and O(mn2) space, where m and n are the number of nodes of the two trees (m &gt;= n) (Zelenko et al., 2003). Bunescu and Mooney (2005a) give a shortest path dependency kern</context>
+<context position="30016" citStr="Bunescu and Mooney, 2005" startWordPosition="5170" endWordPosition="5173">d were found statistically significant over the corresponding numbers under the word subsequence kernel. It may be noted that syntactic tree kernel is mostly doing worse than the word subsequence kernel. We believe this is because of the shortcomings of the syntactic tree kernel pointed out in Subsection 2.2. Since this is a semantic processing task, the words play an important role and the generalized syntactic categories are not very helpful. 6 Future Work In future, the dependency-based word subsequence kernel could be extended to incorporate word classes 407 like the kernels presented in (Bunescu and Mooney, 2005a; Zelenko et al., 2003). It should be possible to achieve this by incorporating matches between word classes in addition to the exact word matches in the kernel computations similar to the way in which the word subsequence kernel was extended to incorporate word classes in (Bunescu and Mooney, 2005b). This will generalize the kernel and make it more robust to data sparsity. The dependency-based word subsequence kernel could be tested on other tasks which require computing similarity between sentences or texts, like text classification, paraphrasing, summarization etc. We believe this kernel w</context>
+</contexts>
+<marker>Bunescu, Mooney, 2005</marker>
+<rawString>Razvan C. Bunescu and Raymond J. Mooney. 2005a. A shortest path dependency kernel for relation extraction. In Proc. of HLT/EMNLP-05, pages 724–731, Vancouver, BC, October.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Razvan C Bunescu</author>
+<author>Raymond J Mooney</author>
+</authors>
+<title>Subsequence kernels for relation extraction.</title>
+<date>2005</date>
+<booktitle>Advances in Neural Information Processing Systems 18,</booktitle>
+<editor>In Y. Weiss, B. Sch¨olkopf, and J. Platt, editors,</editor>
+<location>Vancouver, BC.</location>
+<contexts>
+<context position="6413" citStr="Bunescu and Mooney, 2005" startWordPosition="1025" endWordPosition="1028">alized to have values in the range of [0, 1] to remove any bias due to different sentence lengths. Lodhi et al. (2002) give a dynamic programming algorithm to compute string subsequence kernels in O(nst) time where s and t are the lengths of the two input strings and n is the maximum length of common subsequences one wants to consider. Rousu and Shawe-Taylor (2005) present an improved algorithm which works faster when the vocabulary size is large. Subsequence kernels have been used with success in NLP for text classification (Lodhi et al., 2002; Cancedda et al., 2003), information extraction (Bunescu and Mooney, 2005b) and semantic parsing (Kate and Mooney, 2006). There are, however, some shortcomings of this word subsequence kernel as a measure of similarity between two sentences. Firstly, since it considers all possible common subsequences, it is not sensitive to whether the subsequence is linguistically meaningful or not. For example, the meaningless subsequences “cat was by” and “a was a” will also be considered common between the two sentences by this kernel. Since these subsequences will be used as implicit features by the kernel-based machine learning algorithm, their presence can only hurt the per</context>
+<context position="22689" citStr="Bunescu and Mooney, 2005" startWordPosition="3993" endWordPosition="3996">larity between two HPSG parse trees by finding similarity between the leaf projection paths using string kernels. A few kernels based on dependency trees have also been proposed. Zelenko et al. (2003) proposed a tree kernel over shallow parse tree representations of sentences. This tree kernel was slightly generalized by Culotta and Sorensen (2004) to compute similarity between two dependency trees. In addition to the words, this kernel also incorporates word classes into the kernel. The kernel is based on counting matching subsequences of children of matching nodes. But as was also noted in (Bunescu and Mooney, 2005a), this kernel is opaque i.e. it is not obvious what the implicit features are and the authors do not describe it either. In contrast, our dependency-based word subsequence kernel, which also computes similarity between two dependency trees, is very transparent with the implicit features being simply the dependency paths. Their kernel is also very time consuming and in their more general sparse setting it requires O(mn3) time and O(mn2) space, where m and n are the number of nodes of the two trees (m &gt;= n) (Zelenko et al., 2003). Bunescu and Mooney (2005a) give a shortest path dependency kern</context>
+<context position="30016" citStr="Bunescu and Mooney, 2005" startWordPosition="5170" endWordPosition="5173">d were found statistically significant over the corresponding numbers under the word subsequence kernel. It may be noted that syntactic tree kernel is mostly doing worse than the word subsequence kernel. We believe this is because of the shortcomings of the syntactic tree kernel pointed out in Subsection 2.2. Since this is a semantic processing task, the words play an important role and the generalized syntactic categories are not very helpful. 6 Future Work In future, the dependency-based word subsequence kernel could be extended to incorporate word classes 407 like the kernels presented in (Bunescu and Mooney, 2005a; Zelenko et al., 2003). It should be possible to achieve this by incorporating matches between word classes in addition to the exact word matches in the kernel computations similar to the way in which the word subsequence kernel was extended to incorporate word classes in (Bunescu and Mooney, 2005b). This will generalize the kernel and make it more robust to data sparsity. The dependency-based word subsequence kernel could be tested on other tasks which require computing similarity between sentences or texts, like text classification, paraphrasing, summarization etc. We believe this kernel w</context>
+</contexts>
+<marker>Bunescu, Mooney, 2005</marker>
+<rawString>Razvan C. Bunescu and Raymond J. Mooney. 2005b. Subsequence kernels for relation extraction. In Y. Weiss, B. Sch¨olkopf, and J. Platt, editors, Advances in Neural Information Processing Systems 18, Vancouver, BC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Nicola Cancedda</author>
+<author>Eric Gaussier</author>
+<author>Cyril Goutte</author>
+<author>Jean Michel Renders</author>
+</authors>
+<title>Word sequence kernels.</title>
+<date>2003</date>
+<journal>Journal of Machine Learning Research, Special Issue on</journal>
+<booktitle>Machine Learning Methods for Text and Images,</booktitle>
+<pages>3--1059</pages>
+<contexts>
+<context position="1779" citStr="Cancedda et al., 2003" startWordPosition="271" endWordPosition="274">l information can be effectively passed to a kernel-based learning algorithm using an appropriate kernel, like a string kernel (Lodhi et al., 2002) or a tree kernel (Collins and Duffy, 2001). In contrast, feature-based methods require reducing the data to a pre-defined set of features often leading to some loss of the useful structural information present in the data. A kernel is a measure of similarity between every pair of examples in the data and a kernel-based machine learning algorithm accesses the data only through these kernel values. For example, the string kernel (Lodhi et al., 2002; Cancedda et al., 2003) computes the similarity between two natural language strings as the number of common word subsequences between them. A subsequence allows gaps between the common words which are penalized according to a parameter. Each word subsequence hence becomes an implicit feature used by the kernel-based machine learning algorithm. A problem with this kernel is that many of these word subsequences common between two strings may not be semantically expressive or linguistically meaningful1. Another problem with this kernel is that if there are long-range dependencies between the words in a common word sub</context>
+<context position="5064" citStr="Cancedda et al. (2003)" startWordPosition="783" endWordPosition="786">gives some background on string and tree kernels. Section 3 then introduces the dependency-based word subsequence kernel and gives an efficient algorithm to compute it. Some of the related work is discussed next, followed by experiments, future work and conclusions. 2 String and Tree Kernels 2.1 Word-Subsequence Kernel A kernel between two sentences measures the similarity between them. Lodhi et al. (2002) presented a string kernel which measures the similarity between two sentences, or two documents in general, as the number of character subsequences shared between them. This was extended by Cancedda et al. (2003) to the number of common word subsequences between them. We will refer to this kernel as the word subsequence kernel. Consider the two sentences shown in Figure 1. Some common word subsequences between them are “a cat”, “was chased by”, “by a dog”, “a cat chased by a dog”, etc. Note that the subsequence “was chased by” is present in the second sentence but it requires skipping the words “two days ago” or has a gap of three words present in it. The kernel downweights the presence of gaps by a decay factor Aǫ(0,1]. If g1 and g2 are the sum totals of gaps for a subsequence present in the two sent</context>
+<context position="6363" citStr="Cancedda et al., 2003" startWordPosition="1018" endWordPosition="1021">nel value will be A91+92. The kernel can be normalized to have values in the range of [0, 1] to remove any bias due to different sentence lengths. Lodhi et al. (2002) give a dynamic programming algorithm to compute string subsequence kernels in O(nst) time where s and t are the lengths of the two input strings and n is the maximum length of common subsequences one wants to consider. Rousu and Shawe-Taylor (2005) present an improved algorithm which works faster when the vocabulary size is large. Subsequence kernels have been used with success in NLP for text classification (Lodhi et al., 2002; Cancedda et al., 2003), information extraction (Bunescu and Mooney, 2005b) and semantic parsing (Kate and Mooney, 2006). There are, however, some shortcomings of this word subsequence kernel as a measure of similarity between two sentences. Firstly, since it considers all possible common subsequences, it is not sensitive to whether the subsequence is linguistically meaningful or not. For example, the meaningless subsequences “cat was by” and “a was a” will also be considered common between the two sentences by this kernel. Since these subsequences will be used as implicit features by the kernel-based machine learni</context>
+</contexts>
+<marker>Cancedda, Gaussier, Goutte, Renders, 2003</marker>
+<rawString>Nicola Cancedda, Eric Gaussier, Cyril Goutte, and Jean Michel Renders. 2003. Word sequence kernels. Journal of Machine Learning Research, Special Issue on Machine Learning Methods for Text and Images, 3:1059–1082, February.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Wanxiang Che</author>
+<author>Min Zhang</author>
+<author>Ting Liu</author>
+<author>Sheng Li</author>
+</authors>
+<title>A hybrid convolution tree kernel for semantic role labeling.</title>
+<date>2006</date>
+<booktitle>In Proc. of COLING/ACL-06,</booktitle>
+<pages>73--80</pages>
+<location>Sydney, Australia,</location>
+<contexts>
+<context position="21659" citStr="Che et al. (2006)" startWordPosition="3827" endWordPosition="3830">mple, their kernel will be able 2This analysis uses the fact that any node in a tree on average has 0(1) number of children. K(T1, T2) CPP(n1, n2) = CDP(n1, n2) + c1, 61ǫC(n1) c2, �c2ǫC(n2) c1.w = c2.w 61.w = 62.w ( α * CDP( c1, C2)+ ) α2 * CDP(c1, c2) * CDP( c1, c2) α2 + α * CDP(c1, c2)+ 405 to match the subtrees (NP (DT a) (NN cat)) and (NP (DT a ) (JJ fat) (NN cat)) with some penalty. Moschitti (2006b) proposed a partial tree kernel which can partially match subtrees. Moschitti et al. (2007) proposed a tree kernel over predicateargument structures of sentences based on the ProbBank labels. Che et al. (2006) presented a hybrid tree kernel which combines a constituent and a path kernel. We however note that the paths in this kernel link predicates and their arguments and are very different from general paths in a tree that our dependency-based word subsequence kernel uses. Shen et al. (2003) proposed a lexicalized syntactic tree kernel which utilizes LTAG-based features. Toutanova et al. (2004) compute similarity between two HPSG parse trees by finding similarity between the leaf projection paths using string kernels. A few kernels based on dependency trees have also been proposed. Zelenko et al. </context>
+</contexts>
+<marker>Che, Zhang, Liu, Li, 2006</marker>
+<rawString>Wanxiang Che, Min Zhang, Ting Liu, and Sheng Li. 2006. A hybrid convolution tree kernel for semantic role labeling. In Proc. of COLING/ACL-06, pages 73– 80, Sydney, Australia, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+<author>Nigel Duffy</author>
+</authors>
+<title>Convolution kernels for natural language.</title>
+<date>2001</date>
+<booktitle>In Proc. of NIPS-2001.</booktitle>
+<contexts>
+<context position="1347" citStr="Collins and Duffy, 2001" startWordPosition="199" endWordPosition="202">age of this kernel over word subsequence and syntactic tree kernels. 1 Introduction Kernel-based learning methods (Vapnik, 1998) are becoming increasingly popular in natural language processing (NLP) because they allow one to work with potentially infinite number of features without explicitly constructing or manipulating them. In most NLP problems, the data is present in structured forms, like strings or trees, and this structural information can be effectively passed to a kernel-based learning algorithm using an appropriate kernel, like a string kernel (Lodhi et al., 2002) or a tree kernel (Collins and Duffy, 2001). In contrast, feature-based methods require reducing the data to a pre-defined set of features often leading to some loss of the useful structural information present in the data. A kernel is a measure of similarity between every pair of examples in the data and a kernel-based machine learning algorithm accesses the data only through these kernel values. For example, the string kernel (Lodhi et al., 2002; Cancedda et al., 2003) computes the similarity between two natural language strings as the number of common word subsequences between them. A subsequence allows gaps between the common words</context>
+<context position="7768" citStr="Collins and Duffy (2001)" startWordPosition="1251" endWordPosition="1254">sequence will get unfairly penalized. For example, the most important word subsequence shared between the two sentences shown in Figure 1 is “a cat was chased by a dog” which will get penalized by total gap of eight words coming from the second sentence and a gap of one word from the first sentence. Finally, the kernel is not sensitive to the relations between the words, for example, the kernel will consider “a fat dog” as a common subsequence although in the first sentence “a fat” relates to the cat and not to the dog. 2.2 Syntactic Tree Kernel Syntactic tree kernels were first introduced by Collins and Duffy (2001) and were also used by 401 S NP VP Figure 3: Syntactic parse tree of the sentence shown in Figure 1 (b). NP PP with a red collar chased RB NP NP IN ago by DT NN JJ AUX VP A cat JJ DT NN ADVP VBD PP dog fat a DT NN IN NP was CD NNS two days a dog Figure 2: Syntactic parse tree of the sentence shown in Figure 1 (a). Collins (2002) for the task of re-ranking syntactic parse trees. They define a kernel between two trees as the number of subtrees shared between them. A subtree is defined as any subgraph of the tree which includes more than one node, with the restriction that entire productions must</context>
+<context position="19590" citStr="Collins and Duffy, 2001" startWordPosition="3460" endWordPosition="3463">number of common words between the two trees in addition to the number of common paths, hence 1 is added in the equation. The kernel is normalized to remove any bias due to different tree sizes: Knormalized(T1,T2) = �IK(T1,T1) ∗ K(T2,T2) Since for any long path common between two trees, there will be many shorter paths within it which will be also common between the two trees, it is reasonable to downweight the contribution of long paths. We do this by introducing a parameter αǫ(0,1] and by downweighting a path of length l by αl. A similar mechanism was also used in the syntactic tree kernel (Collins and Duffy, 2001). The equations for computing CDP and CPP are accordingly modified as follows to accommodate this downweighting. CDP(n1, n2) = 0 if n1.w =6 n2.w otherwise, CDP(n1, n2) = E (α + α ∗ CDP(c1, c2)) c1ǫC(n1) c2ǫC(n2) c1.w = c2.w CPP(n1,n2) = 0 if n1.w =6 n2.w otherwise, This algorithm to compute all the common paths between two trees has worst time complexity of O(|T1||T2|), where |T1 |and |T2 |are the number of nodes of the two trees T1 and T2 respectively. This is because CDP computations are needed for every pairs of nodes between the two trees and is recursively computed. Using dynamic programm</context>
+</contexts>
+<marker>Collins, Duffy, 2001</marker>
+<rawString>Michael Collins and Nigel Duffy. 2001. Convolution kernels for natural language. In Proc. of NIPS-2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>Head-driven Statistical Models for Natural Language Parsing.</title>
+<date>1999</date>
+<tech>Ph.D. thesis,</tech>
+<institution>University of Pennsylvania.</institution>
+<contexts>
+<context position="27690" citStr="Collins, 1999" startWordPosition="4797" endWordPosition="4798"> to the meaning representations it outputs, an entire range of precision-recall trade-off can be obtained. We measure the best Fmeasure (harmonic mean of precision and recall) obtained when the system is trained using increasing amounts of training data. Since we were not interested in the accuracy of dependency trees or syntactic trees but in the comparison between various kernels, we worked with gold-standard syntactic trees. We did not have goldstandard dependency trees available for this corpus so we obtained them indirectly from the goldstandard syntactic trees using the head-rules from (Collins, 1999). We however note that accurate syntactic trees can be obtained by training a syntactic parser on WSJ treebank and gold-standard parse trees of some domain-specific sentences (Kate et al., 2005). In the experiments, the α parameter of the dependency-based word subsequence kernel was set to 0.25, the A parameter of the word subsequence kernel was fixed to 0.75 and the downweighting paExamples Dependency Word Syntactic 40 25.62 21.51 23.65 80 45.30 42.77 43.14 160 63.78 61.22 59.66 320 72.44 70.36 67.05 640 77.32 77.82 74.26 792 79.79 79.09 76.62 Table 1: Results on the semantic parsing task wit</context>
+</contexts>
+<marker>Collins, 1999</marker>
+<rawString>Michael Collins. 1999. Head-driven Statistical Models for Natural Language Parsing. Ph.D. thesis, University of Pennsylvania.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>New ranking algorithms for parsing and tagging: Kernels over discrete structures, and the voted perceptron.</title>
+<date>2002</date>
+<booktitle>In Proc. of ACL-2002,</booktitle>
+<pages>263--270</pages>
+<location>Philadelphia, PA,</location>
+<contexts>
+<context position="8098" citStr="Collins (2002)" startWordPosition="1330" endWordPosition="1331"> the relations between the words, for example, the kernel will consider “a fat dog” as a common subsequence although in the first sentence “a fat” relates to the cat and not to the dog. 2.2 Syntactic Tree Kernel Syntactic tree kernels were first introduced by Collins and Duffy (2001) and were also used by 401 S NP VP Figure 3: Syntactic parse tree of the sentence shown in Figure 1 (b). NP PP with a red collar chased RB NP NP IN ago by DT NN JJ AUX VP A cat JJ DT NN ADVP VBD PP dog fat a DT NN IN NP was CD NNS two days a dog Figure 2: Syntactic parse tree of the sentence shown in Figure 1 (a). Collins (2002) for the task of re-ranking syntactic parse trees. They define a kernel between two trees as the number of subtrees shared between them. A subtree is defined as any subgraph of the tree which includes more than one node, with the restriction that entire productions must be included at every node. The kernel defined this way captures most of the structural information present in the syntactic parse trees in the form of tree fragments which the kernelized learning algorithms can then implicitly use as features. The kernel can be computed in O(|N1||N2|) time, where |N1 |and |N2 |are the number of</context>
+</contexts>
+<marker>Collins, 2002</marker>
+<rawString>Michael Collins. 2002. New ranking algorithms for parsing and tagging: Kernels over discrete structures, and the voted perceptron. In Proc. of ACL-2002, pages 263–270, Philadelphia, PA, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Nello Cristianini</author>
+<author>John Shawe-Taylor</author>
+</authors>
+<title>An Introduction to Support Vector Machines and Other Kernel-based Learning Methods.</title>
+<date>2000</date>
+<publisher>Cambridge University Press.</publisher>
+<contexts>
+<context position="24464" citStr="Cristianini and Shawe-Taylor, 2000" startWordPosition="4276" endWordPosition="4279">ree kernel on the task of domain-specific semantic parsing. 5.1 Semantic Parsing Semantic parsing is the task of converting natural language sentences into their domain-specific complete formal meaning representations which an application can execute, for example, to answer database queries or to control a robot. A learning system for semantic parsing induces a semantic parser from the training data of natural language sentences paired with their respective meaning representations. KRISP (Kate and Mooney, 2006) is a semantic parser learning system which uses word subsequence kernel based SVM (Cristianini and Shawe-Taylor, 2000) classifiers and was shown to be robust to noise compared to other semantic parser learners. The system learns an SVM classifier for every production of the meaning representation grammar which tells the probability with which a substring of the sentence represents the semantic concept of the production. Using these classifiers a complete meaning representation of an input sentence is obtained by finding the most probable parse which covers the whole sentence. For details please refer to (Kate and Mooney, 2006). The key operation in KRISP is to find the similarity between any two substrings of</context>
+</contexts>
+<marker>Cristianini, Shawe-Taylor, 2000</marker>
+<rawString>Nello Cristianini and John Shawe-Taylor. 2000. An Introduction to Support Vector Machines and Other Kernel-based Learning Methods. Cambridge University Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Aron Culotta</author>
+<author>Jeffrey Sorensen</author>
+</authors>
+<title>Dependency tree kernels for relation extraction.</title>
+<date>2004</date>
+<booktitle>In Proc. of ACL04,</booktitle>
+<pages>423--429</pages>
+<location>Barcelona, Spain,</location>
+<contexts>
+<context position="22415" citStr="Culotta and Sorensen (2004)" startWordPosition="3948" endWordPosition="3951">k predicates and their arguments and are very different from general paths in a tree that our dependency-based word subsequence kernel uses. Shen et al. (2003) proposed a lexicalized syntactic tree kernel which utilizes LTAG-based features. Toutanova et al. (2004) compute similarity between two HPSG parse trees by finding similarity between the leaf projection paths using string kernels. A few kernels based on dependency trees have also been proposed. Zelenko et al. (2003) proposed a tree kernel over shallow parse tree representations of sentences. This tree kernel was slightly generalized by Culotta and Sorensen (2004) to compute similarity between two dependency trees. In addition to the words, this kernel also incorporates word classes into the kernel. The kernel is based on counting matching subsequences of children of matching nodes. But as was also noted in (Bunescu and Mooney, 2005a), this kernel is opaque i.e. it is not obvious what the implicit features are and the authors do not describe it either. In contrast, our dependency-based word subsequence kernel, which also computes similarity between two dependency trees, is very transparent with the implicit features being simply the dependency paths. T</context>
+</contexts>
+<marker>Culotta, Sorensen, 2004</marker>
+<rawString>Aron Culotta and Jeffrey Sorensen. 2004. Dependency tree kernels for relation extraction. In Proc. of ACL04, pages 423–429, Barcelona, Spain, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Richard Hudson</author>
+</authors>
+<date>1984</date>
+<publisher>Word Grammar. Blackwell.</publisher>
+<contexts>
+<context position="10901" citStr="Hudson, 1984" startWordPosition="1836" endWordPosition="1837"> between the two sentences is “a cat was chased by a dog” which will not be captured by this kernel because S AUX JJ NN NP VP VP DT A VBD PP was cat fat chased NP IN by DT NN 402 was a Figure 4: Dependency tree of the sentence shown in Figure 1 (a). (b) Figure 5: Dependency tree of the sentence shown in Figure 1 (b). there is no common subtree which covers it. The Related Work section discusses some modifications that have been proposed to the syntactic tree kernel. 3 A Dependency-based Word Subsequence Kernel A dependency tree encodes functional relationships between the words in a sentence (Hudson, 1984). The words of the sentence are the nodes and if a word complements or modifies another word then there is a child to parent edge from the first word to the second word. Every word in a dependency tree has exactly one parent except for the root word. Figures 4 and 5 show dependency trees for the two sentences shown in Figure 1. There has been a lot of progress in learning dependency tree parsers (McDonald et al., 2005; Koo et al., 2008; Wang et al., 2008). They can also be obtained indirectly from syntactic parse trees utilizing the head words of the constituents. We introduce a new kernel whi</context>
+</contexts>
+<marker>Hudson, 1984</marker>
+<rawString>Richard Hudson. 1984. Word Grammar. Blackwell.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Rohit J Kate</author>
+<author>Raymond J Mooney</author>
+</authors>
+<title>Using string-kernels for learning semantic parsers.</title>
+<date>2006</date>
+<booktitle>In Proc. of COLING/ACl-06,</booktitle>
+<pages>913--920</pages>
+<location>Sydney, Australia,</location>
+<contexts>
+<context position="6460" citStr="Kate and Mooney, 2006" startWordPosition="1032" endWordPosition="1035">emove any bias due to different sentence lengths. Lodhi et al. (2002) give a dynamic programming algorithm to compute string subsequence kernels in O(nst) time where s and t are the lengths of the two input strings and n is the maximum length of common subsequences one wants to consider. Rousu and Shawe-Taylor (2005) present an improved algorithm which works faster when the vocabulary size is large. Subsequence kernels have been used with success in NLP for text classification (Lodhi et al., 2002; Cancedda et al., 2003), information extraction (Bunescu and Mooney, 2005b) and semantic parsing (Kate and Mooney, 2006). There are, however, some shortcomings of this word subsequence kernel as a measure of similarity between two sentences. Firstly, since it considers all possible common subsequences, it is not sensitive to whether the subsequence is linguistically meaningful or not. For example, the meaningless subsequences “cat was by” and “a was a” will also be considered common between the two sentences by this kernel. Since these subsequences will be used as implicit features by the kernel-based machine learning algorithm, their presence can only hurt the performance. Secondly, if there are long distance </context>
+<context position="24345" citStr="Kate and Mooney, 2006" startWordPosition="4259" endWordPosition="4262"> new dependency-based word subsequence kernel performs better than word subsequence kernel and syntactic tree kernel on the task of domain-specific semantic parsing. 5.1 Semantic Parsing Semantic parsing is the task of converting natural language sentences into their domain-specific complete formal meaning representations which an application can execute, for example, to answer database queries or to control a robot. A learning system for semantic parsing induces a semantic parser from the training data of natural language sentences paired with their respective meaning representations. KRISP (Kate and Mooney, 2006) is a semantic parser learning system which uses word subsequence kernel based SVM (Cristianini and Shawe-Taylor, 2000) classifiers and was shown to be robust to noise compared to other semantic parser learners. The system learns an SVM classifier for every production of the meaning representation grammar which tells the probability with which a substring of the sentence represents the semantic concept of the production. Using these classifiers a complete meaning representation of an input sentence is obtained by finding the most probable parse which covers the whole sentence. For details plea</context>
+</contexts>
+<marker>Kate, Mooney, 2006</marker>
+<rawString>Rohit J. Kate and Raymond J. Mooney. 2006. Using string-kernels for learning semantic parsers. In Proc. of COLING/ACl-06, pages 913–920, Sydney, Australia, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Rohit J Kate</author>
+<author>Yuk Wah Wong</author>
+<author>Raymond J Mooney</author>
+</authors>
+<title>Learning to transform natural to formal languages. In</title>
+<date>2005</date>
+<booktitle>Proc. AAAI-2005,</booktitle>
+<pages>1062--1068</pages>
+<location>Pittsburgh, PA,</location>
+<contexts>
+<context position="26556" citStr="Kate et al., 2005" startWordPosition="4618" endWordPosition="4621">resent in the substrings. This is achieved by including only those downward paths in computations of CDP which end with words within the given substrings. These paths relate the words within the substrings perhaps using words outside of these substrings. 5.2 Methodology We measure the performance of KRISP obtained using the three types of kernels on the GEOQUERY corpus which has been used previously by several semantic parsing learning systems. It contains 880 natural language questions about the US geography paired with their executable meaning representations in a functional query language (Kate et al., 2005). Since the purpose of the experiments is to compare different kernels and not different semantic parsers, we do not compare the performance with other semantic parser learning systems. The training and testing was done using standard 10-fold cross-validation and the performance was measured in terms of precision (the percentage of generated meaning representations that were correct) and recall (the percentage of all sentences for which correct meaning representations were obtained). Since KRISP assigns confidences to the meaning representations it outputs, an entire range of precision-recall </context>
+<context position="27884" citStr="Kate et al., 2005" startWordPosition="4827" endWordPosition="4830">the system is trained using increasing amounts of training data. Since we were not interested in the accuracy of dependency trees or syntactic trees but in the comparison between various kernels, we worked with gold-standard syntactic trees. We did not have goldstandard dependency trees available for this corpus so we obtained them indirectly from the goldstandard syntactic trees using the head-rules from (Collins, 1999). We however note that accurate syntactic trees can be obtained by training a syntactic parser on WSJ treebank and gold-standard parse trees of some domain-specific sentences (Kate et al., 2005). In the experiments, the α parameter of the dependency-based word subsequence kernel was set to 0.25, the A parameter of the word subsequence kernel was fixed to 0.75 and the downweighting paExamples Dependency Word Syntactic 40 25.62 21.51 23.65 80 45.30 42.77 43.14 160 63.78 61.22 59.66 320 72.44 70.36 67.05 640 77.32 77.82 74.26 792 79.79 79.09 76.62 Table 1: Results on the semantic parsing task with increasing number of training examples using dependencybased word subsequence kernel, word subsequence kernel and syntactic tree kernel. rameter for the syntactic tree kernel was fixed to 0.4.</context>
+</contexts>
+<marker>Kate, Wong, Mooney, 2005</marker>
+<rawString>Rohit J. Kate, Yuk Wah Wong, and Raymond J. Mooney. 2005. Learning to transform natural to formal languages. In Proc. AAAI-2005, pages 1062–1068, Pittsburgh, PA, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Terry Koo</author>
+<author>Xavier Carreras</author>
+<author>Michael Collins</author>
+</authors>
+<title>Simple semi-supervised dependency parsing.</title>
+<date>2008</date>
+<booktitle>In Proc. of ACL-08,</booktitle>
+<pages>595--603</pages>
+<location>Columbus, Ohio,</location>
+<contexts>
+<context position="11340" citStr="Koo et al., 2008" startWordPosition="1920" endWordPosition="1923">osed to the syntactic tree kernel. 3 A Dependency-based Word Subsequence Kernel A dependency tree encodes functional relationships between the words in a sentence (Hudson, 1984). The words of the sentence are the nodes and if a word complements or modifies another word then there is a child to parent edge from the first word to the second word. Every word in a dependency tree has exactly one parent except for the root word. Figures 4 and 5 show dependency trees for the two sentences shown in Figure 1. There has been a lot of progress in learning dependency tree parsers (McDonald et al., 2005; Koo et al., 2008; Wang et al., 2008). They can also be obtained indirectly from syntactic parse trees utilizing the head words of the constituents. We introduce a new kernel which takes the words into account like the word-subsequence kernel and also takes the syntactic relations between them into account like the syntactic tree kernel, however, it does not have the shortcomings of the two kernels pointed out in the previous section. This kernel counts the number of common paths between the dependency trees of the two sentences. Another way to look at this kernel is that it counts all the common word subseque</context>
+</contexts>
+<marker>Koo, Carreras, Collins, 2008</marker>
+<rawString>Terry Koo, Xavier Carreras, and Michael Collins. 2008. Simple semi-supervised dependency parsing. In Proc. of ACL-08, pages 595–603, Columbus, Ohio, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Huma Lodhi</author>
+<author>Craig Saunders</author>
+<author>John Shawe-Taylor</author>
+<author>Nello Cristianini</author>
+<author>Chris Watkins</author>
+</authors>
+<title>Text classification using string kernels.</title>
+<date>2002</date>
+<journal>Journal ofMachine Learning Research,</journal>
+<pages>2--419</pages>
+<contexts>
+<context position="1304" citStr="Lodhi et al., 2002" startWordPosition="191" endWordPosition="194">imental results demonstrate the advantage of this kernel over word subsequence and syntactic tree kernels. 1 Introduction Kernel-based learning methods (Vapnik, 1998) are becoming increasingly popular in natural language processing (NLP) because they allow one to work with potentially infinite number of features without explicitly constructing or manipulating them. In most NLP problems, the data is present in structured forms, like strings or trees, and this structural information can be effectively passed to a kernel-based learning algorithm using an appropriate kernel, like a string kernel (Lodhi et al., 2002) or a tree kernel (Collins and Duffy, 2001). In contrast, feature-based methods require reducing the data to a pre-defined set of features often leading to some loss of the useful structural information present in the data. A kernel is a measure of similarity between every pair of examples in the data and a kernel-based machine learning algorithm accesses the data only through these kernel values. For example, the string kernel (Lodhi et al., 2002; Cancedda et al., 2003) computes the similarity between two natural language strings as the number of common word subsequences between them. A subse</context>
+<context position="3227" citStr="Lodhi et al., 2002" startWordPosition="500" endWordPosition="503">number of syntactic subtrees common between them. However, often syntactic parse trees may share syntactic subtrees which correspond to very different semantics based on what words they represent in the sentence. On the other hand, some subtrees may differ syntactically but may represent similar underlying semantics. These differences can become particularly problematic if the tree kernel is to be used for tasks which require semantic processing. This paper presents a new kernel which computes similarity between two sentences as the the number of paths common between their dependency trees. 1(Lodhi et al., 2002) use character subsequences instead of word subsequences which are even less meaningful. 400 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 400–409, Honolulu, October 2008.c�2008 Association for Computational Linguistics (a) A fat cat was chased by a dog. (b) A cat with a red collar was chased two days ago by a fat dog. Figure 1: Two natural language sentences. It improves over the word subsequence kernel because it only counts the word subsequences which are linked by dependencies. It also circumvents some of the difficulties encountered with the</context>
+<context position="4851" citStr="Lodhi et al. (2002)" startWordPosition="750" endWordPosition="753">e this kernel. We present experimental results on the task of domain-specific semantic parsing demonstrating the advantage of this kernel over word subsequence and syntactic tree kernels. The following section gives some background on string and tree kernels. Section 3 then introduces the dependency-based word subsequence kernel and gives an efficient algorithm to compute it. Some of the related work is discussed next, followed by experiments, future work and conclusions. 2 String and Tree Kernels 2.1 Word-Subsequence Kernel A kernel between two sentences measures the similarity between them. Lodhi et al. (2002) presented a string kernel which measures the similarity between two sentences, or two documents in general, as the number of character subsequences shared between them. This was extended by Cancedda et al. (2003) to the number of common word subsequences between them. We will refer to this kernel as the word subsequence kernel. Consider the two sentences shown in Figure 1. Some common word subsequences between them are “a cat”, “was chased by”, “by a dog”, “a cat chased by a dog”, etc. Note that the subsequence “was chased by” is present in the second sentence but it requires skipping the wor</context>
+<context position="6339" citStr="Lodhi et al., 2002" startWordPosition="1014" endWordPosition="1017">ence towards the kernel value will be A91+92. The kernel can be normalized to have values in the range of [0, 1] to remove any bias due to different sentence lengths. Lodhi et al. (2002) give a dynamic programming algorithm to compute string subsequence kernels in O(nst) time where s and t are the lengths of the two input strings and n is the maximum length of common subsequences one wants to consider. Rousu and Shawe-Taylor (2005) present an improved algorithm which works faster when the vocabulary size is large. Subsequence kernels have been used with success in NLP for text classification (Lodhi et al., 2002; Cancedda et al., 2003), information extraction (Bunescu and Mooney, 2005b) and semantic parsing (Kate and Mooney, 2006). There are, however, some shortcomings of this word subsequence kernel as a measure of similarity between two sentences. Firstly, since it considers all possible common subsequences, it is not sensitive to whether the subsequence is linguistically meaningful or not. For example, the meaningless subsequences “cat was by” and “a was a” will also be considered common between the two sentences by this kernel. Since these subsequences will be used as implicit features by the ker</context>
+</contexts>
+<marker>Lodhi, Saunders, Shawe-Taylor, Cristianini, Watkins, 2002</marker>
+<rawString>Huma Lodhi, Craig Saunders, John Shawe-Taylor, Nello Cristianini, and Chris Watkins. 2002. Text classification using string kernels. Journal ofMachine Learning Research, 2:419–444.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ryan McDonald</author>
+<author>Fernando Pereira</author>
+<author>Kiril Ribarov</author>
+<author>Jan Haji˘c</author>
+</authors>
+<title>Non-projective dependency parsing using spanning tree algorithms.</title>
+<date>2005</date>
+<booktitle>In Proc. of HLT/EMNLP-05,</booktitle>
+<pages>523--530</pages>
+<location>Vancouver, BC.</location>
+<marker>McDonald, Pereira, Ribarov, Haji˘c, 2005</marker>
+<rawString>Ryan McDonald, Fernando Pereira, Kiril Ribarov, and Jan Haji˘c. 2005. Non-projective dependency parsing using spanning tree algorithms. In Proc. of HLT/EMNLP-05, pages 523–530, Vancouver, BC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alessandro Moschitti</author>
+<author>Silvia Quarteroni</author>
+<author>Roberto Basili</author>
+<author>Suresh Manandhar</author>
+</authors>
+<title>Exploiting syntactic and shallow semantic kernels for question answer classification.</title>
+<date>2007</date>
+<booktitle>In Proc. ofACL-07,</booktitle>
+<pages>776--783</pages>
+<location>Prague, Czech Republic,</location>
+<contexts>
+<context position="21541" citStr="Moschitti et al. (2007)" startWordPosition="3807" endWordPosition="3810">ee kernel which allows soft matching between the subtrees of the trees if that is deemed appropriate by the grammar. For example, their kernel will be able 2This analysis uses the fact that any node in a tree on average has 0(1) number of children. K(T1, T2) CPP(n1, n2) = CDP(n1, n2) + c1, 61ǫC(n1) c2, �c2ǫC(n2) c1.w = c2.w 61.w = 62.w ( α * CDP( c1, C2)+ ) α2 * CDP(c1, c2) * CDP( c1, c2) α2 + α * CDP(c1, c2)+ 405 to match the subtrees (NP (DT a) (NN cat)) and (NP (DT a ) (JJ fat) (NN cat)) with some penalty. Moschitti (2006b) proposed a partial tree kernel which can partially match subtrees. Moschitti et al. (2007) proposed a tree kernel over predicateargument structures of sentences based on the ProbBank labels. Che et al. (2006) presented a hybrid tree kernel which combines a constituent and a path kernel. We however note that the paths in this kernel link predicates and their arguments and are very different from general paths in a tree that our dependency-based word subsequence kernel uses. Shen et al. (2003) proposed a lexicalized syntactic tree kernel which utilizes LTAG-based features. Toutanova et al. (2004) compute similarity between two HPSG parse trees by finding similarity between the leaf p</context>
+</contexts>
+<marker>Moschitti, Quarteroni, Basili, Manandhar, 2007</marker>
+<rawString>Alessandro Moschitti, Silvia Quarteroni, Roberto Basili, and Suresh Manandhar. 2007. Exploiting syntactic and shallow semantic kernels for question answer classification. In Proc. ofACL-07, pages 776–783, Prague, Czech Republic, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>Making tree kernels practical for natural language learning.</title>
+<date>2006</date>
+<booktitle>In Proc. of EACL06,</booktitle>
+<pages>113--120</pages>
+<location>Trento, Italy,</location>
+<contexts>
+<context position="8798" citStr="Moschitti (2006" startWordPosition="1451" endWordPosition="1453">rees as the number of subtrees shared between them. A subtree is defined as any subgraph of the tree which includes more than one node, with the restriction that entire productions must be included at every node. The kernel defined this way captures most of the structural information present in the syntactic parse trees in the form of tree fragments which the kernelized learning algorithms can then implicitly use as features. The kernel can be computed in O(|N1||N2|) time, where |N1 |and |N2 |are the number of nodes of the two trees. An efficient algorithm to compute tree kernels was given by Moschitti (2006a) which runs in close to linear time in the size of the input trees. One drawback of this tree kernel, though, particularly when used for any task requiring semantic processing, is that it may match syntactic subtrees between two trees even though they represent very dissimilar things in the sentence. For example, between the syntactic parse trees shown in Figures 2 and 3 for the two sentences shown in Figure 1, the syntactic tree kernel will find (NP (DT a) JJ NN) as a common subtree but in the first sentence it represents “cat” while in the second it represents “collar” and “dog”. It will a</context>
+<context position="21448" citStr="Moschitti (2006" startWordPosition="3795" endWordPosition="3796">ted out in Subsection 2.2. Zhang et al. (2007) proposed a grammar-driven syntactic tree kernel which allows soft matching between the subtrees of the trees if that is deemed appropriate by the grammar. For example, their kernel will be able 2This analysis uses the fact that any node in a tree on average has 0(1) number of children. K(T1, T2) CPP(n1, n2) = CDP(n1, n2) + c1, 61ǫC(n1) c2, �c2ǫC(n2) c1.w = c2.w 61.w = 62.w ( α * CDP( c1, C2)+ ) α2 * CDP(c1, c2) * CDP( c1, c2) α2 + α * CDP(c1, c2)+ 405 to match the subtrees (NP (DT a) (NN cat)) and (NP (DT a ) (JJ fat) (NN cat)) with some penalty. Moschitti (2006b) proposed a partial tree kernel which can partially match subtrees. Moschitti et al. (2007) proposed a tree kernel over predicateargument structures of sentences based on the ProbBank labels. Che et al. (2006) presented a hybrid tree kernel which combines a constituent and a path kernel. We however note that the paths in this kernel link predicates and their arguments and are very different from general paths in a tree that our dependency-based word subsequence kernel uses. Shen et al. (2003) proposed a lexicalized syntactic tree kernel which utilizes LTAG-based features. Toutanova et al. (2</context>
+</contexts>
+<marker>Moschitti, 2006</marker>
+<rawString>Alessandro Moschitti. 2006a. Making tree kernels practical for natural language learning. In Proc. of EACL06, pages 113–120, Trento, Italy, April.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>Syntactic kernels for natural language learning: the semantic role labeling case.</title>
+<date>2006</date>
+<booktitle>In Proc. of HLT/NAACL-06, short papers,</booktitle>
+<pages>97--100</pages>
+<location>New York City, USA,</location>
+<contexts>
+<context position="8798" citStr="Moschitti (2006" startWordPosition="1451" endWordPosition="1453">rees as the number of subtrees shared between them. A subtree is defined as any subgraph of the tree which includes more than one node, with the restriction that entire productions must be included at every node. The kernel defined this way captures most of the structural information present in the syntactic parse trees in the form of tree fragments which the kernelized learning algorithms can then implicitly use as features. The kernel can be computed in O(|N1||N2|) time, where |N1 |and |N2 |are the number of nodes of the two trees. An efficient algorithm to compute tree kernels was given by Moschitti (2006a) which runs in close to linear time in the size of the input trees. One drawback of this tree kernel, though, particularly when used for any task requiring semantic processing, is that it may match syntactic subtrees between two trees even though they represent very dissimilar things in the sentence. For example, between the syntactic parse trees shown in Figures 2 and 3 for the two sentences shown in Figure 1, the syntactic tree kernel will find (NP (DT a) JJ NN) as a common subtree but in the first sentence it represents “cat” while in the second it represents “collar” and “dog”. It will a</context>
+<context position="21448" citStr="Moschitti (2006" startWordPosition="3795" endWordPosition="3796">ted out in Subsection 2.2. Zhang et al. (2007) proposed a grammar-driven syntactic tree kernel which allows soft matching between the subtrees of the trees if that is deemed appropriate by the grammar. For example, their kernel will be able 2This analysis uses the fact that any node in a tree on average has 0(1) number of children. K(T1, T2) CPP(n1, n2) = CDP(n1, n2) + c1, 61ǫC(n1) c2, �c2ǫC(n2) c1.w = c2.w 61.w = 62.w ( α * CDP( c1, C2)+ ) α2 * CDP(c1, c2) * CDP( c1, c2) α2 + α * CDP(c1, c2)+ 405 to match the subtrees (NP (DT a) (NN cat)) and (NP (DT a ) (JJ fat) (NN cat)) with some penalty. Moschitti (2006b) proposed a partial tree kernel which can partially match subtrees. Moschitti et al. (2007) proposed a tree kernel over predicateargument structures of sentences based on the ProbBank labels. Che et al. (2006) presented a hybrid tree kernel which combines a constituent and a path kernel. We however note that the paths in this kernel link predicates and their arguments and are very different from general paths in a tree that our dependency-based word subsequence kernel uses. Shen et al. (2003) proposed a lexicalized syntactic tree kernel which utilizes LTAG-based features. Toutanova et al. (2</context>
+</contexts>
+<marker>Moschitti, 2006</marker>
+<rawString>Alessandro Moschitti. 2006b. Syntactic kernels for natural language learning: the semantic role labeling case. In Proc. of HLT/NAACL-06, short papers, pages 97– 100, New York City, USA, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Juho Rousu</author>
+<author>John Shawe-Taylor</author>
+</authors>
+<title>Efficient computation of gapped substring kernels on large alphabets.</title>
+<date>2005</date>
+<journal>Journal of Machine Learning Research,</journal>
+<pages>6--1323</pages>
+<contexts>
+<context position="6156" citStr="Rousu and Shawe-Taylor (2005)" startWordPosition="985" endWordPosition="988">weights the presence of gaps by a decay factor Aǫ(0,1]. If g1 and g2 are the sum totals of gaps for a subsequence present in the two sentences respectively, then the contribution of this subsequence towards the kernel value will be A91+92. The kernel can be normalized to have values in the range of [0, 1] to remove any bias due to different sentence lengths. Lodhi et al. (2002) give a dynamic programming algorithm to compute string subsequence kernels in O(nst) time where s and t are the lengths of the two input strings and n is the maximum length of common subsequences one wants to consider. Rousu and Shawe-Taylor (2005) present an improved algorithm which works faster when the vocabulary size is large. Subsequence kernels have been used with success in NLP for text classification (Lodhi et al., 2002; Cancedda et al., 2003), information extraction (Bunescu and Mooney, 2005b) and semantic parsing (Kate and Mooney, 2006). There are, however, some shortcomings of this word subsequence kernel as a measure of similarity between two sentences. Firstly, since it considers all possible common subsequences, it is not sensitive to whether the subsequence is linguistically meaningful or not. For example, the meaningless</context>
+</contexts>
+<marker>Rousu, Shawe-Taylor, 2005</marker>
+<rawString>Juho Rousu and John Shawe-Taylor. 2005. Efficient computation of gapped substring kernels on large alphabets. Journal of Machine Learning Research, 6:1323–1344.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Libin Shen</author>
+<author>Anoop Sarkar</author>
+<author>Aravind Joshi</author>
+</authors>
+<title>Using ltag based features in parse reranking.</title>
+<date>2003</date>
+<booktitle>In Proc. of EMNLP-2003,</booktitle>
+<pages>89--96</pages>
+<location>Sapporo, Japan,</location>
+<contexts>
+<context position="21947" citStr="Shen et al. (2003)" startWordPosition="3876" endWordPosition="3879">)+ 405 to match the subtrees (NP (DT a) (NN cat)) and (NP (DT a ) (JJ fat) (NN cat)) with some penalty. Moschitti (2006b) proposed a partial tree kernel which can partially match subtrees. Moschitti et al. (2007) proposed a tree kernel over predicateargument structures of sentences based on the ProbBank labels. Che et al. (2006) presented a hybrid tree kernel which combines a constituent and a path kernel. We however note that the paths in this kernel link predicates and their arguments and are very different from general paths in a tree that our dependency-based word subsequence kernel uses. Shen et al. (2003) proposed a lexicalized syntactic tree kernel which utilizes LTAG-based features. Toutanova et al. (2004) compute similarity between two HPSG parse trees by finding similarity between the leaf projection paths using string kernels. A few kernels based on dependency trees have also been proposed. Zelenko et al. (2003) proposed a tree kernel over shallow parse tree representations of sentences. This tree kernel was slightly generalized by Culotta and Sorensen (2004) to compute similarity between two dependency trees. In addition to the words, this kernel also incorporates word classes into the k</context>
+</contexts>
+<marker>Shen, Sarkar, Joshi, 2003</marker>
+<rawString>Libin Shen, Anoop Sarkar, and Aravind Joshi. 2003. Using ltag based features in parse reranking. In Proc. of EMNLP-2003, pages 89–96, Sapporo, Japan, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kristina Toutanova</author>
+<author>Penka Markova</author>
+<author>Christopher Manning</author>
+</authors>
+<title>The leaf projection path view of parse trees: Exploring string kernels for HPSG parse selection.</title>
+<date>2004</date>
+<booktitle>In Proc. EMNLP-04,</booktitle>
+<pages>166--173</pages>
+<location>Barcelona, Spain,</location>
+<contexts>
+<context position="22052" citStr="Toutanova et al. (2004)" startWordPosition="3891" endWordPosition="3894">ty. Moschitti (2006b) proposed a partial tree kernel which can partially match subtrees. Moschitti et al. (2007) proposed a tree kernel over predicateargument structures of sentences based on the ProbBank labels. Che et al. (2006) presented a hybrid tree kernel which combines a constituent and a path kernel. We however note that the paths in this kernel link predicates and their arguments and are very different from general paths in a tree that our dependency-based word subsequence kernel uses. Shen et al. (2003) proposed a lexicalized syntactic tree kernel which utilizes LTAG-based features. Toutanova et al. (2004) compute similarity between two HPSG parse trees by finding similarity between the leaf projection paths using string kernels. A few kernels based on dependency trees have also been proposed. Zelenko et al. (2003) proposed a tree kernel over shallow parse tree representations of sentences. This tree kernel was slightly generalized by Culotta and Sorensen (2004) to compute similarity between two dependency trees. In addition to the words, this kernel also incorporates word classes into the kernel. The kernel is based on counting matching subsequences of children of matching nodes. But as was al</context>
+</contexts>
+<marker>Toutanova, Markova, Manning, 2004</marker>
+<rawString>Kristina Toutanova, Penka Markova, and Christopher Manning. 2004. The leaf projection path view of parse trees: Exploring string kernels for HPSG parse selection. In Proc. EMNLP-04, pages 166–173, Barcelona, Spain, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Vladimir N Vapnik</author>
+</authors>
+<title>Statistical Learning Theory.</title>
+<date>1998</date>
+<publisher>John Wiley &amp; Sons.</publisher>
+<contexts>
+<context position="851" citStr="Vapnik, 1998" startWordPosition="124" endWordPosition="125">nel which computes similarity between two natural language sentences as the number of paths shared by their dependency trees. The paper gives a very efficient algorithm to compute it. This kernel is also an improvement over the word subsequence kernel because it only counts linguistically meaningful word subsequences which are based on word dependencies. It overcomes some of the difficulties encountered by syntactic tree kernels as well. Experimental results demonstrate the advantage of this kernel over word subsequence and syntactic tree kernels. 1 Introduction Kernel-based learning methods (Vapnik, 1998) are becoming increasingly popular in natural language processing (NLP) because they allow one to work with potentially infinite number of features without explicitly constructing or manipulating them. In most NLP problems, the data is present in structured forms, like strings or trees, and this structural information can be effectively passed to a kernel-based learning algorithm using an appropriate kernel, like a string kernel (Lodhi et al., 2002) or a tree kernel (Collins and Duffy, 2001). In contrast, feature-based methods require reducing the data to a pre-defined set of features often le</context>
+</contexts>
+<marker>Vapnik, 1998</marker>
+<rawString>Vladimir N. Vapnik. 1998. Statistical Learning Theory. John Wiley &amp; Sons.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Qin Iris Wang</author>
+<author>Dale Schuurmans</author>
+<author>Dekang Lin</author>
+</authors>
+<title>Semi-supervised convex training for dependency parsing.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL-08: HLT,</booktitle>
+<pages>532--540</pages>
+<location>Columbus, Ohio,</location>
+<contexts>
+<context position="11360" citStr="Wang et al., 2008" startWordPosition="1924" endWordPosition="1927">tic tree kernel. 3 A Dependency-based Word Subsequence Kernel A dependency tree encodes functional relationships between the words in a sentence (Hudson, 1984). The words of the sentence are the nodes and if a word complements or modifies another word then there is a child to parent edge from the first word to the second word. Every word in a dependency tree has exactly one parent except for the root word. Figures 4 and 5 show dependency trees for the two sentences shown in Figure 1. There has been a lot of progress in learning dependency tree parsers (McDonald et al., 2005; Koo et al., 2008; Wang et al., 2008). They can also be obtained indirectly from syntactic parse trees utilizing the head words of the constituents. We introduce a new kernel which takes the words into account like the word-subsequence kernel and also takes the syntactic relations between them into account like the syntactic tree kernel, however, it does not have the shortcomings of the two kernels pointed out in the previous section. This kernel counts the number of common paths between the dependency trees of the two sentences. Another way to look at this kernel is that it counts all the common word subsequences which are linke</context>
+</contexts>
+<marker>Wang, Schuurmans, Lin, 2008</marker>
+<rawString>Qin Iris Wang, Dale Schuurmans, and Dekang Lin. 2008. Semi-supervised convex training for dependency parsing. In Proceedings of ACL-08: HLT, pages 532–540, Columbus, Ohio, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Zelenko</author>
+<author>C Aone</author>
+<author>A Richardella</author>
+</authors>
+<title>Kernel methods for relation extraction.</title>
+<date>2003</date>
+<journal>Journal of Machine Learning Research,</journal>
+<pages>3--1083</pages>
+<contexts>
+<context position="22265" citStr="Zelenko et al. (2003)" startWordPosition="3924" endWordPosition="3927">e et al. (2006) presented a hybrid tree kernel which combines a constituent and a path kernel. We however note that the paths in this kernel link predicates and their arguments and are very different from general paths in a tree that our dependency-based word subsequence kernel uses. Shen et al. (2003) proposed a lexicalized syntactic tree kernel which utilizes LTAG-based features. Toutanova et al. (2004) compute similarity between two HPSG parse trees by finding similarity between the leaf projection paths using string kernels. A few kernels based on dependency trees have also been proposed. Zelenko et al. (2003) proposed a tree kernel over shallow parse tree representations of sentences. This tree kernel was slightly generalized by Culotta and Sorensen (2004) to compute similarity between two dependency trees. In addition to the words, this kernel also incorporates word classes into the kernel. The kernel is based on counting matching subsequences of children of matching nodes. But as was also noted in (Bunescu and Mooney, 2005a), this kernel is opaque i.e. it is not obvious what the implicit features are and the authors do not describe it either. In contrast, our dependency-based word subsequence ke</context>
+<context position="30040" citStr="Zelenko et al., 2003" startWordPosition="5174" endWordPosition="5177">significant over the corresponding numbers under the word subsequence kernel. It may be noted that syntactic tree kernel is mostly doing worse than the word subsequence kernel. We believe this is because of the shortcomings of the syntactic tree kernel pointed out in Subsection 2.2. Since this is a semantic processing task, the words play an important role and the generalized syntactic categories are not very helpful. 6 Future Work In future, the dependency-based word subsequence kernel could be extended to incorporate word classes 407 like the kernels presented in (Bunescu and Mooney, 2005a; Zelenko et al., 2003). It should be possible to achieve this by incorporating matches between word classes in addition to the exact word matches in the kernel computations similar to the way in which the word subsequence kernel was extended to incorporate word classes in (Bunescu and Mooney, 2005b). This will generalize the kernel and make it more robust to data sparsity. The dependency-based word subsequence kernel could be tested on other tasks which require computing similarity between sentences or texts, like text classification, paraphrasing, summarization etc. We believe this kernel will help improve perform</context>
+</contexts>
+<marker>Zelenko, Aone, Richardella, 2003</marker>
+<rawString>D. Zelenko, C. Aone, and A. Richardella. 2003. Kernel methods for relation extraction. Journal of Machine Learning Research, 3:1083–1106.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Min Zhang</author>
+<author>Wanxiang Che</author>
+<author>Aiti Aw</author>
+<author>Chew Lim Tan</author>
+<author>Guodong Zhou</author>
+<author>Ting Liu</author>
+<author>Sheng Li</author>
+</authors>
+<title>A grammar-driven convolution tree kernel for semantic role classification.</title>
+<date>2007</date>
+<booktitle>In Proc. of ACL-2007,</booktitle>
+<pages>200--207</pages>
+<location>Prague, Czech Republic,</location>
+<contexts>
+<context position="20879" citStr="Zhang et al. (2007)" startWordPosition="3680" endWordPosition="3683">hen simply add the CDP values2. If the nodes common between the two trees are sparse then the algorithm will run much faster. Since the algorithm only needs to store the CDP values, its space complexity is O(|T1||T2|). Also note that this algorithm computes the number of common paths of all lengths unlike the word subsequence kernel in which the maximum subsequence length needs to be specified and the time complexity then depends on this length. 4 Related Work Several modifications to the syntactic tree kernels have been proposed to overcome the type of problems pointed out in Subsection 2.2. Zhang et al. (2007) proposed a grammar-driven syntactic tree kernel which allows soft matching between the subtrees of the trees if that is deemed appropriate by the grammar. For example, their kernel will be able 2This analysis uses the fact that any node in a tree on average has 0(1) number of children. K(T1, T2) CPP(n1, n2) = CDP(n1, n2) + c1, 61ǫC(n1) c2, �c2ǫC(n2) c1.w = c2.w 61.w = 62.w ( α * CDP( c1, C2)+ ) α2 * CDP(c1, c2) * CDP( c1, c2) α2 + α * CDP(c1, c2)+ 405 to match the subtrees (NP (DT a) (NN cat)) and (NP (DT a ) (JJ fat) (NN cat)) with some penalty. Moschitti (2006b) proposed a partial tree kern</context>
+</contexts>
+<marker>Zhang, Che, Aw, Tan, Zhou, Liu, Li, 2007</marker>
+<rawString>Min Zhang, Wanxiang Che, Aiti Aw, Chew Lim Tan, Guodong Zhou, Ting Liu, and Sheng Li. 2007. A grammar-driven convolution tree kernel for semantic role classification. In Proc. of ACL-2007, pages 200– 207, Prague, Czech Republic, June.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

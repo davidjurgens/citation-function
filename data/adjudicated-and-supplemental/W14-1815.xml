@@ -1,0 +1,1598 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.993733">
+Natural Language Generation with Vocabulary Constraints
+</title>
+<author confidence="0.98884">
+Ben Swanson Elif Yamangil Eugene Charniak
+</author>
+<affiliation confidence="0.986679">
+Brown University Google Inc. Brown University
+</affiliation>
+<address confidence="0.823743">
+Providence, RI Mountain View, CA Providence, RI
+</address>
+<email confidence="0.99904">
+chonger@cs.brown.edu leafer@google.com ec@cs.brown.edu
+</email>
+<sectionHeader confidence="0.997391" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.9997962">
+We investigate data driven natural lan-
+guage generation under the constraints
+that all words must come from a fixed vo-
+cabulary and a specified word must ap-
+pear in the generated sentence, motivated
+by the possibility for automatic genera-
+tion of language education exercises. We
+present fast and accurate approximations
+to the ideal rejection samplers for these
+constraints and compare various sentence
+level generative language models. Our
+best systems produce output that is with
+high frequency both novel and error free,
+which we validate with human and auto-
+matic evaluations.
+</bodyText>
+<sectionHeader confidence="0.999517" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999928859649123">
+Freeform data driven Natural Language Genera-
+tion (NLG) is a topic explored by academics and
+artists alike, but motivating its empirical study is a
+difficult task. While many language models used
+in statistical NLP are generative and can easily
+produce sample sentences by running their “gen-
+erative mode”, if all that is required is a plausible
+sentence one might as well pick a sentence at ran-
+dom from any existing corpus.
+NLG becomes useful when constraints exist
+such that only certain sentences are valid. The
+majority of NLG applies a semantic constraint of
+“what to say”, producing sentences with commu-
+nicative goals. Other work such as ours investi-
+gates constraints in structure; producing sentences
+of a certain form without concern for their specific
+meaning.
+We study two constraints concerning the words
+that are allowed in a sentence. The first sets a
+fixed vocabulary such that only sentences where
+all words are in-vocab are allowed. The second
+demands not only that all words are in-vocab,
+but also requires the inclusion of a specific word
+somewhere in the sentence.
+These constraints are natural in the construction
+of language education exercises, where students
+have small known vocabularies and exercises that
+reinforce the knowledge of arbitrary words are re-
+quired. To provide an example, consider a Chi-
+nese teacher composing a quiz that asks students
+to translate sentences from English to Chinese.
+The teacher cannot ask students to translate words
+that have not been taught in class, and would like
+ensure that each vocabulary word from the current
+book chapter is included in at least one sentence.
+Using a system such as ours, she could easily gen-
+erate a number of usable sentences that contain a
+given vocab word and select her favorite, repeat-
+ing this process for each vocab word until the quiz
+is complete.
+The construction of such a system presents two
+primary technical challenges. First, while highly
+parameterized models trained on large corpora are
+a good fit for data driven NLG, sparsity is still
+an issue when constraints are introduced. Tradi-
+tional smoothing techniques used for prediction
+based tasks are inappropriate, however, as they lib-
+erally assign probability to implausible text. We
+investigate smoothing techniques better suited for
+NLG that smooth more precisely, sharing proba-
+bility only between words that have strong seman-
+tic connections.
+The second challenge arises from the fact that
+both vocabulary and word inclusion constraints
+are easily handled with a rejection sampler that re-
+peatedly generates sentences until one that obeys
+the constraints is produced. Unfortunately, for
+</bodyText>
+<page confidence="0.976607">
+124
+</page>
+<note confidence="0.715325">
+Proceedings of the Ninth Workshop on Innovative Use of NLP for Building Educational Applications, pages 124–133,
+Baltimore, Maryland USA, June 26, 2014. c�2014 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.999741944444444">
+models with a sufficiently wide range of outputs
+the computation wasted by rejection quickly be-
+comes prohibitive, especially when the word in-
+clusion constraint is applied. We define models
+that sample directly from the possible outputs for
+each constraint without rejection or backtracking,
+and closely approximate the distribution of the
+true rejection samplers.
+We contrast several generative systems through
+both human and automatic evaluation. Our best
+system effectively captures the compositional na-
+ture of our training data, producing error-free text
+with nearly 80 percent accuracy without wasting
+computation on backtracking or rejection. When
+the word inclusion constraint is introduced, we
+show clear empirical advantages over the simple
+solution of searching a large corpus for an appro-
+priate sentence.
+</bodyText>
+<sectionHeader confidence="0.999943" genericHeader="related work">
+2 Related Work
+</sectionHeader>
+<bodyText confidence="0.999930333333333">
+The majority of NLG focuses on the satisfaction
+of a communicative goal, with examples such as
+Belz (2008) which produces weather reports from
+structured data or Mitchell et al. (2013) which gen-
+erates descriptions of objects from images. Our
+work is more similar to NLG work that concen-
+trates on structural constraints such as generative
+poetry (Greene et al., 2010) (Colton et al., 2012)
+(Jiang and Zhou, 2008) or song lyrics (Wu et al.,
+2013) (Ramakrishnan A et al., 2009), where spec-
+ified meter or rhyme schemes are enforced. In
+these papers soft semantic goals are sometimes
+also introduced that seek responses to previous
+lines of poetry or lyric.
+Computational creativity is another subfield of
+NLG that often does not fix an a priori meaning in
+its output. Examples such as ¨Ozbal et al. (2013)
+and Valitutti et al. (2013) use template filling tech-
+niques guided by quantified notions of humor or
+how catchy a phrase is.
+Our motivation for generation of material for
+language education exists in work such as Sumita
+et al. (2005) and Mostow and Jang (2012), which
+deal with automatic generation of classic fill in the
+blank questions. Our work is naturally comple-
+mentary to these efforts, as their methods require a
+corpus of in-vocab text to serve as seed sentences.
+</bodyText>
+<sectionHeader confidence="0.996949" genericHeader="method">
+3 Freeform Generation
+</sectionHeader>
+<bodyText confidence="0.989323">
+For clarity in our discussion, we phrase the sen-
+tence generation process in the following general
+terms based around two classes of atomic units :
+contexts and outcomes. In order to specify a gen-
+eration system, we must define
+</bodyText>
+<listItem confidence="0.99948275">
+1. the set C of contexts c
+2. the set O of outcomes o
+3. the “Imply” function I(c, o) —* List[c E C]
+4. M : derivation tree ;-± sentence
+</listItem>
+<bodyText confidence="0.998572142857143">
+where I(c, o) defines the further contexts implied
+by the choice of outcome o for the context c. Be-
+ginning with a unique root context, a derivation
+tree is created by repeatedly choosing an outcome
+o for a leaf context c and expanding c to the new
+leaf contexts specified by I(c, o). M converts be-
+tween derivation tree and sentence text form.
+This is simply a convenient rephrasing of the
+Context Free Grammar formalism, and as such
+the systems we describe all have some equivalent
+CFG interpretation. Indeed, to describe a tradi-
+tional CFG, let C be the set of symbols, O be the
+rules of the CFG, and I(c, o) return a list of the
+symbols on the right hand side of the rule o. To de-
+fine an n-gram model, a context is a list of words,
+an outcome a single word, and I(c, o) can be pro-
+cedurally defined to drop the first element of c and
+append o.
+To perform the sampling required for derivation
+tree construction we must define P(o|c). Using
+M, we begin by converting a large corpus of sen-
+tence segmented text into a training set of deriva-
+tion trees. Maximum likelihood estimation of
+P(o|c) is then as simple as normalizing the counts
+of the observed outcomes for each observed con-
+text. However, in order to obtain contexts for
+which the conditional independence assumption
+of P(o|c) is appropriate, it is necessary to con-
+dition on a large amount of information. This
+leads to sparse estimates even on large amounts of
+training data, a problem that can be addressed by
+smoothing. We identify two complementary types
+of smoothing, and illustrate them with the follow-
+ing sentences.
+The furry dog bit me.
+The cute cat licked me.
+An unsmoothed bigram model trained on this
+data can only generate the two sentences verba-
+tim. If, however, we know that the tokens “dog”
+and “cat” are semantically similar, we can smooth
+by assuming the words that follow “cat” are also
+likely to follow “dog”. This is easily handled with
+</bodyText>
+<page confidence="0.994903">
+125
+</page>
+<figure confidence="0.348208416666667">
+eary
+traditinal smoothing techniques that interpolate
+o on arg m f n
+e bgram model where co
+furry dog bit me.
+i Thi ld
+C] Assuming a imple bigram model where con
+ars ite
+word and th outcome a si-
+cute cat licked me
+between distributions estimated for boh coare,
+e amounts of raining data a problem tha cn
+</figure>
+<bodyText confidence="0.765643">
+text is the prevous word and th outcome a sin
+</bodyText>
+<equation confidence="0.794288">
+P(wJw_1=[animal]), andofine,dP(w|w_1=&amp;quot;dog”),
+</equation>
+<bodyText confidence="0.864359761904762">
+contexts. We refer tobthis as context smoothing. ve
+e previous word and the outcome a sin
+om y
+hng, and ilustrate them with he follwing
+tio However, we would also like to capture the in-
+t g we ha so
+g tha y f wig t
+n unsmoothd model trained on ths
+tence
+at d h k “dg” d c” ae imla d wd
+i nd ould
+fact In our bigram modl
+only generae the two sentenes verba-
+tuition that words which can be followed by “dog”
+ire the like to levrage this fact In our bigram mode
+nd refer
+gine we have ome way of knowng hat
+can also be followed by “cat”, which we will call
+im that the wrds hat follow
+The furry dog bit me
+this amounts to the laim that the words that follow
+</bodyText>
+<figure confidence="0.77437875862069">
+mes fr
+outcom smoothing We extnd ur terminology
+likely to follow “dog”. Thi
+dg ae lar wl
+The cute cat licked me.
+“cat” are perhps alo likely o folow “dog”. This
+h traitional smoothing teh-
+g his f I ou ig
+to describe a sstem that performs both ypes of
+apping is easly handled wih traditiona smoothing tch
+od
+nt to the claim that the words that follow
+smoothing with the fllowing
+betw diriions
+ng qes, wh inp
+ple bgam mde i
+perhaps also kely o follow “dog”.
+h i id f b
+[il])
+d h t
+•,the set Ceof smooth contextssc¯
+to
+•bothe set 0 of smooth-outcomes o¯
+like to apu th in
+lt gie we hae om wa of knoing tht
+H, ld l lik t c
+•da smoothingofunctione 5ce: C → C
+O •caa smoothing functionbSoa: 0 —* 0
+ik h
+</figure>
+<figureCaption confidence="0.999538">
+Figure 1: A flow chart depicting the decisions
+</figureCaption>
+<bodyText confidence="0.989185695652174">
+made when choosing an outcome for a context.
+The large circles show the set of items associated
+with each decision, and contain examples items
+for a bigram model where SC and SO map words
+(e.g. dog) to semantic classes (e.g. [animal]).
+We describe the smoothed generative process
+with the flowchart shown in Figure 1. In order to
+choose an outcome for a given context, two deci-
+sions must be made. First, we must decide which
+context we will employ, the true context or the
+smooth context, marked by edges 1 or 2 respec-
+tively. Next, we choose to generate a true outcome
+or a smooth outcome, and if we select the latter
+we use edge 6 to choose a true outcome given the
+smooth outcome. The decision between edges 1
+and 2 can be sampled from a Bernoulli random
+variable with parameter λc, with one variable es-
+timated for each context c. The decision between
+edges 5 and 3 and the one between 4 and 7 can also
+be made with Bernoulli random variables, with pa-
+rameter sets γc and γ¯c respectively.
+This yields the full form of the unconstrained
+probabilistic generative model as follows
+</bodyText>
+<equation confidence="0.9997494">
+P(o|c) = λcP1(o|c) + (1 − λc)P2(o|SC(c))
+P1(o|c) = γcP5(o|c)+
+(1 − γc)P7(o|¯o)P3(¯o|c) (1)
+P2(o|¯c) = γ¯cP6(o|c)+
+(1 − γ¯c)P7(o|¯o)P4(¯o|¯c)
+</equation>
+<bodyText confidence="0.99974225">
+requiring estimation of the λ and γ variables as
+well as the five multinomial distributions P3_7.
+This can be done with a straightforward applica-
+tion of EM.
+</bodyText>
+<sectionHeader confidence="0.96257" genericHeader="method">
+4 Limiting Vocabulary
+</sectionHeader>
+<bodyText confidence="0.9999045">
+A primary concern in the generation of language
+education exercises is the working vocabulary of
+the students. If efficiency were not a concern, the
+natural solution to the vocabulary constraint would
+be rejection sampling: simply generate sentences
+until one happens to obey the constraint. In this
+section we show how to generate a sentence di-
+rectly from this constrained set with a distribution
+closely approximating that of the rejection sam-
+pler.
+</bodyText>
+<subsectionHeader confidence="0.99806">
+4.1 Pruning
+</subsectionHeader>
+<bodyText confidence="0.9711225">
+The first step is to prune the space of possible sen-
+tences to those that obey the vocabulary constraint.
+For the models we investigate there is a natural
+predicate V (o) that is true if and only if an out-
+come introduces a word that is out of vocab, and
+so the vocabulary constraint is equivalent to the
+requirement that V (o) is false for all possible out-
+comes o. Considering transitions along edges in
+Figure 1, the removal of all transitions along edges
+5,6, and 7 that lead to outcomes where V (o) is true
+satisfies this property.
+Our remaining concern is that the generation
+process does not reach a failure case. Again
+considering transitions in Figure 1, failure occurs
+when we require P(o|c) for some c and there is no
+transition to c on edge 1 or SC(c) along edge 2.
+We refer to such a context as invalid. Our goal,
+which we refer to as consistency, is that for all
+</bodyText>
+<figure confidence="0.988148642857143">
+: dogOwe o [animal]
+- → O
+5
+3h
+1
+g O
+end u
+r[action]
+bit
+O
+s 6
+2
+y 4
+C
+</figure>
+<page confidence="0.992467">
+126
+</page>
+<bodyText confidence="0.999870833333333">
+valid contexts c, all outcomes o that can be reached
+in Figure 1 satisfy the property that all members of
+I(c, o) are valid contexts.
+To see how we might end up in failure, consider
+a trigram model on POS/word pairs for which SC
+is the identity function and SO backs off to the
+</bodyText>
+<equation confidence="0.70147">
+POS tag. Given a context c = ((t−2 ), (t−1 )) if
+w−2 w−1
+</equation>
+<bodyText confidence="0.987745">
+we generate along a path using edge 6 we will
+choose a smooth outcome t0 that we have seen
+following c in the data and then independenently
+choose a w0 that has been observed with tag t0.
+This implies a following context (( t−1 ), ( t0 )). If
+</bodyText>
+<equation confidence="0.83218">
+w−1 w0
+</equation>
+<bodyText confidence="0.9999505">
+we have estimated our model with observations
+from data, there is no guarantee that this context
+ever appeared, and if so there will be no available
+transition along edges 1 or 2.
+Let the list ¯I(c, o) be the result of the mapped
+application of SC to each element of I(c, o). In
+order to define an efficient algorithm, we require
+the following property D referring to the amount
+of information needed to determine ¯I(c, o). Sim-
+ply put, D states if the smoothed context and out-
+come are fixed, then the implied smooth contexts
+are determined.
+</bodyText>
+<equation confidence="0.821166">
+D {SC(c), SO(o)} —* I(c, o)
+</equation>
+<bodyText confidence="0.982366228571429">
+To highlight the statement D makes, consider the
+trigram POS/word model described above, but let
+SC also map the POS/word pairs in the context
+to their POS tags alone. D holds here because
+given SC(c) = (t−2,t−1) and SO(o) = t0 from
+the outcome, we are able to determine the implied
+smooth context (t−1, t0). If context smoothing in-
+stead produced SC(c) = (t−2), D would not hold.
+If D holds then we can show consistency based
+on the transitions in Figure 1 alone as any com-
+plete path through Figure 1 defines both c¯ and ¯o.
+By D we can determine ¯I(c, o) for any path and
+verify that all its members have possible transi-
+tions along edge 2. If the verification passes for
+all paths then the model is consistent.
+Algorithm 1 produces a consistent model by
+verifying each complete path in the manner just
+described. One important feature is that it pre-
+serves the invariant that if a context c can be
+reached on edge 1, then SC(c) can be reached on
+edge 2. This means that if the verification fails
+then the complete path produces an invalid con-
+text, even though we have only checked the mem-
+bers of ¯I(c, o) against path 2.
+If a complete path produces an invalid con-
+text, some transition along that path must be re-
+Algorithm 1 Pruning Algorithm
+Initialize with all observed transitions
+for all out of vocab o do
+remove ? —* o from edges 5,6, and 7
+end for
+repeat
+for all paths in flow chart do
+if 1¯c E ¯I(c, o) s.t. c¯ is invalid then
+remove transition from edge 5,7,3 or 4
+</bodyText>
+<subsectionHeader confidence="0.249345">
+end if
+end for
+</subsectionHeader>
+<bodyText confidence="0.9720765">
+Run FIXUP
+until edge 2 transitions did not change
+moved. It is never optimal to remove transitions
+from edges 1 or 2 as this unnecessarily removes
+all downstream complete paths as well, and so for
+invalid complete paths along 1-5 and 2-7 Algo-
+rithm 1 removes the transitions along edges 5 and
+7. The choice is not so simple for the complete
+paths 1-3-6 and 2-4-6, as there are two remaining
+choices. Fortunately, D implies that breaking the
+connection on edge 3 or 4 is optimal as regardless
+of which outcome is chosen on edge 6, ¯I(c, o) will
+still produce the same invalid ¯c.
+After removing transitions in this manner, some
+transitions on edges 1-4 may no longer have any
+outgoing transitions. The subroutine FIXUP re-
+moves such transitions, checking edges 3 and 4
+before 1 and 2. If FIXUP does not modify edge 2
+then the model is consistent and Algorithm 1 ter-
+minates.
+</bodyText>
+<subsectionHeader confidence="0.914992">
+4.2 Estimation
+</subsectionHeader>
+<bodyText confidence="0.998946941176471">
+In order to replicate the behavior of the rejection
+sampler, which uses the original probability model
+P(o|c) from Equation 1, we must set the probabil-
+ities PV (o|c) of the pruned model appropriately.
+We note that for moderately sized vocabularies it
+is feasible to recursively enumerate CV , the set of
+all reachable contexts in the pruned model. In
+further discussion we simplify the representation
+of the model to a standard PCFG with CV as its
+symbol set and its PCFG rules indexed by out-
+comes. This also allows us to construct the reach-
+ability graph for CV , with an edge from ci to cj
+for each cj E I(ci, o). Such an edge is given
+weight P(o|c), the probability under the uncon-
+strained model, and zero weight edges are not in-
+cluded.
+Our goal is to retain the form of the stan-
+</bodyText>
+<page confidence="0.989162">
+127
+</page>
+<bodyText confidence="0.999664722222222">
+dard incremental recursive sampling algorithm for
+PCFGs. The correctness of this algorithm comes
+from the fact that the probability of a rule R ex-
+panding a symbol X is precisely the probability of
+all trees rooted at X whose first rule is R. This im-
+plies that the correct sampling distribution is sim-
+ply the distribution over rules itself. When con-
+straints that disallow certain trees are introduced,
+the probability of all trees whose first rule is R
+only includes the mass from valid trees, and the
+correct sampling distribution is the renormaliza-
+tion of these values.
+Let the goodness of a context G(c) be the proba-
+bility that a full subtree generated from c using the
+unconstrained model obeys the vocabulary con-
+straint. Knowledge of G(c) for all c E CV al-
+lows the calculation of probabilities for the pruned
+model with
+</bodyText>
+<equation confidence="0.9953126">
+PV (o|c) a P(o|c) Y G(c&apos;) (2)
+c0EI(c,o)
+While G(c) can be defined recursively as
+G(c) = X P(o|c) Y G(c&apos;) (3)
+oEO c0EI(c,o)
+</equation>
+<bodyText confidence="0.999565222222222">
+its calculation requires that the reachability graph
+be acyclic. We approximate an acyclic graph by
+listing all edges in order of decreasing weight and
+introducing edges as long as they do not create cy-
+cles. This can be done efficiently with a binary
+search over the edges by weight. Note that this ap-
+proximate graph is used only in recursive estima-
+tion of G(c), and the true graph can still be used
+in Equation 2.
+</bodyText>
+<sectionHeader confidence="0.988973" genericHeader="method">
+5 Generating Up
+</sectionHeader>
+<bodyText confidence="0.999958">
+In this section we show how to efficiently gener-
+ate sentences that contain an arbitrary word w* in
+addition to the vocabulary constraint. We assume
+the ability to easily find Cw∗, a subset of CV whose
+use guarantees that the resulting sentence contains
+w*. Our goal is once again to efficiently emulate
+the rejection sampler, which generates a derivation
+tree T and accepts if and only if it contains at least
+one member of Cw∗.
+Let Tw∗ be the set of derivation trees that would
+be accepted by the rejection sampler. We present
+a three stage generative model and its associated
+probability distribution Pw∗(τ) over items τ for
+which there is a functional mapping into Tw∗.
+In addition to the probabilities PV (o|c) from the
+previous section, we require an estimate of E(c),
+the expected number of times each context c ap-
+pears in a single tree. This can be computed effi-
+ciently using the mean matrix, described in Miller
+and Osullivan (1992). This |CV  |x |CV  |matri x M
+has its entries defined as
+</bodyText>
+<equation confidence="0.9489245">
+M(i,j) = X P(o|ci)#(cj, ci, o) (4)
+oEO
+</equation>
+<bodyText confidence="0.99617825">
+where the operator # returns the number of times
+context cj appears I(ci,o). Defining a 1 x |CV |
+start state vector z0 that is zero everywhere and 1
+in the entry corresponding to the root context gives
+which can be iteratively computed with sparse ma-
+trix multiplication. Note that the ith term in the
+sum corresponds to expected counts at depth i in
+the derivation tree. With definitions of context and
+outcome for which very deep derivations are im-
+probable, it is reasonable to approximate this sum
+by truncation.
+Our generation model operates in three phases.
+</bodyText>
+<listItem confidence="0.9959436">
+1. Chose a start context c0 E Cw∗
+2. Generate a spine S of contexts and outcomes
+connecting c0 to the root context
+3. Fill in the full derivation tree T below all re-
+maining unexpanded contexts
+</listItem>
+<bodyText confidence="0.993343">
+In the first phase, c0 is sampled from the multi-
+nomial
+</bodyText>
+<equation confidence="0.9917375">
+E(c0)
+P1(c0) = (5)
+X E(c)
+cEC,,,∗
+</equation>
+<bodyText confidence="0.99857825">
+The second step produces a spine 5, which is
+formally an ordered list of triples. Each element
+of 5 records a context ci, an outcome oi, and the
+index k in I(ci, oi) of the child along which the
+spine progresses. The members of 5 are sampled
+independantly given the previously sampled con-
+text, starting from c0 and terminating when the
+root context is reached. Intuitively this is equiv-
+alent to generating the path from the root to c0 in
+a bottom up fashion.
+We define the probability Pσ of a triple
+(ci, oi, k) given a previously sampled context cj
+</bodyText>
+<equation confidence="0.9825926">
+00
+X
+i=0
+z0Mi
+E(z) =
+</equation>
+<page confidence="0.697326">
+128
+</page>
+<bodyText confidence="0.674643">
+as gives
+</bodyText>
+<equation confidence="0.998642705882353">
+= E(c0)
+Pw* (τ) X E(c)
+c∈Cw*
+= PV (T)
+Pw* (τ) X
+E(c)
+c∈Cw*
+Y |S|
+i=1
+PV (oi|ci)
+Y PV (o|c)
+E(c0)
+(c,o)∈T/S
+1 PV (T) (11)
+ρ
+Pσ({ci,oi,k}|cj) oc
+� E(ci)PV (oi|ci) I(ci,oi)[k] = cj (6) 0 otherwise
+</equation>
+<bodyText confidence="0.972109">
+Let S = (c1, o1, k1) ... (cn, on, kn) be the re-
+sults of this recursive sampling algorithm, where
+cn is the root context, and c1 is the parent context
+of c0. The total probability of a spine S is then
+</bodyText>
+<equation confidence="0.999093">
+P2(S|c0) = Y |S |E(ci)PV (oi|ci) (7) where ρ is a constant and PV (o|c)
+i=1 Zi−1 Y
+PV (T) =
+(c,o)∈T
+XZi−1 = E(c)PV (o|c)#(ci−1, c, o) is the probability of T under the original model.
+</equation>
+<bodyText confidence="0.885216333333333">
+(c,o)∈Ici_1 Note that several τ may map to the same T by
+(8) using different spines, and so
+where Ic−1 is the set of all (c, o) for which
+Pσ(c, o, k|ci−1) is non-zero for some k. A key
+observation is that Zi−1 = E(ci−1), which can-
+cels nearly all of the expected counts from the full
+product. Along with the fact that the expected
+count of the root context is one, the formula sim-
+plifies to
+</bodyText>
+<equation confidence="0.9999635">
+Y |S |PV (oi|ci)
+P2(S|c0) = i=1 E(c0) (9)
+</equation>
+<bodyText confidence="0.9999135">
+The third step generates a final tree T by fill-
+ing in subtrees below unexpanded contexts on the
+spine S using the original generation algorithm,
+yielding results with probability
+</bodyText>
+<equation confidence="0.987629">
+P3(T|S) = Y PV (o|c) (10)
+(c,o)∈T/S
+</equation>
+<bodyText confidence="0.999699777777778">
+where the set T/S includes all contexts that are
+not ancestors of c0, as their outcomes are already
+specified in S.
+We validate this algorithm by considering its
+distrubution over complete derivation trees T E
+T,,,*. The algorithm generates τ = (T, S, c0) and
+has a simple functional mapping into T,,,* by ex-
+tracting the first member of τ.
+Combining the probabilities of our three steps
+</bodyText>
+<equation confidence="0.9706475">
+Pw*(T) = η(T)PV (T) (12)
+ρ
+</equation>
+<bodyText confidence="0.999867">
+where η(T) is the number of possible spines, or
+equivalently the number of contexts c E Cw* in T.
+Recall that our goal is to efficiently emulate the
+output of a rejection sampler. An ideal system Pw*
+would produce the complete set of derivation trees
+accepted by the rejection sampler using PV , with
+probabilities of each derivation tree T satisfying
+</bodyText>
+<equation confidence="0.997354">
+Pw*(T) oc PV (T) (13)
+</equation>
+<bodyText confidence="0.9523885">
+Consider the implications of the following as-
+sumption
+</bodyText>
+<equation confidence="0.763115">
+A each T E T,,,* contains exactly one c E Cw*
+</equation>
+<bodyText confidence="0.998332866666667">
+A ensures that η(T) = 1 for all T, unifying Equa-
+tions 12 and 13. A does not generally hold in prac-
+tice, but its clear exposition allows us to design
+models for which it holds most of the time, lead-
+ing to a tight approximation.
+The most important consideration of this type is
+to limit redundancy in Cw*. For illustration con-
+sider a dependency grammar model with parent
+annotation where a context is the current word and
+its parent word. When specifying Cw* for a partic-
+ular w∗, we might choose all contexts in which w∗
+appears as either the current or parent word, but
+a better choice that more closely satisfies A is to
+choose contexts where w∗ appears as the current
+word only.
+</bodyText>
+<page confidence="0.990056">
+129
+</page>
+<figure confidence="0.999395351851852">
+ROOT
+VBZ
+likes
+only ceain p
+plausie sen
+ROOT VBZ
+N thLG a
+likes
+es ar e
+ble ses ar
+PRP NNS
+The t
+tic cint of
+e
+th
+she ntic c
+dogs
+At m
+data i all tht is r
+ROT VZ
+ajorit
+ROOT PRP VBZ
+of NLG ap
+st set afixd vo
+ture; poducng se
+ft roiati
+ROOT VBZ NNS
+ern fo thei
+likes dogs
+he l wo
+i
+t as ell p
+Abtract
+she likes
+ls
+” d
+sen ences
+he semantic
+d END th
+e ce
+JJ
+e d
+y
+big
+ibi
+in-
+VBZ JJ NNS
+cab ar llod.
+ords e
+big dogs
+igle
+END
+ca s t d a
+e a m
+</figure>
+<figureCaption confidence="0.995248">
+Figure 2: The generation system SPINEDEP draws on dependency tree syntax where we use the term
+</figureCaption>
+<figure confidence="0.584196322580645">
+d where students have sm k
+educion, where stuents have small known o
+he likes
+ROOT PRP VBZ edge of arbiary wds are required. This use
+ROOT P VBZ c
+cabularies and eercises that reinfoe the knowl- cal study is a difficult ask Whe many langug
+NLG is seful when costraints are appld such
+sh k es
+he e o bitra e h de e N ge nd t s d
+node to refer to a POS/word pair. Contexts consist of a node, its parent node, and grandparent POS tag,
+edge of abitrary wd are required. This use
+ROOT PRP VBZ JJ NNS can easiy prouce sample sntences from distri-
+liks majrity of NG applies the semantic conraint of
+e h
+stat frm if al d
+as shown in squares. Outcomes, shown in squares with rounded right sides, are full lists of dependents
+is a plausible sentence one might as wel pick one
+ative gals. Othr work sch as ours investi-
+g i i d nt
+nd m ny eg rp
+or the END symbol. The shaded rectangles contain the resultsuof Ih(c,oo) from thehindicated (c, o) pair. ing
+6 Experiments
+We train our models on sentences drawn from the
+Simple English Wikipedia1. We obtained these
+ROOT VBZ NNS
+sentences from a data dump which we liberally fil-
+likes dogs
+tered to remove items such as lists and sentences
+longer than 15 words or shorter then 3 words. We
+ROOT PRP VZ
+s ke
+</figure>
+<bodyText confidence="0.999756857142857">
+parsed this data with the recently updated Stanford
+Parser (Socher et al., 2013) to Penn Treebank con-
+stituent form, and removed any sentence that did
+not parse to a top level S containing at least one
+NP and one VP child. Even with such strong fil-
+ters, we retained over 140K sentences for use as
+training data, and provide this exact set of parse
+trees for use in future work.2
+Inspired by the application in language educa-
+tion, for our vocabulary list we use the English Vo-
+cabulary Profile (Capel, 2012), which predicts stu-
+dent vocabulary at different stages of learning En-
+glish as a second language. We take the most ba-
+sic American English vocabulary (the A1 list), and
+retrieve all inflections for each word using Sim-
+pleNLG (Gatt and Reiter, 2009), yielding a vocab-
+ulary of 1226 simple words and punctuation.
+To mitigate noise in the data, we discard any
+pair of context and outcome that appears only once
+in the training data, and estimate the parameters of
+the unconstrained model using EM.
+</bodyText>
+<subsectionHeader confidence="0.999168">
+6.1 Model Comparison
+</subsectionHeader>
+<bodyText confidence="0.790021333333333">
+We experimented with many generation models
+before converging on SPINEDEP, described in
+Figure 2, which we use in these experiments.
+</bodyText>
+<footnote confidence="0.999746">
+1http://simple.wikipedia.org
+2data url anon for review
+</footnote>
+<bodyText confidence="0.525263">
+We motivate two specfic constraints concern-
+</bodyText>
+<figure confidence="0.983159368421053">
+SPINEDEP unsmoothed
+otaint e m
+education whe
+aries d
+SPINEDEP WordNet
+a fixed vocabulary sch that only sen-
+she likes
+edge of arbitra
+h b ld
+SPINEDEP word2vec 5000
+The second demands not only that all words are
+ib b h il f il
+SPINEDEP word2vec 500
+btrary word somewere in the entence. These
+i l i h f l
+nts have small known o-
+KneserNey-5
+h if h knl
+DMVThis use
+</figure>
+<figureCaption confidence="0.672774461538461">
+Figure 3: System comparison based on human
+judged correctness and the percentage of unique
+sentences in a sample of 100K.
+SPINEDEP uses dependency grammar elements,
+with parent and grandparent information in the
+contexts to capture such distinctions as that be-
+tween main and clausal verbs. Its outcomes are
+full configurations of dependents, capturing co-
+ordinations such as subject-object pairings. This
+specificity greatly increases the size of the model
+and in turn reduces the speed of the true rejection
+sampler, which fails over 90% of the time to pro-
+duce an in-vocab sentence.
+</figureCaption>
+<bodyText confidence="0.998720083333334">
+We found that large amounts of smoothing
+quickly diminishes the amount of error free out-
+put, and so we smooth very cautiously, map-
+ping words in the contexts and outcomes to
+fine semantic classes. We compare the use
+of human annotated hypernyms from Word-
+net (Miller, 1995) with automatic word clusters
+from word2vec (Mikolov et al., 2013), based on
+vector space word embeddings, evaluating both
+500 and 5000 clusters for the latter.
+We compare these models against several base-
+line alternatives, shown in Figure 3. To determine
+</bodyText>
+<figure confidence="0.996202714285714">
+s not only that all
+Corr(%) % uniq
+s ar
+s the incluson of e ar
+87.6 5.0
+the cae o uae
+ve small n vo-
+reinfoce owl- .5
+78.3 32
+required s use
+72.6 52.9
+65.3 60.2
+64.0 25.8
+33.7 71.2
+</figure>
+<page confidence="0.988203">
+130
+</page>
+<bodyText confidence="0.9998427">
+correctness, used Amazon Mechanical Turk, ask-
+ing the question: “Is this sentence plausible?”. We
+further clarified this question in the instructions
+with alternative definitions of plausibility as well
+as both positive and negative examples. Every sen-
+tence was rated by five reviewers and its correct-
+ness was determined by majority vote, with a .496
+Fleiss kappa agreement. To avoid spammers, we
+limited our hits to Turkers with an over 95% ap-
+proval rating.
+Traditional language modeling techniques such
+as such as the Dependency Model with Va-
+lence (Klein and Manning, 2004) and 5-gram
+Kneser Ney (Chen and Goodman, 1996) perform
+poorly, which is unsurprising as they are designed
+for tasks in recognition rather than generation. For
+n-gram models, accuracy can be greatly increased
+by decreasing the amount of smoothing, but it be-
+comes difficult to find long n-grams that are com-
+pletely in-vocab and results become redundant,
+parroting the few completely in-vocab sentences
+from the training data. The DMV is more flex-
+ible, but makes assumptions of conditional inde-
+pendence that are far too strong. As a result it
+is unable to avoid red flags such as sentences not
+ending in punctuation or strange subject-object co-
+ordinations. Without smoothing, SPINEDEP suf-
+fers from a similar problem as unsmoothed n-gram
+models; high accuracy but quickly vanishing pro-
+ductivity.
+All of the smoothed SPINEDEP systems show
+clear advantages over their competitors. The
+tradeoff between correctness and generative ca-
+pacity is also clear, and our results suggest that the
+number of clusters created from the word2vec em-
+beddings can be used to trace this curve. As for the
+ideal position in this tradeoff, we leave such deci-
+sions which are particular to specific application to
+future work, arbitrarily using SPINEDEP WordNet
+for our following experiments.
+</bodyText>
+<subsectionHeader confidence="0.998652">
+6.2 Fixed Vocabulary
+</subsectionHeader>
+<bodyText confidence="0.997470333333333">
+To show the tightness of the approximation pre-
+sented in Section 4.2, we evaluate three settings
+for the probabilities of the pruned model. The first
+is a weak baseline that sets all distributions to uni-
+form. For the second, we simply renormalize the
+true model’s probabilities, which is equivalent to
+setting G(c) = 1 for all c in Equation 2. Finally,
+we use our proposed method to estimate G(c).
+We show in Figure 4 that our estimation method
+</bodyText>
+<table confidence="0.981203">
+Corr(%) -LLR
+True RS 79.3
+Uniform 47.3 96.2
+G(c) = 1 77.0 25.0
+G(c) estimated 78.3 1.0
+</table>
+<figureCaption confidence="0.99027">
+Figure 4: A comparison of our system against both
+</figureCaption>
+<bodyText confidence="0.981380285714286">
+a weak and a strong baseline based on correctness
+and the negative log of the likelihood ratio mea-
+suring closeness to the true rejection sampler.
+more closely approximates the distribution of the
+rejection sampler by drawing 500K samples from
+each model and comparing them with 500K sam-
+ples from the rejection sampler itself. We quantify
+this comparison with the likelihood ratio statistic,
+evaluating the null hypothesis that the two sam-
+ples were drawn from the same distribution. Not
+only does our method more closely emulate that of
+the rejection sampler, be we see welcome evidence
+that closeness to the true distribution is correlated
+with correctness.
+</bodyText>
+<subsectionHeader confidence="0.995737">
+6.3 Word Inclusion
+</subsectionHeader>
+<bodyText confidence="0.999962846153846">
+To explore the word inclusion constraint, for each
+word in our vocabulary list we sample 1000 sen-
+tences that are constrained to include that word
+using both unsmoothed and WordNet smoothed
+SPINEDEP. We compare these results to the “Cor-
+pus” model that simply searches the training data
+and uniformly samples from the existing sentences
+that satisfy the constraints. This corpus search ap-
+proach is quite a strong baseline, as it is trivial to
+implement and we assume perfect correctness for
+its results.
+This experiment is especially relevant to our
+motivation of language education. The natural
+question when proposing any NLG approach is
+whether or not the ability to automatically produce
+sentences outweighs the requirement of a post-
+process to ensure goal-appropriate output. This
+is a challenging task in the context of language
+education, as most applications such as exam or
+homework creation require only a handful of sen-
+tences. In order for an NLG solution to be appro-
+priate, the constraints must be so strong that a cor-
+pus search based method will frequently produce
+too few options to be useful. The word inclusion
+constraint highlights the strengths of our method
+as it is not only highly plausible in a language ed-
+</bodyText>
+<page confidence="0.992169">
+131
+</page>
+<table confidence="0.989456">
+# &lt; 10 # &gt; 100 Corr(%)
+Corpus 987 26 100
+Unsmooth 957 56 89.0
+Smooth 544 586 79.0
+</table>
+<figureCaption confidence="0.776284">
+Figure 5: Using systems that implement the word
+</figureCaption>
+<bodyText confidence="0.991467842105263">
+inclusion constraint, this table shows the number
+of words for which the amount of unique sentences
+out of 1000 samples was less than 10 or greater
+than 100, along with the correctness of each sys-
+tem.
+ucation setting but difficult to satisfy by chance in
+large corpora.
+Figure 5 shows that the corpus search approach
+fails to find more than ten sentences that obey the
+word inclusion constraints for most target words.
+Moreover, it is arguably the case that unsmoothed
+SPINEDEP is even worse due to its inferior cor-
+rectness. With the addition of smoothing, how-
+ever, we see a drastic shift in the number of words
+for which a large number of sentences can be pro-
+duced. For the majority of the vocabulary words
+this model generates over 100 sentences that obey
+both constraints, of which approximately 80% are
+valid English sentences.
+</bodyText>
+<sectionHeader confidence="0.999173" genericHeader="conclusions">
+7 Conclusion
+</sectionHeader>
+<bodyText confidence="0.999993196428571">
+In this work we address two novel NLG con-
+straints, fixed vocabulary and fixed vocabulary
+with word inclusion, that are motivated by lan-
+guage education scenarios. We showed that un-
+der these constraints a highly parameterized model
+based on dependency tree syntax can produce a
+wide range of accurate sentences, outperforming
+the strong baselines of popular generative lan-
+guage models. We developed a pruning and es-
+timation algorithm for the fixed vocabulary con-
+straint and showed that it not only closely approx-
+imates the true rejection sampler but also that the
+tightness of approximation is correlated with hu-
+man judgments of correctness. We showed that
+under the word inclusion constraint, precise se-
+mantic smoothing produces a system whose abili-
+ties exceed the simple but powerful alternative of
+looking up sentences in large corpora.
+SPINEDEP works surprisingly well given the
+widely held stigma that freeform NLG produces
+either memorized sentences or gibberish. Still, we
+expect that better models exist, especially in terms
+of definition of smoothing operators. We have pre-
+sented our algorithms in the flexible terms of con-
+text and outcome, and clearly stated the properties
+that are required for the full use of our methodol-
+ogy. We have also implemented our code in these
+general terms3, which performs EM based param-
+eter estimation as well as efficient generation un-
+der the constraints discussed above. All systems
+used in this work with the exception of 5-gram in-
+terpolated Kneser-Ney were implemented in this
+way, are included with the code, and can be used
+as templates.
+We recognize several avenues for continued
+work on this topic. The use of form-based con-
+straints such as word inclusion has clear applica-
+tion in language education, but many other con-
+straints are also desirable. The clearest is perhaps
+the ability to constrain results based on a “vocab-
+ulary” of syntactic patterns such as “Not only ...
+but also ...”. Another extension would be to incor-
+porate the rough communicative goal of response
+to a previous sentence as in Wu et al. (2013) and
+attempt to produce in-vocab dialogs such as are
+ubiquitous in language education textbooks.
+Another possible direction is in the improve-
+ment of the context-outcome framework itself.
+While we have assumed a data set of one deriva-
+tion tree per sentence, our current methods eas-
+ily extend to sets of weighted derivations for each
+sentence. This suggests the use of techinques that
+have proved effective in grammar estimation that
+reason over large numbers of possible derivations
+such as Bayesian tree substitution grammars or un-
+supervised symbol refinement.
+</bodyText>
+<sectionHeader confidence="0.999206" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.994648142857143">
+Anja Belz. 2008. Automatic generation of weather
+forecast texts using comprehensive probabilistic
+generation-space models. Natural Language Engi-
+neering, 14(4):431–455.
+A. Capel. 2012. The english vocabulary profile.
+http://vocabulary.englishprofile.org/.
+Stanley F. Chen and Joshua Goodman. 1996. An em-
+pirical study of smoothing techniques for language
+modeling. In Proceedings of the 34th Annual Meet-
+ing on Association for Computational Linguistics,
+ACL ’96, pages 310–318, Stroudsburg, PA, USA.
+Association for Computational Linguistics.
+Simon Colton, Jacob Goodwin, and Tony Veale. 2012.
+Full face poetry generation. In Proceedings of the
+</reference>
+<footnote confidence="0.571831">
+3url anon for review
+</footnote>
+<page confidence="0.985304">
+132
+</page>
+<reference confidence="0.99809091025641">
+Third International Conference on Computational
+Creativity, pages 95–102.
+Albert Gatt and Ehud Reiter. 2009. Simplenlg: A re-
+alisation engine for practical applications. In Pro-
+ceedings of the 12th European Workshop on Natu-
+ral Language Generation, ENLG ’09, pages 90–93,
+Stroudsburg, PA, USA. Association for Computa-
+tional Linguistics.
+Erica Greene, Tugba Bodrumlu, and Kevin Knight.
+2010. Automatic analysis of rhythmic poetry with
+applications to generation and translation. In Pro-
+ceedings of the 2010 Conference on Empirical Meth-
+ods in Natural Language Processing, EMNLP ’10,
+pages 524–533, Stroudsburg, PA, USA. Association
+for Computational Linguistics.
+Long Jiang and Ming Zhou. 2008. Generating chi-
+nese couplets using a statistical mt approach. In
+Proceedings of the 22nd International Conference
+on Computational Linguistics-Volume 1, pages 377–
+384. Association for Computational Linguistics.
+Dan Klein and Christopher D. Manning. 2004.
+Corpus-based induction of syntactic structure: Mod-
+els of dependency and constituency. In Proceed-
+ings of the 42Nd Annual Meeting on Association for
+Computational Linguistics, ACL ’04, Stroudsburg,
+PA, USA. Association for Computational Linguis-
+tics.
+Tomas Mikolov, Kai Chen, Greg Corrado, and Jeffrey
+Dean. 2013. Efficient estimation of word represen-
+tations in vector space. CoRR, abs/1301.3781.
+Michael I. Miller and Joseph A. Osullivan. 1992. En-
+tropies and combinatorics of random branching pro-
+cesses and context-free languages. IEEE Transac-
+tions on Information Theory, 38.
+George A. Miller. 1995. Wordnet: A lexical database
+for english. COMMUNICATIONS OF THE ACM,
+38:39–41.
+Margaret Mitchell, Kees van Deemter, and Ehud Reiter.
+2013. Generating expressions that refer to visible
+objects. In HLT-NAACL, pages 1174–1184.
+Jack Mostow and Hyeju Jang. 2012. Generating di-
+agnostic multiple choice comprehension cloze ques-
+tions. In Proceedings of the Seventh Workshop
+on Building Educational Applications Using NLP,
+pages 136–146. Association for Computational Lin-
+guistics.
+G¨ozde ¨Ozbal, Daniele Pighin, and Carlo Strapparava.
+2013. Brainsup: Brainstorming support for creative
+sentence generation. In Proceedings of the 51st An-
+nual Meeting of the Association for Computational
+Linguistics (Volume 1: Long Papers), pages 1446–
+1455, Sofia, Bulgaria, August. Association for Com-
+putational Linguistics.
+Ananth Ramakrishnan A, Sankar Kuppan, and
+Sobha Lalitha Devi. 2009. Automatic generation
+of tamil lyrics for melodies. In Proceedings of the
+Workshop on Computational Approaches to Linguis-
+tic Creativity, pages 40–46. Association for Compu-
+tational Linguistics.
+Richard Socher, John Bauer, Christopher D. Manning,
+and Andrew Y. Ng. 2013. Parsing With Composi-
+tional Vector Grammars. In ACL.
+Eiichiro Sumita, Fumiaki Sugaya, and Seiichi Ya-
+mamoto. 2005. Measuring non-native speak-
+ers’ proficiency of english by using a test with
+automatically-generated fill-in-the-blank questions.
+In Proceedings of the second workshop on Building
+Educational Applications Using NLP, pages 61–68.
+Association for Computational Linguistics.
+Alessandro Valitutti, Hannu Toivonen, Antoine
+Doucet, and Jukka M. Toivanen. 2013. ”let every-
+thing turn well in your wife”: Generation of adult
+humor using lexical constraints. In ACL (2), pages
+243–248.
+Dekai Wu, Karteek Addanki, Markus Saers, and
+Meriem Beloucif. 2013. Learning to freestyle: Hip
+hop challenge-response induction via transduction
+rule segmentation. In EMNLP, pages 102–112.
+</reference>
+<page confidence="0.999149">
+133
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.547357">
+<title confidence="0.999967">Natural Language Generation with Vocabulary Constraints</title>
+<author confidence="0.999822">Ben Swanson Elif Yamangil Eugene Charniak</author>
+<affiliation confidence="0.786984">Brown University Google Inc. Brown University Providence, RI Mountain View, CA Providence,</affiliation>
+<email confidence="0.999305">chonger@cs.brown.eduleafer@google.comec@cs.brown.edu</email>
+<abstract confidence="0.99714825">We investigate data driven natural language generation under the constraints that all words must come from a fixed vocabulary and a specified word must appear in the generated sentence, motivated by the possibility for automatic generation of language education exercises. We present fast and accurate approximations to the ideal rejection samplers for these constraints and compare various sentence level generative language models. Our best systems produce output that is with high frequency both novel and error free, which we validate with human and automatic evaluations.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Anja Belz</author>
+</authors>
+<title>Automatic generation of weather forecast texts using comprehensive probabilistic generation-space models.</title>
+<date>2008</date>
+<journal>Natural Language Engineering,</journal>
+<volume>14</volume>
+<issue>4</issue>
+<contexts>
+<context position="4622" citStr="Belz (2008)" startWordPosition="706" endWordPosition="707">bution of the true rejection samplers. We contrast several generative systems through both human and automatic evaluation. Our best system effectively captures the compositional nature of our training data, producing error-free text with nearly 80 percent accuracy without wasting computation on backtracking or rejection. When the word inclusion constraint is introduced, we show clear empirical advantages over the simple solution of searching a large corpus for an appropriate sentence. 2 Related Work The majority of NLG focuses on the satisfaction of a communicative goal, with examples such as Belz (2008) which produces weather reports from structured data or Mitchell et al. (2013) which generates descriptions of objects from images. Our work is more similar to NLG work that concentrates on structural constraints such as generative poetry (Greene et al., 2010) (Colton et al., 2012) (Jiang and Zhou, 2008) or song lyrics (Wu et al., 2013) (Ramakrishnan A et al., 2009), where specified meter or rhyme schemes are enforced. In these papers soft semantic goals are sometimes also introduced that seek responses to previous lines of poetry or lyric. Computational creativity is another subfield of NLG t</context>
+</contexts>
+<marker>Belz, 2008</marker>
+<rawString>Anja Belz. 2008. Automatic generation of weather forecast texts using comprehensive probabilistic generation-space models. Natural Language Engineering, 14(4):431–455.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Capel</author>
+</authors>
+<date>2012</date>
+<note>The english vocabulary profile. http://vocabulary.englishprofile.org/.</note>
+<contexts>
+<context position="25914" citStr="Capel, 2012" startWordPosition="4677" endWordPosition="4678"> remove items such as lists and sentences longer than 15 words or shorter then 3 words. We ROOT PRP VZ s ke parsed this data with the recently updated Stanford Parser (Socher et al., 2013) to Penn Treebank constituent form, and removed any sentence that did not parse to a top level S containing at least one NP and one VP child. Even with such strong filters, we retained over 140K sentences for use as training data, and provide this exact set of parse trees for use in future work.2 Inspired by the application in language education, for our vocabulary list we use the English Vocabulary Profile (Capel, 2012), which predicts student vocabulary at different stages of learning English as a second language. We take the most basic American English vocabulary (the A1 list), and retrieve all inflections for each word using SimpleNLG (Gatt and Reiter, 2009), yielding a vocabulary of 1226 simple words and punctuation. To mitigate noise in the data, we discard any pair of context and outcome that appears only once in the training data, and estimate the parameters of the unconstrained model using EM. 6.1 Model Comparison We experimented with many generation models before converging on SPINEDEP, described in</context>
+</contexts>
+<marker>Capel, 2012</marker>
+<rawString>A. Capel. 2012. The english vocabulary profile. http://vocabulary.englishprofile.org/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stanley F Chen</author>
+<author>Joshua Goodman</author>
+</authors>
+<title>An empirical study of smoothing techniques for language modeling.</title>
+<date>1996</date>
+<booktitle>In Proceedings of the 34th Annual Meeting on Association for Computational Linguistics, ACL ’96,</booktitle>
+<pages>310--318</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Stroudsburg, PA, USA.</location>
+<contexts>
+<context position="28930" citStr="Chen and Goodman, 1996" startWordPosition="5187" endWordPosition="5190">0 correctness, used Amazon Mechanical Turk, asking the question: “Is this sentence plausible?”. We further clarified this question in the instructions with alternative definitions of plausibility as well as both positive and negative examples. Every sentence was rated by five reviewers and its correctness was determined by majority vote, with a .496 Fleiss kappa agreement. To avoid spammers, we limited our hits to Turkers with an over 95% approval rating. Traditional language modeling techniques such as such as the Dependency Model with Valence (Klein and Manning, 2004) and 5-gram Kneser Ney (Chen and Goodman, 1996) perform poorly, which is unsurprising as they are designed for tasks in recognition rather than generation. For n-gram models, accuracy can be greatly increased by decreasing the amount of smoothing, but it becomes difficult to find long n-grams that are completely in-vocab and results become redundant, parroting the few completely in-vocab sentences from the training data. The DMV is more flexible, but makes assumptions of conditional independence that are far too strong. As a result it is unable to avoid red flags such as sentences not ending in punctuation or strange subject-object coordin</context>
+</contexts>
+<marker>Chen, Goodman, 1996</marker>
+<rawString>Stanley F. Chen and Joshua Goodman. 1996. An empirical study of smoothing techniques for language modeling. In Proceedings of the 34th Annual Meeting on Association for Computational Linguistics, ACL ’96, pages 310–318, Stroudsburg, PA, USA. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Simon Colton</author>
+<author>Jacob Goodwin</author>
+<author>Tony Veale</author>
+</authors>
+<title>Full face poetry generation.</title>
+<date>2012</date>
+<booktitle>In Proceedings of the Third International Conference on Computational Creativity,</booktitle>
+<pages>95--102</pages>
+<contexts>
+<context position="4904" citStr="Colton et al., 2012" startWordPosition="750" endWordPosition="753">wasting computation on backtracking or rejection. When the word inclusion constraint is introduced, we show clear empirical advantages over the simple solution of searching a large corpus for an appropriate sentence. 2 Related Work The majority of NLG focuses on the satisfaction of a communicative goal, with examples such as Belz (2008) which produces weather reports from structured data or Mitchell et al. (2013) which generates descriptions of objects from images. Our work is more similar to NLG work that concentrates on structural constraints such as generative poetry (Greene et al., 2010) (Colton et al., 2012) (Jiang and Zhou, 2008) or song lyrics (Wu et al., 2013) (Ramakrishnan A et al., 2009), where specified meter or rhyme schemes are enforced. In these papers soft semantic goals are sometimes also introduced that seek responses to previous lines of poetry or lyric. Computational creativity is another subfield of NLG that often does not fix an a priori meaning in its output. Examples such as ¨Ozbal et al. (2013) and Valitutti et al. (2013) use template filling techniques guided by quantified notions of humor or how catchy a phrase is. Our motivation for generation of material for language educat</context>
+</contexts>
+<marker>Colton, Goodwin, Veale, 2012</marker>
+<rawString>Simon Colton, Jacob Goodwin, and Tony Veale. 2012. Full face poetry generation. In Proceedings of the Third International Conference on Computational Creativity, pages 95–102.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Albert Gatt</author>
+<author>Ehud Reiter</author>
+</authors>
+<title>Simplenlg: A realisation engine for practical applications.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the 12th European Workshop on Natural Language Generation, ENLG ’09,</booktitle>
+<pages>90--93</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Stroudsburg, PA, USA.</location>
+<contexts>
+<context position="26160" citStr="Gatt and Reiter, 2009" startWordPosition="4717" endWordPosition="4720">any sentence that did not parse to a top level S containing at least one NP and one VP child. Even with such strong filters, we retained over 140K sentences for use as training data, and provide this exact set of parse trees for use in future work.2 Inspired by the application in language education, for our vocabulary list we use the English Vocabulary Profile (Capel, 2012), which predicts student vocabulary at different stages of learning English as a second language. We take the most basic American English vocabulary (the A1 list), and retrieve all inflections for each word using SimpleNLG (Gatt and Reiter, 2009), yielding a vocabulary of 1226 simple words and punctuation. To mitigate noise in the data, we discard any pair of context and outcome that appears only once in the training data, and estimate the parameters of the unconstrained model using EM. 6.1 Model Comparison We experimented with many generation models before converging on SPINEDEP, described in Figure 2, which we use in these experiments. 1http://simple.wikipedia.org 2data url anon for review We motivate two specfic constraints concernSPINEDEP unsmoothed otaint e m education whe aries d SPINEDEP WordNet a fixed vocabulary sch that only</context>
+</contexts>
+<marker>Gatt, Reiter, 2009</marker>
+<rawString>Albert Gatt and Ehud Reiter. 2009. Simplenlg: A realisation engine for practical applications. In Proceedings of the 12th European Workshop on Natural Language Generation, ENLG ’09, pages 90–93, Stroudsburg, PA, USA. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Erica Greene</author>
+<author>Tugba Bodrumlu</author>
+<author>Kevin Knight</author>
+</authors>
+<title>Automatic analysis of rhythmic poetry with applications to generation and translation.</title>
+<date>2010</date>
+<booktitle>In Proceedings of the 2010 Conference on Empirical Methods in Natural Language Processing, EMNLP ’10,</booktitle>
+<pages>524--533</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Stroudsburg, PA, USA.</location>
+<contexts>
+<context position="4882" citStr="Greene et al., 2010" startWordPosition="746" endWordPosition="749">cent accuracy without wasting computation on backtracking or rejection. When the word inclusion constraint is introduced, we show clear empirical advantages over the simple solution of searching a large corpus for an appropriate sentence. 2 Related Work The majority of NLG focuses on the satisfaction of a communicative goal, with examples such as Belz (2008) which produces weather reports from structured data or Mitchell et al. (2013) which generates descriptions of objects from images. Our work is more similar to NLG work that concentrates on structural constraints such as generative poetry (Greene et al., 2010) (Colton et al., 2012) (Jiang and Zhou, 2008) or song lyrics (Wu et al., 2013) (Ramakrishnan A et al., 2009), where specified meter or rhyme schemes are enforced. In these papers soft semantic goals are sometimes also introduced that seek responses to previous lines of poetry or lyric. Computational creativity is another subfield of NLG that often does not fix an a priori meaning in its output. Examples such as ¨Ozbal et al. (2013) and Valitutti et al. (2013) use template filling techniques guided by quantified notions of humor or how catchy a phrase is. Our motivation for generation of materi</context>
+</contexts>
+<marker>Greene, Bodrumlu, Knight, 2010</marker>
+<rawString>Erica Greene, Tugba Bodrumlu, and Kevin Knight. 2010. Automatic analysis of rhythmic poetry with applications to generation and translation. In Proceedings of the 2010 Conference on Empirical Methods in Natural Language Processing, EMNLP ’10, pages 524–533, Stroudsburg, PA, USA. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Long Jiang</author>
+<author>Ming Zhou</author>
+</authors>
+<title>Generating chinese couplets using a statistical mt approach.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 22nd International Conference on Computational Linguistics-Volume 1,</booktitle>
+<pages>377--384</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="4927" citStr="Jiang and Zhou, 2008" startWordPosition="754" endWordPosition="757"> backtracking or rejection. When the word inclusion constraint is introduced, we show clear empirical advantages over the simple solution of searching a large corpus for an appropriate sentence. 2 Related Work The majority of NLG focuses on the satisfaction of a communicative goal, with examples such as Belz (2008) which produces weather reports from structured data or Mitchell et al. (2013) which generates descriptions of objects from images. Our work is more similar to NLG work that concentrates on structural constraints such as generative poetry (Greene et al., 2010) (Colton et al., 2012) (Jiang and Zhou, 2008) or song lyrics (Wu et al., 2013) (Ramakrishnan A et al., 2009), where specified meter or rhyme schemes are enforced. In these papers soft semantic goals are sometimes also introduced that seek responses to previous lines of poetry or lyric. Computational creativity is another subfield of NLG that often does not fix an a priori meaning in its output. Examples such as ¨Ozbal et al. (2013) and Valitutti et al. (2013) use template filling techniques guided by quantified notions of humor or how catchy a phrase is. Our motivation for generation of material for language education exists in work such</context>
+</contexts>
+<marker>Jiang, Zhou, 2008</marker>
+<rawString>Long Jiang and Ming Zhou. 2008. Generating chinese couplets using a statistical mt approach. In Proceedings of the 22nd International Conference on Computational Linguistics-Volume 1, pages 377– 384. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dan Klein</author>
+<author>Christopher D Manning</author>
+</authors>
+<title>Corpus-based induction of syntactic structure: Models of dependency and constituency.</title>
+<date>2004</date>
+<booktitle>In Proceedings of the 42Nd Annual Meeting on Association for Computational Linguistics, ACL ’04,</booktitle>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Stroudsburg, PA, USA.</location>
+<contexts>
+<context position="28883" citStr="Klein and Manning, 2004" startWordPosition="5179" endWordPosition="5182">s use 72.6 52.9 65.3 60.2 64.0 25.8 33.7 71.2 130 correctness, used Amazon Mechanical Turk, asking the question: “Is this sentence plausible?”. We further clarified this question in the instructions with alternative definitions of plausibility as well as both positive and negative examples. Every sentence was rated by five reviewers and its correctness was determined by majority vote, with a .496 Fleiss kappa agreement. To avoid spammers, we limited our hits to Turkers with an over 95% approval rating. Traditional language modeling techniques such as such as the Dependency Model with Valence (Klein and Manning, 2004) and 5-gram Kneser Ney (Chen and Goodman, 1996) perform poorly, which is unsurprising as they are designed for tasks in recognition rather than generation. For n-gram models, accuracy can be greatly increased by decreasing the amount of smoothing, but it becomes difficult to find long n-grams that are completely in-vocab and results become redundant, parroting the few completely in-vocab sentences from the training data. The DMV is more flexible, but makes assumptions of conditional independence that are far too strong. As a result it is unable to avoid red flags such as sentences not ending i</context>
+</contexts>
+<marker>Klein, Manning, 2004</marker>
+<rawString>Dan Klein and Christopher D. Manning. 2004. Corpus-based induction of syntactic structure: Models of dependency and constituency. In Proceedings of the 42Nd Annual Meeting on Association for Computational Linguistics, ACL ’04, Stroudsburg, PA, USA. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tomas Mikolov</author>
+<author>Kai Chen</author>
+<author>Greg Corrado</author>
+<author>Jeffrey Dean</author>
+</authors>
+<title>Efficient estimation of word representations in vector space.</title>
+<date>2013</date>
+<location>CoRR, abs/1301.3781.</location>
+<contexts>
+<context position="27936" citStr="Mikolov et al., 2013" startWordPosition="5015" endWordPosition="5018">mes are full configurations of dependents, capturing coordinations such as subject-object pairings. This specificity greatly increases the size of the model and in turn reduces the speed of the true rejection sampler, which fails over 90% of the time to produce an in-vocab sentence. We found that large amounts of smoothing quickly diminishes the amount of error free output, and so we smooth very cautiously, mapping words in the contexts and outcomes to fine semantic classes. We compare the use of human annotated hypernyms from Wordnet (Miller, 1995) with automatic word clusters from word2vec (Mikolov et al., 2013), based on vector space word embeddings, evaluating both 500 and 5000 clusters for the latter. We compare these models against several baseline alternatives, shown in Figure 3. To determine s not only that all Corr(%) % uniq s ar s the incluson of e ar 87.6 5.0 the cae o uae ve small n voreinfoce owl- .5 78.3 32 required s use 72.6 52.9 65.3 60.2 64.0 25.8 33.7 71.2 130 correctness, used Amazon Mechanical Turk, asking the question: “Is this sentence plausible?”. We further clarified this question in the instructions with alternative definitions of plausibility as well as both positive and nega</context>
+</contexts>
+<marker>Mikolov, Chen, Corrado, Dean, 2013</marker>
+<rawString>Tomas Mikolov, Kai Chen, Greg Corrado, and Jeffrey Dean. 2013. Efficient estimation of word representations in vector space. CoRR, abs/1301.3781.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael I Miller</author>
+<author>Joseph A Osullivan</author>
+</authors>
+<title>Entropies and combinatorics of random branching processes and context-free languages.</title>
+<date>1992</date>
+<journal>IEEE Transactions on Information Theory,</journal>
+<volume>38</volume>
+<contexts>
+<context position="19320" citStr="Miller and Osullivan (1992)" startWordPosition="3399" endWordPosition="3402">ion sampler, which generates a derivation tree T and accepts if and only if it contains at least one member of Cw∗. Let Tw∗ be the set of derivation trees that would be accepted by the rejection sampler. We present a three stage generative model and its associated probability distribution Pw∗(τ) over items τ for which there is a functional mapping into Tw∗. In addition to the probabilities PV (o|c) from the previous section, we require an estimate of E(c), the expected number of times each context c appears in a single tree. This can be computed efficiently using the mean matrix, described in Miller and Osullivan (1992). This |CV |x |CV |matri x M has its entries defined as M(i,j) = X P(o|ci)#(cj, ci, o) (4) oEO where the operator # returns the number of times context cj appears I(ci,o). Defining a 1 x |CV | start state vector z0 that is zero everywhere and 1 in the entry corresponding to the root context gives which can be iteratively computed with sparse matrix multiplication. Note that the ith term in the sum corresponds to expected counts at depth i in the derivation tree. With definitions of context and outcome for which very deep derivations are improbable, it is reasonable to approximate this sum by t</context>
+</contexts>
+<marker>Miller, Osullivan, 1992</marker>
+<rawString>Michael I. Miller and Joseph A. Osullivan. 1992. Entropies and combinatorics of random branching processes and context-free languages. IEEE Transactions on Information Theory, 38.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>George A Miller</author>
+</authors>
+<title>Wordnet: A lexical database for english.</title>
+<date>1995</date>
+<journal>COMMUNICATIONS OF THE ACM,</journal>
+<pages>38--39</pages>
+<contexts>
+<context position="27870" citStr="Miller, 1995" startWordPosition="5007" endWordPosition="5008">inctions as that between main and clausal verbs. Its outcomes are full configurations of dependents, capturing coordinations such as subject-object pairings. This specificity greatly increases the size of the model and in turn reduces the speed of the true rejection sampler, which fails over 90% of the time to produce an in-vocab sentence. We found that large amounts of smoothing quickly diminishes the amount of error free output, and so we smooth very cautiously, mapping words in the contexts and outcomes to fine semantic classes. We compare the use of human annotated hypernyms from Wordnet (Miller, 1995) with automatic word clusters from word2vec (Mikolov et al., 2013), based on vector space word embeddings, evaluating both 500 and 5000 clusters for the latter. We compare these models against several baseline alternatives, shown in Figure 3. To determine s not only that all Corr(%) % uniq s ar s the incluson of e ar 87.6 5.0 the cae o uae ve small n voreinfoce owl- .5 78.3 32 required s use 72.6 52.9 65.3 60.2 64.0 25.8 33.7 71.2 130 correctness, used Amazon Mechanical Turk, asking the question: “Is this sentence plausible?”. We further clarified this question in the instructions with alterna</context>
+</contexts>
+<marker>Miller, 1995</marker>
+<rawString>George A. Miller. 1995. Wordnet: A lexical database for english. COMMUNICATIONS OF THE ACM, 38:39–41.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Margaret Mitchell</author>
+<author>Kees van Deemter</author>
+<author>Ehud Reiter</author>
+</authors>
+<title>Generating expressions that refer to visible objects.</title>
+<date>2013</date>
+<booktitle>In HLT-NAACL,</booktitle>
+<pages>1174--1184</pages>
+<marker>Mitchell, van Deemter, Reiter, 2013</marker>
+<rawString>Margaret Mitchell, Kees van Deemter, and Ehud Reiter. 2013. Generating expressions that refer to visible objects. In HLT-NAACL, pages 1174–1184.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jack Mostow</author>
+<author>Hyeju Jang</author>
+</authors>
+<title>Generating diagnostic multiple choice comprehension cloze questions.</title>
+<date>2012</date>
+<booktitle>In Proceedings of the Seventh Workshop on Building Educational Applications Using NLP,</booktitle>
+<pages>136--146</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="5578" citStr="Mostow and Jang (2012)" startWordPosition="866" endWordPosition="869">013) (Ramakrishnan A et al., 2009), where specified meter or rhyme schemes are enforced. In these papers soft semantic goals are sometimes also introduced that seek responses to previous lines of poetry or lyric. Computational creativity is another subfield of NLG that often does not fix an a priori meaning in its output. Examples such as ¨Ozbal et al. (2013) and Valitutti et al. (2013) use template filling techniques guided by quantified notions of humor or how catchy a phrase is. Our motivation for generation of material for language education exists in work such as Sumita et al. (2005) and Mostow and Jang (2012), which deal with automatic generation of classic fill in the blank questions. Our work is naturally complementary to these efforts, as their methods require a corpus of in-vocab text to serve as seed sentences. 3 Freeform Generation For clarity in our discussion, we phrase the sentence generation process in the following general terms based around two classes of atomic units : contexts and outcomes. In order to specify a generation system, we must define 1. the set C of contexts c 2. the set O of outcomes o 3. the “Imply” function I(c, o) —* List[c E C] 4. M : derivation tree ;-± sentence whe</context>
+</contexts>
+<marker>Mostow, Jang, 2012</marker>
+<rawString>Jack Mostow and Hyeju Jang. 2012. Generating diagnostic multiple choice comprehension cloze questions. In Proceedings of the Seventh Workshop on Building Educational Applications Using NLP, pages 136–146. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G¨ozde ¨Ozbal</author>
+<author>Daniele Pighin</author>
+<author>Carlo Strapparava</author>
+</authors>
+<title>Brainsup: Brainstorming support for creative sentence generation.</title>
+<date>2013</date>
+<booktitle>In Proceedings of the 51st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers),</booktitle>
+<pages>1446--1455</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Sofia, Bulgaria,</location>
+<marker>¨Ozbal, Pighin, Strapparava, 2013</marker>
+<rawString>G¨ozde ¨Ozbal, Daniele Pighin, and Carlo Strapparava. 2013. Brainsup: Brainstorming support for creative sentence generation. In Proceedings of the 51st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 1446– 1455, Sofia, Bulgaria, August. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ananth Ramakrishnan A</author>
+<author>Sankar Kuppan</author>
+<author>Sobha Lalitha Devi</author>
+</authors>
+<title>Automatic generation of tamil lyrics for melodies.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the Workshop on Computational Approaches to Linguistic Creativity,</booktitle>
+<pages>40--46</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="4990" citStr="A et al., 2009" startWordPosition="766" endWordPosition="769">roduced, we show clear empirical advantages over the simple solution of searching a large corpus for an appropriate sentence. 2 Related Work The majority of NLG focuses on the satisfaction of a communicative goal, with examples such as Belz (2008) which produces weather reports from structured data or Mitchell et al. (2013) which generates descriptions of objects from images. Our work is more similar to NLG work that concentrates on structural constraints such as generative poetry (Greene et al., 2010) (Colton et al., 2012) (Jiang and Zhou, 2008) or song lyrics (Wu et al., 2013) (Ramakrishnan A et al., 2009), where specified meter or rhyme schemes are enforced. In these papers soft semantic goals are sometimes also introduced that seek responses to previous lines of poetry or lyric. Computational creativity is another subfield of NLG that often does not fix an a priori meaning in its output. Examples such as ¨Ozbal et al. (2013) and Valitutti et al. (2013) use template filling techniques guided by quantified notions of humor or how catchy a phrase is. Our motivation for generation of material for language education exists in work such as Sumita et al. (2005) and Mostow and Jang (2012), which deal</context>
+</contexts>
+<marker>A, Kuppan, Devi, 2009</marker>
+<rawString>Ananth Ramakrishnan A, Sankar Kuppan, and Sobha Lalitha Devi. 2009. Automatic generation of tamil lyrics for melodies. In Proceedings of the Workshop on Computational Approaches to Linguistic Creativity, pages 40–46. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Richard Socher</author>
+<author>John Bauer</author>
+<author>Christopher D Manning</author>
+<author>Andrew Y Ng</author>
+</authors>
+<title>Parsing With Compositional Vector Grammars.</title>
+<date>2013</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="25490" citStr="Socher et al., 2013" startWordPosition="4597" endWordPosition="4600">ists of dependents is a plausible sentence one might as wel pick one ative gals. Othr work sch as ours investig i i d nt nd m ny eg rp or the END symbol. The shaded rectangles contain the resultsuof Ih(c,oo) from thehindicated (c, o) pair. ing 6 Experiments We train our models on sentences drawn from the Simple English Wikipedia1. We obtained these ROOT VBZ NNS sentences from a data dump which we liberally fillikes dogs tered to remove items such as lists and sentences longer than 15 words or shorter then 3 words. We ROOT PRP VZ s ke parsed this data with the recently updated Stanford Parser (Socher et al., 2013) to Penn Treebank constituent form, and removed any sentence that did not parse to a top level S containing at least one NP and one VP child. Even with such strong filters, we retained over 140K sentences for use as training data, and provide this exact set of parse trees for use in future work.2 Inspired by the application in language education, for our vocabulary list we use the English Vocabulary Profile (Capel, 2012), which predicts student vocabulary at different stages of learning English as a second language. We take the most basic American English vocabulary (the A1 list), and retrieve</context>
+</contexts>
+<marker>Socher, Bauer, Manning, Ng, 2013</marker>
+<rawString>Richard Socher, John Bauer, Christopher D. Manning, and Andrew Y. Ng. 2013. Parsing With Compositional Vector Grammars. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eiichiro Sumita</author>
+<author>Fumiaki Sugaya</author>
+<author>Seiichi Yamamoto</author>
+</authors>
+<title>Measuring non-native speakers’ proficiency of english by using a test with automatically-generated fill-in-the-blank questions.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the second workshop on Building Educational Applications Using NLP,</booktitle>
+<pages>61--68</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="5551" citStr="Sumita et al. (2005)" startWordPosition="861" endWordPosition="864">song lyrics (Wu et al., 2013) (Ramakrishnan A et al., 2009), where specified meter or rhyme schemes are enforced. In these papers soft semantic goals are sometimes also introduced that seek responses to previous lines of poetry or lyric. Computational creativity is another subfield of NLG that often does not fix an a priori meaning in its output. Examples such as ¨Ozbal et al. (2013) and Valitutti et al. (2013) use template filling techniques guided by quantified notions of humor or how catchy a phrase is. Our motivation for generation of material for language education exists in work such as Sumita et al. (2005) and Mostow and Jang (2012), which deal with automatic generation of classic fill in the blank questions. Our work is naturally complementary to these efforts, as their methods require a corpus of in-vocab text to serve as seed sentences. 3 Freeform Generation For clarity in our discussion, we phrase the sentence generation process in the following general terms based around two classes of atomic units : contexts and outcomes. In order to specify a generation system, we must define 1. the set C of contexts c 2. the set O of outcomes o 3. the “Imply” function I(c, o) —* List[c E C] 4. M : deriv</context>
+</contexts>
+<marker>Sumita, Sugaya, Yamamoto, 2005</marker>
+<rawString>Eiichiro Sumita, Fumiaki Sugaya, and Seiichi Yamamoto. 2005. Measuring non-native speakers’ proficiency of english by using a test with automatically-generated fill-in-the-blank questions. In Proceedings of the second workshop on Building Educational Applications Using NLP, pages 61–68. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alessandro Valitutti</author>
+<author>Hannu Toivonen</author>
+<author>Antoine Doucet</author>
+<author>Jukka M Toivanen</author>
+</authors>
+<title>let everything turn well in your wife”: Generation of adult humor using lexical constraints.</title>
+<date>2013</date>
+<booktitle>In ACL (2),</booktitle>
+<pages>243--248</pages>
+<contexts>
+<context position="5345" citStr="Valitutti et al. (2013)" startWordPosition="826" endWordPosition="829">iptions of objects from images. Our work is more similar to NLG work that concentrates on structural constraints such as generative poetry (Greene et al., 2010) (Colton et al., 2012) (Jiang and Zhou, 2008) or song lyrics (Wu et al., 2013) (Ramakrishnan A et al., 2009), where specified meter or rhyme schemes are enforced. In these papers soft semantic goals are sometimes also introduced that seek responses to previous lines of poetry or lyric. Computational creativity is another subfield of NLG that often does not fix an a priori meaning in its output. Examples such as ¨Ozbal et al. (2013) and Valitutti et al. (2013) use template filling techniques guided by quantified notions of humor or how catchy a phrase is. Our motivation for generation of material for language education exists in work such as Sumita et al. (2005) and Mostow and Jang (2012), which deal with automatic generation of classic fill in the blank questions. Our work is naturally complementary to these efforts, as their methods require a corpus of in-vocab text to serve as seed sentences. 3 Freeform Generation For clarity in our discussion, we phrase the sentence generation process in the following general terms based around two classes of a</context>
+</contexts>
+<marker>Valitutti, Toivonen, Doucet, Toivanen, 2013</marker>
+<rawString>Alessandro Valitutti, Hannu Toivonen, Antoine Doucet, and Jukka M. Toivanen. 2013. ”let everything turn well in your wife”: Generation of adult humor using lexical constraints. In ACL (2), pages 243–248.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dekai Wu</author>
+<author>Karteek Addanki</author>
+<author>Markus Saers</author>
+<author>Meriem Beloucif</author>
+</authors>
+<title>Learning to freestyle: Hip hop challenge-response induction via transduction rule segmentation.</title>
+<date>2013</date>
+<booktitle>In EMNLP,</booktitle>
+<pages>102--112</pages>
+<contexts>
+<context position="4960" citStr="Wu et al., 2013" startWordPosition="761" endWordPosition="764">ord inclusion constraint is introduced, we show clear empirical advantages over the simple solution of searching a large corpus for an appropriate sentence. 2 Related Work The majority of NLG focuses on the satisfaction of a communicative goal, with examples such as Belz (2008) which produces weather reports from structured data or Mitchell et al. (2013) which generates descriptions of objects from images. Our work is more similar to NLG work that concentrates on structural constraints such as generative poetry (Greene et al., 2010) (Colton et al., 2012) (Jiang and Zhou, 2008) or song lyrics (Wu et al., 2013) (Ramakrishnan A et al., 2009), where specified meter or rhyme schemes are enforced. In these papers soft semantic goals are sometimes also introduced that seek responses to previous lines of poetry or lyric. Computational creativity is another subfield of NLG that often does not fix an a priori meaning in its output. Examples such as ¨Ozbal et al. (2013) and Valitutti et al. (2013) use template filling techniques guided by quantified notions of humor or how catchy a phrase is. Our motivation for generation of material for language education exists in work such as Sumita et al. (2005) and Most</context>
+</contexts>
+<marker>Wu, Addanki, Saers, Beloucif, 2013</marker>
+<rawString>Dekai Wu, Karteek Addanki, Markus Saers, and Meriem Beloucif. 2013. Learning to freestyle: Hip hop challenge-response induction via transduction rule segmentation. In EMNLP, pages 102–112.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

@@ -1,0 +1,1421 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<note confidence="0.9521715">
+Proceedings of the 40th Annual Meeting of the Association for
+Computational Linguistics (ACL), Philadelphia, July 2002, pp. 1-8.
+</note>
+<title confidence="0.965663">
+Parameter Estimation for Probabilistic Finite-State Transducers∗
+</title>
+<author confidence="0.998643">
+Jason Eisner
+</author>
+<affiliation confidence="0.921639">
+Department of Computer Science
+Johns Hopkins University
+</affiliation>
+<address confidence="0.983464">
+Baltimore, MD, USA 21218-2691
+</address>
+<email confidence="0.99926">
+jason@cs.jhu.edu
+</email>
+<sectionHeader confidence="0.994802" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.99948875">
+Weighted finite-state transducers suffer from the lack of a train-
+ing algorithm. Training is even harder for transducers that have
+been assembled via finite-state operations such as composition,
+minimization, union, concatenation, and closure, as this yields
+tricky parameter tying. We formulate a “parameterized FST”
+paradigm and give training algorithms for it, including a gen-
+eral bookkeeping trick (“expectation semirings”) that cleanly
+and efficiently computes expectations and gradients.
+</bodyText>
+<sectionHeader confidence="0.882941" genericHeader="keywords">
+1 Background and Motivation
+</sectionHeader>
+<bodyText confidence="0.976525471428571">
+Rational relations on strings have become wide-
+spread in language and speech engineering (Roche
+and Schabes, 1997). Despite bounded memory they
+are well-suited to describe many linguistic and tex-
+tual processes, either exactly or approximately.
+A relation is a set of (input, output) pairs. Re-
+lations are more general than functions because they
+may pair a given input string with more or fewer than
+one output string.
+The class of so-called rational relations admits
+a nice declarative programming paradigm. Source
+code describing the relation (a regular expression)
+is compiled into efficient object code (in the form
+of a 2-tape automaton called a finite-state trans-
+ducer). The object code can even be optimized for
+runtime and code size (via algorithms such as deter-
+minization and minimization of transducers).
+This programming paradigm supports efficient
+nondeterminism, including parallel processing over
+infinite sets of input strings, and even allows “re-
+verse” computation from output to input. Its unusual
+flexibility for the practiced programmer stems from
+the many operations under which rational relations
+are closed. It is common to define further useful
+operations (as macros), which modify existing rela-
+tions not by editing their source code but simply by
+operating on them “from outside.”
+∗A brief version of this work, with some additional mate-
+rial, first appeared as (Eisner, 2001a). A leisurely journal-length
+version with more details has been prepared and is available.
+The entire paradigm has been generalized to
+weighted relations, which assign a weight to each
+(input, output) pair rather than simply including or
+excluding it. If these weights represent probabili-
+ties P(input, output) or P(output  |input), the
+weighted relation is called a joint or conditional
+(probabilistic) relation and constitutes a statistical
+model. Such models can be efficiently restricted,
+manipulated or combined using rational operations
+as before. An artificial example will appear in §2.
+The availability of toolkits for this weighted case
+(Mohri et al., 1998; van Noord and Gerdemann,
+2001) promises to unify much of statistical NLP.
+Such tools make it easy to run most current ap-
+proaches to statistical markup, chunking, normal-
+ization, segmentation, alignment, and noisy-channel
+decoding,&apos; including classic models for speech
+recognition (Pereira and Riley, 1997) and machine
+translation (Knight and Al-Onaizan, 1998). More-
+over, once the models are expressed in the finite-
+state framework, it is easy to use operators to tweak
+them, to apply them to speech lattices or other sets,
+and to combine them with linguistic resources.
+Unfortunately, there is a stumbling block: Where
+do the weights come from? After all, statistical mod-
+els require supervised or unsupervised training. Cur-
+rently, finite-state practitioners derive weights using
+exogenous training methods, then patch them onto
+transducer arcs. Not only do these methods require
+additional programming outside the toolkit, but they
+are limited to particular kinds of models and train-
+ing regimens. For example, the forward-backward
+algorithm (Baum, 1972) trains only Hidden Markov
+Models, while (Ristad and Yianilos, 1996) trains
+only stochastic edit distance.
+In short, current finite-state toolkits include no
+training algorithms, because none exist for the large
+space of statistical models that the toolkits can in
+principle describe and run.
+&apos;Given output, find input to maximize P(input, output).
+</bodyText>
+<figureCaption confidence="0.993228">
+Figure 1: (a) A probabilistic FST defining a joint probability
+distribution. (b) A smaller joint distribution. (c) A conditional
+distribution. Defining (a)=(b)o(c) means that the weights in (a)
+can be altered by adjusting the fewer weights in (b) and (c).
+</figureCaption>
+<bodyText confidence="0.9998016">
+This paper aims to provide a remedy through a
+new paradigm, which we call parameterized finite-
+state machines. It lays out a fully general approach
+for training the weights of weighted rational rela-
+tions. First §2 considers how to parameterize such
+models, so that weights are defined in terms of un-
+derlying parameters to be learned. §3 asks what it
+means to learn these parameters from training data
+(what is to be optimized?), and notes the apparently
+formidable bookkeeping involved. §4 cuts through
+the difficulty with a surprisingly simple trick. Fi-
+nally, §5 removes inefficiencies from the basic algo-
+rithm, making it suitable for inclusion in an actual
+toolkit. Such a toolkit could greatly shorten the de-
+velopment cycle in natural language engineering.
+</bodyText>
+<sectionHeader confidence="0.770783" genericHeader="introduction">
+2 Transducers and Parameters
+</sectionHeader>
+<bodyText confidence="0.999791444444444">
+Finite-state machines, including finite-state au-
+tomata (FSAs) and transducers (FSTs), are a kind
+of labeled directed multigraph. For ease and brevity,
+we explain them by example. Fig. 1a shows a proba-
+bilistic FST with input alphabet E = {a, b}, output
+alphabet A = {x, z}, and all states final. It may
+be regarded as a device for generating a string pair
+in E* x A* by a random walk from Q. Two paths
+exist that generate both input aabb and output xz:
+</bodyText>
+<equation confidence="0.9991715">
+Oa:x/.63 a:e/.07 b:e/.03 b:z/.4
+O OO O1 O2 /.5
+O a:x/.63 a:e/.07 b:z/.12Ob:e/.1
+) O � O�
+</equation>
+<page confidence="0.780389">
+5
+</page>
+<bodyText confidence="0.9974241">
+Each of the paths has probability .0002646, so
+the probability of somehow generating the pair
+(aabb, xz) is .0002646 + .0002646 = .0005292.
+Abstracting away from the idea of random walks,
+arc weights need not be probabilities. Still, define a
+path’s weight as the product of its arc weights and
+the stopping weight of its final state. Thus Fig. 1a
+defines a weighted relation f where f(aabb, xz) =
+.0005292. This particular relation does happen to be
+probabilistic (see §1). It represents a joint distribu-
+tion (since Ex,y f(x, y) = 1). Meanwhile, Fig. 1c
+defines a conditional one (bx Ey f(x, y) = 1).
+This paper explains how to adjust probability dis-
+tributions like that of Fig. 1a so as to model training
+data better. The algorithm improves an FST’s nu-
+meric weights while leaving its topology fixed.
+How many parameters are there to adjust in
+Fig. 1a? That is up to the user who built it! An
+FST model with few parameters is more constrained,
+making optimization easier. Some possibilities:
+</bodyText>
+<listItem confidence="0.965521625">
+• Most simply, the algorithm can be asked to tune
+the 17 numbers in Fig. 1a separately, subject to the
+constraint that the paths retain total probability 1. A
+more specific version of the constraint requires the
+FST to remain Markovian: each of the 4 states must
+present options with total probability 1 (at state Q,
+15+.7+.03.+.12=1). This preserves the random-walk
+interpretation and (we will show) entails no loss of
+generality. The 4 restrictions leave 13 free params.
+• But perhaps Fig. 1a was actually obtained as
+the composition of Fig. 1b–c, effectively defin-
+ing P(input, output) = Emid P(input, mid) �
+P(output  |mid). If Fig. 1b–c are required to re-
+main Markovian, they have 5 and 1 degrees of free-
+dom respectively, so now Fig. 1a has only 6 param-
+eters total.2 In general, composing machines mul-
+tiplies their arc counts but only adds their param-
+eter counts. We wish to optimize just the few un-
+derlying parameters, not independently optimize the
+many arc weights of the composed machine.
+• Perhaps Fig. 1b was itself obtained by the proba-
+bilistic regular expression (a : p)*λ(b : (p +p q))*
+with the 3 parameters (A, µ, v) = (.7, .2, .5). With
+ρ = .1 from footnote 2, the composed machine
+</listItem>
+<footnote confidence="0.68962875">
+2Why does Fig. 1c have only 1 degree of freedom? The
+Markovian requirement means something different in Fig. 1c,
+which defines a conditional relation P(output  |mid) rather
+than a joint one. A random walk on Fig. 1c chooses among arcs
+with a given input label. So the arcs from state © with input
+p must have total probability 1 (currently .9+.1). All other arc
+choices are forced by the input label and so have probability 1.
+The only tunable value is .1 (denote it by ρ), with .9 = 1 − ρ.
+</footnote>
+<figure confidence="0.958061102564102">
+b:q/.4
+b:p/.1
+a:p/.7
+(b)
+a: ε /.7
+b: ε /.03
+b:z/.12
+b: ε /. 1
+(a)
+a: ε/.07
+a:x/.63
+1/.15
+b:z/.4
+4/.15
+b:p/.03
+5/.5
+b:q/.12
+q:z/1
+p: ε /1
+0/.15
+b: ε /.003
+b:z/.12
+2/.5
+p:x/.9
+(c)
+b:x/.027
+b: ε /.0 1
+b:x/.09
+3/.5
+b:z/.4
+6/1
+p: ε /. 1
+q:z/1
+7/1
+ν
+(Fig. 1a) has now been described with a total of just
+4 parameters!3 Here, probabilistic union E +µ F def =
+µE + (1 − µ)F means “flip a µ-weighted coin and
+def
+</figure>
+<bodyText confidence="0.988540263157894">
+generate E if heads, F if tails.” E*λ = (AE)∗(1−A)
+means “repeatedly flip an A-weighted coin and keep
+repeating E as long as it comes up heads.”
+These 4 parameters have global effects on Fig. 1a,
+thanks to complex parameter tying: arcs ® b:p
+−) @,
+® b:q −) ® in Fig. 1b get respective probabilities (1 −
+A)µν and (1 − µ)ν, which covary with ν and vary
+oppositely with µ. Each of these probabilities in turn
+affects multiple arcs in the composed FST of Fig. 1a.
+We offer a theorem that highlights the broad
+applicability of these modeling techniques.4 If
+f(input, output) is a weighted regular relation,
+then the following statements are equivalent: (1) f is
+a joint probabilistic relation; (2) f can be computed
+by a Markovian FST that halts with probability 1;
+(3) f can be expressed as a probabilistic regexp,
+i.e., a regexp built up from atomic expressions a : b
+(for a E E U {E}, b E A U {E}) using concatenation,
+probabilistic union +p, and probabilistic closure *p.
+For defining conditional relations, a good regexp
+language is unknown to us, but they can be defined
+in several other ways: (1) via FSTs as in Fig. 1c, (2)
+by compilation of weighted rewrite rules (Mohri and
+Sproat, 1996), (3) by compilation of decision trees
+(Sproat and Riley, 1996), (4) as a relation that per-
+forms contextual left-to-right replacement of input
+substrings by a smaller conditional relation (Gerde-
+mann and van Noord, 1999),5 (5) by conditionaliza-
+tion of a joint relation as discussed below.
+A central technique is to define a joint relation as a
+noisy-channel model, by composing a joint relation
+with a cascade of one or more conditional relations
+as in Fig. 1 (Pereira and Riley, 1997; Knight and
+Graehl, 1998). The general form is illustrated by
+3Conceptually, the parameters represent the probabilities of
+reading another a (A); reading another b (ν); transducing b to p
+rather than q (µ); starting to transduce p to a rather than x (p).
+</bodyText>
+<footnote confidence="0.8829">
+4To prove (1)⇒(3), express f as an FST and apply the
+well-known Kleene-Sch¨utzenberger construction (Berstel and
+Reutenauer, 1988), taking care to write each regexp in the con-
+struction as a constant times a probabilistic regexp. A full proof
+is straightforward, as are proofs of (3)⇒(2), (2)⇒(1).
+5In (4), the randomness is in the smaller relation’s choice of
+how to replace a match. One can also get randomness through
+the choice of matches, ignoring match possibilities by randomly
+deleting markers in Gerdemann and van Noord’s construction.
+</footnote>
+<bodyText confidence="0.961748529411765">
+P(v, z) def = Ew,x,y P(v|w)P(w, x)P(y|x)P(z|y),
+implemented by composing 4 machines.6,7
+There are also procedures for defining weighted
+FSTs that are not probabilistic (Berstel and
+Reutenauer, 1988). Arbitrary weights such as 2.7
+may be assigned to arcs or sprinkled through a reg-
+exp (to be compiled into E:E/2.7 −)arcs). A more subtle
+example is weighted FSAs that approximate PCFGs
+(Nederhof, 2000; Mohri and Nederhof, 2001), or
+to extend the idea, weighted FSTs that approximate
+joint or conditional synchronous PCFGs built for
+translation. These are parameterized by the PCFG’s
+parameters, but add or remove strings of the PCFG
+to leave an improper probability distribution.
+Fortunately for those techniques, an FST with
+positive arc weights can be normalized to make it
+jointly or conditionally probabilistic:
+</bodyText>
+<listItem confidence="0.9987265">
+• An easy approach is to normalize the options at
+each state to make the FST Markovian. Unfortu-
+nately, the result may differ for equivalent FSTs that
+express the same weighted relation. Undesirable
+consequences of this fact have been termed “label
+bias” (Lafferty et al., 2001). Also, in the conditional
+case such per-state normalization is only correct if
+all states accept all input suffixes (since “dead ends”
+leak probability mass).8
+• A better-founded approach is global normal-
+</listItem>
+<bodyText confidence="0.914305037735849">
+ization, which simply divides each f(x, y) by
+Ex,,y, f(x&apos;, y&apos;) (joint case) or by Ey, f(x, y&apos;) (con-
+ditional case). To implement the joint case, just di-
+vide stopping weights by the total weight of all paths
+(which §4 shows how to find), provided this is finite.
+In the conditional case, let g be a copy of f with the
+output labels removed, so that g(x) finds the desired
+divisor; determinize g if possible (but this fails for
+some weighted FSAs), replace all weights with their
+reciprocals, and compose the result with f.9
+6P(w, x) defines the source model, and is often an “identity
+FST” that requires w = x, really just an FSA.
+7We propose also using n-tape automata to generalize to
+“branching noisy channels” (a case of dendroid distributions).
+In Ew,x P(v|w)P(v,|w)P(w, x)P(y|x), the true transcrip-
+tion w can be triply constrained by observing speech y and two
+errorful transcriptions v, v&apos;, which independently depend on w.
+8A corresponding problem exists in the joint case, but may
+be easily avoided there by first pruning non-coaccessible states.
+9It suffices to make g unambiguous (one accepting path per
+string), a weaker condition than determinism. When this is not
+possible (as in the inverse of Fig. 1b, whose conditionaliza-
+Normalization is particularly important because it
+enables the use of log-linear (maximum-entropy)
+parameterizations. Here one defines each arc
+weight, coin weight, or regexp weight in terms of
+meaningful features associated by hand with that
+arc, coin, etc. Each feature has a strength E R&gt;0,
+and a weight is computed as the product of the
+strengths of its features.10 It is now the strengths
+that are the learnable parameters. This allows mean-
+ingful parameter tying: if certain arcs such asu:i
+�—*,
+�—*, and a:ae
+o:e �—* share a contextual “vowel-fronting”
+feature, then their weights rise and fall together with
+the strength of that feature. The resulting machine
+must be normalized, either per-state or globally, to
+obtain a joint or a conditional distribution as de-
+sired. Such approaches have been tried recently
+in restricted cases (McCallum et al., 2000; Eisner,
+2001b; Lafferty et al., 2001).
+Normalization may be postponed and applied in-
+stead to the result of combining the FST with other
+FSTs by composition, union, concatenation, etc. A
+simple example is a probabilistic FSA defined by
+normalizing the intersection of other probabilistic
+FSAs f1, f2,. . .. (This is in fact a log-linear model
+in which the component FSAs define the features:
+string x has log fi(x) occurrences of feature i.)
+In short, weighted finite-state operators provide a
+language for specifying a wide variety of parameter-
+ized statistical models. Let us turn to their training.
+</bodyText>
+<sectionHeader confidence="0.988894" genericHeader="method">
+3 Estimation in Parameterized FSTs
+</sectionHeader>
+<bodyText confidence="0.949093875">
+We are primarily concerned with the following train-
+ing paradigm, novel in its generality. Let fθ :
+E* xA* —* R&gt;0 be a joint probabilistic relation that
+is computed by a weighted FST. The FST was built
+by some recipe that used the parameter vector 0.
+Changing 0 may require us to rebuild the FST to get
+updated weights; this can involve composition, reg-
+exp compilation, multiplication of feature strengths,
+etc. (Lazy algorithms that compute arcs and states of
+tion cannot be realized by any weighted FST), one can some-
+times succeed by first intersecting g with a smaller regular set
+in which the input being considered is known to fall. In the ex-
+treme, if each input string is fully observed (not the case if the
+input is bound by composition to the output of a one-to-many
+FST), one can succeed by restricting g to each input string in
+turn; this amounts to manually dividing f(x, y) by g(x).
+</bodyText>
+<footnote confidence="0.787164">
+10Traditionally log(strength) values are called weights, but
+this paper uses “weight” to mean something else.
+</footnote>
+<figureCaption confidence="0.971108">
+Figure 2: The joint model of Fig. 1a constrained to generate
+only input ∈ a(a + b)∗ and output = xxz.
+</figureCaption>
+<bodyText confidence="0.976354333333334">
+fθ on demand (Mohri et al., 1998) can pay off here,
+since only part of fθ may be needed subsequently.)
+As training data we are given a set of observed
+(input, output) pairs, (xi, yi). These are assumed
+to be independent random samples from a joint dis-
+tribution of the form fe(x, y); the goal is to recover
+the true ˆ0. Samples need not be fully observed
+(partly supervised training): thus xi C E*, yi C A*
+may be given as regular sets in which input and out-
+put were observed to fall. For example, in ordinary
+HMM training, xi = E* and represents a completely
+hidden state sequence (cf. Ristad (1998), who allows
+any regular set), while yi is a single string represent-
+ing a completely observed emission sequence.11
+What to optimize? Maximum-likelihood es-
+timation guesses 0ˆ to be the 0 maximizing
+Hi fθ(xi, yi). Maximum-posterior estimation
+tries to maximize P(0)·Hi fθ(xi, yi) where P(0) is
+a prior probability. In a log-linear parameterization,
+for example, a prior that penalizes feature strengths
+far from 1 can be used to do feature selection and
+avoid overfitting (Chen and Rosenfeld, 1999).
+The EM algorithm (Dempster et al., 1977) can
+maximize these functions. Roughly, the E step
+guesses hidden information: if (xi, yi) was gener-
+ated from the current fθ, which FST paths stand a
+chance of having been the path used? (Guessing the
+path also guesses the exact input and output.) The
+M step updates 0 to make those paths more likely.
+EM alternates these steps and converges to a local
+optimum. The M step’s form depends on the param-
+eterization and the E step serves the M step’s needs.
+Let fθ be Fig. 1a and suppose (xi, yi) = (a(a +
+b)*, xxz). During the E step, we restrict to paths
+compatible with this observation by computing xi o
+fθ o yi, shown in Fig. 2. To find each path’s pos-
+terior probability given the observation (xi, yi), just
+conditionalize: divide its raw probability by the total
+probability (Pz� 0.1003) of all paths in Fig. 2.
+11To implement an HMM by an FST, compose a probabilistic
+FSA that generates a state sequence of the HMM with a condi-
+tional FST that transduces HMM states to emitted symbols.
+</bodyText>
+<figure confidence="0.964529888888889">
+b: � /. 1
+a: �/. 7
+a:x/.63
+8 9
+b:z/.1284
+a:x/.63 10 12/.5
+b: � /.0051 b: �/. 1 b:z/.404
+b:x/.027
+11
+</figure>
+<bodyText confidence="0.998483166666666">
+But that is not the full E step. The M step uses
+not individual path probabilities (Fig. 2 has infinitely
+many) but expected counts derived from the paths.
+Crucially, §4 will show how the E step can accumu-
+late these counts effortlessly. We first explain their
+use by the M step, repeating the presentation of §2:
+</bodyText>
+<listItem confidence="0.609895571428572">
+• If the parameters are the 17 weights in Fig. 1a, the
+M step reestimates the probabilities of the arcs from
+each state to be proportional to the expected number
+of traversals of each arc (normalizing at each state
+to make the FST Markovian). So the E step must
+count traversals. This requires mapping Fig. 2 back
+onto Fig. 1a: to traverse either �� a:x
+</listItem>
+<equation confidence="0.9613405">
+�) �� or �� a:x
+�) 0
+</equation>
+<bodyText confidence="0.517235">
+in Fig. 2 is “really” to traverse Q a:x
+</bodyText>
+<listItem confidence="0.83686575">
+�) in Fig. 1a.
+• If Fig. 1a was built by composition, the M step
+is similar but needs the expected traversals of the
+arcs in Fig. 1b–c. This requires further unwinding of
+Fig. 1a’s Qa:x ) Q: to traverse that arc is “really” to
+traverse Fig. 1b’s Qa:p )Q and Fig. 1c’s Q p:x
+�) Q.
+• If Fig. 1b was defined by the regexp given earlier,
+traversing Qa:p ) Q is in turn “really” just evidence
+that the A-coin came up heads. To learn the weights
+A, v, µ, ρ, count expected heads/tails for each coin.
+• If arc probabilities (or even A, v, µ, ρ) have log-
+linear parameterization, then the E step must com-
+pute c = Ei ecf(xi, yi), where ec(x, y) denotes
+the expected vector of total feature counts along a
+random path in fθ whose (input, output) matches
+(x, y). The M step then treats c as fixed, observed
+data and adjusts 0 until the predicted vector of to-
+tal feature counts equals c, using Improved Itera-
+tive Scaling (Della Pietra et al., 1997; Chen and
+</listItem>
+<bodyText confidence="0.979057">
+Rosenfeld, 1999).12 For globally normalized, joint
+models, the predicted vector is ecf(E*, A*). If the
+log-linear probabilities are conditioned on the state
+and/or the input, the predicted vector is harder to de-
+scribe (though usually much easier to compute).13
+12IIS is itself iterative; to avoid nested loops, run only one it-
+eration at each M step, giving a GEM algorithm (Riezler,1999).
+Alternatively, discard EM and use gradient-based optimization.
+13For per-state conditional normalization, let Dj,a be the set
+of arcs from state j with input symbol a E E; their weights are
+normalized to sum to 1. Besides computing c, the E step must
+count the expected number dj,a of traversals of arcs in each
+Dj,a. Then the predicted vector given θ is Ej,a dj,a ·(expected
+feature counts on a randomly chosen arc in Dj,a). Per-state
+joint normalization (Eisner, 2001b, §8.2) is similar but drops the
+dependence on a. The difficult case is global conditional nor-
+malization. It arises, for example, when training a joint model
+of the form fθ = · · · (gθ o hθ) · · ·, where hθ is a conditional
+It is also possible to use this EM approach for dis-
+criminative training, where we wish to maximize
+Hi P(yi  |xi) and fθ(x, y) is a conditional FST that
+defines P(y  |x). The trick is to instead train a joint
+model g o fθ, where g(xi) defines P(xi), thereby
+maximizing Hi P(xi) · P(yi  |xi). (Of course,
+the method of this paper can train such composi-
+tions.) If x1,... xn are fully observed, just define
+each g(xi) = 1/n. But by choosing a more gen-
+eral model of g, we can also handle incompletely
+observed xi: training g o fθ then forces g and fθ
+to cooperatively reconstruct a distribution over the
+possible inputs and do discriminative training of fθ
+given those inputs. (Any parameters of g may be ei-
+ther frozen before training or optimized along with
+the parameters of fθ.) A final possibility is that each
+xi is defined by a probabilistic FSA that already sup-
+plies a distribution over the inputs; then we consider
+xi o fθ o yi directly, just as in the joint model.
+Finally, note that EM is not all-purpose. It only
+maximizes probabilistic objective functions, and
+even there it is not necessarily as fast as (say) conju-
+gate gradient. For this reason, we will also show be-
+low how to compute the gradient of fθ(xi, yi) with
+respect to 0, for an arbitrary parameterized FST fθ.
+We remark without elaboration that this can help
+optimize task-related objective functions, such as
+E Ey(P(xi, y)α/ Ey&apos; P(xi, y�)α) · error(y, yi).
+i
+</bodyText>
+<sectionHeader confidence="0.982387" genericHeader="method">
+4 The E Step: Expectation Semirings
+</sectionHeader>
+<bodyText confidence="0.99879175">
+It remains to devise appropriate E steps, which looks
+rather daunting. Each path in Fig. 2 weaves together
+parameters from other machines, which we must un-
+tangle and tally. In the 4-coin parameterization, path
+</bodyText>
+<equation confidence="0.873998166666667">
+Q a:x �) �� a:x
+�) ioa:~
+�) ioa:~
+�) iob:z
+�) Q must yield up a
+vector (Hλ, Tλ, Hµ, Tµ, Hν, Tν, Hρ, Tρ) that counts
+</equation>
+<bodyText confidence="0.97208348">
+observed heads and tails of the 4 coins. This non-
+trivially works out to (4, 1, 0,1,1,1,1, 2). For other
+parameterizations, the path must instead yield a vec-
+tor of arc traversal counts or feature counts.
+Computing a count vector for one path is hard
+enough, but it is the E step’s job to find the expected
+value of this vector—an average over the infinitely
+log-linear model of P(v  |u) for u E E&apos;*, v E 0&apos;*. Then the
+predicted count vector contributed by h is Ei EuEΣ,∗ P(u
+xi, yi) · ech(u, 0&apos;*). The term Ei P(u  |xi, yi) computes the
+expected count of each u E E&apos;*. It may be found by a variant
+of §4 in which path values are regular expressions over E&apos;*.
+many paths π through Fig. 2 in proportion to their
+posterior probabilities P(π  |xi, yi). The results for
+all (xi, yi) are summed and passed to the M step.
+Abstractly, let us say that each path π has not only
+a probability P(π) E [0, 1] but also a value val(π)
+in a vector space V , which counts the arcs, features,
+or coin flips encountered along path π. The value of
+a path is the sum of the values assigned to its arcs.
+The E step must return the expected value of the
+unknown path that generated (xi, yi). For example,
+if every arc had value 1, then expected value would
+be expected path length. Letting H denote the set of
+paths in xi o fe o yi (Fig. 2), the expected value is14
+</bodyText>
+<equation confidence="0.999949333333333">
+E[val(π)  |xi, yi] = &amp;EΠ
+P(π)
+P(π) val(π) (1)
+</equation>
+<bodyText confidence="0.999913173913043">
+The denominator of equation (1) is the total prob-
+ability of all accepting paths in xi o f o yi. But while
+computing this, we will also compute the numerator.
+The idea is to augment the weight data structure with
+expectation information, so each weight records a
+probability and a vector counting the parameters
+that contributed to that probability. We will enforce
+an invariant: the weight of any pathset H must
+be (&amp;EΠ P(π), &amp;EΠ P(π) val(π)) E R&gt;0 x V ,
+from which (1) is trivial to compute.
+Berstel and Reutenauer (1988) give a sufficiently
+general finite-state framework to allow this: weights
+may fall in any set K (instead of R). Multiplica-
+tion and addition are replaced by binary operations
+® and ® on K. Thus ® is used to combine arc
+weights into a path weight and ® is used to com-
+bine the weights of alternative paths. To sum over
+infinite sets of cyclic paths we also need a closure
+operation *, interpreted as k* = (D&apos;0 ki. The usual
+finite-state algorithms work if (K, ®, ®, *) has the
+structure of a closed semiring.15
+Ordinary probabilities fall in the semiring
+(R&gt;0, +, x, *).16 Our novel weights fall in a novel
+</bodyText>
+<footnote confidence="0.963696454545455">
+14 Formal derivation of (1): Eπ P(ir  |xi, yi) val(ir) =
+(Eπ P(ir, xi, yi) val(ir))/P(xi, yi) = (Eπ P(xi, yi
+ir)P(ir) val(ir))/ Eπ P(xi, yi  |ir)P(ir); now observe that
+P(xi, yi  |ir) = 1 or 0 according to whether ir E Π.
+15That is: (K, ®) is a monoid (i.e., ® : K x K --+ K is
+associative) with identity 1. (K, ®) is a commutative monoid
+with identity 0. ® distributes over ® from both sides, 0 ® k =
+k ® 0 = 0, and k* = 1® k ® k* = 1® k* ® k. For finite-state
+composition, commutativity of ® is needed as well.
+16The closure operation is defined for p E [0, 1) as p* =
+1/(1 − p), so cycles with weights in [0, 1) are allowed.
+</footnote>
+<equation confidence="0.89443925">
+V-expectation semiring, (R&gt;0 x V, ®, (g, *):
+(p1, v1) ® (p2, v2) def = (p1p2,p1v2 + v1p2) (2)
+(p1, v1) ® (p2, v2) def = (p1 + p2, v1 + v2)
+ifp* defined, (p, v)* def = (p*, p*vp*)
+</equation>
+<bodyText confidence="0.948008151515152">
+If an arc has probability p and value v, we give it
+the weight (p, pv), so that our invariant (see above)
+holds if H consists of a single length-0 or length-1
+path. The above definitions are designed to preserve
+our invariant as we build up larger paths and path-
+sets. ® lets us concatenate (e.g.) simple paths π1, π2
+to get a longer path π with P(π) = P(π1)P(π2)
+and val(π) = val(π1) + val(π2). The defini-
+tion of ® guarantees that path π’s weight will be
+(P(π), P(π) · val(π)). ® lets us take the union of
+two disjoint pathsets, and * computes infinite unions.
+To compute (1) now, we only need the total
+weight ti of accepting paths in xi o f o yi (Fig. 2).
+This can be computed with finite-state methods: the
+machine (exxi)of o(yixc) is aversion that replaces
+all input:output labels with c: c, so it maps (E, 6) to
+the same total weight ti. Minimizing it yields a one-
+state FST from which ti can be read directly!
+The other “magical” property of the expecta-
+tion semiring is that it automatically keeps track of
+the tangled parameter counts. For instance, recall
+that traversing Q a:x
+−) Q should have the same ef-
+fect as traversing both the underlying arcs ® a:p
+−) ®
+and © p:x
+−) ©. And indeed, if the underlying arcs
+have values v1 and v2, then the composed arc
+@ a:x
+−) @ gets weight �,„1,p1v1) ® p (
+g �N2,p2v2) =
+(p1p2, p1p2(v1 + v2)), just as if it had value v1 + v2.
+Some concrete examples of values may be useful:
+</bodyText>
+<listItem confidence="0.998283636363636">
+• To count traversals of the arcs of Figs. 1b–c, num-
+ber these arcs and let arc ` have value et, the `�h basis
+vector. Then the `�h element of val(π) counts the ap-
+pearances of arc ` in path π, or underlying path π.
+• A regexp of form E+µF = µE+(1−µ)F should
+be weighted as (µ, µek)E + (1 − µ, (1 − µ)ek+1)F
+in the new semiring. Then elements k and k + 1 of
+val(π) count the heads and tails of the µ-coin.
+• For a global log-linear parameterization, an arc’s
+value is a vector specifying the arc’s features. Then
+val(π) counts all the features encountered along π.
+</listItem>
+<bodyText confidence="0.997641833333333">
+Really we are manipulating weighted relations,
+not FSTs. We may combine FSTs, or determinize
+or minimize them, with any variant of the semiring-
+weighted algorithms.17 As long as the resulting FST
+computes the right weighted relation, the arrange-
+ment of its states, arcs, and labels is unimportant.
+The same semiring may be used to compute gradi-
+ents. We would like to find fθ(xi, yi) and its gradient
+with respect to θ, where fθ is real-valued but need
+not be probabilistic. Whatever procedures are used
+to evaluate fθ(xi, yi) exactly or approximately—for
+example, FST operations to compile fθ followed by
+minimization of (c x xi) o fθ o (yi x c)—can simply
+be applied over the expectation semiring, replacing
+each weight p by (p, Vp) and replacing the usual
+arithmetic operations with ⊕, ⊗, etc.18 (2)–(4) pre-
+serve the gradient ((2) is the derivative product rule),
+so this computation yields (fθ(xi, yi), Vfθ(xi, yi)).
+</bodyText>
+<sectionHeader confidence="0.994114" genericHeader="method">
+5 Removing Inefficiencies
+</sectionHeader>
+<bodyText confidence="0.90800325">
+Now for some important remarks on efficiency:
+• Computing ti is an instance of the well-known
+algebraic path problem (Lehmann, 1977; Tar an,
+1981a). Let Ti = xiofoyi. Then ti is the total semir-
+ing weight w0n of paths in Ti from initial state 0 to
+final state n (assumed WLOG to be unique and un-
+weighted). It is wasteful to compute ti as suggested
+earlier, by minimizing (cxxi)of o(yixE), since then
+the real work is done by an c-closure step (Mohri,
+2002) that implements the all-pairs version of alge-
+braic path, whereas all we need is the single-source
+version. If n and m are the number of states and
+edges,19 then both problems are O(n3) in the worst
+case, but the single-source version can be solved in
+essentially O(m) time for acyclic graphs and other
+reducible flow graphs (Tar an, 1981b). For a gen-
+eral graph Ti, Tar an (1981b) shows how to partition
+into “hard” subgraphs that localize the cyclicity or
+irreducibility, then run the O(n3) algorithm on each
+subgraph (thereby reducing n to as little as 1), and
+recombine the results. The overhead of partitioning
+and recombining is essentially only O(m).
+• For speeding up the O(n3) problem on subgraphs,
+one can use an approximate relaxation technique
+</bodyText>
+<footnote confidence="0.953590833333333">
+17Eisner (submitted) develops fast minimization algorithms
+that work for the real and V-expectation semirings.
+18Division and subtraction are also possible: −(p, v) =
+(−p, −v) and (p, v)−1 = (m-1, −p−1vp−1). Division is com-
+monly used in defining fθ (f&apos;or normalization).
+19Multiple edges from j to k are summed into a single edge.
+</footnote>
+<bodyText confidence="0.99247425">
+(Mohri, 2002). Efficient hardware implementation is
+also possible via chip-level parallelism (Rote, 1985).
+• In many cases of interest, Ti is an acyclic graph.20
+Then Tar an’s method computes w0j for each j in
+topologically sorted order, thereby finding ti in a
+linear number of ⊕ and ⊗ operations. For HMMs
+(footnote 11), Ti is the familiar trellis, and we would
+like this computation of ti to reduce to the forward-
+backward algorithm (Baum, 1972). But notice that
+it has no backward pass. In place of pushing cumu-
+lative probabilities backward to the arcs, it pushes
+cumulative arcs (more generally, values in V ) for-
+ward to the probabilities. This is slower because
+our ⊕ and ⊗ are vector operations, and the vec-
+tors rapidly lose sparsity as they are added together.
+We therefore reintroduce a backward pass that lets
+us avoid ⊕ and ⊗ when computing ti (so they are
+needed only to construct Ti). This speedup also
+works for cyclic graphs and for any V . Write wjk
+as (pjk, vjk), and let w1jk = (p1jk, v1 jk) denote the
+weight of the edge from j to k.19 Then it can be
+shown that w0n = (p0n, Ej,k p0jv1jkpkn). The for-
+ward and backward probabilities, p0j and pkn, can
+be computed using single-source algebraic path for
+the simpler semiring (R, +, x, ∗)—or equivalently,
+by solving a sparse linear system of equations over
+R, a much-studied problem at O(n) space, O(nm)
+time, and faster approximations (Greenbaum, 1997).
+</bodyText>
+<listItem confidence="0.853086">
+• A Viterbi variant of the expectation semiring ex-
+ists: replace (3) with if(p1 &gt; p2, (p1, v1), (p2, v2)).
+</listItem>
+<bodyText confidence="0.887745">
+Here, the forward and backward probabilities can be
+computed in time only O(m + n log n) (Fredman
+and Tar an, 1987). k-best variants are also possible.
+</bodyText>
+<sectionHeader confidence="0.999632" genericHeader="conclusions">
+6 Discussion
+</sectionHeader>
+<bodyText confidence="0.999540923076923">
+We have exhibited a training algorithm for param-
+eterized finite-state machines. Some specific conse-
+quences that we believe to be novel are (1) an EM al-
+gorithm for FSTs with cycles and epsilons; (2) train-
+ing algorithms for HMMs and weighted contextual
+edit distance that work on incomplete data; (3) end-
+to-end training of noisy channel cascades, so that it
+is not necessary to have separate training data for
+each machine in the cascade (cf. Knight and Graehl,
+20If xi and yi are acyclic (e.g., fully observed strings), and
+f (or rather its FST) has no a : a cycles, then composition will
+“unroll” f into an acyclic machine. If only xi is acyclic, then
+the composition is still acyclic if domain(f) has no a cycles.
+1998), although such data could also be used; (4)
+training of branching noisy channels (footnote 7);
+(5) discriminative training with incomplete data; (6)
+training of conditional MEMMs (McCallum et al.,
+2000) and conditional random fields (Lafferty et al.,
+2001) on unbounded sequences.
+We are particularly interested in the potential for
+quickly building statistical models that incorporate
+linguistic and engineering insights. Many models of
+interest can be constructed in our paradigm, without
+having to write new code. Bringing diverse models
+into the same declarative framework also allows one
+to apply new optimization methods, objective func-
+tions, and finite-state algorithms to all of them.
+To avoid local maxima, one might try determinis-
+tic annealing (Rao and Rose, 2001), or randomized
+methods, or place a prior on θ. Another extension is
+to adjust the machine topology, say by model merg-
+ing (Stolcke and Omohundro, 1994). Such tech-
+niques build on our parameter estimation method.
+The key algorithmic ideas of this paper extend
+from forward-backward-style to inside-outside-style
+methods. For example, it should be possible to do
+end-to-end training of a weighted relation defined
+by an interestingly parameterized synchronous CFG
+composed with tree transducers and then FSTs.
+</bodyText>
+<sectionHeader confidence="0.998867" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.998765411764706">
+L. E. Baum. 1972. An inequality and associated max-
+imization technique in statistical estimation of proba-
+bilistic functions of a Markov process. Inequalities, 3.
+Jean Berstel and Christophe Reutenauer. 1988. Rational
+Series and their Languages. Springer-Verlag.
+Stanley F. Chen and Ronald Rosenfeld. 1999. A Gaus-
+sian prior for smoothing maximum entropy models.
+Technical Report CMU-CS-99-108, Carnegie Mellon.
+S. Della Pietra, V. Della Pietra, and J. Lafferty. 1997.
+Inducing features of random fields. IEEE Transactions
+on Pattern Analysis and Machine Intelligence, 19(4).
+A. P. Dempster, N. M. Laird, and D. B. Rubin. 1977.
+Maximum likelihood from incomplete data via the EM
+algorithm. J. Royal Statist. Soc. Ser. B, 39(1):1–38.
+Jason Eisner. 2001a. Expectation semirings: Flexible
+EM for finite-state transducers. In G. van Noord, ed.,
+Proc. ofthe ESSLLI Workshop on Finite-State Methods
+in Natural Language Processing. Extended abstract.
+Jason Eisner. 2001b. Smoothing a Probabilistic Lexicon
+via Syntactic Transformations. Ph.D. thesis, Univer-
+sity of Pennsylvania.
+D. Gerdemann and G. van Noord. 1999. Transducers
+from rewrite rules with backreferences. Proc. ofEACL.
+Anne Greenbaum. 1997. Iterative Methods for Solving
+Linear Systems. Soc. for Industrial and Applied Math.
+Kevin Knight and Yaser Al-Onaizan. 1998. Translation
+with finite-state devices. In Proc. ofAMTA.
+Kevin Knight and Jonathan Graehl. 1998. Machine
+transliteration. Computational Linguistics, 24(4).
+J. Lafferty, A. McCallum, and F. Pereira. 2001. Con-
+ditional random fields: Probabilistic models for seg-
+menting and labeling sequence data. Proc. ofICML.
+D. J. Lehmann. 1977. Algebraic structures for transitive
+closure. Theoretical Computer Science, 4(1):59–76.
+A. McCallum, D. Freitag, and F. Pereira. 2000. Maxi-
+mum entropy Markov models for information extrac-
+tion and segmentation. Proc. ofICML, 591–598.
+M. Mohri and M.-J. Nederhof. 2001. Regular approxi-
+mation of context-free grammars through transforma-
+tion. In J.-C. Junqua and G. van Noord, eds., Robust-
+ness in Language and Speech Technology. Kluwer.
+Mehryar Mohri and Richard Sproat. 1996. An efficient
+compiler for weighted rewrite rules. In Proc. ofACL.
+M. Mohri, F. Pereira, and M. Riley. 1998. A rational de-
+sign for a weighted finite-state transducer library. Lec-
+ture Notes in Computer Science, 1436.
+M. Mohri. 2002. Generic epsilon-removal and input
+epsilon-normalization algorithms for weighted trans-
+ducers. Int. J. ofFoundations of Comp. Sci., 1(13).
+Mark-Jan Nederhof. 2000. Practical experiments
+with regular approximation of context-free languages.
+Computational Linguistics, 26(1).
+Fernando C. N. Pereira and Michael Riley. 1997. Speech
+recognition by composition of weighted finite au-
+tomata. In E. Roche and Y. Schabes, eds., Finite-State
+Language Processing. MIT Press, Cambridge, MA.
+A. Rao and K. Rose. 2001 Deterministically annealed
+design of hidden Markov movel speech recognizers.
+In IEEE Trans. on Speech and Audio Processing, 9(2).
+Stefan Riezler. 1999. Probabilistic Constraint Logic
+Programming. Ph.D. thesis, Universit¨at T¨ubingen.
+E. Ristad and P. Yianilos. 1996. Learning string edit
+distance. Tech. Report CS-TR-532-96, Princeton.
+E. Ristad. 1998. Hidden Markov models with finite state
+supervision. In A. Kornai, ed., Extended Finite State
+Models ofLanguage. Cambridge University Press.
+Emmanuel Roche and Yves Schabes, editors. 1997.
+Finite-State Language Processing. MIT Press.
+G¨unter Rote. 1985. A systolic array algorithm for the
+algebraic path problem (shortest paths; matrix inver-
+sion). Computing, 34(3):191–219.
+Richard Sproat and Michael Riley. 1996. Compilation of
+weighted finite-state transducers from decision trees.
+In Proceedings of the 34th Annual Meeting of the ACL.
+Andreas Stolcke and Stephen M. Omohundro. 1994.
+Best-first model merging for hidden Markov model in-
+duction. Tech. Report ICSI TR-94-003, Berkeley, CA.
+Robert Endre Tarjan. 1981a. A unified approach to path
+problems. Journal of the ACM, 28(3):577–593, July.
+Robert Endre Tarjan. 1981b. Fast algorithms for solving
+path problems. J. of the ACM, 28(3):594–614, July.
+G. van Noord and D. Gerdemann. 2001. An extendible
+regular expression compiler for finite-state approaches
+in natural language processing. In Automata Imple-
+mentation, no. 22 in Springer Lecture Notes in CS.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.000005">
+<note confidence="0.9975755">Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics (ACL), Philadelphia, July 2002, pp. 1-8.</note>
+<title confidence="0.993457">Estimation for Probabilistic Finite-State</title>
+<author confidence="0.999989">Jason Eisner</author>
+<affiliation confidence="0.999611">Department of Computer Science Johns Hopkins University</affiliation>
+<address confidence="0.999456">Baltimore, MD, USA 21218-2691</address>
+<email confidence="0.999883">jason@cs.jhu.edu</email>
+<abstract confidence="0.997023190184049">Weighted finite-state transducers suffer from the lack of a training algorithm. Training is even harder for transducers that have been assembled via finite-state operations such as composition, minimization, union, concatenation, and closure, as this yields tricky parameter tying. We formulate a “parameterized FST” paradigm and give training algorithms for it, including a general bookkeeping trick (“expectation semirings”) that cleanly and efficiently computes expectations and gradients. 1 Background and Motivation Rational relations on strings have become widespread in language and speech engineering (Roche and Schabes, 1997). Despite bounded memory they are well-suited to describe many linguistic and textual processes, either exactly or approximately. a set of Relations are more general than functions because they may pair a given input string with more or fewer than one output string. class of so-called admits a nice declarative programming paradigm. Source describing the relation (a is compiled into efficient object code (in the form a 2-tape automaton called a trans- The object code can even be optimized for runtime and code size (via algorithms such as determinization and minimization of transducers). This programming paradigm supports efficient nondeterminism, including parallel processing over infinite sets of input strings, and even allows “reverse” computation from output to input. Its unusual flexibility for the practiced programmer stems from the many operations under which rational relations are closed. It is common to define further useful operations (as macros), which modify existing relations not by editing their source code but simply by operating on them “from outside.” brief version of this work, with some additional material, first appeared as (Eisner, 2001a). A leisurely journal-length version with more details has been prepared and is available. The entire paradigm has been generalized to which assign a weight to each rather than simply including or excluding it. If these weights represent probabilithe relation is called a relation constitutes a statistical model. Such models can be efficiently restricted, manipulated or combined using rational operations before. An artificial example will appear in The availability of toolkits for this weighted case (Mohri et al., 1998; van Noord and Gerdemann, 2001) promises to unify much of statistical NLP. Such tools make it easy to run most current apto statistical normaland noisy-channel classic models for speech recognition (Pereira and Riley, 1997) and machine translation (Knight and Al-Onaizan, 1998). Moreover, once the models are expressed in the finitestate framework, it is easy to use operators to tweak them, to apply them to speech lattices or other sets, and to combine them with linguistic resources. there is a stumbling block: the weights come from? all, statistical models require supervised or unsupervised training. Currently, finite-state practitioners derive weights using exogenous training methods, then patch them onto transducer arcs. Not only do these methods require additional programming outside the toolkit, but they limited to particular models and training regimens. For example, the forward-backward algorithm (Baum, 1972) trains only Hidden Markov Models, while (Ristad and Yianilos, 1996) trains only stochastic edit distance. In short, current finite-state toolkits include no training algorithms, because none exist for the large space of statistical models that the toolkits can in principle describe and run. find maximize Figure 1: (a) A probabilistic FST defining a joint probability distribution. (b) A smaller joint distribution. (c) A conditional Defining means that the weights in (a) can be altered by adjusting the fewer weights in (b) and (c). This paper aims to provide a remedy through a paradigm, which we call finite- It lays out a fully general approach for training the weights of weighted rational rela- First considers how to parameterize such models, so that weights are defined in terms of unparameters to be learned. asks what it means to learn these parameters from training data (what is to be optimized?), and notes the apparently bookkeeping involved. cuts through the difficulty with a surprisingly simple trick. Firemoves inefficiencies from the basic algorithm, making it suitable for inclusion in an actual toolkit. Such a toolkit could greatly shorten the development cycle in natural language engineering. 2 Transducers and Parameters Finite-state machines, including finite-state auand transducers are a kind of labeled directed multigraph. For ease and brevity, we explain them by example. Fig. 1a shows a proba- FST with input alphabet = output = and all states final. It may be regarded as a device for generating a string pair a random walk from Two paths that generate both input output 5 Each of the paths has probability .0002646, so the probability of somehow generating the pair + = Abstracting away from the idea of random walks, arc weights need not be probabilities. Still, define a path’s weight as the product of its arc weights and the stopping weight of its final state. Thus Fig. 1a a weighted relation = This particular relation does happen to be (see It represents a joint distribu- (since = Meanwhile, Fig. 1c a conditional one = This paper explains how to adjust probability distributions like that of Fig. 1a so as to model training data better. The algorithm improves an FST’s numeric weights while leaving its topology fixed. How many parameters are there to adjust in Fig. 1a? That is up to the user who built it! An FST model with few parameters is more constrained, making optimization easier. Some possibilities: • Most simply, the algorithm can be asked to tune the 17 numbers in Fig. 1a separately, subject to the constraint that the paths retain total probability 1. A more specific version of the constraint requires the to remain each of the 4 states must options with total probability 1 (at state 15+.7+.03.+.12=1). This preserves the random-walk interpretation and (we will show) entails no loss of The 4 restrictions leave params. • But perhaps Fig. 1a was actually obtained as the composition of Fig. 1b–c, effectively defin- = If Fig. 1b–c are required to remain Markovian, they have 5 and 1 degrees of freedom respectively, so now Fig. 1a has only 6 paramgeneral, composing machines multiplies their arc counts but only adds their parameter counts. We wish to optimize just the few underlying parameters, not independently optimize the many arc weights of the composed machine. • Perhaps Fig. 1b was itself obtained by the probaregular expression the 3 parameters µ, = With footnote 2, the composed machine does Fig. 1c have only 1 degree of freedom? The Markovian requirement means something different in Fig. 1c, defines a conditional relation than a joint one. A random walk on Fig. 1c chooses among arcs a label. So the arcs from state input have total probability 1 (currently .9+.1). All other arc choices are forced by the input label and so have probability 1. only tunable value is .1 (denote it by with = 1 b:q/.4</abstract>
+<note confidence="0.882172">b:p/.1 a:p/.7 (b) b:z/.12 1 (a) a:x/.63 1/.15 b:z/.4 4/.15 b:p/.03 5/.5 b:q/.12 q:z/1 0/.15 b:z/.12 2/.5 p:x/.9 (c) b:x/.027 1 b:x/.09 3/.5 b:z/.4 6/1 1 q:z/1 7/1</note>
+<email confidence="0.258468">ν</email>
+<abstract confidence="0.999494795811518">(Fig. 1a) has now been described with a total of just probabilistic union (1 “flip a coin and def heads, tails.” “repeatedly flip an coin and keep long as it comes up heads.” These 4 parameters have global effects on Fig. 1a, to complex parameter tying: arcs ® Fig. 1b get respective probabilities which covary with vary with Each of these probabilities in turn affects multiple arcs in the composed FST of Fig. 1a. We offer a theorem that highlights the broad of these modeling a weighted regular relation, the following statements are equivalent: (1) joint probabilistic relation; (2) be computed by a Markovian FST that halts with probability 1; be expressed as a a regexp built up from atomic expressions b using concatenation, union and probabilistic closure defining a good regexp language is unknown to us, but they can be defined in several other ways: (1) via FSTs as in Fig. 1c, (2) by compilation of weighted rewrite rules (Mohri and Sproat, 1996), (3) by compilation of decision trees (Sproat and Riley, 1996), (4) as a relation that performs contextual left-to-right replacement of input substrings by a smaller conditional relation (Gerdeand van Noord, by conditionalization of a joint relation as discussed below. A central technique is to define a joint relation as a by composing a joint relation with a cascade of one or more conditional relations as in Fig. 1 (Pereira and Riley, 1997; Knight and Graehl, 1998). The general form is illustrated by the parameters represent the probabilities of another reading another transducing than starting to transduce than prove express an FST and apply the well-known Kleene-Sch¨utzenberger construction (Berstel and Reutenauer, 1988), taking care to write each regexp in the construction as a constant times a probabilistic regexp. A full proof straightforward, as are proofs of (4), the randomness is in the smaller relation’s choice of how to replace a match. One can also get randomness through the choice of matches, ignoring match possibilities by randomly deleting markers in Gerdemann and van Noord’s construction. by composing 4 There are also procedures for defining weighted FSTs that are not probabilistic (Berstel and Reutenauer, 1988). Arbitrary weights such as 2.7 be assigned to arcs or sprinkled through a reg- (to be compiled into A more subtle example is weighted FSAs that approximate PCFGs (Nederhof, 2000; Mohri and Nederhof, 2001), or to extend the idea, weighted FSTs that approximate or conditional built for translation. These are parameterized by the PCFG’s parameters, but add or remove strings of the PCFG to leave an improper probability distribution. Fortunately for those techniques, an FST with arc weights can be make it jointly or conditionally probabilistic: • An easy approach is to normalize the options at each state to make the FST Markovian. Unfortunately, the result may differ for equivalent FSTs that express the same weighted relation. Undesirable consequences of this fact have been termed “label bias” (Lafferty et al., 2001). Also, in the conditional such normalization only correct if all states accept all input suffixes (since “dead ends” probability A better-founded approach is normalwhich simply divides each case) or by (conditional case). To implement the joint case, just divide stopping weights by the total weight of all paths shows how to find), provided this is finite. the conditional case, let a copy of the labels removed, so that the desired determinize possible (but this fails for some weighted FSAs), replace all weights with their and compose the result with x) the source model, and is often an “identity that requires = really just an FSA. propose also using automata to generalize to “branching noisy channels” (a case of dendroid distributions). the true transcripbe triply constrained by observing speech transcriptions which independently depend on corresponding problem exists in the joint case, but may be easily avoided there by first pruning non-coaccessible states. suffices to make (one accepting path per string), a weaker condition than determinism. When this is not (as in the inverse of Fig. 1b, whose conditionaliza- Normalization is particularly important because it the use of parameterizations. Here one defines each arc weight, coin weight, or regexp weight in terms of by hand with that coin, etc. Each feature has a and a weight is computed as the product of the of its is now the strengths that are the learnable parameters. This allows meanparameter tying: if certain arcs such and a contextual “vowel-fronting” feature, then their weights rise and fall together with the strength of that feature. The resulting machine must be normalized, either per-state or globally, to obtain a joint or a conditional distribution as desired. Such approaches have been tried recently in restricted cases (McCallum et al., 2000; Eisner, 2001b; Lafferty et al., 2001). Normalization may be postponed and applied instead to the result of combining the FST with other FSTs by composition, union, concatenation, etc. A simple example is a probabilistic FSA defined by normalizing the intersection of other probabilistic . (This is in fact a log-linear model in which the component FSAs define the features: of feature In short, weighted finite-state operators provide a language for specifying a wide variety of parameterized statistical models. Let us turn to their training. 3 Estimation in Parameterized FSTs We are primarily concerned with the following trainparadigm, novel in its generality. Let a joint probabilistic relation that is computed by a weighted FST. The FST was built some recipe that used the vector require us to rebuild the FST to get updated weights; this can involve composition, regexp compilation, multiplication of feature strengths, etc. (Lazy algorithms that compute arcs and states of tion cannot be realized by any weighted FST), one can somesucceed by a smaller regular set in which the input being considered is known to fall. In the extreme, if each input string is fully observed (not the case if the input is bound by composition to the output of a one-to-many one can succeed by restricting each input string in this amounts to manually dividing log(strength) values are called weights, but this paper uses “weight” to mean something else. Figure 2: The joint model of Fig. 1a constrained to generate input output demand (Mohri et al., 1998) can pay off here, only part of be needed subsequently.) As training data we are given a set of observed These are assumed to be independent random samples from a joint disof the form the goal is to recover true Samples need not be fully observed supervised training): thus may be given as regular sets in which input and output were observed to fall. For example, in ordinary training, represents a completely hidden state sequence (cf. Ristad (1998), who allows regular set), while a single string representa completely observed emission to optimize? esbe the estimation to maximize a prior probability. In a log-linear parameterization, for example, a prior that penalizes feature strengths far from 1 can be used to do feature selection and avoid overfitting (Chen and Rosenfeld, 1999). The EM algorithm (Dempster et al., 1977) can these functions. Roughly, the step hidden information: if generfrom the current which FST paths stand a chance of having been the path used? (Guessing the path also guesses the exact input and output.) The step make those paths more likely. EM alternates these steps and converges to a local optimum. The M step’s form depends on the parameterization and the E step serves the M step’s needs. Fig. 1a and suppose = During the E step, we restrict to paths with this observation by computing shown in Fig. 2. To find each path’s posprobability the observation just conditionalize: divide its raw probability by the total of all paths in Fig. 2. implement an HMM by an FST, compose a probabilistic FSA that generates a state sequence of the HMM with a conditional FST that transduces HMM states to emitted symbols.</abstract>
+<note confidence="0.755522222222222">1 7 a:x/.63 8 9 b:z/.1284 a:x/.63 10 12/.5 b: 1 b:z/.404 b:x/.027 11</note>
+<abstract confidence="0.997614411949686">But that is not the full E step. The M step uses not individual path probabilities (Fig. 2 has infinitely many) but expected counts derived from the paths. will show how the E step can accumulate these counts effortlessly. We first explain their by the M step, repeating the presentation of • If the parameters are the 17 weights in Fig. 1a, the M step reestimates the probabilities of the arcs from state to be proportional to the number traversals each arc (normalizing at each state to make the FST Markovian). So the E step must count traversals. This requires mapping Fig. 2 back Fig. 1a: to traverse either �) 0 Fig. 2 is “really” to traverse Fig. 1a. • If Fig. 1a was built by composition, the M step is similar but needs the expected traversals of the arcs in Fig. 1b–c. This requires further unwinding of 1a’s to traverse that arc is “really” to Fig. 1b’s 1c’s • If Fig. 1b was defined by the regexp given earlier, Q in turn “really” just evidence the came up heads. To learn the weights v, µ, count heads/tails each coin. If arc probabilities (or even v, µ, have loglinear parameterization, then the E step must comwhere vector of total feature counts a path in The M step then treats fixed, and adjusts the of tofeature counts equals using Improved Iterative Scaling (Della Pietra et al., 1997; Chen and globally normalized, joint the predicted vector is If the log-linear probabilities are conditioned on the state and/or the input, the predicted vector is harder to de- (though usually much easier to is itself iterative; to avoid nested loops, run only one iteration at each M step, giving a GEM algorithm (Riezler,1999). Alternatively, discard EM and use gradient-based optimization. per-state conditional normalization, let the set arcs from state input symbol their weights are to sum to 1. Besides computing the E step must the expected number traversals of arcs in each Then the predicted vector given counts on a randomly chosen arc in Per-state normalization (Eisner, 2001b, is similar but drops the on The difficult case is global conditional normalization. It arises, for example, when training a joint model the form · · · where a conditional is also possible to use this EM approach for diswhere we wish to maximize a conditional FST that The trick is to instead train a joint where thereby (Of course, the method of this paper can train such composi- If fully observed, just define = But by choosing a more genmodel of we can also handle incompletely training forces to cooperatively reconstruct a distribution over the inputs and do discriminative training of those inputs. (Any parameters of be either frozen before training or optimized along with parameters of A final possibility is that each defined by a that already supplies a distribution over the inputs; then we consider just as in the joint model. Finally, note that EM is not all-purpose. It only maximizes probabilistic objective functions, and even there it is not necessarily as fast as (say) conjugate gradient. For this reason, we will also show behow to compute the gradient of to for an arbitrary parameterized FST We remark without elaboration that this can help optimize task-related objective functions, such as i 4 The E Step: Expectation Semirings It remains to devise appropriate E steps, which looks rather daunting. Each path in Fig. 2 weaves together parameters from other machines, which we must untangle and tally. In the 4-coin parameterization, path Q yield up a counts observed heads and tails of the 4 coins. This nonworks out to 1, 0,1,1,1,1, other parameterizations, the path must instead yield a vector of arc traversal counts or feature counts. Computing a count vector for one path is hard enough, but it is the E step’s job to find the expected value of this vector—an average over the infinitely model of v Then the count vector contributed by The term the count of each It may be found by a variant in which path values are regular expressions over paths Fig. 2 in proportion to their probabilities The results for summed and passed to the M step. let us say that each path not only probability also a a vector space which counts the arcs, features, coin flips encountered along path The value of path is the the values assigned to its arcs. E step must return the value the path that generated For example, if every arc had value 1, then expected value would expected path length. Letting the set of in 2), the expected value = The denominator of equation (1) is the total probof all accepting paths in But while computing this, we will also compute the numerator. The idea is to augment the weight data structure with expectation information, so each weight records a vector counting the parameters that contributed to that probability. We will enforce the weight of from which (1) is trivial to compute. Berstel and Reutenauer (1988) give a sufficiently general finite-state framework to allow this: weights fall in any set of Multiplication and addition are replaced by binary operations Thus used to combine arc into a path weight and used to combine the weights of alternative paths. To sum over infinite sets of cyclic paths we also need a closure interpreted as The usual algorithms work if the of a Ordinary probabilities fall in the semiring novel weights fall in a novel derivation of (1): = = now observe that = 1 0 according to whether is: a monoid (i.e., with identity a identity over both sides, = and For finite-state commutativity of needed as well. closure operation is defined for − so cycles with weights in allowed. an arc has probability value we give it weight so that our invariant (see above) if of a single length-0 or length-1 path. The above definitions are designed to preserve our invariant as we build up larger paths and pathus concatenate (e.g.) simple paths get a longer path = = + The definiof that path weight will be us take the union of disjoint pathsets, and infinite unions. To compute (1) now, we only need the total accepting paths in 2). This can be computed with finite-state methods: the aversion that replaces input:output labels with so it maps same total weight Minimizing it yields a one- FST from which be read directly! The other “magical” property of the expectation semiring is that it automatically keeps track of the tangled parameter counts. For instance, recall traversing Q have the same efas traversing underlying arcs −) ® And indeed, if the underlying arcs values then the composed arc @ weight = just as if it had value Some concrete examples of values may be useful: • To count traversals of the arcs of Figs. 1b–c, numthese arcs and let arc value the Then the of the apof arc path or underlying path A regexp of form weighted as (1 − − the new semiring. Then elements 1 the heads and tails of the • For a global log-linear parameterization, an arc’s value is a vector specifying the arc’s features. Then all the features encountered along Really we are manipulating weighted relations, not FSTs. We may combine FSTs, or determinize or minimize them, with any variant of the semiringlong as the resulting FST computes the right weighted relation, the arrangement of its states, arcs, and labels is unimportant. The same semiring may be used to compute gradi- We would like to find its gradient respect to where real-valued but need not be probabilistic. Whatever procedures are used evaluate or approximately—for FST operations to compile by of simply be applied over the expectation semiring, replacing weight replacing the usual operations with preserve the gradient ((2) is the derivative product rule), this computation yields 5 Removing Inefficiencies Now for some important remarks on efficiency: Computing an instance of the well-known path problem 1977; Tar an, Let Then the total semirweight paths in initial state 0 to state WLOG to be unique and un- It is wasteful to compute suggested by minimizing since then real work is done by an step (Mohri, that implements the of algepath, whereas all we need is the If the number of states and both problems are the worst case, but the single-source version can be solved in for acyclic graphs and other reducible flow graphs (Tar an, 1981b). For a gengraph Tar an (1981b) shows how to partition into “hard” subgraphs that localize the cyclicity or then run the on each (thereby reducing as little as 1), and recombine the results. The overhead of partitioning recombining is essentially only For speeding up the on subgraphs, one can use an approximate relaxation technique (submitted) develops fast minimization algorithms work for the real and semirings. and subtraction are also possible: v) = Division is comused in defining normalization). edges from summed into a single edge. (Mohri, 2002). Efficient hardware implementation is also possible via chip-level parallelism (Rote, 1985). In many cases of interest, an acyclic Tar an’s method computes each sorted order, thereby finding a number of For HMMs 11), the familiar trellis, and we would this computation of reduce to the forwardbackward algorithm (Baum, 1972). But notice that it has no backward pass. In place of pushing cumulative probabilities backward to the arcs, it pushes arcs (more generally, values in forward to the probabilities. This is slower because vector operations, and the vectors rapidly lose sparsity as they are added together. We therefore reintroduce a backward pass that lets avoid computing they are only to construct This speedup also for cyclic graphs and for any Write and let the of the edge from it can be that The forand backward probabilities, be computed using single-source algebraic path for simpler semiring equivalently, by solving a sparse linear system of equations over a much-studied problem at time, and faster approximations (Greenbaum, 1997). • A Viterbi variant of the expectation semiring exreplace (3) with Here, the forward and backward probabilities can be in time only Tar an, 1987). variants are also possible. 6 Discussion We have exhibited a training algorithm for parameterized finite-state machines. Some specific consequences that we believe to be novel are (1) an EM algorithm for FSTs with cycles and epsilons; (2) training algorithms for HMMs and weighted contextual edit distance that work on incomplete data; (3) endto-end training of noisy channel cascades, so that it is not necessary to have separate training data for each machine in the cascade (cf. Knight and Graehl, acyclic (e.g., fully observed strings), and rather its FST) has no : a then composition will an acyclic machine. If only acyclic, then composition is still acyclic if no 1998), although such data could also be used; (4) training of branching noisy channels (footnote 7); (5) discriminative training with incomplete data; (6) training of conditional MEMMs (McCallum et al., 2000) and conditional random fields (Lafferty et al., 2001) on unbounded sequences. We are particularly interested in the potential for quickly building statistical models that incorporate linguistic and engineering insights. Many models of interest can be constructed in our paradigm, without having to write new code. Bringing diverse models into the same declarative framework also allows one to apply new optimization methods, objective functions, and finite-state algorithms to all of them. To avoid local maxima, one might try deterministic annealing (Rao and Rose, 2001), or randomized or place a prior on Another extension is adjust the machine say by model merging (Stolcke and Omohundro, 1994). Such techniques build on our parameter estimation method. The key algorithmic ideas of this paper extend from forward-backward-style to inside-outside-style methods. For example, it should be possible to do end-to-end training of a weighted relation defined by an interestingly parameterized synchronous CFG composed with tree transducers and then FSTs. References L. E. Baum. 1972. An inequality and associated maximization technique in statistical estimation of probafunctions of a Markov process. 3. Berstel and Christophe Reutenauer. 1988. and their Springer-Verlag. Stanley F. Chen and Ronald Rosenfeld. 1999. A Gaussian prior for smoothing maximum entropy models.</abstract>
+<note confidence="0.739799086956522">Technical Report CMU-CS-99-108, Carnegie Mellon. S. Della Pietra, V. Della Pietra, and J. Lafferty. 1997. features of random fields. Transactions Pattern Analysis and Machine 19(4). A. P. Dempster, N. M. Laird, and D. B. Rubin. 1977. Maximum likelihood from incomplete data via the EM Royal Statist. Soc. Ser. 39(1):1–38. Jason Eisner. 2001a. Expectation semirings: Flexible EM for finite-state transducers. In G. van Noord, ed., Proc. ofthe ESSLLI Workshop on Finite-State Methods Natural Language Extended abstract. Eisner. 2001b. a Probabilistic Lexicon Syntactic Ph.D. thesis, University of Pennsylvania. D. Gerdemann and G. van Noord. 1999. Transducers rewrite rules with backreferences. Greenbaum. 1997. Methods for Solving Soc. for Industrial and Applied Math. Kevin Knight and Yaser Al-Onaizan. 1998. Translation finite-state devices. In Kevin Knight and Jonathan Graehl. 1998. Machine 24(4). J. Lafferty, A. McCallum, and F. Pereira. 2001. Con-</note>
+<abstract confidence="0.930192476190476">ditional random fields: Probabilistic models for segand labeling sequence data. D. J. Lehmann. 1977. Algebraic structures for transitive Computer 4(1):59–76. A. McCallum, D. Freitag, and F. Pereira. 2000. Maximum entropy Markov models for information extracand segmentation. 591–598. M. Mohri and M.-J. Nederhof. 2001. Regular approximation of context-free grammars through transforma- In J.-C. Junqua and G. van Noord, eds., Robustin Language and Speech Kluwer. Mehryar Mohri and Richard Sproat. 1996. An efficient for weighted rewrite rules. In M. Mohri, F. Pereira, and M. Riley. 1998. A rational defor a weighted finite-state transducer library. Lec- Notes in Computer 1436. M. Mohri. 2002. Generic epsilon-removal and input epsilon-normalization algorithms for weighted trans- J. ofFoundations of Comp. 1(13). Mark-Jan Nederhof. 2000. Practical experiments with regular approximation of context-free languages.</abstract>
+<note confidence="0.835692230769231">26(1). Fernando C. N. Pereira and Michael Riley. 1997. Speech recognition by composition of weighted finite au- In E. Roche and Y. Schabes, eds., MIT Press, Cambridge, MA. A. Rao and K. Rose. 2001 Deterministically annealed design of hidden Markov movel speech recognizers. Trans. on Speech and Audio 9(2). Riezler. 1999. Constraint Logic Ph.D. thesis, Universit¨at T¨ubingen. E. Ristad and P. Yianilos. 1996. Learning string edit distance. Tech. Report CS-TR-532-96, Princeton. E. Ristad. 1998. Hidden Markov models with finite state</note>
+<author confidence="0.490375">In A Kornai</author>
+<author confidence="0.490375">Finite State ed</author>
+<affiliation confidence="0.761441">Cambridge University Press.</affiliation>
+<note confidence="0.709242333333333">Emmanuel Roche and Yves Schabes, editors. 1997. Language MIT Press. G¨unter Rote. 1985. A systolic array algorithm for the</note>
+<abstract confidence="0.862812125">algebraic path problem (shortest paths; matrix inver- 34(3):191–219. Richard Sproat and Michael Riley. 1996. Compilation of weighted finite-state transducers from decision trees. of the 34th Annual Meeting of the Andreas Stolcke and Stephen M. Omohundro. 1994. Best-first model merging for hidden Markov model induction. Tech. Report ICSI TR-94-003, Berkeley, CA. Robert Endre Tarjan. 1981a. A unified approach to path of the 28(3):577–593, July. Robert Endre Tarjan. 1981b. Fast algorithms for solving problems. of the 28(3):594–614, July. G. van Noord and D. Gerdemann. 2001. An extendible regular expression compiler for finite-state approaches natural language processing. In Impleno. 22 in Springer Lecture Notes in CS.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>L E Baum</author>
+</authors>
+<title>An inequality and associated maximization technique in statistical estimation of probabilistic functions of a Markov process.</title>
+<date>1972</date>
+<journal>Inequalities,</journal>
+<volume>3</volume>
+<contexts>
+<context position="3955" citStr="Baum, 1972" startWordPosition="578" endWordPosition="579"> to use operators to tweak them, to apply them to speech lattices or other sets, and to combine them with linguistic resources. Unfortunately, there is a stumbling block: Where do the weights come from? After all, statistical models require supervised or unsupervised training. Currently, finite-state practitioners derive weights using exogenous training methods, then patch them onto transducer arcs. Not only do these methods require additional programming outside the toolkit, but they are limited to particular kinds of models and training regimens. For example, the forward-backward algorithm (Baum, 1972) trains only Hidden Markov Models, while (Ristad and Yianilos, 1996) trains only stochastic edit distance. In short, current finite-state toolkits include no training algorithms, because none exist for the large space of statistical models that the toolkits can in principle describe and run. &apos;Given output, find input to maximize P(input, output). Figure 1: (a) A probabilistic FST defining a joint probability distribution. (b) A smaller joint distribution. (c) A conditional distribution. Defining (a)=(b)o(c) means that the weights in (a) can be altered by adjusting the fewer weights in (b) and </context>
+<context position="31589" citStr="Baum, 1972" startWordPosition="5485" endWordPosition="5486">(−p, −v) and (p, v)−1 = (m-1, −p−1vp−1). Division is commonly used in defining fθ (f&apos;or normalization). 19Multiple edges from j to k are summed into a single edge. (Mohri, 2002). Efficient hardware implementation is also possible via chip-level parallelism (Rote, 1985). • In many cases of interest, Ti is an acyclic graph.20 Then Tar an’s method computes w0j for each j in topologically sorted order, thereby finding ti in a linear number of ⊕ and ⊗ operations. For HMMs (footnote 11), Ti is the familiar trellis, and we would like this computation of ti to reduce to the forwardbackward algorithm (Baum, 1972). But notice that it has no backward pass. In place of pushing cumulative probabilities backward to the arcs, it pushes cumulative arcs (more generally, values in V ) forward to the probabilities. This is slower because our ⊕ and ⊗ are vector operations, and the vectors rapidly lose sparsity as they are added together. We therefore reintroduce a backward pass that lets us avoid ⊕ and ⊗ when computing ti (so they are needed only to construct Ti). This speedup also works for cyclic graphs and for any V . Write wjk as (pjk, vjk), and let w1jk = (p1jk, v1 jk) denote the weight of the edge from j t</context>
+</contexts>
+<marker>Baum, 1972</marker>
+<rawString>L. E. Baum. 1972. An inequality and associated maximization technique in statistical estimation of probabilistic functions of a Markov process. Inequalities, 3.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jean Berstel</author>
+<author>Christophe Reutenauer</author>
+</authors>
+<title>Rational Series and their Languages.</title>
+<date>1988</date>
+<publisher>Springer-Verlag.</publisher>
+<contexts>
+<context position="11037" citStr="Berstel and Reutenauer, 1988" startWordPosition="1812" endWordPosition="1815">ization of a joint relation as discussed below. A central technique is to define a joint relation as a noisy-channel model, by composing a joint relation with a cascade of one or more conditional relations as in Fig. 1 (Pereira and Riley, 1997; Knight and Graehl, 1998). The general form is illustrated by 3Conceptually, the parameters represent the probabilities of reading another a (A); reading another b (ν); transducing b to p rather than q (µ); starting to transduce p to a rather than x (p). 4To prove (1)⇒(3), express f as an FST and apply the well-known Kleene-Sch¨utzenberger construction (Berstel and Reutenauer, 1988), taking care to write each regexp in the construction as a constant times a probabilistic regexp. A full proof is straightforward, as are proofs of (3)⇒(2), (2)⇒(1). 5In (4), the randomness is in the smaller relation’s choice of how to replace a match. One can also get randomness through the choice of matches, ignoring match possibilities by randomly deleting markers in Gerdemann and van Noord’s construction. P(v, z) def = Ew,x,y P(v|w)P(w, x)P(y|x)P(z|y), implemented by composing 4 machines.6,7 There are also procedures for defining weighted FSTs that are not probabilistic (Berstel and Reute</context>
+<context position="25262" citStr="Berstel and Reutenauer (1988)" startWordPosition="4316" endWordPosition="4319">et of paths in xi o fe o yi (Fig. 2), the expected value is14 E[val(π) |xi, yi] = &amp;EΠ P(π) P(π) val(π) (1) The denominator of equation (1) is the total probability of all accepting paths in xi o f o yi. But while computing this, we will also compute the numerator. The idea is to augment the weight data structure with expectation information, so each weight records a probability and a vector counting the parameters that contributed to that probability. We will enforce an invariant: the weight of any pathset H must be (&amp;EΠ P(π), &amp;EΠ P(π) val(π)) E R&gt;0 x V , from which (1) is trivial to compute. Berstel and Reutenauer (1988) give a sufficiently general finite-state framework to allow this: weights may fall in any set K (instead of R). Multiplication and addition are replaced by binary operations ® and ® on K. Thus ® is used to combine arc weights into a path weight and ® is used to combine the weights of alternative paths. To sum over infinite sets of cyclic paths we also need a closure operation *, interpreted as k* = (D&apos;0 ki. The usual finite-state algorithms work if (K, ®, ®, *) has the structure of a closed semiring.15 Ordinary probabilities fall in the semiring (R&gt;0, +, x, *).16 Our novel weights fall in a n</context>
+</contexts>
+<marker>Berstel, Reutenauer, 1988</marker>
+<rawString>Jean Berstel and Christophe Reutenauer. 1988. Rational Series and their Languages. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stanley F Chen</author>
+<author>Ronald Rosenfeld</author>
+</authors>
+<title>A Gaussian prior for smoothing maximum entropy models.</title>
+<date>1999</date>
+<tech>Technical Report CMU-CS-99-108,</tech>
+<location>Carnegie Mellon.</location>
+<contexts>
+<context position="17682" citStr="Chen and Rosenfeld, 1999" startWordPosition="2913" endWordPosition="2916">rved to fall. For example, in ordinary HMM training, xi = E* and represents a completely hidden state sequence (cf. Ristad (1998), who allows any regular set), while yi is a single string representing a completely observed emission sequence.11 What to optimize? Maximum-likelihood estimation guesses 0ˆ to be the 0 maximizing Hi fθ(xi, yi). Maximum-posterior estimation tries to maximize P(0)·Hi fθ(xi, yi) where P(0) is a prior probability. In a log-linear parameterization, for example, a prior that penalizes feature strengths far from 1 can be used to do feature selection and avoid overfitting (Chen and Rosenfeld, 1999). The EM algorithm (Dempster et al., 1977) can maximize these functions. Roughly, the E step guesses hidden information: if (xi, yi) was generated from the current fθ, which FST paths stand a chance of having been the path used? (Guessing the path also guesses the exact input and output.) The M step updates 0 to make those paths more likely. EM alternates these steps and converges to a local optimum. The M step’s form depends on the parameterization and the E step serves the M step’s needs. Let fθ be Fig. 1a and suppose (xi, yi) = (a(a + b)*, xxz). During the E step, we restrict to paths compa</context>
+<context position="20501" citStr="Chen and Rosenfeld, 1999" startWordPosition="3445" endWordPosition="3448">aversing Qa:p ) Q is in turn “really” just evidence that the A-coin came up heads. To learn the weights A, v, µ, ρ, count expected heads/tails for each coin. • If arc probabilities (or even A, v, µ, ρ) have loglinear parameterization, then the E step must compute c = Ei ecf(xi, yi), where ec(x, y) denotes the expected vector of total feature counts along a random path in fθ whose (input, output) matches (x, y). The M step then treats c as fixed, observed data and adjusts 0 until the predicted vector of total feature counts equals c, using Improved Iterative Scaling (Della Pietra et al., 1997; Chen and Rosenfeld, 1999).12 For globally normalized, joint models, the predicted vector is ecf(E*, A*). If the log-linear probabilities are conditioned on the state and/or the input, the predicted vector is harder to describe (though usually much easier to compute).13 12IIS is itself iterative; to avoid nested loops, run only one iteration at each M step, giving a GEM algorithm (Riezler,1999). Alternatively, discard EM and use gradient-based optimization. 13For per-state conditional normalization, let Dj,a be the set of arcs from state j with input symbol a E E; their weights are normalized to sum to 1. Besides compu</context>
+</contexts>
+<marker>Chen, Rosenfeld, 1999</marker>
+<rawString>Stanley F. Chen and Ronald Rosenfeld. 1999. A Gaussian prior for smoothing maximum entropy models. Technical Report CMU-CS-99-108, Carnegie Mellon.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Della Pietra</author>
+<author>V Della Pietra</author>
+<author>J Lafferty</author>
+</authors>
+<title>Inducing features of random fields.</title>
+<date>1997</date>
+<journal>IEEE Transactions on Pattern Analysis and Machine Intelligence,</journal>
+<volume>19</volume>
+<issue>4</issue>
+<contexts>
+<context position="20474" citStr="Pietra et al., 1997" startWordPosition="3441" endWordPosition="3444">exp given earlier, traversing Qa:p ) Q is in turn “really” just evidence that the A-coin came up heads. To learn the weights A, v, µ, ρ, count expected heads/tails for each coin. • If arc probabilities (or even A, v, µ, ρ) have loglinear parameterization, then the E step must compute c = Ei ecf(xi, yi), where ec(x, y) denotes the expected vector of total feature counts along a random path in fθ whose (input, output) matches (x, y). The M step then treats c as fixed, observed data and adjusts 0 until the predicted vector of total feature counts equals c, using Improved Iterative Scaling (Della Pietra et al., 1997; Chen and Rosenfeld, 1999).12 For globally normalized, joint models, the predicted vector is ecf(E*, A*). If the log-linear probabilities are conditioned on the state and/or the input, the predicted vector is harder to describe (though usually much easier to compute).13 12IIS is itself iterative; to avoid nested loops, run only one iteration at each M step, giving a GEM algorithm (Riezler,1999). Alternatively, discard EM and use gradient-based optimization. 13For per-state conditional normalization, let Dj,a be the set of arcs from state j with input symbol a E E; their weights are normalized</context>
+</contexts>
+<marker>Pietra, Pietra, Lafferty, 1997</marker>
+<rawString>S. Della Pietra, V. Della Pietra, and J. Lafferty. 1997. Inducing features of random fields. IEEE Transactions on Pattern Analysis and Machine Intelligence, 19(4).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A P Dempster</author>
+<author>N M Laird</author>
+<author>D B Rubin</author>
+</authors>
+<title>Maximum likelihood from incomplete data via the EM algorithm.</title>
+<date>1977</date>
+<journal>J. Royal Statist. Soc. Ser. B,</journal>
+<volume>39</volume>
+<issue>1</issue>
+<contexts>
+<context position="17724" citStr="Dempster et al., 1977" startWordPosition="2920" endWordPosition="2923">aining, xi = E* and represents a completely hidden state sequence (cf. Ristad (1998), who allows any regular set), while yi is a single string representing a completely observed emission sequence.11 What to optimize? Maximum-likelihood estimation guesses 0ˆ to be the 0 maximizing Hi fθ(xi, yi). Maximum-posterior estimation tries to maximize P(0)·Hi fθ(xi, yi) where P(0) is a prior probability. In a log-linear parameterization, for example, a prior that penalizes feature strengths far from 1 can be used to do feature selection and avoid overfitting (Chen and Rosenfeld, 1999). The EM algorithm (Dempster et al., 1977) can maximize these functions. Roughly, the E step guesses hidden information: if (xi, yi) was generated from the current fθ, which FST paths stand a chance of having been the path used? (Guessing the path also guesses the exact input and output.) The M step updates 0 to make those paths more likely. EM alternates these steps and converges to a local optimum. The M step’s form depends on the parameterization and the E step serves the M step’s needs. Let fθ be Fig. 1a and suppose (xi, yi) = (a(a + b)*, xxz). During the E step, we restrict to paths compatible with this observation by computing x</context>
+</contexts>
+<marker>Dempster, Laird, Rubin, 1977</marker>
+<rawString>A. P. Dempster, N. M. Laird, and D. B. Rubin. 1977. Maximum likelihood from incomplete data via the EM algorithm. J. Royal Statist. Soc. Ser. B, 39(1):1–38.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jason Eisner</author>
+</authors>
+<title>Expectation semirings: Flexible EM for finite-state transducers.</title>
+<date>2001</date>
+<booktitle>Proc. ofthe ESSLLI Workshop on Finite-State Methods in Natural Language Processing. Extended abstract.</booktitle>
+<editor>In G. van Noord, ed.,</editor>
+<contexts>
+<context position="2236" citStr="Eisner, 2001" startWordPosition="323" endWordPosition="324">inimization of transducers). This programming paradigm supports efficient nondeterminism, including parallel processing over infinite sets of input strings, and even allows “reverse” computation from output to input. Its unusual flexibility for the practiced programmer stems from the many operations under which rational relations are closed. It is common to define further useful operations (as macros), which modify existing relations not by editing their source code but simply by operating on them “from outside.” ∗A brief version of this work, with some additional material, first appeared as (Eisner, 2001a). A leisurely journal-length version with more details has been prepared and is available. The entire paradigm has been generalized to weighted relations, which assign a weight to each (input, output) pair rather than simply including or excluding it. If these weights represent probabilities P(input, output) or P(output |input), the weighted relation is called a joint or conditional (probabilistic) relation and constitutes a statistical model. Such models can be efficiently restricted, manipulated or combined using rational operations as before. An artificial example will appear in §2. The a</context>
+<context position="14858" citStr="Eisner, 2001" startWordPosition="2430" endWordPosition="2431">h feature has a strength E R&gt;0, and a weight is computed as the product of the strengths of its features.10 It is now the strengths that are the learnable parameters. This allows meaningful parameter tying: if certain arcs such asu:i �—*, �—*, and a:ae o:e �—* share a contextual “vowel-fronting” feature, then their weights rise and fall together with the strength of that feature. The resulting machine must be normalized, either per-state or globally, to obtain a joint or a conditional distribution as desired. Such approaches have been tried recently in restricted cases (McCallum et al., 2000; Eisner, 2001b; Lafferty et al., 2001). Normalization may be postponed and applied instead to the result of combining the FST with other FSTs by composition, union, concatenation, etc. A simple example is a probabilistic FSA defined by normalizing the intersection of other probabilistic FSAs f1, f2,. . .. (This is in fact a log-linear model in which the component FSAs define the features: string x has log fi(x) occurrences of feature i.) In short, weighted finite-state operators provide a language for specifying a wide variety of parameterized statistical models. Let us turn to their training. 3 Estimation</context>
+<context position="21343" citStr="Eisner, 2001" startWordPosition="3584" endWordPosition="3585">to compute).13 12IIS is itself iterative; to avoid nested loops, run only one iteration at each M step, giving a GEM algorithm (Riezler,1999). Alternatively, discard EM and use gradient-based optimization. 13For per-state conditional normalization, let Dj,a be the set of arcs from state j with input symbol a E E; their weights are normalized to sum to 1. Besides computing c, the E step must count the expected number dj,a of traversals of arcs in each Dj,a. Then the predicted vector given θ is Ej,a dj,a ·(expected feature counts on a randomly chosen arc in Dj,a). Per-state joint normalization (Eisner, 2001b, §8.2) is similar but drops the dependence on a. The difficult case is global conditional normalization. It arises, for example, when training a joint model of the form fθ = · · · (gθ o hθ) · · ·, where hθ is a conditional It is also possible to use this EM approach for discriminative training, where we wish to maximize Hi P(yi |xi) and fθ(x, y) is a conditional FST that defines P(y |x). The trick is to instead train a joint model g o fθ, where g(xi) defines P(xi), thereby maximizing Hi P(xi) · P(yi |xi). (Of course, the method of this paper can train such compositions.) If x1,... xn are ful</context>
+</contexts>
+<marker>Eisner, 2001</marker>
+<rawString>Jason Eisner. 2001a. Expectation semirings: Flexible EM for finite-state transducers. In G. van Noord, ed., Proc. ofthe ESSLLI Workshop on Finite-State Methods in Natural Language Processing. Extended abstract.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jason Eisner</author>
+</authors>
+<title>Smoothing a Probabilistic Lexicon via Syntactic Transformations.</title>
+<date>2001</date>
+<tech>Ph.D. thesis,</tech>
+<institution>University of Pennsylvania.</institution>
+<contexts>
+<context position="2236" citStr="Eisner, 2001" startWordPosition="323" endWordPosition="324">inimization of transducers). This programming paradigm supports efficient nondeterminism, including parallel processing over infinite sets of input strings, and even allows “reverse” computation from output to input. Its unusual flexibility for the practiced programmer stems from the many operations under which rational relations are closed. It is common to define further useful operations (as macros), which modify existing relations not by editing their source code but simply by operating on them “from outside.” ∗A brief version of this work, with some additional material, first appeared as (Eisner, 2001a). A leisurely journal-length version with more details has been prepared and is available. The entire paradigm has been generalized to weighted relations, which assign a weight to each (input, output) pair rather than simply including or excluding it. If these weights represent probabilities P(input, output) or P(output |input), the weighted relation is called a joint or conditional (probabilistic) relation and constitutes a statistical model. Such models can be efficiently restricted, manipulated or combined using rational operations as before. An artificial example will appear in §2. The a</context>
+<context position="14858" citStr="Eisner, 2001" startWordPosition="2430" endWordPosition="2431">h feature has a strength E R&gt;0, and a weight is computed as the product of the strengths of its features.10 It is now the strengths that are the learnable parameters. This allows meaningful parameter tying: if certain arcs such asu:i �—*, �—*, and a:ae o:e �—* share a contextual “vowel-fronting” feature, then their weights rise and fall together with the strength of that feature. The resulting machine must be normalized, either per-state or globally, to obtain a joint or a conditional distribution as desired. Such approaches have been tried recently in restricted cases (McCallum et al., 2000; Eisner, 2001b; Lafferty et al., 2001). Normalization may be postponed and applied instead to the result of combining the FST with other FSTs by composition, union, concatenation, etc. A simple example is a probabilistic FSA defined by normalizing the intersection of other probabilistic FSAs f1, f2,. . .. (This is in fact a log-linear model in which the component FSAs define the features: string x has log fi(x) occurrences of feature i.) In short, weighted finite-state operators provide a language for specifying a wide variety of parameterized statistical models. Let us turn to their training. 3 Estimation</context>
+<context position="21343" citStr="Eisner, 2001" startWordPosition="3584" endWordPosition="3585">to compute).13 12IIS is itself iterative; to avoid nested loops, run only one iteration at each M step, giving a GEM algorithm (Riezler,1999). Alternatively, discard EM and use gradient-based optimization. 13For per-state conditional normalization, let Dj,a be the set of arcs from state j with input symbol a E E; their weights are normalized to sum to 1. Besides computing c, the E step must count the expected number dj,a of traversals of arcs in each Dj,a. Then the predicted vector given θ is Ej,a dj,a ·(expected feature counts on a randomly chosen arc in Dj,a). Per-state joint normalization (Eisner, 2001b, §8.2) is similar but drops the dependence on a. The difficult case is global conditional normalization. It arises, for example, when training a joint model of the form fθ = · · · (gθ o hθ) · · ·, where hθ is a conditional It is also possible to use this EM approach for discriminative training, where we wish to maximize Hi P(yi |xi) and fθ(x, y) is a conditional FST that defines P(y |x). The trick is to instead train a joint model g o fθ, where g(xi) defines P(xi), thereby maximizing Hi P(xi) · P(yi |xi). (Of course, the method of this paper can train such compositions.) If x1,... xn are ful</context>
+</contexts>
+<marker>Eisner, 2001</marker>
+<rawString>Jason Eisner. 2001b. Smoothing a Probabilistic Lexicon via Syntactic Transformations. Ph.D. thesis, University of Pennsylvania.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Gerdemann</author>
+<author>G van Noord</author>
+</authors>
+<title>Transducers from rewrite rules with backreferences.</title>
+<date>1999</date>
+<booktitle>Proc. ofEACL.</booktitle>
+<marker>Gerdemann, van Noord, 1999</marker>
+<rawString>D. Gerdemann and G. van Noord. 1999. Transducers from rewrite rules with backreferences. Proc. ofEACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Anne Greenbaum</author>
+</authors>
+<title>Iterative Methods for Solving Linear Systems.</title>
+<date>1997</date>
+<journal>Soc. for Industrial and Applied Math.</journal>
+<contexts>
+<context position="32559" citStr="Greenbaum, 1997" startWordPosition="5659" endWordPosition="5660">rd pass that lets us avoid ⊕ and ⊗ when computing ti (so they are needed only to construct Ti). This speedup also works for cyclic graphs and for any V . Write wjk as (pjk, vjk), and let w1jk = (p1jk, v1 jk) denote the weight of the edge from j to k.19 Then it can be shown that w0n = (p0n, Ej,k p0jv1jkpkn). The forward and backward probabilities, p0j and pkn, can be computed using single-source algebraic path for the simpler semiring (R, +, x, ∗)—or equivalently, by solving a sparse linear system of equations over R, a much-studied problem at O(n) space, O(nm) time, and faster approximations (Greenbaum, 1997). • A Viterbi variant of the expectation semiring exists: replace (3) with if(p1 &gt; p2, (p1, v1), (p2, v2)). Here, the forward and backward probabilities can be computed in time only O(m + n log n) (Fredman and Tar an, 1987). k-best variants are also possible. 6 Discussion We have exhibited a training algorithm for parameterized finite-state machines. Some specific consequences that we believe to be novel are (1) an EM algorithm for FSTs with cycles and epsilons; (2) training algorithms for HMMs and weighted contextual edit distance that work on incomplete data; (3) endto-end training of noisy </context>
+</contexts>
+<marker>Greenbaum, 1997</marker>
+<rawString>Anne Greenbaum. 1997. Iterative Methods for Solving Linear Systems. Soc. for Industrial and Applied Math.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kevin Knight</author>
+<author>Yaser Al-Onaizan</author>
+</authors>
+<title>Translation with finite-state devices.</title>
+<date>1998</date>
+<booktitle>In Proc. ofAMTA.</booktitle>
+<contexts>
+<context position="3262" citStr="Knight and Al-Onaizan, 1998" startWordPosition="470" endWordPosition="473">stic) relation and constitutes a statistical model. Such models can be efficiently restricted, manipulated or combined using rational operations as before. An artificial example will appear in §2. The availability of toolkits for this weighted case (Mohri et al., 1998; van Noord and Gerdemann, 2001) promises to unify much of statistical NLP. Such tools make it easy to run most current approaches to statistical markup, chunking, normalization, segmentation, alignment, and noisy-channel decoding,&apos; including classic models for speech recognition (Pereira and Riley, 1997) and machine translation (Knight and Al-Onaizan, 1998). Moreover, once the models are expressed in the finitestate framework, it is easy to use operators to tweak them, to apply them to speech lattices or other sets, and to combine them with linguistic resources. Unfortunately, there is a stumbling block: Where do the weights come from? After all, statistical models require supervised or unsupervised training. Currently, finite-state practitioners derive weights using exogenous training methods, then patch them onto transducer arcs. Not only do these methods require additional programming outside the toolkit, but they are limited to particular ki</context>
+</contexts>
+<marker>Knight, Al-Onaizan, 1998</marker>
+<rawString>Kevin Knight and Yaser Al-Onaizan. 1998. Translation with finite-state devices. In Proc. ofAMTA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kevin Knight</author>
+<author>Jonathan Graehl</author>
+</authors>
+<date>1998</date>
+<booktitle>Machine transliteration. Computational Linguistics,</booktitle>
+<volume>24</volume>
+<issue>4</issue>
+<contexts>
+<context position="10677" citStr="Knight and Graehl, 1998" startWordPosition="1755" endWordPosition="1758">veral other ways: (1) via FSTs as in Fig. 1c, (2) by compilation of weighted rewrite rules (Mohri and Sproat, 1996), (3) by compilation of decision trees (Sproat and Riley, 1996), (4) as a relation that performs contextual left-to-right replacement of input substrings by a smaller conditional relation (Gerdemann and van Noord, 1999),5 (5) by conditionalization of a joint relation as discussed below. A central technique is to define a joint relation as a noisy-channel model, by composing a joint relation with a cascade of one or more conditional relations as in Fig. 1 (Pereira and Riley, 1997; Knight and Graehl, 1998). The general form is illustrated by 3Conceptually, the parameters represent the probabilities of reading another a (A); reading another b (ν); transducing b to p rather than q (µ); starting to transduce p to a rather than x (p). 4To prove (1)⇒(3), express f as an FST and apply the well-known Kleene-Sch¨utzenberger construction (Berstel and Reutenauer, 1988), taking care to write each regexp in the construction as a constant times a probabilistic regexp. A full proof is straightforward, as are proofs of (3)⇒(2), (2)⇒(1). 5In (4), the randomness is in the smaller relation’s choice of how to rep</context>
+</contexts>
+<marker>Knight, Graehl, 1998</marker>
+<rawString>Kevin Knight and Jonathan Graehl. 1998. Machine transliteration. Computational Linguistics, 24(4).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Lafferty</author>
+<author>A McCallum</author>
+<author>F Pereira</author>
+</authors>
+<title>Conditional random fields: Probabilistic models for segmenting and labeling sequence data.</title>
+<date>2001</date>
+<booktitle>Proc. ofICML.</booktitle>
+<contexts>
+<context position="12543" citStr="Lafferty et al., 2001" startWordPosition="2049" endWordPosition="2052">approximate joint or conditional synchronous PCFGs built for translation. These are parameterized by the PCFG’s parameters, but add or remove strings of the PCFG to leave an improper probability distribution. Fortunately for those techniques, an FST with positive arc weights can be normalized to make it jointly or conditionally probabilistic: • An easy approach is to normalize the options at each state to make the FST Markovian. Unfortunately, the result may differ for equivalent FSTs that express the same weighted relation. Undesirable consequences of this fact have been termed “label bias” (Lafferty et al., 2001). Also, in the conditional case such per-state normalization is only correct if all states accept all input suffixes (since “dead ends” leak probability mass).8 • A better-founded approach is global normalization, which simply divides each f(x, y) by Ex,,y, f(x&apos;, y&apos;) (joint case) or by Ey, f(x, y&apos;) (conditional case). To implement the joint case, just divide stopping weights by the total weight of all paths (which §4 shows how to find), provided this is finite. In the conditional case, let g be a copy of f with the output labels removed, so that g(x) finds the desired divisor; determinize g if</context>
+<context position="14883" citStr="Lafferty et al., 2001" startWordPosition="2432" endWordPosition="2435"> strength E R&gt;0, and a weight is computed as the product of the strengths of its features.10 It is now the strengths that are the learnable parameters. This allows meaningful parameter tying: if certain arcs such asu:i �—*, �—*, and a:ae o:e �—* share a contextual “vowel-fronting” feature, then their weights rise and fall together with the strength of that feature. The resulting machine must be normalized, either per-state or globally, to obtain a joint or a conditional distribution as desired. Such approaches have been tried recently in restricted cases (McCallum et al., 2000; Eisner, 2001b; Lafferty et al., 2001). Normalization may be postponed and applied instead to the result of combining the FST with other FSTs by composition, union, concatenation, etc. A simple example is a probabilistic FSA defined by normalizing the intersection of other probabilistic FSAs f1, f2,. . .. (This is in fact a log-linear model in which the component FSAs define the features: string x has log fi(x) occurrences of feature i.) In short, weighted finite-state operators provide a language for specifying a wide variety of parameterized statistical models. Let us turn to their training. 3 Estimation in Parameterized FSTs We</context>
+<context position="33809" citStr="Lafferty et al., 2001" startWordPosition="5871" endWordPosition="5874"> is not necessary to have separate training data for each machine in the cascade (cf. Knight and Graehl, 20If xi and yi are acyclic (e.g., fully observed strings), and f (or rather its FST) has no a : a cycles, then composition will “unroll” f into an acyclic machine. If only xi is acyclic, then the composition is still acyclic if domain(f) has no a cycles. 1998), although such data could also be used; (4) training of branching noisy channels (footnote 7); (5) discriminative training with incomplete data; (6) training of conditional MEMMs (McCallum et al., 2000) and conditional random fields (Lafferty et al., 2001) on unbounded sequences. We are particularly interested in the potential for quickly building statistical models that incorporate linguistic and engineering insights. Many models of interest can be constructed in our paradigm, without having to write new code. Bringing diverse models into the same declarative framework also allows one to apply new optimization methods, objective functions, and finite-state algorithms to all of them. To avoid local maxima, one might try deterministic annealing (Rao and Rose, 2001), or randomized methods, or place a prior on θ. Another extension is to adjust the</context>
+</contexts>
+<marker>Lafferty, McCallum, Pereira, 2001</marker>
+<rawString>J. Lafferty, A. McCallum, and F. Pereira. 2001. Conditional random fields: Probabilistic models for segmenting and labeling sequence data. Proc. ofICML.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D J Lehmann</author>
+</authors>
+<title>Algebraic structures for transitive closure.</title>
+<date>1977</date>
+<journal>Theoretical Computer Science,</journal>
+<volume>4</volume>
+<issue>1</issue>
+<contexts>
+<context position="29732" citStr="Lehmann, 1977" startWordPosition="5168" endWordPosition="5169">bilistic. Whatever procedures are used to evaluate fθ(xi, yi) exactly or approximately—for example, FST operations to compile fθ followed by minimization of (c x xi) o fθ o (yi x c)—can simply be applied over the expectation semiring, replacing each weight p by (p, Vp) and replacing the usual arithmetic operations with ⊕, ⊗, etc.18 (2)–(4) preserve the gradient ((2) is the derivative product rule), so this computation yields (fθ(xi, yi), Vfθ(xi, yi)). 5 Removing Inefficiencies Now for some important remarks on efficiency: • Computing ti is an instance of the well-known algebraic path problem (Lehmann, 1977; Tar an, 1981a). Let Ti = xiofoyi. Then ti is the total semiring weight w0n of paths in Ti from initial state 0 to final state n (assumed WLOG to be unique and unweighted). It is wasteful to compute ti as suggested earlier, by minimizing (cxxi)of o(yixE), since then the real work is done by an c-closure step (Mohri, 2002) that implements the all-pairs version of algebraic path, whereas all we need is the single-source version. If n and m are the number of states and edges,19 then both problems are O(n3) in the worst case, but the single-source version can be solved in essentially O(m) time fo</context>
+</contexts>
+<marker>Lehmann, 1977</marker>
+<rawString>D. J. Lehmann. 1977. Algebraic structures for transitive closure. Theoretical Computer Science, 4(1):59–76.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A McCallum</author>
+<author>D Freitag</author>
+<author>F Pereira</author>
+</authors>
+<title>Maximum entropy Markov models for information extraction and segmentation.</title>
+<date>2000</date>
+<booktitle>Proc. ofICML,</booktitle>
+<pages>591--598</pages>
+<contexts>
+<context position="14844" citStr="McCallum et al., 2000" startWordPosition="2426" endWordPosition="2429">hat arc, coin, etc. Each feature has a strength E R&gt;0, and a weight is computed as the product of the strengths of its features.10 It is now the strengths that are the learnable parameters. This allows meaningful parameter tying: if certain arcs such asu:i �—*, �—*, and a:ae o:e �—* share a contextual “vowel-fronting” feature, then their weights rise and fall together with the strength of that feature. The resulting machine must be normalized, either per-state or globally, to obtain a joint or a conditional distribution as desired. Such approaches have been tried recently in restricted cases (McCallum et al., 2000; Eisner, 2001b; Lafferty et al., 2001). Normalization may be postponed and applied instead to the result of combining the FST with other FSTs by composition, union, concatenation, etc. A simple example is a probabilistic FSA defined by normalizing the intersection of other probabilistic FSAs f1, f2,. . .. (This is in fact a log-linear model in which the component FSAs define the features: string x has log fi(x) occurrences of feature i.) In short, weighted finite-state operators provide a language for specifying a wide variety of parameterized statistical models. Let us turn to their training</context>
+<context position="33755" citStr="McCallum et al., 2000" startWordPosition="5863" endWordPosition="5866">dto-end training of noisy channel cascades, so that it is not necessary to have separate training data for each machine in the cascade (cf. Knight and Graehl, 20If xi and yi are acyclic (e.g., fully observed strings), and f (or rather its FST) has no a : a cycles, then composition will “unroll” f into an acyclic machine. If only xi is acyclic, then the composition is still acyclic if domain(f) has no a cycles. 1998), although such data could also be used; (4) training of branching noisy channels (footnote 7); (5) discriminative training with incomplete data; (6) training of conditional MEMMs (McCallum et al., 2000) and conditional random fields (Lafferty et al., 2001) on unbounded sequences. We are particularly interested in the potential for quickly building statistical models that incorporate linguistic and engineering insights. Many models of interest can be constructed in our paradigm, without having to write new code. Bringing diverse models into the same declarative framework also allows one to apply new optimization methods, objective functions, and finite-state algorithms to all of them. To avoid local maxima, one might try deterministic annealing (Rao and Rose, 2001), or randomized methods, or </context>
+</contexts>
+<marker>McCallum, Freitag, Pereira, 2000</marker>
+<rawString>A. McCallum, D. Freitag, and F. Pereira. 2000. Maximum entropy Markov models for information extraction and segmentation. Proc. ofICML, 591–598.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Mohri</author>
+<author>M-J Nederhof</author>
+</authors>
+<title>Regular approximation of context-free grammars through transformation.</title>
+<date>2001</date>
+<booktitle>Robustness in Language and</booktitle>
+<editor>In J.-C. Junqua and G. van Noord, eds.,</editor>
+<publisher>Speech Technology. Kluwer.</publisher>
+<contexts>
+<context position="11877" citStr="Mohri and Nederhof, 2001" startWordPosition="1945" endWordPosition="1948">on’s choice of how to replace a match. One can also get randomness through the choice of matches, ignoring match possibilities by randomly deleting markers in Gerdemann and van Noord’s construction. P(v, z) def = Ew,x,y P(v|w)P(w, x)P(y|x)P(z|y), implemented by composing 4 machines.6,7 There are also procedures for defining weighted FSTs that are not probabilistic (Berstel and Reutenauer, 1988). Arbitrary weights such as 2.7 may be assigned to arcs or sprinkled through a regexp (to be compiled into E:E/2.7 −)arcs). A more subtle example is weighted FSAs that approximate PCFGs (Nederhof, 2000; Mohri and Nederhof, 2001), or to extend the idea, weighted FSTs that approximate joint or conditional synchronous PCFGs built for translation. These are parameterized by the PCFG’s parameters, but add or remove strings of the PCFG to leave an improper probability distribution. Fortunately for those techniques, an FST with positive arc weights can be normalized to make it jointly or conditionally probabilistic: • An easy approach is to normalize the options at each state to make the FST Markovian. Unfortunately, the result may differ for equivalent FSTs that express the same weighted relation. Undesirable consequences </context>
+</contexts>
+<marker>Mohri, Nederhof, 2001</marker>
+<rawString>M. Mohri and M.-J. Nederhof. 2001. Regular approximation of context-free grammars through transformation. In J.-C. Junqua and G. van Noord, eds., Robustness in Language and Speech Technology. Kluwer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mehryar Mohri</author>
+<author>Richard Sproat</author>
+</authors>
+<title>An efficient compiler for weighted rewrite rules.</title>
+<date>1996</date>
+<booktitle>In Proc. ofACL.</booktitle>
+<contexts>
+<context position="10168" citStr="Mohri and Sproat, 1996" startWordPosition="1671" endWordPosition="1674"> is a weighted regular relation, then the following statements are equivalent: (1) f is a joint probabilistic relation; (2) f can be computed by a Markovian FST that halts with probability 1; (3) f can be expressed as a probabilistic regexp, i.e., a regexp built up from atomic expressions a : b (for a E E U {E}, b E A U {E}) using concatenation, probabilistic union +p, and probabilistic closure *p. For defining conditional relations, a good regexp language is unknown to us, but they can be defined in several other ways: (1) via FSTs as in Fig. 1c, (2) by compilation of weighted rewrite rules (Mohri and Sproat, 1996), (3) by compilation of decision trees (Sproat and Riley, 1996), (4) as a relation that performs contextual left-to-right replacement of input substrings by a smaller conditional relation (Gerdemann and van Noord, 1999),5 (5) by conditionalization of a joint relation as discussed below. A central technique is to define a joint relation as a noisy-channel model, by composing a joint relation with a cascade of one or more conditional relations as in Fig. 1 (Pereira and Riley, 1997; Knight and Graehl, 1998). The general form is illustrated by 3Conceptually, the parameters represent the probabilit</context>
+</contexts>
+<marker>Mohri, Sproat, 1996</marker>
+<rawString>Mehryar Mohri and Richard Sproat. 1996. An efficient compiler for weighted rewrite rules. In Proc. ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Mohri</author>
+<author>F Pereira</author>
+<author>M Riley</author>
+</authors>
+<title>A rational design for a weighted finite-state transducer library.</title>
+<date>1998</date>
+<journal>Lecture Notes in Computer Science,</journal>
+<pages>1436</pages>
+<contexts>
+<context position="2902" citStr="Mohri et al., 1998" startWordPosition="419" endWordPosition="422"> details has been prepared and is available. The entire paradigm has been generalized to weighted relations, which assign a weight to each (input, output) pair rather than simply including or excluding it. If these weights represent probabilities P(input, output) or P(output |input), the weighted relation is called a joint or conditional (probabilistic) relation and constitutes a statistical model. Such models can be efficiently restricted, manipulated or combined using rational operations as before. An artificial example will appear in §2. The availability of toolkits for this weighted case (Mohri et al., 1998; van Noord and Gerdemann, 2001) promises to unify much of statistical NLP. Such tools make it easy to run most current approaches to statistical markup, chunking, normalization, segmentation, alignment, and noisy-channel decoding,&apos; including classic models for speech recognition (Pereira and Riley, 1997) and machine translation (Knight and Al-Onaizan, 1998). Moreover, once the models are expressed in the finitestate framework, it is easy to use operators to tweak them, to apply them to speech lattices or other sets, and to combine them with linguistic resources. Unfortunately, there is a stum</context>
+<context position="16620" citStr="Mohri et al., 1998" startWordPosition="2731" endWordPosition="2734">mes succeed by first intersecting g with a smaller regular set in which the input being considered is known to fall. In the extreme, if each input string is fully observed (not the case if the input is bound by composition to the output of a one-to-many FST), one can succeed by restricting g to each input string in turn; this amounts to manually dividing f(x, y) by g(x). 10Traditionally log(strength) values are called weights, but this paper uses “weight” to mean something else. Figure 2: The joint model of Fig. 1a constrained to generate only input ∈ a(a + b)∗ and output = xxz. fθ on demand (Mohri et al., 1998) can pay off here, since only part of fθ may be needed subsequently.) As training data we are given a set of observed (input, output) pairs, (xi, yi). These are assumed to be independent random samples from a joint distribution of the form fe(x, y); the goal is to recover the true ˆ0. Samples need not be fully observed (partly supervised training): thus xi C E*, yi C A* may be given as regular sets in which input and output were observed to fall. For example, in ordinary HMM training, xi = E* and represents a completely hidden state sequence (cf. Ristad (1998), who allows any regular set), whi</context>
+</contexts>
+<marker>Mohri, Pereira, Riley, 1998</marker>
+<rawString>M. Mohri, F. Pereira, and M. Riley. 1998. A rational design for a weighted finite-state transducer library. Lecture Notes in Computer Science, 1436.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Mohri</author>
+</authors>
+<title>Generic epsilon-removal and input epsilon-normalization algorithms for weighted transducers.</title>
+<date>2002</date>
+<journal>Int. J. ofFoundations of Comp. Sci.,</journal>
+<volume>1</volume>
+<issue>13</issue>
+<contexts>
+<context position="30056" citStr="Mohri, 2002" startWordPosition="5230" endWordPosition="5231">, etc.18 (2)–(4) preserve the gradient ((2) is the derivative product rule), so this computation yields (fθ(xi, yi), Vfθ(xi, yi)). 5 Removing Inefficiencies Now for some important remarks on efficiency: • Computing ti is an instance of the well-known algebraic path problem (Lehmann, 1977; Tar an, 1981a). Let Ti = xiofoyi. Then ti is the total semiring weight w0n of paths in Ti from initial state 0 to final state n (assumed WLOG to be unique and unweighted). It is wasteful to compute ti as suggested earlier, by minimizing (cxxi)of o(yixE), since then the real work is done by an c-closure step (Mohri, 2002) that implements the all-pairs version of algebraic path, whereas all we need is the single-source version. If n and m are the number of states and edges,19 then both problems are O(n3) in the worst case, but the single-source version can be solved in essentially O(m) time for acyclic graphs and other reducible flow graphs (Tar an, 1981b). For a general graph Ti, Tar an (1981b) shows how to partition into “hard” subgraphs that localize the cyclicity or irreducibility, then run the O(n3) algorithm on each subgraph (thereby reducing n to as little as 1), and recombine the results. The overhead o</context>
+</contexts>
+<marker>Mohri, 2002</marker>
+<rawString>M. Mohri. 2002. Generic epsilon-removal and input epsilon-normalization algorithms for weighted transducers. Int. J. ofFoundations of Comp. Sci., 1(13).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mark-Jan Nederhof</author>
+</authors>
+<title>Practical experiments with regular approximation of context-free languages.</title>
+<date>2000</date>
+<journal>Computational Linguistics,</journal>
+<volume>26</volume>
+<issue>1</issue>
+<contexts>
+<context position="11850" citStr="Nederhof, 2000" startWordPosition="1943" endWordPosition="1944">e smaller relation’s choice of how to replace a match. One can also get randomness through the choice of matches, ignoring match possibilities by randomly deleting markers in Gerdemann and van Noord’s construction. P(v, z) def = Ew,x,y P(v|w)P(w, x)P(y|x)P(z|y), implemented by composing 4 machines.6,7 There are also procedures for defining weighted FSTs that are not probabilistic (Berstel and Reutenauer, 1988). Arbitrary weights such as 2.7 may be assigned to arcs or sprinkled through a regexp (to be compiled into E:E/2.7 −)arcs). A more subtle example is weighted FSAs that approximate PCFGs (Nederhof, 2000; Mohri and Nederhof, 2001), or to extend the idea, weighted FSTs that approximate joint or conditional synchronous PCFGs built for translation. These are parameterized by the PCFG’s parameters, but add or remove strings of the PCFG to leave an improper probability distribution. Fortunately for those techniques, an FST with positive arc weights can be normalized to make it jointly or conditionally probabilistic: • An easy approach is to normalize the options at each state to make the FST Markovian. Unfortunately, the result may differ for equivalent FSTs that express the same weighted relation</context>
+</contexts>
+<marker>Nederhof, 2000</marker>
+<rawString>Mark-Jan Nederhof. 2000. Practical experiments with regular approximation of context-free languages. Computational Linguistics, 26(1).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Fernando C N Pereira</author>
+<author>Michael Riley</author>
+</authors>
+<title>Speech recognition by composition of weighted finite automata.</title>
+<date>1997</date>
+<booktitle>Finite-State Language Processing.</booktitle>
+<editor>In E. Roche and Y. Schabes, eds.,</editor>
+<publisher>MIT Press,</publisher>
+<location>Cambridge, MA.</location>
+<contexts>
+<context position="3208" citStr="Pereira and Riley, 1997" startWordPosition="463" endWordPosition="466">lation is called a joint or conditional (probabilistic) relation and constitutes a statistical model. Such models can be efficiently restricted, manipulated or combined using rational operations as before. An artificial example will appear in §2. The availability of toolkits for this weighted case (Mohri et al., 1998; van Noord and Gerdemann, 2001) promises to unify much of statistical NLP. Such tools make it easy to run most current approaches to statistical markup, chunking, normalization, segmentation, alignment, and noisy-channel decoding,&apos; including classic models for speech recognition (Pereira and Riley, 1997) and machine translation (Knight and Al-Onaizan, 1998). Moreover, once the models are expressed in the finitestate framework, it is easy to use operators to tweak them, to apply them to speech lattices or other sets, and to combine them with linguistic resources. Unfortunately, there is a stumbling block: Where do the weights come from? After all, statistical models require supervised or unsupervised training. Currently, finite-state practitioners derive weights using exogenous training methods, then patch them onto transducer arcs. Not only do these methods require additional programming outs</context>
+<context position="10651" citStr="Pereira and Riley, 1997" startWordPosition="1751" endWordPosition="1754">they can be defined in several other ways: (1) via FSTs as in Fig. 1c, (2) by compilation of weighted rewrite rules (Mohri and Sproat, 1996), (3) by compilation of decision trees (Sproat and Riley, 1996), (4) as a relation that performs contextual left-to-right replacement of input substrings by a smaller conditional relation (Gerdemann and van Noord, 1999),5 (5) by conditionalization of a joint relation as discussed below. A central technique is to define a joint relation as a noisy-channel model, by composing a joint relation with a cascade of one or more conditional relations as in Fig. 1 (Pereira and Riley, 1997; Knight and Graehl, 1998). The general form is illustrated by 3Conceptually, the parameters represent the probabilities of reading another a (A); reading another b (ν); transducing b to p rather than q (µ); starting to transduce p to a rather than x (p). 4To prove (1)⇒(3), express f as an FST and apply the well-known Kleene-Sch¨utzenberger construction (Berstel and Reutenauer, 1988), taking care to write each regexp in the construction as a constant times a probabilistic regexp. A full proof is straightforward, as are proofs of (3)⇒(2), (2)⇒(1). 5In (4), the randomness is in the smaller relat</context>
+</contexts>
+<marker>Pereira, Riley, 1997</marker>
+<rawString>Fernando C. N. Pereira and Michael Riley. 1997. Speech recognition by composition of weighted finite automata. In E. Roche and Y. Schabes, eds., Finite-State Language Processing. MIT Press, Cambridge, MA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Rao</author>
+<author>K Rose</author>
+</authors>
+<title>Deterministically annealed design of hidden Markov movel speech recognizers.</title>
+<date>2001</date>
+<booktitle>In IEEE Trans. on Speech and Audio Processing,</booktitle>
+<volume>9</volume>
+<issue>2</issue>
+<marker>Rao, Rose, 2001</marker>
+<rawString>A. Rao and K. Rose. 2001 Deterministically annealed design of hidden Markov movel speech recognizers. In IEEE Trans. on Speech and Audio Processing, 9(2).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stefan Riezler</author>
+</authors>
+<title>Probabilistic Constraint Logic Programming.</title>
+<date>1999</date>
+<tech>Ph.D. thesis,</tech>
+<institution>Universit¨at T¨ubingen.</institution>
+<marker>Riezler, 1999</marker>
+<rawString>Stefan Riezler. 1999. Probabilistic Constraint Logic Programming. Ph.D. thesis, Universit¨at T¨ubingen.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Ristad</author>
+<author>P Yianilos</author>
+</authors>
+<title>Learning string edit distance.</title>
+<date>1996</date>
+<tech>Tech. Report CS-TR-532-96,</tech>
+<location>Princeton.</location>
+<contexts>
+<context position="4023" citStr="Ristad and Yianilos, 1996" startWordPosition="586" endWordPosition="589">ech lattices or other sets, and to combine them with linguistic resources. Unfortunately, there is a stumbling block: Where do the weights come from? After all, statistical models require supervised or unsupervised training. Currently, finite-state practitioners derive weights using exogenous training methods, then patch them onto transducer arcs. Not only do these methods require additional programming outside the toolkit, but they are limited to particular kinds of models and training regimens. For example, the forward-backward algorithm (Baum, 1972) trains only Hidden Markov Models, while (Ristad and Yianilos, 1996) trains only stochastic edit distance. In short, current finite-state toolkits include no training algorithms, because none exist for the large space of statistical models that the toolkits can in principle describe and run. &apos;Given output, find input to maximize P(input, output). Figure 1: (a) A probabilistic FST defining a joint probability distribution. (b) A smaller joint distribution. (c) A conditional distribution. Defining (a)=(b)o(c) means that the weights in (a) can be altered by adjusting the fewer weights in (b) and (c). This paper aims to provide a remedy through a new paradigm, whi</context>
+</contexts>
+<marker>Ristad, Yianilos, 1996</marker>
+<rawString>E. Ristad and P. Yianilos. 1996. Learning string edit distance. Tech. Report CS-TR-532-96, Princeton.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Ristad</author>
+</authors>
+<title>Hidden Markov models with finite state supervision. In</title>
+<date>1998</date>
+<editor>A. Kornai, ed.,</editor>
+<publisher>Cambridge University Press.</publisher>
+<contexts>
+<context position="17186" citStr="Ristad (1998)" startWordPosition="2838" endWordPosition="2839">output = xxz. fθ on demand (Mohri et al., 1998) can pay off here, since only part of fθ may be needed subsequently.) As training data we are given a set of observed (input, output) pairs, (xi, yi). These are assumed to be independent random samples from a joint distribution of the form fe(x, y); the goal is to recover the true ˆ0. Samples need not be fully observed (partly supervised training): thus xi C E*, yi C A* may be given as regular sets in which input and output were observed to fall. For example, in ordinary HMM training, xi = E* and represents a completely hidden state sequence (cf. Ristad (1998), who allows any regular set), while yi is a single string representing a completely observed emission sequence.11 What to optimize? Maximum-likelihood estimation guesses 0ˆ to be the 0 maximizing Hi fθ(xi, yi). Maximum-posterior estimation tries to maximize P(0)·Hi fθ(xi, yi) where P(0) is a prior probability. In a log-linear parameterization, for example, a prior that penalizes feature strengths far from 1 can be used to do feature selection and avoid overfitting (Chen and Rosenfeld, 1999). The EM algorithm (Dempster et al., 1977) can maximize these functions. Roughly, the E step guesses hid</context>
+</contexts>
+<marker>Ristad, 1998</marker>
+<rawString>E. Ristad. 1998. Hidden Markov models with finite state supervision. In A. Kornai, ed., Extended Finite State Models ofLanguage. Cambridge University Press.</rawString>
+</citation>
+<citation valid="true">
+<title>Finite-State Language Processing.</title>
+<date>1997</date>
+<editor>Emmanuel Roche and Yves Schabes, editors.</editor>
+<publisher>MIT Press.</publisher>
+<marker>1997</marker>
+<rawString>Emmanuel Roche and Yves Schabes, editors. 1997. Finite-State Language Processing. MIT Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G¨unter Rote</author>
+</authors>
+<title>A systolic array algorithm for the algebraic path problem (shortest paths; matrix inversion).</title>
+<date>1985</date>
+<journal>Computing,</journal>
+<volume>34</volume>
+<issue>3</issue>
+<contexts>
+<context position="31247" citStr="Rote, 1985" startWordPosition="5423" endWordPosition="5424">ults. The overhead of partitioning and recombining is essentially only O(m). • For speeding up the O(n3) problem on subgraphs, one can use an approximate relaxation technique 17Eisner (submitted) develops fast minimization algorithms that work for the real and V-expectation semirings. 18Division and subtraction are also possible: −(p, v) = (−p, −v) and (p, v)−1 = (m-1, −p−1vp−1). Division is commonly used in defining fθ (f&apos;or normalization). 19Multiple edges from j to k are summed into a single edge. (Mohri, 2002). Efficient hardware implementation is also possible via chip-level parallelism (Rote, 1985). • In many cases of interest, Ti is an acyclic graph.20 Then Tar an’s method computes w0j for each j in topologically sorted order, thereby finding ti in a linear number of ⊕ and ⊗ operations. For HMMs (footnote 11), Ti is the familiar trellis, and we would like this computation of ti to reduce to the forwardbackward algorithm (Baum, 1972). But notice that it has no backward pass. In place of pushing cumulative probabilities backward to the arcs, it pushes cumulative arcs (more generally, values in V ) forward to the probabilities. This is slower because our ⊕ and ⊗ are vector operations, and</context>
+</contexts>
+<marker>Rote, 1985</marker>
+<rawString>G¨unter Rote. 1985. A systolic array algorithm for the algebraic path problem (shortest paths; matrix inversion). Computing, 34(3):191–219.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Richard Sproat</author>
+<author>Michael Riley</author>
+</authors>
+<title>Compilation of weighted finite-state transducers from decision trees.</title>
+<date>1996</date>
+<booktitle>In Proceedings of the 34th Annual Meeting of the ACL.</booktitle>
+<contexts>
+<context position="10231" citStr="Sproat and Riley, 1996" startWordPosition="1681" endWordPosition="1684">are equivalent: (1) f is a joint probabilistic relation; (2) f can be computed by a Markovian FST that halts with probability 1; (3) f can be expressed as a probabilistic regexp, i.e., a regexp built up from atomic expressions a : b (for a E E U {E}, b E A U {E}) using concatenation, probabilistic union +p, and probabilistic closure *p. For defining conditional relations, a good regexp language is unknown to us, but they can be defined in several other ways: (1) via FSTs as in Fig. 1c, (2) by compilation of weighted rewrite rules (Mohri and Sproat, 1996), (3) by compilation of decision trees (Sproat and Riley, 1996), (4) as a relation that performs contextual left-to-right replacement of input substrings by a smaller conditional relation (Gerdemann and van Noord, 1999),5 (5) by conditionalization of a joint relation as discussed below. A central technique is to define a joint relation as a noisy-channel model, by composing a joint relation with a cascade of one or more conditional relations as in Fig. 1 (Pereira and Riley, 1997; Knight and Graehl, 1998). The general form is illustrated by 3Conceptually, the parameters represent the probabilities of reading another a (A); reading another b (ν); transducin</context>
+</contexts>
+<marker>Sproat, Riley, 1996</marker>
+<rawString>Richard Sproat and Michael Riley. 1996. Compilation of weighted finite-state transducers from decision trees. In Proceedings of the 34th Annual Meeting of the ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andreas Stolcke</author>
+<author>Stephen M Omohundro</author>
+</authors>
+<title>Best-first model merging for hidden Markov model induction.</title>
+<date>1994</date>
+<tech>Tech. Report ICSI TR-94-003,</tech>
+<location>Berkeley, CA.</location>
+<marker>Stolcke, Omohundro, 1994</marker>
+<rawString>Andreas Stolcke and Stephen M. Omohundro. 1994. Best-first model merging for hidden Markov model induction. Tech. Report ICSI TR-94-003, Berkeley, CA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Robert Endre Tarjan</author>
+</authors>
+<title>A unified approach to path problems.</title>
+<date>1981</date>
+<journal>Journal of the ACM,</journal>
+<volume>28</volume>
+<issue>3</issue>
+<marker>Tarjan, 1981</marker>
+<rawString>Robert Endre Tarjan. 1981a. A unified approach to path problems. Journal of the ACM, 28(3):577–593, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Robert Endre Tarjan</author>
+</authors>
+<title>Fast algorithms for solving path problems.</title>
+<date>1981</date>
+<journal>J. of the ACM,</journal>
+<volume>28</volume>
+<issue>3</issue>
+<marker>Tarjan, 1981</marker>
+<rawString>Robert Endre Tarjan. 1981b. Fast algorithms for solving path problems. J. of the ACM, 28(3):594–614, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G van Noord</author>
+<author>D Gerdemann</author>
+</authors>
+<title>An extendible regular expression compiler for finite-state approaches in natural language processing.</title>
+<date>2001</date>
+<booktitle>In Automata Implementation, no. 22 in Springer Lecture Notes in CS.</booktitle>
+<marker>van Noord, Gerdemann, 2001</marker>
+<rawString>G. van Noord and D. Gerdemann. 2001. An extendible regular expression compiler for finite-state approaches in natural language processing. In Automata Implementation, no. 22 in Springer Lecture Notes in CS.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

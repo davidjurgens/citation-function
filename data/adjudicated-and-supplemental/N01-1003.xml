@@ -1,0 +1,1183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000017">
+<title confidence="0.946136">
+SPoT: A Trainable Sentence Planner
+</title>
+<author confidence="0.828821">
+Marilyn A. Walker Owen Rambow Monica Rogati
+</author>
+<affiliation confidence="0.650152">
+AT&amp;T Labs – Research AT&amp;T Labs – Research Carnegie Mellon University
+Florham Park, NJ, USA Florham Park, NJ, USA Pittsburgh, PA, USA
+</affiliation>
+<email confidence="0.979991">
+walker@research.att.com rambow@research.att.com mrogati+@cs.cmu.edu
+</email>
+<sectionHeader confidence="0.993567" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999952058823529">
+Sentence planning is a set of inter-related but distinct
+tasks, one of which is sentence scoping, i.e. the choice
+of syntactic structure for elementary speech acts and
+the decision of how to combine them into one or more
+sentences. In this paper, we present SPoT, a sentence
+planner, and a new methodology for automatically train-
+ing SPoT on the basis of feedback provided by human
+judges. We reconceptualize the task into two distinct
+phases. First, a very simple, randomized sentence-plan-
+generator (SPG) generates a potentially large list of pos-
+sible sentence plans for a given text-plan input. Second,
+the sentence-plan-ranker (SPR) ranks the list of output
+sentence plans, and then selects the top-ranked plan. The
+SPR uses ranking rules automatically learned from train-
+ing data. We show that the trained SPR learns to select a
+sentence plan whose rating on average is only 5% worse
+than the top human-ranked sentence plan.
+</bodyText>
+<sectionHeader confidence="0.998992" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999229142857143">
+Sentence planning is a set of inter-related but distinct
+tasks, one of which is sentence scoping, i.e. the choice
+of syntactic structure for elementary speech acts and the
+decision of how to combine them into sentences.1 For
+example, consider the required capabilities of a sentence
+planner for a mixed-initiative spoken dialog system for
+travel planning:
+</bodyText>
+<note confidence="0.855554">
+(D1) System1: Welcome.... What airport would you like to
+fly out of?
+</note>
+<footnote confidence="0.563752666666667">
+User2: I need to go to Dallas.
+System3: Flying to Dallas. What departure airport was
+that?
+</footnote>
+<note confidence="0.972999">
+User4: from Newark on September the 1st.
+</note>
+<bodyText confidence="0.903628857142857">
+System5: What time would you like to travel on Septem-
+ber the 1st to Dallas from Newark?
+Utterance System1 requests information about the
+caller’s departure airport, but in User2, the caller takes
+the initiative to provide information about her destina-
+tion. In System3, the system’s goal is to implicitly con-
+firm the destination (because of the possibility of error
+</bodyText>
+<footnote confidence="0.9862325">
+1We would like to thank Michael Collins and Rob Schapire for their
+help, comments, and encouragement, and Noemie Elhadad and three
+anonymous reviewers for very useful feedback. This work was partially
+funded by DARPA under contract MDA972-99-3-0003.
+</footnote>
+<bodyText confidence="0.999831142857143">
+in the speech recognition component), and request in-
+formation (for the second time) of the caller’s departure
+airport. In User4, the caller provides this information
+but also provides the month and day of travel. Given the
+system’s dialog strategy, the communicative goals for its
+next turn are to implicitly confirm all the information that
+the user has provided so far, i.e. the departure and desti-
+nation cities and the month and day information, as well
+as to request information about the time of travel. The
+system’s representation of its communicative goals for
+utterance System5 is in Figure 1. The job of the sentence
+planner is to decide among the large number of potential
+realizations of these communicative goals. Some exam-
+ple alternative realizations are in Figure 2.2
+</bodyText>
+<figure confidence="0.4517792">
+implicit-confirm(orig-city:NEWARK)
+implicit-confirm(dest-city:DALLAS)
+implicit-confirm(month:9)
+implicit-confirm(day-number:1)
+request(depart-time)
+</figure>
+<figureCaption confidence="0.980231">
+Figure 1: The text plan (communicative goals) for utter-
+ance System5 in dialog D1
+</figureCaption>
+<table confidence="0.735463444444444">
+Alt Realization H RB
+0 What time would you like to travel on 5 .85
+September the 1st to Dallas from Newark?
+5 Leaving on September the 1st. What time 4.5 .82
+would you like to travel from Newark to Dal-
+las?
+8 Leaving in September. Leaving on the 1st. 2 .39
+What time would you, traveling from Newark
+to Dallas, like to leave?
+</table>
+<figureCaption confidence="0.748225333333333">
+Figure 2: Alternative sentence plan realizations for the
+text plan for utterance System5 in dialog D1. H = human
+rating, RB = RankBoost score.
+</figureCaption>
+<bodyText confidence="0.9991655">
+In this paper, we present SPoT, for “Sentence Plan-
+ner, Trainable”. We also present a new methodology
+for automatically training SPoT on the basis of feed-
+back provided by human judges. In order to train SPoT,
+we reconceptualize its task as consisting of two distinct
+phases. In the first phase, the sentence-plan-generator
+</bodyText>
+<footnote confidence="0.6918035">
+2The meaning of the human ratings and RankBoost scores in Fig-
+ure 2 are discussed below.
+</footnote>
+<bodyText confidence="0.99958015">
+(SPG) generates a potentially large sample of possible
+sentence plans for a given text-plan input. In the second
+phase, the sentence-plan-ranker (SPR) ranks the sample
+sentence plans, and then selects the top-ranked output to
+input to the surface realizer. Our primary contribution is
+a method for training the SPR. The SPR uses rules au-
+tomatically learned from training data, using techniques
+similar to (Collins, 2000; Freund et al., 1998).
+Our method for training a sentence planner is unique
+in neither depending on hand-crafted rules, nor on the
+existence of a text or speech corpus in the domain of the
+sentence planner obtained from the interaction of a hu-
+man with a system or another human. We show that the
+trained SPR learns to select a sentence plan whose rating
+on average is only 5% worse than the top human-ranked
+sentence plan. In the remainder of the paper, section 2
+describes the sentence planning task in more detail. We
+then describe the sentence plan generator (SPG) in sec-
+tion 3, the sentence plan ranker (SPR) in section 4, and
+the results in section 5.
+</bodyText>
+<sectionHeader confidence="0.919438" genericHeader="method">
+2 The Sentence Planning Task
+</sectionHeader>
+<bodyText confidence="0.999836914285714">
+The term “sentence planning” comprises many distinct
+tasks and many ways of organizing these tasks have been
+proposed in the literature. In general, the role of the sen-
+tence planner is to choose abstract linguistic resources
+(meaning-bearing lexemes, syntactic constructions) for a
+text plan. In our case, the output of the dialog manager of
+a spoken dialog system provides the input to our sentence
+planner in the form of a single spoken dialog text plan
+for each of the turns. (In contrast, the dialog managers
+of most dialog systems today simply output completely
+formed utterances which are passed on to the TTS mod-
+ule.) Each text plan is an unordered set of elementary
+speech acts encoding all of the system’s communicative
+goals for the current turn, as illustrated in Figure 1. Each
+elementary speech act is represented as a type (request,
+implicit confirm, explicit confirm), with type-specific pa-
+rameters. The sentence planner must decide among al-
+ternative abstract linguistic resources for this text plan;
+surface realizations of some such alternatives are in Fig-
+ure 2.
+As already mentioned, we divide the sentence plan-
+ning task into two phases. In the first phase, the sentence-
+plan-generator (SPG) generates 12-20 possible sentence
+plans for a given input text plan. Each speech act
+is assigned a canonical lexico-structural representation
+(called a DSyntS – Deep Syntactic Structure (Mel’ˇcuk,
+1988)). The sentence plan is a tree recording how these
+elementary DSyntS are combined into larger DSyntSs;
+the DSyntS for the entire input text plan is associated
+with the root node of the tree. In the second phase, the
+sentence plan ranker (SPR) ranks sentence plans gener-
+ated by the SPG, and then selects the top-ranked out-
+put as input to the surface realizer, RealPro (Lavoie and
+Rambow, 1997). The architecture is summarized in Fig-
+ure 3.
+</bodyText>
+<subsubsectionHeader confidence="0.678429">
+Text Plan Chosen sp−tree with associated DSyntS
+</subsubsectionHeader>
+<figureCaption confidence="0.999362">
+Figure 3: Architecture of SPoT
+</figureCaption>
+<sectionHeader confidence="0.972963" genericHeader="method">
+3 The Sentence Plan Generator
+</sectionHeader>
+<bodyText confidence="0.98962872972973">
+The research presented here is primarily concerned
+with creating a trainable SPR. A strength of our ap-
+proach is the ability to use a very simple SPG, as we
+explain below. The basis of our SPG is a set of clause-
+combining operations that incrementally transform a list
+of elementary predicate-argument representations (the
+DSyntSs corresponding to elementary speech acts, in
+our case) into a single lexico-structural representation,
+by combining these representations using the following
+combining operations. Examples can be found in Fig-
+ure 4.
+MERGE. Two identical main matrix verbs can be iden-
+tified if they have the same arguments; the adjuncts are
+combined.
+MERGE-GENERAL. Same as MERGE, except that one of
+the two verbs may be embedded.
+SOFT-MERGE. Same as MERGE, except that the verbs
+need only to be in a relation of synonymy or hyperonymy
+(rather than being identical).
+SOFT-MERGE-GENERAL. Same as MERGE-GENERAL,
+except that the verbs need only to be in a relation of syn-
+onymy or hyperonymy.
+CONJUNCTION. This is standard conjunction with con-
+junction reduction.
+RELATIVE-CLAUSE. This includes participial adjuncts to
+nouns.
+ADJECTIVE. This transforms a predicative use of an ad-
+jective into an adnominal construction.
+PERIOD. Joins two complete clauses with a period.
+These operations are not domain-specific and are sim-
+ilar to those of previous aggregation components (Ram-
+bow and Korelsky,1992; Shaw, 1998; Danlos, 2000), al-
+though the various MERGE operations are, to our knowl-
+edge, novel in this form.
+The result of applying the operations is a sentence
+plan tree (or sp-tree for short), which is a binary tree
+with leaves labeled by all the elementary speech acts
+</bodyText>
+<figure confidence="0.9738306875">
+Sp−trees with associated DSyntSs
+* Sentence Planner *
+0
+SPG
+!fin
+!fin !fin
+.
+.
+SPR
+!fin
+.
+!fin
+Dialog
+System
+RealPro
+Realizer
+</figure>
+<table confidence="0.994421666666667">
+Rule Sample first argument Sample second argument Result
+MERGE You are leaving from Newark. You are leaving at 5 You are leaving at 5 from Newark
+MERGE-GENERAL What time would you like to You are leaving from Newark. What time would you like to leave
+leave? from Newark?
+SOFT-MERGE You are leaving from Newark You are going to Dallas You are traveling from Newark to
+Dallas
+SOFT-MERGE- What time would you like to You are going to Dallas. What time would you like to fly to
+GENERAL leave? Dallas?
+CONJUNCTION You are leaving from Newark. You are going to Dallas. You are leaving from Newark and
+you are going to Dallas.
+RELATIVE- Your flight leaves at 5. Your flight arrives at 9. Your flight, which leaves at 5, ar-
+CLAUSE rives at 9.
+ADJECTIVE Your flight leaves at 5. Your flight is nonstop. Your nonstop flight leaves at 5.
+PERIOD You are leaving from Newark. You are going to Dallas. You are leaving from Newark.
+You are going to Dallas
+</table>
+<figureCaption confidence="0.973654">
+Figure 4: List of clause combining operations with examples from our domain; an explanation of the operations is
+given in Section 3.
+</figureCaption>
+<bodyText confidence="0.998753105263158">
+from the input text plan, and with its interior nodes la-
+beled with clause-combining operations3. Each node is
+also associated with a DSyntS: the leaves (which corre-
+spond to elementary speech acts from the input text plan)
+are linked to a canonical DSyntS for that speech act (by
+lookup in a hand-crafted dictionary). The interior nodes
+are associated with DSyntSs by executing their clause-
+combing operation on their two daughter nodes. (A PE-
+RIOD node results in a DSyntS headed by a period and
+whose daughters are the two daughter DSyntSs.) If a
+clause combination fails, the sp-tree is discarded (for ex-
+ample, if we try to create a relative clause of a struc-
+ture which already contains a period). As a result, the
+DSyntS for the entire turn is associated with the root
+node. This DSyntS can be sent to RealPro, which returns
+a sentence (or several sentences, if the DSyntS contains
+period nodes). The SPG is designed in such a way that
+if a DSyntS is associated with the root node, it is a valid
+structure which can be realized.
+</bodyText>
+<figure confidence="0.372364">
+imp−confirm(dest−city) imp−confirm(orig−city)
+</figure>
+<figureCaption confidence="0.867349666666667">
+Figure 5: Alternative 0 Sentence Plan Tree
+Figure 2 shows some of the realizations of alternative
+sentence plans generated by our SPG for utterance Sys-
+</figureCaption>
+<footnote confidence="0.9210875">
+3The sp-tree is inspired by (Lavoie and Rambow, 1998). The rep-
+resentations used by Danlos (2000), Gardent and Webber (1998), or
+Stone and Doran (1997) are similar, but do not (always) explicitly rep-
+resent the clause combining operations as labeled nodes.
+</footnote>
+<figure confidence="0.730338">
+period
+imp−confirm(orig−city) imp−confirm(dest−city)
+</figure>
+<figureCaption confidence="0.9999715">
+Figure 6: Alternative 5 Sentence Plan Tree
+Figure 7: Alternative 8 Sentence Plan Tree
+</figureCaption>
+<bodyText confidence="0.999952769230769">
+tem5 in Dialog D1. Sp-trees for alternatives 0, 5 and
+8 are in Figures 5, 6 and 7. For example, consider the
+sp-tree in Figure 7. Node soft-merge-general merges
+an implicit-confirmations of the destination city and the
+origin city. The row labelled SOFT-MERGE in Figure 4
+shows the result of applying the soft-merge operation
+when Args 1 and 2 are implicit confirmations of the ori-
+gin and destination cities. Figure 8 illustrates the rela-
+tionship between the sp-tree and the DSyntS for alter-
+native 8. The labels and arrows show the DSyntSs as-
+sociated with each node in the sp-tree (in Figure 7), and
+the diagram also shows how structures are composed into
+larger structures by the clause combining operations.
+</bodyText>
+<figure confidence="0.992890958333333">
+imp−confirm(month) request(time) soft−merge−general
+3
+2
+soft−merge
+soft−merge−general
+imp−confirm(day)
+1
+soft−merge−general
+soft−merge−general 1 soft−merge−general 2
+imp−confirm(day)
+imp−confirm(month)
+soft−merge−general request(time)
+3
+imp−confirm(month)
+imp−confirm(day)
+soft−merge−general
+request(time)
+imp−confirm(orig−city)
+imp−confirm(dest−city)
+period
+1
+2
+period
+relative−clause
+</figure>
+<figureCaption confidence="0.971138">
+Figure 8: Alternative 8 DSyntS (not all linguistic features are shown)
+</figureCaption>
+<figure confidence="0.9965898">
+relative−clause request(time)
+period
+period
+like
+mood: question
+leave
+leave
+mood:prespart mood:prespart
+person: 2
+number: sg
+PRONOUN
+travel
+mood: inf−to
+AT1
+PRONOUN
+IN1
+PRONOUN ON1
+time
+travel mood:prespart
+September
+1 WHAT2
+PRONOUN FROM1
+TO1
+imp−confirm(day)
+imp−confirm(moth)
+Newark
+Dallas
+soft−merge−general
+imp−confirm(orig−city)
+imp−confirm(dest−city)
+</figure>
+<bodyText confidence="0.999854555555555">
+The complexity of most sentence planners arises from
+the attempt to encode constraints on the application of,
+and ordering of, the operations, in order to generate a sin-
+gle high quality sentence plan. In our approach, we do
+not need to encode such constraints. Rather, we gener-
+ate a random sample of possible sentence plans for each
+text plan, up to a pre-specified maximum number of sen-
+tence plans, by randomly selecting among the operations
+according to some probability distribution.4
+</bodyText>
+<sectionHeader confidence="0.996631" genericHeader="method">
+4 The Sentence-Plan-Ranker
+</sectionHeader>
+<bodyText confidence="0.9990355">
+The sentence-plan-ranker SPR takes as input a set of sen-
+tence plans generated by the SPG and ranks them. In
+order to train the SPR we applied the machine learning
+program RankBoost (Freund et al., 1998), to learn from
+a labelled set of sentence-plan training examples a set of
+rules for scoring sentence plans.
+</bodyText>
+<subsectionHeader confidence="0.971243">
+4.1 RankBoost
+</subsectionHeader>
+<bodyText confidence="0.999897666666667">
+RankBoost is a member of a family of boosting algo-
+rithms (Schapire, 1999). Freund et al. (1998) describe
+the boosting algorithms for ranking in detail: for com-
+pleteness, we give a brief description in this section.
+Each example is represented by a set of indicator
+functions for . The indicator functions
+are calculated by thresholding the feature values (counts)
+described in section 4.2. For example, one such indicator
+function might be
+</bodyText>
+<footnote confidence="0.9442322">
+4Here the probability distribution is hand-crafted based on assumed
+preferences for operations such as SOFT-MERGE and SOFT-MERGE-
+GENERAL over CONJUNCTION and PERIOD. This allows us to bias the
+SPG to generate plans that are more likely to be high quality, while
+generating a relatively smaller sample of sentence plans.
+</footnote>
+<bodyText confidence="0.982174538461539">
+So if the number of pronouns in is .
+A single parameter is associated with each indicator
+function, and the “ranking score” for an example is
+then calculated as
+This score is used to rank competing sp-trees of the same
+text plan in order of plausibility. The training examples
+are used to set the parameter values. In (Freund et al.,
+1998) the human judgments are converted into a train-
+ing set of ordered pairs of examples , where and
+are candidates for the same sentence, and is strictly
+preferred to. More formally, the training set is
+are realizations for the same text plan,
+is preferred to by human judgments
+Thus each text plan with 20 candidates could contribute
+up to such pairs: in practice, fewer
+pairs could be contributed due to different candidates get-
+ting tied scores from the annotators.
+Freund et al. (1998) then describe training as a process
+of setting the parameters to minimize the following
+loss function:
+It can be seen that as this loss function is minimized, the
+values for where is preferred to will
+be pushed to be positive, so that the number of ranking
+errors (cases where ranking scores disagree with human
+judgments) will tend to be reduced. Initially all parame-
+ter values are set to zero. The optimization method then
+greedily picks a single parameter at a time – the param-
+eter which will make most impact on the loss function
+– and updates the parameter value to minimize the loss.
+if DSYNT-TRAVERSAL-PRONOUN()
+otherwise
+The result is that substantial progress is typically made in
+minimizing the error rate, with relatively few non-zero
+parameter values. Freund et al. (1998) show that un-
+der certain conditions the combination of minimizing the
+loss function while using relatively few parameters leads
+to good generalization on test data examples. Empiri-
+cal results for boosting have shown that in practice the
+method is highly effective.
+</bodyText>
+<subsectionHeader confidence="0.984922">
+4.2 Examples and Feedback
+</subsectionHeader>
+<bodyText confidence="0.99997495">
+To apply RankBoost, we require a set of example sp-
+trees, each of which have been rated, and encoded in
+terms of a set of features (see below). We started with
+a corpus of 100 text plans generated in context in 25 di-
+alogs by the dialog system. We then ran the SPG, param-
+eterized to generate at most 20 distinct sp-trees for each
+text plan. Since not all text plans have 20 valid sp-trees
+(while some have many more), this resulted in a corpus
+of 1868 sentence plans. These 1868 sp-trees, realized by
+RealPro, were then rated by two expert judges in the con-
+text of the transcribed original dialogs (and therefore also
+with respect to their adequacy given the communicative
+goals for that turn), on a scale from 1 to 5. The ratings
+given by the judges were then averaged to provide a rat-
+ing between 1 and 5 for each sentence plan alternative.
+The ratings assigned to the sentence plans were roughly
+normally distributed, with a mean of 2.86 and a median
+of 3. Each sp-tree provided an example input to Rank-
+Boost, and each corresponding rating was the feedback
+for that example.
+</bodyText>
+<subsectionHeader confidence="0.979434">
+4.3 Features Used by RankBoost
+</subsectionHeader>
+<bodyText confidence="0.993554962962963">
+Rankboost, like other machine learning programs of the
+boosting family, can handle a very large number of fea-
+tures. Therefore, instead of carefully choosing a small
+number of features by hand which may be useful, we
+generated a very large number of features and let Rank-
+Boost choose the relevant ones. In total, we used 3,291
+features in training the SPR. Features were discovered
+from the actual sentence plan trees that the SPG gener-
+ated through the feature derivation process described be-
+low, in a manner similar to that used by Collins (2000).
+The motivation for the features was to capture declar-
+atively decisions made by the randomized SPG. We
+avoided features specific to particular text plans by dis-
+carding those that occurred fewer than 10 times.
+Features are derived from two sources: the sp-trees
+and the DSyntSs associated with the root nodes of sp-
+trees. The feature names are prefixed with “sp-” or
+“dsynt-” depending on the source. There are two types
+of features: local and global. Local features record struc-
+tural configurations local to a particular node, i.e., that
+can be described with respect to a single node (such as
+its ancestors, its daughters, etc.). The value of the fea-
+ture is the number of times this configuration is found in
+the sp-tree or DSyntS. Each type of local feature also
+has a corresponding parameterized or lexicalized ver-
+sion, which is more specific to aspects of the particular
+dialog in which the text plan was generated.5 Global fea-
+tures record properties of the entire tree. Features and
+examples are discussed below.
+Traversal features: For each node in the tree, fea-
+tures are generated that record the preorder traversal of
+the subtree rooted at that node, for all subtrees of all
+depths (up to the maximum depth). Feature names are
+constructed with the prefix “traversal-”, followed by the
+concatenated names of the nodes (starting with the cur-
+rent node) on the traversal path. As an example, consider
+the sp-tree in Figure 5. Feature SP-TRAVERSAL-SOFT-
+MERGE*IMPLICIT-CONFIRM*IMPLICIT-CONFIRM has
+value 1, since it counts the number of subtrees in the sp-
+tree in which a soft-merge rule dominates two implicit-
+confirm nodes. In the DSyntS tree for alternative 8 (Fig-
+ure 8), feature DSYNT-TRAVERSAL-PRONOUN, which
+counts the number of nodes in the DSyntS tree labelled
+PRONOUN (explicit or empty), has value 4.
+Sister features: These features record all con-
+secutive sister nodes. Names are constructed with
+the prefix “sisters-”, followed by the concatenated
+names of the sister nodes. As an example, con-
+sider the sp-tree shown in Figure 7, and the DSyntS
+tree shown in Figure 8. Feature DSYNT-SISTERS-
+PRONOUN-ON1 counts the number of times the lexi-
+cal items PRONOUN and ON1 are sisters in the DSyntS
+tree; its value is 1 in Figure 8. Another example
+is feature SP-SISTERS-IMPLICIT-CONFIRM*IMPLICIT-
+CONFIRM, which describes the configuration of all im-
+plicit confirms in the sp-trees in; its value is 2 for all
+three sp-trees in Figures 5, 6 and 7.
+Ancestor features: For each node in the tree, these
+features record all the initial subpaths of the path from
+that node to the root. Feature names are constructed with
+the prefix “ancestor-”, followed by the concatenated
+names of the nodes (starting with the current node).
+For example, the feature SP-ANCESTOR*IMPLICIT-
+CONFIRM-ORIG-CITY*SOFT-MERGE-GENERAL*SOFT-
+MERGE-GENERAL counts the number of times that
+two soft-merge-general nodes dominate an implicit
+confirm of the origin city; its value is 1 in the sp-trees of
+Figures 5 and 6, but 0 in the sp-tree of Figure 7.
+Leaf features: These features record all initial
+substrings of the frontier of the sp-tree (recall that its
+frontier consists of elementary speech acts). Names
+are prefixed with “leaf-”, and are then followed by
+the concatenated names of the frontier nodes (starting
+with the current node). The value is always 0 or
+1. For example, the sp-trees of Figure 5, 6 and 7
+have value 1 for features LEAF-IMPLICIT-CONFIRM
+AND LEAF-IMPLICIT-CONFIRM*IMPLICIT-CONFIRM,
+representing the first two sequences of speech acts on
+the leaves of the tree. Figure 5 sp-tree has value 1
+for features LEAF-IMPLICIT-CONFIRM*IMPLICIT-
+CONFIRM*REQUEST, and LEAF-IMPLICIT-
+</bodyText>
+<footnote confidence="0.7433955">
+5Lexicalized features are useful in learning lexically specific restric-
+tions on aggregation (for example, for verbs such as kiss).
+</footnote>
+<table confidence="0.999891428571429">
+N Condition A0 A5 A8
+1 LEAF-IMPLICIT-CONFIRM 1 1 1 1 0.94
+2 DSYNT-TRAVERSAL-PRONOUN 2 1 2 4 -0.85
+3 LEAF-IMPLICIT-CONFIRM*IMPLICIT-CONFIRM*REQUEST*IMPLICIT-CONFIRM 1 1 0 0 -0.52
+4 DSYNT-TRAVERSAL-IN1 1 0 0 1 -0.52
+5 DSYNT-TRAVERSAL-PRONOUN 3 1 2 4 -0.34
+6 SP-ANCESTOR*IMPLICIT-CONFIRM-ORIG-CITY*SOFT-MERGE-GENERAL*SOFT- 1 1 0 0.33
+MERGE-GENERAL 1.0
+7 SP-ANCESTOR-SOFT-MERGE-GENERAL*PERIOD 1 0 1 0 0.21
+8 DSYNT-ANCESTOR-IN1*LEAVE 1 0 0 1 -0.16
+9 SP-TRAVERSAL-IMPLICIT-CONFIRM-DAY-NUMBER 1 1 1 1 -0.13
+10 SP-TRAVERSAL-SOFT-MERGE*IMPLICIT-CONFIRM*IMPLICIT-CONFIRM 1 1 0 0 0.11
+11 REL-CLAUSE-AVG 2 0 0 3 -0.12
+12 PERIOD-AVG 3 0 5 3.5 0.12
+13 DSYNT-ANCESTOR-TRAVEL*LIKE 1 1 0 0 0.10
+14 DSYNT-SISTERS-PRONOUN-ON1 1 0 1 1 -0.10
+15 LEAF-IMPLICIT-CONFIRM*IMPLICIT-CONFIRM*REQUEST 1 1 0 0 -0.10
+16 REL-CLAUSE-MIN 2 0 0 3 -0.09
+17 SP-SISTERS-IMPLICIT-CONFIRM*IMPLICIT-CONFIRM- 1 2 2 2 0.09
+18 REL-CLAUSE-MAX 2 0 0 3 -0.07
+19 SP-ANCESTOR-IMPLICIT-CONFIRM*SOFT-MERGE*SOFT-MERGE-GENERAL 1 1 0 0 0.06
+</table>
+<figureCaption confidence="0.8717935">
+Figure 9: Rules with the largest impact on the final RankBoost score. represents the increment or decrement
+associated with satisfying the condition. The columns A0, A5 and A8 give the values of the feature for alternatives 0,
+</figureCaption>
+<sectionHeader confidence="0.514842" genericHeader="method">
+5 and 8
+</sectionHeader>
+<bodyText confidence="0.993635">
+CONFIRM*IMPLICIT-CONFIRM*REQUEST*IMPLICIT-
+CONFIRM. Each of these has a corresponding param-
+eterized feature, e.g. for LEAF-IMPLICIT-CONFIRM,
+there is a corresponding parameterized feature of
+LEAF-IMPLICIT-CONFIRM-ORIG-CITY.
+Global Features: The global sp-tree features record,
+for each sp-tree and for each operation labeling a
+non-frontier node (i.e., rule such as CONJUNCTION or
+MERGE-GENERAL), (1) the minimal number of leaves
+(elementary speech acts) dominated by a node labeled
+with that rule in that tree (MIN); (2) the maximal num-
+ber of leaves dominated by a node labeled with that rule
+(MAX); and (3) the average number of leaves dominated
+by a node labeled with that rule (AVG). For example, the
+sp-tree for alternative 8 in Figure 7 has value 2 for SOFT-
+MERGE-GENERAL-MAX -MIN, and -AVG, but a PERIOD-
+MAX of 5, PERIOD-MIN of 2 and PERIOD-AVG of 3.5.
+</bodyText>
+<sectionHeader confidence="0.992038" genericHeader="method">
+5 Experimental Results
+</sectionHeader>
+<bodyText confidence="0.992429166666667">
+To train and test the SPR we partitioned the corpus into
+5 disjoint folds and performed 5-fold cross-validation, in
+which at each fold, 80% of the examples were used for
+training an SPR and the other unseen 20% was used for
+testing. This method ensures that every example occurs
+once in the test set. We evaluate the performance of the
+the trained SPR on the test sets of text plans by compar-
+ing for each text plan:
+BEST: The score of the top human-ranked sentence
+plan(s);
+SPOT: The score of SPoT’s selected sentence plan;
+RANDOM: The score of a sentence plan randomly
+selected from the alternate sentence plans.
+Figure 10 shows the distributions of scores for the
+highest ranked sp-tree for each of the 100 text plans, ac-
+cording to the human experts, according to SPoT, and ac-
+cording to random choice. The human rankings provide
+a topline for SPoT (since SPoT is choosing among op-
+tions ranked by the humans, it cannot possibly do better),
+while the random scores provide a baseline. The BEST
+distribution shows that 97% of text plans had at least one
+sentence plan ranked 4 or better. The RANDOM distri-
+bution approximates the distribution of rankings for all
+sentence plans for all examples.
+Because each text plan is used in some fold of 5-fold
+cross validation as a test element, we assess the signif-
+icance of the ranking differences with a paired t-test of
+SPOT to BEST and SPOT to RANDOM.
+A paired t-test of SPOT to BEST shows that there
+are significant differences in performance (
+). Perfect performance would have meant that there
+would be no significant difference. However, the mean
+of BEST is 4.82 as compared with the mean of SPOT of
+4.56, for a mean difference of 0.26 on a scale of 1 to 5.
+This is only a 5% difference in performance. Figure 5
+also shows that the main differences are in the lower half
+of the distribution of rankings; both distributions have a
+median of 5.
+A paired t-test of SPOT to RANDOM shows that
+there are also significant differences in performance (
+). The median of the RANDOM distri-
+Figure 10: Distribution of rankings for BEST, SPOT and
+RANDOM
+bution is 2.50 as compared to SPoT’s median of 5.0. The
+mean of RANDOM is 2.76, as compared to the mean of
+SPOT of 4.56, for a mean difference of 1.8 on a scale of
+1 to 5. The performance difference in this case is 36%,
+showing a large difference in the performance of SPoT
+and RANDOM.
+We then examined the rules that SPoT learned in
+training and the resulting RankBoost scores. Figure 2
+shows, for each alternative sentence plan, the BEST rat-
+ing used as feedback to RankBoost and the score that
+RankBoost gave that example when it was in the test set
+in a fold. Recall that RankBoost focuses on learning rel-
+ative scores, not absolute values, so the scores are nor-
+malized to range between 0 and 1.
+Figure 9 shows some of the rules that were learned on
+the training data, that were then applied to the alternative
+sentence plans in each test set of each fold in order to
+rank them. We include only a subset of the rules that
+had the largest impact on the score of each sp-tree. We
+discuss some particular rule examples here to help the
+reader understand how SPoT’s SPR works, but leave it
+to the reader to examine the thresholds and feature values
+in the remainder of the rules and sum the increments and
+decrements.
+Rule (1) in Figure 9 states that an implicit confirma-
+tion as the first leaf of the sp-tree leads to a large (.94)
+increase in the score. Thus all three of our alternative sp-
+trees accrue this ranking increase. Rules (2) and (5) state
+that the occurrence of 2 or more PRONOUN nodes in the
+DSyntS reduces the ranking by 0.85, and that 3 or more
+PRONOUN nodes reduces the ranking by an additional
+0.34. Alternative 8 is above the threshold for both of
+these rules; alternative 5 is above the threshold for Rule
+(2) and alternative 0 is always below the thresholds. Rule
+(6) on the other hand increases only the scores of alter-
+natives 0 and 5 by 0.33 since alternative 8 is below the
+threshold for that feature.
+Note also that the quality of the rules in general seems
+to be high. Although we provided multiple instantiations
+of features, some of which included parameters or lexical
+items that might identify particular discourse contexts,
+most of the learned rules utilize general properties of the
+sp-tree and the DSyntS. This is probably partly due to
+the fact that we eliminated features that appeared fewer
+than 10 times in the training data, but also partly due to
+the fact that boosting algorithms in general appear to be
+resistant to overfitting the data (Freund et al., 1998).
+</bodyText>
+<sectionHeader confidence="0.999972" genericHeader="related work">
+6 Related Work
+</sectionHeader>
+<bodyText confidence="0.999831068181818">
+Previous work in sentence planning in the natural lan-
+guage generation (NLG) community uses hand-written
+rules to approximate the distribution of linguistic phe-
+nomena in a corpus (see (Shaw, 1998) for a recent exam-
+ple with further references). This approach is difficult to
+scale due to the nonrobustness of rules and unexpected
+interactions (Hovy and Wanner, 1996), and it is difficult
+to develop new applications quickly. Presumably, this is
+the reason why dialog systems to date have not used this
+kind of sentence planning.
+Most dialog systems today use template-based gener-
+ation. The template outputs are typically concatenated to
+produce a turn realizing all the communicative goals. It
+is hard to achieve high quality output by concatenating
+the template-based output for individual communicative
+goals, and templates are difficult to develop and maintain
+for a mixed-initiative dialog system. For these reasons,
+Oh and Rudnicky (2000) use-gram models and Ratna-
+parkhi (2000), maximum entropy to choose templates,
+using hand-written rules to score different candidates.
+But syntactically simplistic approaches may have qual-
+ity problems, and more importantly, these approaches
+only deal with inform speech acts. And crucially, these
+approaches suffer from the need for training data. In
+general there may be no corpus available for a new ap-
+plication area, or if there is a corpus available, it is a
+transcript of human-human dialogs. Human-human di-
+alogs, however, may not provide a very good model of
+sentence planning strategies for a computational system
+because the sentence planner must plan communicative
+goals such as implicit confirmation which are needed to
+prevent and correct errors in automatic speech recogni-
+tion but which are rare in human-human dialog.
+Other related work deals with discourse-related as-
+pects of sentence planning such as cue word placement
+(Moser and Moore, 1995), clearly a crucial task whose
+integration into our approach we leave to future work.
+Mellish et al. (1998) investigate the problem of deter-
+mining a discourse tree for a set of elementary speech
+acts which are partially constrained by rhetorical rela-
+tions. Using hand-crafted evaluation metrics, they show
+that a genetic algorithm achieves good results in finding
+discourse trees. However, they do not address clause-
+combining, and we do not use hand-crafted metrics.
+</bodyText>
+<figure confidence="0.984107823529412">
+100
+90
+80
+70
+60
+50
+BEST
+SPOT
+RANDOM
+30
+20
+10
+0
+1 1.5 2 2.5 3 3.5 4 4.5 5
+Score
+Number of plans with that score or more
+40
+</figure>
+<sectionHeader confidence="0.984595" genericHeader="conclusions">
+7 Discussion
+</sectionHeader>
+<bodyText confidence="0.999992666666667">
+We have presented SPoT, a trainable sentence planner.
+SPoT re-conceptualizes the sentence planning task as
+consisting of two distinct phases: (1) a very simple sen-
+tence plan generator SPG that generates multiple candi-
+date sentence plans using weighted randomization; and
+(2) a sentence plan ranker SPR that can be trained from
+examples via human feedback, whose job is to rank the
+candidate sentence plans and select the highest ranked
+plan. Our results show that:
+SPoT’s SPR selects sentence plans that on aver-
+age are only 5% worse than the sentence plan(s) se-
+lected as the best by human judges.
+SPoT’s SPR selects sentence plans that on average
+are 36% better than a random SPR that simply se-
+lects randomly among the candidate sentence plans.
+We validated these results in an independent experi-
+ment in which 60 subjects evaluated the quality of differ-
+ent realizations for a given turn. (Recall that our train-
+able sentence planner was trained on the scores of only
+two human judges.) This evaluation revealed that the
+choices made by SPoT were not statistically distinguish-
+able from the choices ranked at the top by the two hu-
+man judges. More importantly, they were also not dis-
+tinguishable statistically from the current hand-crafted
+template-based output of the AT&amp;T Communicator sys-
+tem, which has been developed and fine-tuned over an
+extended period of time (whereas SPoT is based on judg-
+ments that took about three person-days to make). SPoT
+also was rated better than two rule-based versions of our
+SPG which we developed as baselines. All systems out-
+performed the random choice. We will report on these
+results in more detail in a future publication.
+In future work, we intend to build on the work reported
+in this paper in several ways. First, we believe that we
+could utilize additional features as predictors of the qual-
+ity of a sentence plan. These include features based on
+the discourse context, and features that encode relation-
+ships between the sp-tree and the DSyntS. We will also
+expand the capabilities of the SPG to cover additional
+sentence planning tasks in addition to sentence scoping,
+and duplicate the methods described here to retrain SPoT
+for our extended SPG.
+</bodyText>
+<sectionHeader confidence="0.999463" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.989237292307692">
+Michael Collins. 2000. Discriminative reranking for
+natural language parsing. In Proceedings of the Inter-
+national Conference on Machine Learning (ICML).
+Laurence Danlos. 2000. G-TAG: A lexicalized for-
+malism for text generation inspired by tree adjoining
+grammar. In Anne Abeill´e and Owen Rambow, edi-
+tors, Tree Adjoining Grammars: Formalisms, Linguis-
+tic Analysis, and Processing. CSLI Publications.
+Yoav Freund, Raj Iyer, Robert E. Schapire, and
+Yoram Singer. 1998. An efficient boosting al-
+gorithm for combining preferences. In Machine
+Learning: Proceedings of the Fifteenth Interna-
+tional Conference. Extended version available from
+http://www.research.att.com/ schapire.
+Claire Gardent and Bonnie Webber. 1998. Varieties
+of ambiguity in incremental discourse processing. In
+Proceedings ofAMLap-98 (Architectures and Mecha-
+nisms for Language Processing), Freiburg, Germany.
+E.H. Hovy and Leo Wanner. 1996. Managing sen-
+tence planning requirements. In Proceedings of the
+ECAI’96 Workshop Gaps and Bridges: New Direc-
+tions in Planning and Natural Language Generation.
+Benoit Lavoie and Owen Rambow. 1997. RealPro – a
+fast, portable sentence realizer. In Proceedings of the
+Conference on Applied Natural Language Processing
+(ANLP’97), Washington, DC.
+Benoit Lavoie and Owen Rambow. 1998. A frame-
+work for customizable generation of multi-modal
+presentations. In 36th Meeting of the Association
+for Computational Linguistics and 17th International
+Conference on Computational Linguistics (COLING-
+ACL’98), Montr´eal, Canada. ACL.
+Igor A. Mel’ˇcuk. 1988. Dependency Syntax: Theory and
+Practice. State University of New York Press, New
+York.
+Chris Mellish, Alistair Knott, Mick O’Donnell, and
+Jon Oberlander. 1998. Experiments using stochastic
+search for text planning. In Proceedings of the 8th In-
+ternational Workshop on Natural Language Genera-
+tion, pages 98–107, Niagara-on-the-Lake, Ontario.
+Margaret G. Moser and Johanna Moore. 1995. Inves-
+tigating cue selection and placement in tutorial dis-
+course. In ACL 95, pages 130–137.
+Alice H. Oh and Alexander I. Rudnicky. 2000. Stochas-
+tic language generation for spoken dialog systems. In
+Proceedings of the ANL/NAACL 2000 Workshop on
+Conversational Systems, pages 27–32, Seattle. ACL.
+Owen Rambow and Tanya Korelsky. 1992. Applied text
+generation. In Proceedings of the Third Conference
+on Applied Natural Language Processing, ANLP92,
+pages 40–47.
+Adwait Ratnaparkhi. 2000. Trainable methods for sur-
+face natural language generation. In Proceedings of
+First North American ACL, Seattle, USA, May.
+Robert E. Schapire. 1999. A brief introduction to boost-
+ing. In Proceedings of the Sixteenth International
+Joint Conference on Artificial Intelligence.
+James Shaw. 1998. Clause aggregation using linguistic
+knowledge. In Proceedings of the 8th International
+Workshop on Natural Language Generation, Niagara-
+on-the-Lake, Ontario.
+Matthew Stone and Christine Doran. 1997. Sentence
+planning as description using tree adjoining grammar.
+In 35th Meeting of the Association for Computational
+Linguistics (ACL’97), pages 198–205, Madrid, Spain.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.995553">
+<title confidence="0.99864">SPoT: A Trainable Sentence Planner</title>
+<author confidence="0.999967">Marilyn A Walker Owen Rambow Monica Rogati</author>
+<affiliation confidence="0.999977">AT&amp;T Labs – Research AT&amp;T Labs – Research Carnegie Mellon University</affiliation>
+<address confidence="0.999855">Florham Park, NJ, USA Florham Park, NJ, USA Pittsburgh, PA, USA</address>
+<email confidence="0.999431">walker@research.att.comrambow@research.att.commrogati+@cs.cmu.edu</email>
+<abstract confidence="0.999869833333333">Sentence planning is a set of inter-related but distinct tasks, one of which is sentence scoping, i.e. the choice of syntactic structure for elementary speech acts and the decision of how to combine them into one or more In this paper, we present a sentence planner, and a new methodology for automatically trainthe basis of feedback provided by human judges. We reconceptualize the task into two distinct phases. First, a very simple, randomized sentence-planpotentially large list of possible sentence plans for a given text-plan input. Second, sentence-plan-ranker list of output sentence plans, and then selects the top-ranked plan. The ranking rules automatically learned from traindata. We show that the trained to select a sentence plan whose rating on average is only 5% worse than the top human-ranked sentence plan.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>Discriminative reranking for natural language parsing.</title>
+<date>2000</date>
+<booktitle>In Proceedings of the International Conference on Machine Learning (ICML).</booktitle>
+<contexts>
+<context position="4711" citStr="Collins, 2000" startWordPosition="742" endWordPosition="743">ceptualize its task as consisting of two distinct phases. In the first phase, the sentence-plan-generator 2The meaning of the human ratings and RankBoost scores in Figure 2 are discussed below. (SPG) generates a potentially large sample of possible sentence plans for a given text-plan input. In the second phase, the sentence-plan-ranker (SPR) ranks the sample sentence plans, and then selects the top-ranked output to input to the surface realizer. Our primary contribution is a method for training the SPR. The SPR uses rules automatically learned from training data, using techniques similar to (Collins, 2000; Freund et al., 1998). Our method for training a sentence planner is unique in neither depending on hand-crafted rules, nor on the existence of a text or speech corpus in the domain of the sentence planner obtained from the interaction of a human with a system or another human. We show that the trained SPR learns to select a sentence plan whose rating on average is only 5% worse than the top human-ranked sentence plan. In the remainder of the paper, section 2 describes the sentence planning task in more detail. We then describe the sentence plan generator (SPG) in section 3, the sentence plan</context>
+<context position="18522" citStr="Collins (2000)" startWordPosition="3005" endWordPosition="3006">g was the feedback for that example. 4.3 Features Used by RankBoost Rankboost, like other machine learning programs of the boosting family, can handle a very large number of features. Therefore, instead of carefully choosing a small number of features by hand which may be useful, we generated a very large number of features and let RankBoost choose the relevant ones. In total, we used 3,291 features in training the SPR. Features were discovered from the actual sentence plan trees that the SPG generated through the feature derivation process described below, in a manner similar to that used by Collins (2000). The motivation for the features was to capture declaratively decisions made by the randomized SPG. We avoided features specific to particular text plans by discarding those that occurred fewer than 10 times. Features are derived from two sources: the sp-trees and the DSyntSs associated with the root nodes of sptrees. The feature names are prefixed with “sp-” or “dsynt-” depending on the source. There are two types of features: local and global. Local features record structural configurations local to a particular node, i.e., that can be described with respect to a single node (such as its an</context>
+</contexts>
+<marker>Collins, 2000</marker>
+<rawString>Michael Collins. 2000. Discriminative reranking for natural language parsing. In Proceedings of the International Conference on Machine Learning (ICML).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Laurence Danlos</author>
+</authors>
+<title>G-TAG: A lexicalized formalism for text generation inspired by tree adjoining grammar.</title>
+<date>2000</date>
+<booktitle>In Anne Abeill´e and Owen Rambow, editors, Tree Adjoining Grammars: Formalisms, Linguistic Analysis, and Processing.</booktitle>
+<publisher>CSLI Publications.</publisher>
+<contexts>
+<context position="8782" citStr="Danlos, 2000" startWordPosition="1405" endWordPosition="1406">ation of synonymy or hyperonymy (rather than being identical). SOFT-MERGE-GENERAL. Same as MERGE-GENERAL, except that the verbs need only to be in a relation of synonymy or hyperonymy. CONJUNCTION. This is standard conjunction with conjunction reduction. RELATIVE-CLAUSE. This includes participial adjuncts to nouns. ADJECTIVE. This transforms a predicative use of an adjective into an adnominal construction. PERIOD. Joins two complete clauses with a period. These operations are not domain-specific and are similar to those of previous aggregation components (Rambow and Korelsky,1992; Shaw, 1998; Danlos, 2000), although the various MERGE operations are, to our knowledge, novel in this form. The result of applying the operations is a sentence plan tree (or sp-tree for short), which is a binary tree with leaves labeled by all the elementary speech acts Sp−trees with associated DSyntSs * Sentence Planner * 0 SPG !fin !fin !fin . . SPR !fin . !fin Dialog System RealPro Realizer Rule Sample first argument Sample second argument Result MERGE You are leaving from Newark. You are leaving at 5 You are leaving at 5 from Newark MERGE-GENERAL What time would you like to You are leaving from Newark. What time w</context>
+<context position="11550" citStr="Danlos (2000)" startWordPosition="1889" endWordPosition="1890"> the DSyntS for the entire turn is associated with the root node. This DSyntS can be sent to RealPro, which returns a sentence (or several sentences, if the DSyntS contains period nodes). The SPG is designed in such a way that if a DSyntS is associated with the root node, it is a valid structure which can be realized. imp−confirm(dest−city) imp−confirm(orig−city) Figure 5: Alternative 0 Sentence Plan Tree Figure 2 shows some of the realizations of alternative sentence plans generated by our SPG for utterance Sys3The sp-tree is inspired by (Lavoie and Rambow, 1998). The representations used by Danlos (2000), Gardent and Webber (1998), or Stone and Doran (1997) are similar, but do not (always) explicitly represent the clause combining operations as labeled nodes. period imp−confirm(orig−city) imp−confirm(dest−city) Figure 6: Alternative 5 Sentence Plan Tree Figure 7: Alternative 8 Sentence Plan Tree tem5 in Dialog D1. Sp-trees for alternatives 0, 5 and 8 are in Figures 5, 6 and 7. For example, consider the sp-tree in Figure 7. Node soft-merge-general merges an implicit-confirmations of the destination city and the origin city. The row labelled SOFT-MERGE in Figure 4 shows the result of applying t</context>
+</contexts>
+<marker>Danlos, 2000</marker>
+<rawString>Laurence Danlos. 2000. G-TAG: A lexicalized formalism for text generation inspired by tree adjoining grammar. In Anne Abeill´e and Owen Rambow, editors, Tree Adjoining Grammars: Formalisms, Linguistic Analysis, and Processing. CSLI Publications.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yoav Freund</author>
+<author>Raj Iyer</author>
+<author>Robert E Schapire</author>
+<author>Yoram Singer</author>
+</authors>
+<title>An efficient boosting algorithm for combining preferences.</title>
+<date>1998</date>
+<booktitle>In Machine Learning: Proceedings of the Fifteenth International</booktitle>
+<contexts>
+<context position="4733" citStr="Freund et al., 1998" startWordPosition="744" endWordPosition="747">task as consisting of two distinct phases. In the first phase, the sentence-plan-generator 2The meaning of the human ratings and RankBoost scores in Figure 2 are discussed below. (SPG) generates a potentially large sample of possible sentence plans for a given text-plan input. In the second phase, the sentence-plan-ranker (SPR) ranks the sample sentence plans, and then selects the top-ranked output to input to the surface realizer. Our primary contribution is a method for training the SPR. The SPR uses rules automatically learned from training data, using techniques similar to (Collins, 2000; Freund et al., 1998). Our method for training a sentence planner is unique in neither depending on hand-crafted rules, nor on the existence of a text or speech corpus in the domain of the sentence planner obtained from the interaction of a human with a system or another human. We show that the trained SPR learns to select a sentence plan whose rating on average is only 5% worse than the top human-ranked sentence plan. In the remainder of the paper, section 2 describes the sentence planning task in more detail. We then describe the sentence plan generator (SPG) in section 3, the sentence plan ranker (SPR) in secti</context>
+<context position="14089" citStr="Freund et al., 1998" startWordPosition="2249" endWordPosition="2252">lication of, and ordering of, the operations, in order to generate a single high quality sentence plan. In our approach, we do not need to encode such constraints. Rather, we generate a random sample of possible sentence plans for each text plan, up to a pre-specified maximum number of sentence plans, by randomly selecting among the operations according to some probability distribution.4 4 The Sentence-Plan-Ranker The sentence-plan-ranker SPR takes as input a set of sentence plans generated by the SPG and ranks them. In order to train the SPR we applied the machine learning program RankBoost (Freund et al., 1998), to learn from a labelled set of sentence-plan training examples a set of rules for scoring sentence plans. 4.1 RankBoost RankBoost is a member of a family of boosting algorithms (Schapire, 1999). Freund et al. (1998) describe the boosting algorithms for ranking in detail: for completeness, we give a brief description in this section. Each example is represented by a set of indicator functions for . The indicator functions are calculated by thresholding the feature values (counts) described in section 4.2. For example, one such indicator function might be 4Here the probability distribution is</context>
+<context position="15310" citStr="Freund et al., 1998" startWordPosition="2450" endWordPosition="2453">hand-crafted based on assumed preferences for operations such as SOFT-MERGE and SOFT-MERGEGENERAL over CONJUNCTION and PERIOD. This allows us to bias the SPG to generate plans that are more likely to be high quality, while generating a relatively smaller sample of sentence plans. So if the number of pronouns in is . A single parameter is associated with each indicator function, and the “ranking score” for an example is then calculated as This score is used to rank competing sp-trees of the same text plan in order of plausibility. The training examples are used to set the parameter values. In (Freund et al., 1998) the human judgments are converted into a training set of ordered pairs of examples , where and are candidates for the same sentence, and is strictly preferred to. More formally, the training set is are realizations for the same text plan, is preferred to by human judgments Thus each text plan with 20 candidates could contribute up to such pairs: in practice, fewer pairs could be contributed due to different candidates getting tied scores from the annotators. Freund et al. (1998) then describe training as a process of setting the parameters to minimize the following loss function: It can be se</context>
+<context position="16579" citStr="Freund et al. (1998)" startWordPosition="2664" endWordPosition="2667">alues for where is preferred to will be pushed to be positive, so that the number of ranking errors (cases where ranking scores disagree with human judgments) will tend to be reduced. Initially all parameter values are set to zero. The optimization method then greedily picks a single parameter at a time – the parameter which will make most impact on the loss function – and updates the parameter value to minimize the loss. if DSYNT-TRAVERSAL-PRONOUN() otherwise The result is that substantial progress is typically made in minimizing the error rate, with relatively few non-zero parameter values. Freund et al. (1998) show that under certain conditions the combination of minimizing the loss function while using relatively few parameters leads to good generalization on test data examples. Empirical results for boosting have shown that in practice the method is highly effective. 4.2 Examples and Feedback To apply RankBoost, we require a set of example sptrees, each of which have been rated, and encoded in terms of a set of features (see below). We started with a corpus of 100 text plans generated in context in 25 dialogs by the dialog system. We then ran the SPG, parameterized to generate at most 20 distinct</context>
+<context position="28993" citStr="Freund et al., 1998" startWordPosition="4747" endWordPosition="4750">ive 8 is below the threshold for that feature. Note also that the quality of the rules in general seems to be high. Although we provided multiple instantiations of features, some of which included parameters or lexical items that might identify particular discourse contexts, most of the learned rules utilize general properties of the sp-tree and the DSyntS. This is probably partly due to the fact that we eliminated features that appeared fewer than 10 times in the training data, but also partly due to the fact that boosting algorithms in general appear to be resistant to overfitting the data (Freund et al., 1998). 6 Related Work Previous work in sentence planning in the natural language generation (NLG) community uses hand-written rules to approximate the distribution of linguistic phenomena in a corpus (see (Shaw, 1998) for a recent example with further references). This approach is difficult to scale due to the nonrobustness of rules and unexpected interactions (Hovy and Wanner, 1996), and it is difficult to develop new applications quickly. Presumably, this is the reason why dialog systems to date have not used this kind of sentence planning. Most dialog systems today use template-based generation.</context>
+</contexts>
+<marker>Freund, Iyer, Schapire, Singer, 1998</marker>
+<rawString>Yoav Freund, Raj Iyer, Robert E. Schapire, and Yoram Singer. 1998. An efficient boosting algorithm for combining preferences. In Machine Learning: Proceedings of the Fifteenth International Conference. Extended version available from http://www.research.att.com/ schapire.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Claire Gardent</author>
+<author>Bonnie Webber</author>
+</authors>
+<title>Varieties of ambiguity in incremental discourse processing.</title>
+<date>1998</date>
+<booktitle>In Proceedings ofAMLap-98 (Architectures and Mechanisms for Language Processing),</booktitle>
+<location>Freiburg, Germany.</location>
+<contexts>
+<context position="11577" citStr="Gardent and Webber (1998)" startWordPosition="1891" endWordPosition="1894"> the entire turn is associated with the root node. This DSyntS can be sent to RealPro, which returns a sentence (or several sentences, if the DSyntS contains period nodes). The SPG is designed in such a way that if a DSyntS is associated with the root node, it is a valid structure which can be realized. imp−confirm(dest−city) imp−confirm(orig−city) Figure 5: Alternative 0 Sentence Plan Tree Figure 2 shows some of the realizations of alternative sentence plans generated by our SPG for utterance Sys3The sp-tree is inspired by (Lavoie and Rambow, 1998). The representations used by Danlos (2000), Gardent and Webber (1998), or Stone and Doran (1997) are similar, but do not (always) explicitly represent the clause combining operations as labeled nodes. period imp−confirm(orig−city) imp−confirm(dest−city) Figure 6: Alternative 5 Sentence Plan Tree Figure 7: Alternative 8 Sentence Plan Tree tem5 in Dialog D1. Sp-trees for alternatives 0, 5 and 8 are in Figures 5, 6 and 7. For example, consider the sp-tree in Figure 7. Node soft-merge-general merges an implicit-confirmations of the destination city and the origin city. The row labelled SOFT-MERGE in Figure 4 shows the result of applying the soft-merge operation whe</context>
+</contexts>
+<marker>Gardent, Webber, 1998</marker>
+<rawString>Claire Gardent and Bonnie Webber. 1998. Varieties of ambiguity in incremental discourse processing. In Proceedings ofAMLap-98 (Architectures and Mechanisms for Language Processing), Freiburg, Germany.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E H Hovy</author>
+<author>Leo Wanner</author>
+</authors>
+<title>Managing sentence planning requirements.</title>
+<date>1996</date>
+<booktitle>In Proceedings of the ECAI’96 Workshop Gaps and Bridges: New Directions in Planning and Natural Language Generation.</booktitle>
+<contexts>
+<context position="29374" citStr="Hovy and Wanner, 1996" startWordPosition="4807" endWordPosition="4810">rtly due to the fact that we eliminated features that appeared fewer than 10 times in the training data, but also partly due to the fact that boosting algorithms in general appear to be resistant to overfitting the data (Freund et al., 1998). 6 Related Work Previous work in sentence planning in the natural language generation (NLG) community uses hand-written rules to approximate the distribution of linguistic phenomena in a corpus (see (Shaw, 1998) for a recent example with further references). This approach is difficult to scale due to the nonrobustness of rules and unexpected interactions (Hovy and Wanner, 1996), and it is difficult to develop new applications quickly. Presumably, this is the reason why dialog systems to date have not used this kind of sentence planning. Most dialog systems today use template-based generation. The template outputs are typically concatenated to produce a turn realizing all the communicative goals. It is hard to achieve high quality output by concatenating the template-based output for individual communicative goals, and templates are difficult to develop and maintain for a mixed-initiative dialog system. For these reasons, Oh and Rudnicky (2000) use-gram models and Ra</context>
+</contexts>
+<marker>Hovy, Wanner, 1996</marker>
+<rawString>E.H. Hovy and Leo Wanner. 1996. Managing sentence planning requirements. In Proceedings of the ECAI’96 Workshop Gaps and Bridges: New Directions in Planning and Natural Language Generation.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Benoit Lavoie</author>
+<author>Owen Rambow</author>
+</authors>
+<title>RealPro – a fast, portable sentence realizer.</title>
+<date>1997</date>
+<booktitle>In Proceedings of the Conference on Applied Natural Language Processing (ANLP’97),</booktitle>
+<location>Washington, DC.</location>
+<contexts>
+<context position="7201" citStr="Lavoie and Rambow, 1997" startWordPosition="1156" endWordPosition="1159"> sentenceplan-generator (SPG) generates 12-20 possible sentence plans for a given input text plan. Each speech act is assigned a canonical lexico-structural representation (called a DSyntS – Deep Syntactic Structure (Mel’ˇcuk, 1988)). The sentence plan is a tree recording how these elementary DSyntS are combined into larger DSyntSs; the DSyntS for the entire input text plan is associated with the root node of the tree. In the second phase, the sentence plan ranker (SPR) ranks sentence plans generated by the SPG, and then selects the top-ranked output as input to the surface realizer, RealPro (Lavoie and Rambow, 1997). The architecture is summarized in Figure 3. Text Plan Chosen sp−tree with associated DSyntS Figure 3: Architecture of SPoT 3 The Sentence Plan Generator The research presented here is primarily concerned with creating a trainable SPR. A strength of our approach is the ability to use a very simple SPG, as we explain below. The basis of our SPG is a set of clausecombining operations that incrementally transform a list of elementary predicate-argument representations (the DSyntSs corresponding to elementary speech acts, in our case) into a single lexico-structural representation, by combining t</context>
+</contexts>
+<marker>Lavoie, Rambow, 1997</marker>
+<rawString>Benoit Lavoie and Owen Rambow. 1997. RealPro – a fast, portable sentence realizer. In Proceedings of the Conference on Applied Natural Language Processing (ANLP’97), Washington, DC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Benoit Lavoie</author>
+<author>Owen Rambow</author>
+</authors>
+<title>A framework for customizable generation of multi-modal presentations.</title>
+<date>1998</date>
+<booktitle>In 36th Meeting of the Association for Computational Linguistics and 17th International Conference on Computational Linguistics (COLINGACL’98),</booktitle>
+<publisher>ACL.</publisher>
+<location>Montr´eal, Canada.</location>
+<contexts>
+<context position="11507" citStr="Lavoie and Rambow, 1998" startWordPosition="1880" endWordPosition="1883">ructure which already contains a period). As a result, the DSyntS for the entire turn is associated with the root node. This DSyntS can be sent to RealPro, which returns a sentence (or several sentences, if the DSyntS contains period nodes). The SPG is designed in such a way that if a DSyntS is associated with the root node, it is a valid structure which can be realized. imp−confirm(dest−city) imp−confirm(orig−city) Figure 5: Alternative 0 Sentence Plan Tree Figure 2 shows some of the realizations of alternative sentence plans generated by our SPG for utterance Sys3The sp-tree is inspired by (Lavoie and Rambow, 1998). The representations used by Danlos (2000), Gardent and Webber (1998), or Stone and Doran (1997) are similar, but do not (always) explicitly represent the clause combining operations as labeled nodes. period imp−confirm(orig−city) imp−confirm(dest−city) Figure 6: Alternative 5 Sentence Plan Tree Figure 7: Alternative 8 Sentence Plan Tree tem5 in Dialog D1. Sp-trees for alternatives 0, 5 and 8 are in Figures 5, 6 and 7. For example, consider the sp-tree in Figure 7. Node soft-merge-general merges an implicit-confirmations of the destination city and the origin city. The row labelled SOFT-MERGE</context>
+</contexts>
+<marker>Lavoie, Rambow, 1998</marker>
+<rawString>Benoit Lavoie and Owen Rambow. 1998. A framework for customizable generation of multi-modal presentations. In 36th Meeting of the Association for Computational Linguistics and 17th International Conference on Computational Linguistics (COLINGACL’98), Montr´eal, Canada. ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Igor A Mel’ˇcuk</author>
+</authors>
+<title>Dependency Syntax: Theory and Practice.</title>
+<date>1988</date>
+<publisher>State University of New York Press,</publisher>
+<location>New York.</location>
+<marker>Mel’ˇcuk, 1988</marker>
+<rawString>Igor A. Mel’ˇcuk. 1988. Dependency Syntax: Theory and Practice. State University of New York Press, New York.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chris Mellish</author>
+<author>Alistair Knott</author>
+<author>Mick O’Donnell</author>
+<author>Jon Oberlander</author>
+</authors>
+<title>Experiments using stochastic search for text planning.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the 8th International Workshop on Natural Language Generation,</booktitle>
+<pages>98--107</pages>
+<location>Niagara-on-the-Lake, Ontario.</location>
+<marker>Mellish, Knott, O’Donnell, Oberlander, 1998</marker>
+<rawString>Chris Mellish, Alistair Knott, Mick O’Donnell, and Jon Oberlander. 1998. Experiments using stochastic search for text planning. In Proceedings of the 8th International Workshop on Natural Language Generation, pages 98–107, Niagara-on-the-Lake, Ontario.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Margaret G Moser</author>
+<author>Johanna Moore</author>
+</authors>
+<title>Investigating cue selection and placement in tutorial discourse.</title>
+<date>1995</date>
+<booktitle>In ACL 95,</booktitle>
+<pages>130--137</pages>
+<contexts>
+<context position="30908" citStr="Moser and Moore, 1995" startWordPosition="5042" endWordPosition="5045">ining data. In general there may be no corpus available for a new application area, or if there is a corpus available, it is a transcript of human-human dialogs. Human-human dialogs, however, may not provide a very good model of sentence planning strategies for a computational system because the sentence planner must plan communicative goals such as implicit confirmation which are needed to prevent and correct errors in automatic speech recognition but which are rare in human-human dialog. Other related work deals with discourse-related aspects of sentence planning such as cue word placement (Moser and Moore, 1995), clearly a crucial task whose integration into our approach we leave to future work. Mellish et al. (1998) investigate the problem of determining a discourse tree for a set of elementary speech acts which are partially constrained by rhetorical relations. Using hand-crafted evaluation metrics, they show that a genetic algorithm achieves good results in finding discourse trees. However, they do not address clausecombining, and we do not use hand-crafted metrics. 100 90 80 70 60 50 BEST SPOT RANDOM 30 20 10 0 1 1.5 2 2.5 3 3.5 4 4.5 5 Score Number of plans with that score or more 40 7 Discussio</context>
+</contexts>
+<marker>Moser, Moore, 1995</marker>
+<rawString>Margaret G. Moser and Johanna Moore. 1995. Investigating cue selection and placement in tutorial discourse. In ACL 95, pages 130–137.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alice H Oh</author>
+<author>Alexander I Rudnicky</author>
+</authors>
+<title>Stochastic language generation for spoken dialog systems.</title>
+<date>2000</date>
+<booktitle>In Proceedings of the ANL/NAACL 2000 Workshop on Conversational Systems,</booktitle>
+<pages>27--32</pages>
+<publisher>ACL.</publisher>
+<location>Seattle.</location>
+<contexts>
+<context position="29951" citStr="Oh and Rudnicky (2000)" startWordPosition="4894" endWordPosition="4897">expected interactions (Hovy and Wanner, 1996), and it is difficult to develop new applications quickly. Presumably, this is the reason why dialog systems to date have not used this kind of sentence planning. Most dialog systems today use template-based generation. The template outputs are typically concatenated to produce a turn realizing all the communicative goals. It is hard to achieve high quality output by concatenating the template-based output for individual communicative goals, and templates are difficult to develop and maintain for a mixed-initiative dialog system. For these reasons, Oh and Rudnicky (2000) use-gram models and Ratnaparkhi (2000), maximum entropy to choose templates, using hand-written rules to score different candidates. But syntactically simplistic approaches may have quality problems, and more importantly, these approaches only deal with inform speech acts. And crucially, these approaches suffer from the need for training data. In general there may be no corpus available for a new application area, or if there is a corpus available, it is a transcript of human-human dialogs. Human-human dialogs, however, may not provide a very good model of sentence planning strategies for a c</context>
+</contexts>
+<marker>Oh, Rudnicky, 2000</marker>
+<rawString>Alice H. Oh and Alexander I. Rudnicky. 2000. Stochastic language generation for spoken dialog systems. In Proceedings of the ANL/NAACL 2000 Workshop on Conversational Systems, pages 27–32, Seattle. ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Owen Rambow</author>
+<author>Tanya Korelsky</author>
+</authors>
+<title>Applied text generation.</title>
+<date>1992</date>
+<booktitle>In Proceedings of the Third Conference on Applied Natural Language Processing, ANLP92,</booktitle>
+<pages>40--47</pages>
+<marker>Rambow, Korelsky, 1992</marker>
+<rawString>Owen Rambow and Tanya Korelsky. 1992. Applied text generation. In Proceedings of the Third Conference on Applied Natural Language Processing, ANLP92, pages 40–47.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adwait Ratnaparkhi</author>
+</authors>
+<title>Trainable methods for surface natural language generation.</title>
+<date>2000</date>
+<booktitle>In Proceedings of First North American ACL,</booktitle>
+<location>Seattle, USA,</location>
+<contexts>
+<context position="29990" citStr="Ratnaparkhi (2000)" startWordPosition="4901" endWordPosition="4903">6), and it is difficult to develop new applications quickly. Presumably, this is the reason why dialog systems to date have not used this kind of sentence planning. Most dialog systems today use template-based generation. The template outputs are typically concatenated to produce a turn realizing all the communicative goals. It is hard to achieve high quality output by concatenating the template-based output for individual communicative goals, and templates are difficult to develop and maintain for a mixed-initiative dialog system. For these reasons, Oh and Rudnicky (2000) use-gram models and Ratnaparkhi (2000), maximum entropy to choose templates, using hand-written rules to score different candidates. But syntactically simplistic approaches may have quality problems, and more importantly, these approaches only deal with inform speech acts. And crucially, these approaches suffer from the need for training data. In general there may be no corpus available for a new application area, or if there is a corpus available, it is a transcript of human-human dialogs. Human-human dialogs, however, may not provide a very good model of sentence planning strategies for a computational system because the sentenc</context>
+</contexts>
+<marker>Ratnaparkhi, 2000</marker>
+<rawString>Adwait Ratnaparkhi. 2000. Trainable methods for surface natural language generation. In Proceedings of First North American ACL, Seattle, USA, May.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Robert E Schapire</author>
+</authors>
+<title>A brief introduction to boosting.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the Sixteenth International Joint Conference on Artificial Intelligence.</booktitle>
+<contexts>
+<context position="14285" citStr="Schapire, 1999" startWordPosition="2284" endWordPosition="2285">f possible sentence plans for each text plan, up to a pre-specified maximum number of sentence plans, by randomly selecting among the operations according to some probability distribution.4 4 The Sentence-Plan-Ranker The sentence-plan-ranker SPR takes as input a set of sentence plans generated by the SPG and ranks them. In order to train the SPR we applied the machine learning program RankBoost (Freund et al., 1998), to learn from a labelled set of sentence-plan training examples a set of rules for scoring sentence plans. 4.1 RankBoost RankBoost is a member of a family of boosting algorithms (Schapire, 1999). Freund et al. (1998) describe the boosting algorithms for ranking in detail: for completeness, we give a brief description in this section. Each example is represented by a set of indicator functions for . The indicator functions are calculated by thresholding the feature values (counts) described in section 4.2. For example, one such indicator function might be 4Here the probability distribution is hand-crafted based on assumed preferences for operations such as SOFT-MERGE and SOFT-MERGEGENERAL over CONJUNCTION and PERIOD. This allows us to bias the SPG to generate plans that are more likel</context>
+</contexts>
+<marker>Schapire, 1999</marker>
+<rawString>Robert E. Schapire. 1999. A brief introduction to boosting. In Proceedings of the Sixteenth International Joint Conference on Artificial Intelligence.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James Shaw</author>
+</authors>
+<title>Clause aggregation using linguistic knowledge.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the 8th International Workshop on Natural Language Generation,</booktitle>
+<location>Niagaraon-the-Lake, Ontario.</location>
+<contexts>
+<context position="8767" citStr="Shaw, 1998" startWordPosition="1403" endWordPosition="1404"> be in a relation of synonymy or hyperonymy (rather than being identical). SOFT-MERGE-GENERAL. Same as MERGE-GENERAL, except that the verbs need only to be in a relation of synonymy or hyperonymy. CONJUNCTION. This is standard conjunction with conjunction reduction. RELATIVE-CLAUSE. This includes participial adjuncts to nouns. ADJECTIVE. This transforms a predicative use of an adjective into an adnominal construction. PERIOD. Joins two complete clauses with a period. These operations are not domain-specific and are similar to those of previous aggregation components (Rambow and Korelsky,1992; Shaw, 1998; Danlos, 2000), although the various MERGE operations are, to our knowledge, novel in this form. The result of applying the operations is a sentence plan tree (or sp-tree for short), which is a binary tree with leaves labeled by all the elementary speech acts Sp−trees with associated DSyntSs * Sentence Planner * 0 SPG !fin !fin !fin . . SPR !fin . !fin Dialog System RealPro Realizer Rule Sample first argument Sample second argument Result MERGE You are leaving from Newark. You are leaving at 5 You are leaving at 5 from Newark MERGE-GENERAL What time would you like to You are leaving from Newa</context>
+<context position="29205" citStr="Shaw, 1998" startWordPosition="4782" endWordPosition="4783">ems that might identify particular discourse contexts, most of the learned rules utilize general properties of the sp-tree and the DSyntS. This is probably partly due to the fact that we eliminated features that appeared fewer than 10 times in the training data, but also partly due to the fact that boosting algorithms in general appear to be resistant to overfitting the data (Freund et al., 1998). 6 Related Work Previous work in sentence planning in the natural language generation (NLG) community uses hand-written rules to approximate the distribution of linguistic phenomena in a corpus (see (Shaw, 1998) for a recent example with further references). This approach is difficult to scale due to the nonrobustness of rules and unexpected interactions (Hovy and Wanner, 1996), and it is difficult to develop new applications quickly. Presumably, this is the reason why dialog systems to date have not used this kind of sentence planning. Most dialog systems today use template-based generation. The template outputs are typically concatenated to produce a turn realizing all the communicative goals. It is hard to achieve high quality output by concatenating the template-based output for individual commun</context>
+</contexts>
+<marker>Shaw, 1998</marker>
+<rawString>James Shaw. 1998. Clause aggregation using linguistic knowledge. In Proceedings of the 8th International Workshop on Natural Language Generation, Niagaraon-the-Lake, Ontario.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Matthew Stone</author>
+<author>Christine Doran</author>
+</authors>
+<title>Sentence planning as description using tree adjoining grammar.</title>
+<date>1997</date>
+<booktitle>In 35th Meeting of the Association for Computational Linguistics (ACL’97),</booktitle>
+<pages>198--205</pages>
+<location>Madrid,</location>
+<contexts>
+<context position="11604" citStr="Stone and Doran (1997)" startWordPosition="1896" endWordPosition="1899"> with the root node. This DSyntS can be sent to RealPro, which returns a sentence (or several sentences, if the DSyntS contains period nodes). The SPG is designed in such a way that if a DSyntS is associated with the root node, it is a valid structure which can be realized. imp−confirm(dest−city) imp−confirm(orig−city) Figure 5: Alternative 0 Sentence Plan Tree Figure 2 shows some of the realizations of alternative sentence plans generated by our SPG for utterance Sys3The sp-tree is inspired by (Lavoie and Rambow, 1998). The representations used by Danlos (2000), Gardent and Webber (1998), or Stone and Doran (1997) are similar, but do not (always) explicitly represent the clause combining operations as labeled nodes. period imp−confirm(orig−city) imp−confirm(dest−city) Figure 6: Alternative 5 Sentence Plan Tree Figure 7: Alternative 8 Sentence Plan Tree tem5 in Dialog D1. Sp-trees for alternatives 0, 5 and 8 are in Figures 5, 6 and 7. For example, consider the sp-tree in Figure 7. Node soft-merge-general merges an implicit-confirmations of the destination city and the origin city. The row labelled SOFT-MERGE in Figure 4 shows the result of applying the soft-merge operation when Args 1 and 2 are implicit</context>
+</contexts>
+<marker>Stone, Doran, 1997</marker>
+<rawString>Matthew Stone and Christine Doran. 1997. Sentence planning as description using tree adjoining grammar. In 35th Meeting of the Association for Computational Linguistics (ACL’97), pages 198–205, Madrid, Spain.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

@@ -1,0 +1,1619 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000003">
+<title confidence="0.9992665">
+A Supertag-Context Model
+for Weakly-Supervised CCG Parser Learning
+</title>
+<author confidence="0.999034">
+Dan Garrette* Chris Dyer† Jason Baldridge$ Noah A. Smith†
+</author>
+<affiliation confidence="0.997159666666667">
+*Computer Science &amp; Engineering, University of Washington, dhg@cs.washington.edu
+†School of Computer Science, Carnegie Mellon University, {cdyer,nasmith}@cs.cmu.edu
+$Department of Linguistics, University of Texas at Austin, jbaldrid@utexas.edu
+</affiliation>
+<sectionHeader confidence="0.989052" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.998088047619048">
+Combinatory Categorial Grammar (CCG)
+is a lexicalized grammar formalism in
+which words are associated with cate-
+gories that specify the syntactic configura-
+tions in which they may occur. We present
+a novel parsing model with the capacity to
+capture the associative adjacent-category
+relationships intrinsic to CCG by param-
+eterizing the relationships between each
+constituent label and the preterminal cat-
+egories directly to its left and right, bi-
+asing the model toward constituent cate-
+gories that can combine with their con-
+texts. This builds on the intuitions of
+Klein and Manning’s (2002) “constituent-
+context” model, which demonstrated the
+value of modeling context, but has the ad-
+vantage of being able to exploit the prop-
+erties of CCG. Our experiments show that
+our model outperforms a baseline in which
+this context information is not captured.
+</bodyText>
+<sectionHeader confidence="0.999517" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999932578947369">
+Learning parsers from incomplete or indirect su-
+pervision is an important component of moving
+NLP research toward new domains and languages.
+But with less information, it becomes necessary to
+devise ways of making better use of the informa-
+tion that is available. In general, this means con-
+structing inductive biases that take advantage of
+unannotated data to train probabilistic models.
+One important example is the constituent-
+context model (CCM) of Klein and Manning
+(2002), which was specifically designed to cap-
+ture the linguistic observation made by Radford
+(1988) that there are regularities to the contexts
+in which constituents appear. This phenomenon,
+known as substitutability, says that phrases of the
+same type appear in similar contexts. For example,
+the part-of-speech (POS) sequence ADJ NOUN fre-
+quently occurs between the tags DET and VERB.
+This DET—VERB context also frequently applies
+to the single-word sequence NOUN and to ADJ ADJ
+NOUN. From this, we might deduce that DET—
+VERB is a likely context for a noun phrase. CCM
+is able to learn which POS contexts are likely,
+and does so via a probabilistic generative model,
+providing a statistical, data-driven take on substi-
+tutability. However, since there is nothing intrin-
+sic about the POS pair DET—VERB that indicates
+a priori that it is a likely constituent context, this
+fact must be inferred entirely from the data.
+Baldridge (2008) observed that unlike opaque,
+atomic POS labels, the rich structures of Combina-
+tory Categorial Grammar (CCG) (Steedman, 2000;
+Steedman and Baldridge, 2011) categories reflect
+universal grammatical properties. CCG is a lexi-
+calized grammar formalism in which every con-
+stituent in a sentence is associated with a struc-
+tured category that specifies its syntactic relation-
+ship to other constituents. For example, a cate-
+gory might encode that “this constituent can com-
+bine with a noun phrase to the right (an object)
+and then a noun phrase to the left (a subject) to
+produce a sentence” instead of simply VERB. CCG
+has proven useful as a framework for grammar in-
+duction due to its ability to incorporate linguis-
+tic knowledge to guide parser learning by, for ex-
+ample, specifying rules in lexical-expansion al-
+gorithms (Bisk and Hockenmaier, 2012; 2013)
+or encoding that information as priors within a
+Bayesian framework (Garrette et al., 2015).
+Baldridge observed is that, cross-linguistically,
+grammars prefer simpler syntactic structures when
+possible, and that due to the natural correspon-
+dence of categories and syntactic structure, bias-
+ing toward simpler categories encourages simpler
+structures. In previous work, we were able to
+incorporate this preference into a Bayesian pars-
+ing model, biasing PCFG productions toward sim-
+</bodyText>
+<page confidence="0.978331">
+22
+</page>
+<note confidence="0.979737">
+Proceedings of the 19th Conference on Computational Language Learning, pages 22–31,
+Beijing, China, July 30-31, 2015. c�2015 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.999971075949367">
+pler categories by encoding a notion of category
+simplicity into a prior (Garrette et al., 2015).
+Baldridge further notes that due to the natural as-
+sociativity of CCG, adjacent categories tend to be
+combinable. We previously showed that incorpo-
+rating this intuition into a Bayesian prior can help
+train a CCG supertagger (Garrette et al., 2014).
+In this paper, we present a novel parsing model
+that is designed specifically for the capacity to
+capture both of these universal, intrinsic proper-
+ties of CCG. We do so by extending our pre-
+vious, PCFG-based parsing model to include pa-
+rameters that govern the relationship between con-
+stituent categories and the preterminal categories
+(also known as supertags) to the left and right.
+The advantage of modeling context within a CCG
+framework is that while CCM must learn which
+contexts are likely purely from the data, the CCG
+categories give us obvious a priori information
+about whether a context is likely for a given con-
+stituent based on whether the categories are com-
+binable. Biasing our model towards both sim-
+ple categories and connecting contexts encourages
+learning structures with simpler syntax and that
+have a better global “fit”.
+The Bayesian framework is well-matched to our
+problem since our inductive biases — those de-
+rived from universal grammar principles, weak su-
+pervision, and estimations based on unannotated
+data — can be encoded as priors, and we can
+use Markov chain Monte Carlo (MCMC) infer-
+ence procedures to automatically blend these bi-
+ases with unannotated text that reflects the way
+language is actually used “in the wild”. Thus, we
+learn context information based on statistics in the
+data like CCM, but have the advantage of addi-
+tional, a priori biases. It is important to note that
+the Bayesian setup allows us to use these universal
+biases as soft constraints: they guide the learner
+toward more appropriate grammars, but may be
+overridden when there is compelling contradictory
+evidence in the data.
+Methodologically, this work serves as an ex-
+ample of how linguistic-theoretical commitments
+can be used to benefit data-driven methods, not
+only through the construction of a model family
+from a grammar, as done in our previous work, but
+also when exploiting statistical associations about
+which the theory is silent. While there has been
+much work in computational modeling of the in-
+teraction between universal grammar and observ-
+able data in the context of studying child language
+acquisition (e.g., Villavicencio, 2002; Goldwater,
+2007), we are interested in applying these princi-
+ples to the design of models and learning proce-
+dures that result in better parsing tools. Given our
+desire to train NLP models in low-supervision sce-
+narios, the possibility of constructing inductive bi-
+ases out of universal properties of language is en-
+ticing: if we can do this well, then it only needs to
+be done once, and can be applied to any language
+or domain without adaptation.
+In this paper, we seek to learn from only raw
+data and an incomplete dictionary mapping some
+words to sets of potential supertags. In order to
+estimate the parameters of our model, we develop
+a blocked sampler based on that of Johnson et
+al. (2007) to sample parse trees for sentences in
+the raw training corpus according to their poste-
+rior probabilities. However, due to the very large
+sets of potential supertags used in a parse, com-
+puting inside charts is intractable, so we design a
+Metropolis-Hastings step that allows us to sample
+efficiently from the correct posterior. Our experi-
+ments show that the incorporation of supertag con-
+text parameters into the model improves learning,
+and that placing combinability-preferring priors
+on those parameters yields further gains in many
+scenarios.
+</bodyText>
+<sectionHeader confidence="0.992988" genericHeader="introduction">
+2 Combinatory Categorial Grammar
+</sectionHeader>
+<bodyText confidence="0.9999755">
+In the CCG formalism, every constituent, including
+those at the lexical level, is associated with a struc-
+tured CCG category that defines that constituent’s
+relationships to the other constituents in the sen-
+tence. Categories are defined by a recursive struc-
+ture, where a category is either atomic (possibly
+with features), or a function from one category to
+another, as indicated by a slash operator:
+</bodyText>
+<equation confidence="0.9998285">
+C — {s, sdcl, sadj, sb, np, n, nnum, pp, ...}
+C — {(C/C), (C \C)}
+</equation>
+<bodyText confidence="0.9988605">
+Categories of adjacent constituents can be com-
+bined using one of a set of combination rules to
+form categories of higher-level constituents, as
+seen in Figure 1. The direction of the slash op-
+erator gives the behavior of the function. A cat-
+egory (s\np)/pp might describe an intransitive
+verb with a prepositional phrase complement; it
+combines on the right (/) with a constituent with
+category pp, and then on the left (\) with a noun
+phrase (np) that serves as its subject.
+</bodyText>
+<page confidence="0.995873">
+23
+</page>
+<figure confidence="0.998879272727273">
+n
+np/n n/n n s\np
+The lazy dog sleeps
+s
+s\np
+pp
+pp/np np
+The man walks to work
+np
+np/n n
+(s\np)/pp
+</figure>
+<figureCaption confidence="0.999677">
+Figure 2: Higher-level category n subsumes the
+categories of its constituents. Thus, n should have
+a strong prior on combinability with its adjacent
+supertags np/n and s\np.
+Figure 1: CCG parse for “The man walks to work.”
+</figureCaption>
+<bodyText confidence="0.962603666666667">
+We follow Lewis and Steedman (2014) in allow-
+ing a small set of generic, linguistically-plausible
+unary and binary grammar rules. We further add
+rules for combining with punctuation to the left
+and right and allow for the merge rule X → X X
+of Clark and Curran (2007).
+</bodyText>
+<sectionHeader confidence="0.999944" genericHeader="method">
+3 Generative Model
+</sectionHeader>
+<bodyText confidence="0.998080612903226">
+In this section, we present our novel supertag-
+context model (SCM) that augments a standard
+PCFG with parameters governing the supertags to
+the left and right of each constituent.
+The CCG formalism is said to be naturally as-
+sociative since a constituent label is often able
+to combine on either the left or the right. As a
+motivating example, consider the sentence “The
+lazy dog sleeps”, as shown in Figure 2. The
+word lazy, with category n/n, can either com-
+bine with dog (n) via the Forward Application rule
+(&gt;), or with The (np/n) via the Forward Compo-
+sition (&gt;B) rule. Baldridge (2008) showed that
+this tendency for adjacent supertags to be com-
+binable can be used to bias a sequence model in
+order to learn better CCG supertaggers. However,
+we can see that if the supertags of adjacent words
+lazy (n/n) and dog (n) combine, then they will
+produce the category n, which describes the en-
+tire constituent span “lazy dog”. Since we have
+produced a new category that subsumes that en-
+tire span, a valid parse must next combine that
+n with one of the remaining supertags to the left
+or right, producing either (The·(lazy·dog))·sleeps
+or The·((lazy·dog)·sleeps). Because we know that
+one (or both) of these combinations must be valid,
+we will similarly want a strong prior on the con-
+nectivity between lazy·dog and its supertag con-
+text: The↔(lazy·dog)↔sleeps.
+Assuming T is the full set of known categories,
+the generative process for our model is:
+</bodyText>
+<equation confidence="0.996110529411765">
+Parameters:
+BROOT ∼ Dir(αROOT, BROOT-0)
+BBIN
+t ∼ Dir(αBIN, BBIN-0\ ∀t ∈ T
+BUN ∼ tir(αUN, BUN-0)/ ∀t ∈ .T
+Bt ERM ∼ Dir(αTERM, Bt ERM-0) ∀t ∈ T
+l
+At ∼ Dir(αλ, A0) / ∀t ∈ T
+BLCTX
+t ∼ Dir(αLCTX, BLCTX-0
+t ) ∀t ∈ T
+BRCTX
+t ∼ Dir(αRCTX, BRCTX-0
+t ) ∀t ∈ T
+Sentence:
+do s ∼ Cat(BROOT)
+y  |s ∼ SCM(s)
+</equation>
+<bodyText confidence="0.9286595">
+until the tree y is valid
+where h.e, y, ri  |t ∼ SCM(t) is defined as:
+</bodyText>
+<equation confidence="0.921000909090909">
+z ∼ Cat(At)
+if z = B : hu, vi  |t ∼ Cat(BBIN
+t )
+yL  |u ∼ SCM(u), yR  |v ∼ SCM(v)
+y = hyL, yRi
+if z = U : hui  |t ∼ Cat(BUN
+t )
+y  |u ∼ SCM(u)
+ifz=T: w  |t ∼ Cat
+y = w
+.e  |t ∼ Cat(Bt CTX), r  |t ∼ Cat(Bt CTX)
+</equation>
+<bodyText confidence="0.999867666666666">
+The process begins /by sampling the parameters
+from Dirichlet distributions: a distribution BROOT
+over root categories, a conditional distribution BBIN
+</bodyText>
+<subsectionHeader confidence="0.395019">
+t
+</subsectionHeader>
+<bodyText confidence="0.845497588235294">
+over binary branching productions given category
+t, BUN
+t for unary rewrite productions, BTERM
+t for ter-
+minal (word) productions, and BLCTX
+t and BRCTX
+t for
+left and right contexts. We also sample parame-
+ters At for the probability of t producing a binary
+branch, unary rewrite, or terminal word.
+Next we sample a sentence. This begins by sam-
+pling first a root category s and then recursively
+sampling subtrees. For each subtree rooted by a
+category t, we generate a left context supertag f
+and a right context supertag r. Then, we sam-
+(BTERM
+t )
+</bodyText>
+<page confidence="0.941489">
+24
+</page>
+<figure confidence="0.682176">
+Aij
+</figure>
+<figureCaption confidence="0.97252">
+Figure 3: The generative process starting with
+</figureCaption>
+<bodyText confidence="0.977272864864865">
+non-terminal Aij, where tx is the supertag for wx,
+the word at position x, and “A — B C” is a valid
+production in the grammar. We can see that non-
+terminal Aij generates nonterminals Bik and Ckj
+(solid arrows) as well as generating left context ti-1
+and right context tj (dashed arrows); likewise for
+Bik and Ckj. The triangle under a non-terminal
+indicates the complete subtree rooted by the node.
+ple a production type z corresponding to either a
+(B) binary, (U) unary, or (T) terminal production.
+Depending on z, we then sample either a binary
+production (u, v) and recurse, a unary production
+(u) and recurse, or a terminal word w and end that
+branch. A tree is complete when all branches end
+in terminal words. See Figure 3 for a graphical de-
+piction of the generative behavior of the process.
+Finally, since it is possible to generate a supertag
+context category that does not match the actual
+category generated by the neighboring constituent,
+we must allow our process to reject such invalid
+trees and re-attempt to sample.
+Like CCM, this model is deficient since the same
+supertags are generated multiple times, and parses
+with conflicting supertags are not valid. Since we
+are not generating from the model, this does not
+introduce difficulties (Klein and Manning, 2002).
+One additional complication that must be ad-
+dressed is that left-frontier non-terminal categories
+— those whose subtree span includes the first
+word of the sentence — do not have a left-side su-
+pertag to use as context. For these cases, we use
+the special sentence-start symbol (S) to serve as
+context. Similarly, we use the end symbol (E) for
+the right-side context of the right-frontier.
+We next discuss how the prior distributions are
+constructed to encode desirable biases, using uni-
+versal CCG properties.
+</bodyText>
+<subsectionHeader confidence="0.994042">
+3.1 Non-terminal production prior means
+</subsectionHeader>
+<bodyText confidence="0.999725333333333">
+For the root, binary, and unary parameters, we
+want to choose prior means that encode our bias
+toward cross-linguistically-plausible categories.
+To formalize the notion of what it means for a
+category to be more “plausible”, we extend the
+category generator of our previous work, which
+we will call PCAT. We can define PCAT using a
+probabilistic grammar (Garrette et al., 2014). The
+grammar may first generate a start or end category
+((S),(E)) with probability pse or a special token-
+deletion category ((D); explained in §5) with prob-
+ability pdel, or a standard CCG category C:
+</bodyText>
+<equation confidence="0.978659">
+X—(S)  |(E) pse
+X—(D) pdel
+X—C (1— (2pse + pdel)) &apos; PC(C)
+</equation>
+<bodyText confidence="0.99584825">
+For each sentence s, there will be one (S) and one
+(E), so we set pse = 1/(25 + 2), since the average
+sentence length in the corpora is roughly 25. To
+discourage the model from deleting tokens (only
+applies during testing), we set pdel = 10−100.
+For PC, the distribution over standard cate-
+gories, we use a recursive definition based on the
+structure of a CCG category. If p = 1 — p, then:1
+</bodyText>
+<equation confidence="0.990182857142857">
+C—a pterm &apos; patom(a)
+C—A/A pterm &apos; pfwd &apos; (pmod &apos; PC(A) +
+pmod &apos; PC(A)2 )
+C—A/B pterm &apos; pfwd &apos; pmod &apos; PC(A) &apos; PC(B)
+C—A\A pterm &apos; pfwd &apos; (pmod &apos; PC(A) +
+pmod &apos; PC(A)2 )
+C—A\B pterm &apos; pfwd &apos; pmod &apos; PC(A) &apos; PC(B)
+</equation>
+<bodyText confidence="0.99961675">
+The category grammar captures important as-
+pects of what makes a category more or less
+likely: (1) simplicity is preferred, with a higher
+pterm meaning a stronger emphasis on simplic-
+ity;2 (2) atomic types may occur at different rates,
+as given by patom; (3) modifier categories (A/A
+or A\A) are more likely than similar-complexity
+non-modifiers (such as an adverb that modifies a
+verb); and (4) operators may occur at different
+rates, as given by pfwd.
+We can use PCAT to define priors on our produc-
+tion parameters that bias our model toward rules
+</bodyText>
+<footnote confidence="0.965215285714286">
+1Note that this version has also updated the probability
+definitions for modifiers to be sums, incorporating the fact
+that any A/A is also a A/B (likewise for A\A). This ensures
+that our grammar defines a valid probability distribution.
+2The probability distribution over categories is guaranteed
+to be proper so long as pterm &gt; 2 since the probability of the
+depth of a tree will decrease geometrically (Chi, 1999).
+</footnote>
+<table confidence="0.4028975">
+Bik Ckj
+ti-1 ti tk-1 tk tj-1 tj
+</table>
+<page confidence="0.637802">
+25
+</page>
+<equation confidence="0.997338">
+that result in a priori more likely categories:3
+θROOT-0 (t) = PC AT (t)
+θBIN-0((u, v)/\
+CAT(u) · PCAT(v)
+θUN-0((u)/) =
+</equation>
+<bodyText confidence="0.9993">
+For simplicity, we assume the production-type
+mixture prior to be uniform: λ0 =(13, 13, 13).
+</bodyText>
+<subsectionHeader confidence="0.999131">
+3.2 Terminal production prior means
+</subsectionHeader>
+<bodyText confidence="0.999866">
+We employ the same procedure as our previous
+work for setting the terminal production prior dis-
+</bodyText>
+<equation confidence="0.968614">
+tributions θTERM-0
+t (w) by estimating word-given-
+</equation>
+<bodyText confidence="0.9987759">
+category relationships from the weak supervision:
+the tag dictionary and raw corpus (Garrette and
+Baldridge, 2012; Garrette et al., 2015).4 This pro-
+cedure attempts to automatically estimate the fre-
+quency of each word/tag combination by divid-
+ing the number of raw-corpus occurrences of each
+word in the dictionary evenly across all of its asso-
+ciated tags. These counts are then combined with
+estimates of the “openness” of each tag in order to
+assess its likelihood of appearing with new words.
+</bodyText>
+<subsectionHeader confidence="0.999825">
+3.3 Context parameter prior means
+</subsectionHeader>
+<bodyText confidence="0.960598">
+In order to encourage our model to choose trees
+in which the constituent labels “fit” into their
+supertag contexts, we want to bias our con-
+text parameters toward context categories that are
+combinable with the constituent label.
+The right-side context of a non-terminal cate-
+gory — the probability of generating a category
+to the right of the current constituent’s category
+— corresponds directly to the category transitions
+used for the HMM supertagger of Garrette et al.
+(2014). Thus, the right-side context prior mean
+θRCTX-0 can be biased in exactly the same way as
+t
+the HMM supertagger’s transitions: toward context
+supertags that connect to the constituent label.
+To encode a notion of combinability, we fol-
+low Baldridge’s (2008) definition. Briefly, let
+κ(t, u) E {0, 1} be an indicator of whether t com-
+bines with u (in that order). For any binary rule
+that can combine t to u, κ(t, u)=1. To ensure that
+our prior captures the natural associativity of CCG,
+we define combinability in this context to include
+composition rules as well as application rules. If
+</bodyText>
+<footnote confidence="0.9957958">
+3For our experiments, we normalize PCAT by dividing by
+Kc∈T PCAT(c). This allows for experiments contrasting with
+a uniform prior (1/|T |) without adjusting α values.
+4We refer the reader to the previous work (Garrette et al.,
+2015) for a fuller discussion and implementation details.
+</footnote>
+<bodyText confidence="0.993882103448276">
+atoms have features associated, then the atoms are
+allowed to unify if the features match, or if at least
+one of them does not have a feature. In defining κ,
+it is also important to ignore possible arguments
+on the wrong side of the combination since they
+can be consumed without affecting the connection
+between the two. To achieve this for κ(t, u), it is
+assumed that it is possible to consume all preced-
+ing arguments of t and all following arguments of
+u. So κ(np, (s\np)/np) = 1. This helps to en-
+sure the associativity discussed earlier. For “com-
+bining” with the start or end of a sentence, we
+define κ((S),u)=1 when u seeks no left-side ar-
+guments (since there are no tags to the left with
+which to combine) and κ(t, (E))=1 when t seeks
+no right-side arguments. So κ((S), np/n)=1, but
+κ((S), s\np)=0. Finally, due to the frequent use
+of the unary rule that allows n to be rewritten
+as np, the atom np is allowed to unify with n
+if n is the argument. So κ(n, s\np) = 1, but
+κ(np/n, np) = 0.
+The prior mean of producing a right-context su-
+pertag r from a constituent category t, Pright(r  |t),
+is defined so that combinable pairs are given
+higher probability than non-combinable pairs. We
+further experimented with a prior that biases to-
+ward both combinability and category likelihood,
+replacing the uniform treatment of categories with
+our prior over categories, yielding Pright
+</bodyText>
+<equation confidence="0.985738875">
+CAT (r  |t). If
+T is the full set of known CCG categories:
+{ σ · 1/|T  |if κ(t, r) σ &gt; 1
+Pright(r  |t) =
+1/|T
+PCATt(r  |t) = { PCAT(r) (r) otherwiseσ &gt; 1
+Distributions Pleft(.e  |t) and P left
+CAT(.e  |t) are de-
+</equation>
+<bodyText confidence="0.999247">
+fined in the same way, but with the combinability
+direction flipped: κ(.e, t), since the left context su-
+pertag precedes the constituent category.
+</bodyText>
+<sectionHeader confidence="0.997352" genericHeader="method">
+4 Posterior Inference
+</sectionHeader>
+<bodyText confidence="0.9998509">
+We wish to infer the distribution over CCG parses,
+given the model we just described and a corpus of
+sentences. Since there is no way to analytically
+compute these modes, we resort to Gibbs sam-
+pling to find an approximate solution. Our strat-
+egy is based on the approach presented by John-
+son et al. (2007). At a high level, we alternate be-
+tween resampling model parameters (θROOT, θBIN,
+θUN, θTERM, λ, θLCTX, θRCTX) given the current set
+of parse trees and resampling those trees given the
+</bodyText>
+<equation confidence="0.5645685">
+PCAT(u)
+otherwise
+</equation>
+<page confidence="0.9669">
+26
+</page>
+<bodyText confidence="0.999951361702128">
+current model parameters and observed word se-
+quences. To efficiently sample new model param-
+eters, we exploit Dirichlet-multinomial conjugacy.
+By repeating these alternating steps and accumu-
+lating the productions, we obtain an approxima-
+tion of the required posterior quantities.
+Our inference procedure takes as input the dis-
+tribution prior means, along with the raw corpus
+and tag dictionary. During sampling, we restrict
+the tag choices for a word w to categories allowed
+by the tag dictionary. Since real-world learning
+scenarios will always lack complete knowledge of
+the lexicon, we, too, want to allow for unknown
+words; for these, we assume the word may take
+any known supertag. We refer to the sequence of
+word tokens as w and a non-terminal category cov-
+ering the span i through j − 1 as yij.
+While it is technically possible to sample di-
+rectly from our context-sensitive model, the high
+number of potential supertags available for each
+context means that computing the inside chart for
+this model is intractable for most sentences. In
+order to overcome this limitation, we employ an
+accept/reject Metropolis-Hastings (MH) step. The
+basic idea is that we sample trees according to a
+simpler proposal distribution Q that approximates
+the full distribution and for which direct sampling
+is tractable, and then choose to accept or reject
+those trees based on the true distribution P.
+For our model, there is a straightforward and
+intuitive choice for the proposal distribution: the
+PCFG model without our context parameters:
+(θROOT, θBIN, θUN, θTERM, λ), which is known to
+have an efficient sampling method. Our accep-
+tance step is therefore based on the remaining pa-
+rameters: the context (θLCTX, θRCTX).
+To sample from our proposal distribution, we
+use a blocked Gibbs sampler based on the one
+proposed by Goodman (1998) and used by John-
+son et al. (2007) that samples entire parse trees.
+For a sentence w, the strategy is to use the Inside
+algorithm (Lari and Young, 1990) to inductively
+compute, for each potential non-terminal position
+spanning words wi through wj−1 and category t,
+going “up” the tree, the probability of generating
+wi, ... , wj−1 via any arrangement of productions
+that is rooted by yij = t.
+</bodyText>
+<equation confidence="0.997032">
+p(wi  |yi,i+1 = t) = λt(T) · θTERM
+t (wi)
++Et→u λt(U) · θUN
+t (hui)
+· p(wi:j−1  |yij = u)
+p(wi:j−1  |yij = t) =
+Et→u λt(U) · θUN
+t (hui)
+</equation>
+<listItem confidence="0.712315571428571">
+· p(wi:j−1  |yij = u)
++ Et→u v Ei&lt;k&lt;j λt (B) · θtIN(hu, vi)
+· p(wi:k−1  |yik = u)
+· p(wk:j−1  |ykj = v)
+We then pass “downward” through the chart, sam-
+pling productions until we reach a terminal word
+on all branches.
+</listItem>
+<equation confidence="0.99822225">
+y0n ∼ θtOO(T · p(w0:n−1  |y0n = t)
+x  |yij ∼ �θyzN((u, vi) · p(wi:k−1  |yik = u)
+· p(wk:j−1  |ykj = v)
+∀ yik, ykj when j &gt; i + 1,
+θUN
+yij(hui) · p(wi:j−1  |y0ij = u) ∀ y0ij,
+θTERM when j = i + 1 �
+yij (wi)
+</equation>
+<bodyText confidence="0.999961375">
+where x is either a split point k and pair of cate-
+gories yik, ykj resulting from a binary rewrite rule,
+a single category y0ij resulting from a unary rule, or
+a word w resulting from a terminal rule.
+The MH procedure requires an acceptance dis-
+tribution A that is used to accept or reject a tree
+sampled from the proposal Q. The probability of
+accepting new tree y0 given the previous tree y is:
+</bodyText>
+<equation confidence="0.9998815">
+A(y0  |y) = minC1, P(y0) Q(y)
+P(y) Q(y0) )
+</equation>
+<bodyText confidence="0.963369">
+Since Q is defined as a subset of P’s parameters,
+it is the case that:
+</bodyText>
+<equation confidence="0.999388">
+P(y) = Q(y) · p(y  |θLCTX, θRCTX)
+</equation>
+<bodyText confidence="0.995863333333333">
+After substituting this for each P in A, all of the Q
+factors cancel, yielding the acceptance distribution
+defined purely in terms of context parameters:
+</bodyText>
+<equation confidence="0.9736015">
+A(y0  |y) = minC)
+1, p(Y, y |θLCTX, θRCTX)
+</equation>
+<bodyText confidence="0.9992225">
+For completeness, we note that the probability
+of a tree y given only the context parameters is:5
+</bodyText>
+<equation confidence="0.921342333333333">
+p(y  |θLCTX, θRCTX) =
+ri θLCTX(yi−1,i  |yij) · θRCTX(yj,j+1  |yij)
+0≤i&lt;j≤n
+</equation>
+<footnote confidence="0.891968666666667">
+5Note that there may actually be multiple yij due to unary
+rules that “loop back” to the same position (i, j); all of these
+much be included in the product.
+</footnote>
+<page confidence="0.998802">
+27
+</page>
+<bodyText confidence="0.9997635">
+Before we begin sampling, we initialize each
+distribution to its prior mean (BROOT=BROOT-0,
+</bodyText>
+<sectionHeader confidence="0.332664" genericHeader="method">
+BBIN
+</sectionHeader>
+<bodyText confidence="0.997333428571429">
+t =BBIN-0, etc). Since MH requires an initial set
+of trees to begin sampling, we parse the raw corpus
+with probabilistic CKY using these initial parame-
+ters (excluding the context parameters) to guess an
+initial tree for each raw sentence.
+The sampler alternates sampling parse trees for
+the entire corpus of sentences using the above pro-
+cedure with resampling the model parameters. Re-
+sampling the parameters requires empirical counts
+of each production. These counts are taken from
+the trees resulting from the previous round of sam-
+pling: new trees that have been “accepted” by the
+MH step, as well as existing trees for sentences in
+which the newly-sampled tree was rejected.
+</bodyText>
+<equation confidence="0.9999628125">
+θθROOT ∼ Dir(hαROOT · θROOT-0(t) + Croot(t) itET )
+BIN
+t ∼ Dir(hαBIN ·θBIN-0(hu, vi) + C(t→hu, vi) iu,vET )
+θUN
+t ∼ Dir(hαUN · θUN-0(hui) + C(t→hui) iuET )
+θTERM t∼ Dir(hαTERM ·θTERM-0
+t (w) + C(t → w) iwEV )
+λt ∼ Dir(hαλ · λ0(B) + Eu,vET C(t→hu, vi),
+αλ · λ0(U) + &amp;ET C(t→hui),
+αλ · λ0(T) + EwEV C(t→w) i)
+θLCTX
+t ∼ Dir(hαLCTX ·θLCTX-0
+t (�) + Cleft (t, e)iPET )
+θRCTX
+t ∼ Dir(hαRCTX ·θRCTX-0
+t (r) + Cright(t, r)irET )
+</equation>
+<bodyText confidence="0.999987714285714">
+It is important to note that this method of re-
+sampling allows the draws to incorporate both the
+data, in the form of counts, and the prior mean,
+which includes all of our carefully-constructed bi-
+ases derived from both the intrinsic, universal CCG
+properties as well as the information we induced
+from the raw corpus and tag dictionary.
+After all sampling iterations have completed,
+the final model is estimated by pooling the trees
+resulting from each sampling iteration, including
+trees accepted by the MH steps as well as the dupli-
+cated trees retained due to rejections. We use this
+pool of trees to compute model parameters using
+the same procedure as we used directly above to
+sample parameters, except that instead of drawing
+a Dirichlet sample based on the vector of counts,
+we simply normalize those counts. However, since
+we require a final model that can parse sentences
+efficiently, we drop the context parameters, mak-
+ing the model a standard PCFG, which allows us to
+use the probabilistic CKY algorithm.
+</bodyText>
+<sectionHeader confidence="0.998922" genericHeader="method">
+5 Experiments
+</sectionHeader>
+<bodyText confidence="0.999972458333334">
+In our evaluation we compared our supertag-
+context approach to (our reimplementation of) the
+best-performing model of our previous work (Gar-
+rette et al., 2015), which SCM extends. We evalu-
+ated on the English CCGBank (Hockenmaier and
+Steedman, 2007), which is a transformation of the
+Penn Treebank (Marcus et al., 1993); the CTB-
+CCG (Tse and Curran, 2010) transformation of the
+Penn Chinese Treebank (Xue et al., 2005); and the
+CCG-TUT corpus (Bos et al., 2009), built from the
+TUT corpus of Italian text (Bosco et al., 2000).
+Each corpus was divided into four distinct data
+sets: a set from which we extract the tag dictionar-
+ies, a set of raw (unannotated) sentences, a devel-
+opment set, and a test set. We use the same splits
+as Garrette et al. (2014). Since these treebanks
+use special representations for conjunctions, we
+chose to rewrite the trees to use conjunction cate-
+gories of the form (X\X)/X rather than introduc-
+ing special conjunction rules. In order to increase
+the amount of raw data available to the sampler,
+we supplemented the English data with raw, unan-
+notated newswire sentences from the NYT Giga-
+word 5 corpus (Parker et al., 2011) and supple-
+mented Italian with the out-of-domain WaCky cor-
+pus (Baroni et al., 1999). For English and Italian,
+this allowed us to use 100k raw tokens for train-
+ing (Chinese uses 62k). For Chinese and Italian,
+for training efficiency, we used only raw sentences
+that were 50 words or fewer (note that we did not
+drop tag dictionary set or test set sentences).
+The English development set was used to tune
+hyperparameters using grid search, and the same
+hyperparameters were then used for all three lan-
+guages. For the category grammar, we used
+ppunc=0.1, pterm=0.7, pmod=0.2, pfwd=0.5. For
+the priors, we use αROOT=1, αBIN=100, αUN=100,
+αTERM=104, αλ=3, αLCTX=αRCTX=103.6 For the
+context prior, we used a=105. We ran our sampler
+for 50 burn-in and 50 sampling iterations.
+CCG parsers are typically evaluated on the de-
+pendencies they produce instead of their CCG
+derivations directly since there can be many differ-
+ent CCG parse trees that all represent the same de-
+pendency relationships (spurious ambiguity), and
+CCG-to-dependency conversion can collapse those
+differences. To convert a CCG tree into a de-
+pendency tree, we follow Lewis and Steedman
+</bodyText>
+<footnote confidence="0.978535666666667">
+6In order to ensure that these concentration parameters,
+while high, were not dominating the posterior distributions,
+we ran experiments in which they were set much higher
+(including using the prior alone), and found that accuracies
+plummeted in those cases, demonstrating that there is a good
+balance with the prior.
+</footnote>
+<page confidence="0.997274">
+28
+</page>
+<bodyText confidence="0.698792">
+Size of the corpus (tokens) from which the tag dictionary is extracted
+</bodyText>
+<table confidence="0.99986652631579">
+250k 200k 150k 100k 50k 25k
+English no context 60.43 61.22 59.69 58.61 56.26 54.70
+context (uniform) 64.02 63.89 62.58 61.80 59.44 57.08
++Pleft / Pright 65.44 63.26 64.28 62.90 59.63 57.86
++P left 59.34 59.89 59.32 58.47 57.85 55.77
+CAT / P right
+CAT
+Chinese no context 32.70 32.07 28.99
+context (uniform) 36.02 33.84 32.55
++Pleft / Pright 35.34 33.04 31.48
++P left 35.15 34.04 33.53
+CAT / P right
+CAT
+Italian no context 51.54
+context (uniform) 53.57
++Pleft / Pright 52.54
++P left 53.29
+CAT / P right
+CAT
+</table>
+<tableCaption confidence="0.998406">
+Table 1: Experimental results in three languages. For each language, four experiments were executed:
+</tableCaption>
+<bodyText confidence="0.983774080645161">
+(1) a no-context model baseline, Garrette et al. (2015) directly; (2) our supertag-context model, with uni-
+form priors on contexts; (3) supertag-context model with priors that prefer combinability; (4) supertag-
+context model with priors that prefer combinability and simpler categories. Results are shown for six
+different levels of supervision, as determined by the size of the corpus used to extract a tag dictionary.
+(2014). We traverse the parse tree, dictating at ev-
+ery branching node which words will be the de-
+pendents of which. For binary branching nodes of
+forward rules, the right side—the argument side—
+is the dependent, unless the left side is a modi-
+fier (X/X) of the right, in which case the left is
+the dependent. The opposite is true for backward
+rules. For punctuation rules, the punctuation is al-
+ways the dependent. For merge rules, the right side
+is always made the parent. The results presented
+in this paper are dependency accuracy scores: the
+proportion of words that were assigned the correct
+parent (or “root” for the root of a tree).
+When evaluating on test set sentences, if the
+model is unable to find a parse given the con-
+straints of the tag dictionary, then we would have
+to take a score of zero for that sentence: every de-
+pendency would be “wrong”. Thus, it is impor-
+tant that we make a best effort to find a parse. To
+accomplish this, we implemented a parsing back-
+off strategy. The parser first tries to find a valid
+parse that has either sdcl or np at its root. If
+that fails, then it searches for a parse with any
+root. If no parse is found yet, then the parser at-
+tempts to strategically allow tokens to subsume a
+neighbor by making it a dependent (first with a re-
+stricted root set, then without). This is similar to
+the “deletion” strategy employed by Zettlemoyer
+and Collins (2007), but we do it directly in the
+grammar. We add unary rules of the form (D)-*u
+for every potential supertag u in the tree. Then,
+at each node spanning exactly two tokens (but no
+higher in the tree), we allow rules t-*((D), v) and
+t-*(v, (D)). Recall that in §3.1, we stated that (D)
+is given extremely low probability, meaning that
+the parser will avoid its use unless it is absolutely
+necessary. Additionally, since u will still remain
+as the preterminal, it will be the category exam-
+ined as the context by adjacent constituents.
+For each language and level of supervision, we
+executed four experiments. The no-context base-
+line used (a reimplementation of) the best model
+from our previous work (Garrette et al., 2015):
+using only the non-context parameters (θROOT,
+θBIN, θUN, θTERM, λ) along with the category prior
+PCAT to bias toward likely categories throughout
+the tree, and θt ERM-0 estimated from the tag dictio-
+nary and raw corpus. We then added the supertag-
+context parameters (θLCTX, θRCTX), but used uni-
+form priors for those (still using PCAT for the rest).
+Then, we evaluated the supertag-context model
+using context parameter priors that bias toward
+categories that combine with their contexts: Pleft
+and Pright (see §3.3). Finally, we evaluated the
+supertag-context model using context parameter
+priors that bias toward combinability and toward
+a priori more likely categories, based on the cate-
+gory grammar (P left
+</bodyText>
+<sectionHeader confidence="0.954295" genericHeader="method">
+CAT and Pright
+</sectionHeader>
+<bodyText confidence="0.773056">
+CAT ).
+Because we are interested in understanding how
+our models perform under varying amounts of su-
+</bodyText>
+<page confidence="0.995469">
+29
+</page>
+<bodyText confidence="0.999781703703704">
+pervision, we executed sequences of experiments
+in which we reduced the size of the corpus from
+which the tag dictionary is drawn, thus reducing
+the amount of information provided to the model.
+As this information is reduced, so is the size of the
+full inventory of known CCG categories that can be
+used as supertags. Additionally, a smaller tag dic-
+tionary means that there will be vastly more un-
+known words; since our model must assume that
+these words may take any supertag from the full
+set of known labels, the model must contend with
+a greatly increased level of ambiguity.
+The results of our experiments are given in Ta-
+ble 1. We find that the incorporation of supertag-
+context parameters into a CCG model improves
+performance in every scenario we tested; we see
+gains of 2–5% across the board. Adding context
+parameters never hurts, and in most cases, using
+priors based on intrinsic, cross-lingual aspects of
+the CCG formalism to bias those parameters to-
+ward connectivity provides further gains. In par-
+ticular, biasing the model toward trees in which
+constituent labels are combinable with their adja-
+cent supertags frequently helps the model.
+However, for English, we found that addition-
+ally biasing context priors toward simpler cate-
+gories using P left
+</bodyText>
+<sectionHeader confidence="0.566811" genericHeader="method">
+CAT/P right
+</sectionHeader>
+<bodyText confidence="0.999834888888889">
+CAT degraded performance.
+This is likely due to the fact that the priors on pro-
+duction parameters (BBIN, BUN) are already biasing
+the model toward likely categories, and that hav-
+ing the context parameters do the same ends up
+over-emphasizing the need for simple categories,
+preventing the model from choosing more com-
+plex categories when they are needed. On the
+other hand, this bias helps in Chinese and Italian.
+</bodyText>
+<sectionHeader confidence="0.999988" genericHeader="related work">
+6 Related Work
+</sectionHeader>
+<bodyText confidence="0.999970225">
+Klein and Manning (2002)’s CCM is an unla-
+beled bracketing model that generates the span of
+part-of-speech tags that make up each constituent
+and the pair of tags surrounding each constituent
+span (as well as the spans and contexts of each
+non-constituent). They found that modeling con-
+stituent context aids in parser learning because it
+is able to capture the observation that the same
+contexts tend to appear repeatedly in a corpus,
+even with different constituents. While CCM is
+designed to learn which tag pairs make for likely
+contexts, without regard for the constituents them-
+selves, our model attempts to learn the relation-
+ships between context categories and the types of
+the constituents, allowing us to take advantage of
+the natural a priori knowledge about which con-
+texts fit with which constituent labels.
+Other researchers have shown positive results
+for grammar induction by introducing relatively
+small amounts of linguistic knowledge. Naseem
+et al. (2010) induced dependency parsers by hand-
+constructing a small set of linguistically-universal
+dependency rules and using them as soft con-
+straints during learning. These rules were use-
+ful for disambiguating between various structures
+in cases where the data alone suggests multiple
+valid analyses. Boonkwan and Steedman (2011)
+made use of language-specific linguistic knowl-
+edge collected from non-native linguists via a
+questionnaire that covered a variety of syntactic
+parameters. They were able to use this infor-
+mation to induce CCG parsers for multiple lan-
+guages. Bisk and Hockenmaier (2012; 2013) in-
+duced CCG parsers by using a smaller number of
+linguistically-universal principles to propose syn-
+tactic categories for each word in a sentence, al-
+lowing EM to estimate the model parameters. This
+allowed them to induce the inventory of language-
+specific types from the training data, without prior
+language-specific knowledge.
+</bodyText>
+<sectionHeader confidence="0.99901" genericHeader="conclusions">
+7 Conclusion
+</sectionHeader>
+<bodyText confidence="0.999978176470588">
+Because of the structured nature of CCG categories
+and the logical framework in which they must as-
+semble to form valid parse trees, the CCG formal-
+ism offers multiple opportunities to bias model
+learning based on universal, intrinsic properties
+of the grammar. In this paper we presented a
+novel parsing model with the capacity to capture
+the associative adjacent-category relationships in-
+trinsic to CCG by parameterizing supertag con-
+texts, the supertags appearing on either side of
+each constituent. In our Bayesian formulation, we
+place priors on those context parameters to bias
+the model toward trees in which constituent labels
+are combinable with their contexts, thus preferring
+trees that “fit” together better. Our experiments
+demonstrate that, across languages, this additional
+context helps in weak-supervision scenarios.
+</bodyText>
+<sectionHeader confidence="0.998713" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.9760275">
+We would like to thank Yonatan Bisk for his
+valuable feedback. This work was supported by
+the U.S. Department of Defense through the U.S.
+Army Research Office grant W911NF-10-1-0533.
+</bodyText>
+<page confidence="0.993015">
+30
+</page>
+<bodyText confidence="0.99473225">
+Julia Hockenmaier and Mark Steedman. 2007. CCG-
+bank: A corpus of CCG derivations and dependency
+structures extracted from the Penn Treebank. Com-
+putational Linguistics, 33(3).
+</bodyText>
+<sectionHeader confidence="0.896834" genericHeader="references">
+References
+</sectionHeader>
+<bodyText confidence="0.58812">
+Jason Baldridge. 2008. Weakly supervised supertag-
+ging with grammar-informed initialization. In Proc.
+of COLING.
+</bodyText>
+<reference confidence="0.999901655913979">
+Marco Baroni, Silvia Bernardini, Adriano Ferraresi,
+and Eros Zanchetta. 1999. The WaCky wide
+web: a collection of very large linguistically pro-
+cessed web-crawled corpora. Language Resources
+and Evaluation, 43(3).
+Yonatan Bisk and Julia Hockenmaier. 2012. Simple
+robust grammar induction with combinatory catego-
+rial grammar. In Proc. of AAAI.
+Yonatan Bisk and Julia Hockenmaier. 2013. An HDP
+model for inducing combinatory categorial gram-
+mars. Transactions of the Association for Compu-
+tational Linguistics, 1.
+Prachya Boonkwan and Mark Steedman. 2011. Gram-
+mar induction from text using small syntactic proto-
+types. In Proc. of IJCNLP.
+Johan Bos, Cristina Bosco, and Alessandro Mazzei.
+2009. Converting a dependency treebank to a cat-
+egorial grammar treebank for Italian. In M. Pas-
+sarotti, Adam Przepi´orkowski, S. Raynaud, and
+Frank Van Eynde, editors, Proc. of the Eighth In-
+ternational Workshop on Treebanks and Linguistic
+Theories (TLT8).
+Cristina Bosco, Vincenzo Lombardo, Daniela Vassallo,
+and Leonardo Lesmo. 2000. Building a treebank for
+Italian: a data-driven annotation schema. In Proc. of
+LREC.
+Zhiyi Chi. 1999. Statistical properties of probabilistic
+context-free grammars. Computational Linguistics.
+Stephen Clark and James R. Curran. 2007. Wide-
+coverage efficient statistical parsing with CCG and
+log-linear models. Computational Linguistics, 33.
+Dan Garrette and Jason Baldridge. 2012. Type-
+supervised hidden Markov models for part-of-
+speech tagging with incomplete tag dictionaries. In
+Proc. of EMNLP.
+Dan Garrette, Chris Dyer, Jason Baldridge, and
+Noah A. Smith. 2014. Weakly-supervised Bayesian
+learning of a CCG supertagger. In Proc. of CoNLL.
+Dan Garrette, Chris Dyer, Jason Baldridge, and
+Noah A. Smith. 2015. Weakly-supervised
+grammar-informed Bayesian CCG parser learning.
+In Proc. of AAAI.
+Sharon Goldwater. 2007. Nonparametric Bayesian
+Models of Lexical Acquisition. Ph.D. thesis, Brown
+University.
+Joshua Goodman. 1998. Parsing inside-out. Ph.D.
+thesis, Harvard University.
+Mark Johnson, Thomas Griffiths, and Sharon Gold-
+water. 2007. Bayesian inference for PCFGs via
+Markov chain Monte Carlo. In Proc. of NAACL.
+Dan Klein and Christopher D. Manning. 2002. A
+generative constituent-context model for improved
+grammar induction. In Proc. of ACL.
+Karim Lari and Steve J. Young. 1990. The esti-
+mation of stochastic context-free grammars using
+the inside-outside algorithm. Computer Speech and
+Language, 4:35–56.
+Mike Lewis and Mark Steedman. 2014. A* CCG
+parsing with a supertag-factored model. In Proc. of
+EMNLP.
+Mitchell P. Marcus, Beatrice Santorini, and Mary Ann
+Marcinkiewicz. 1993. Building a large annotated
+corpus of English: The Penn Treebank. Computa-
+tional Linguistics, 19(2).
+Tahira Naseem, Harr Chen, Regina Barzilay, and Mark
+Johnson. 2010. Using universal linguistic knowl-
+edge to guide grammar induction. In Proc. of
+EMNLP.
+Robert Parker, David Graff, Junbo Kong, Ke Chen, and
+Kazuaki Maeda. 2011. English Gigaword Fifth Edi-
+tion LDC2011T07. Linguistic Data Consortium.
+Andrew Radford. 1988. Transformational Grammar.
+Cambridge University Press.
+Mark Steedman and Jason Baldridge. 2011. Combina-
+tory categorial grammar. In Robert Borsley and Ker-
+sti Borjars, editors, Non-Transformational Syntax:
+Formal and Explicit Models of Grammar. Wiley-
+Blackwell.
+Mark Steedman. 2000. The Syntactic Process. MIT
+Press.
+Daniel Tse and James R. Curran. 2010. Chinese CCG-
+bank: Extracting CCG derivations from the Penn
+Chinese Treebank. In Proc. of COLING.
+Aline Villavicencio. 2002. The acquisition of a
+unification-based generalised categorial grammar.
+Ph.D. thesis, University of Cambridge.
+Nianwen Xue, Fei Xia, Fu-Dong Chiou, and Martha
+Palmer. 2005. The Penn Chinese TreeBank: Phrase
+structure annotation of a large corpus. Natural Lan-
+guage Engineering, 11(2):207–238.
+Luke S. Zettlemoyer and Michael Collins. 2007. On-
+line learning of relaxed CCG grammars for parsing
+to logical form. In Proc. of EMNLP.
+</reference>
+<page confidence="0.999913">
+31
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.886726">
+<title confidence="0.999198">A Supertag-Context for Weakly-Supervised CCG Parser Learning</title>
+<author confidence="0.998527">Chris Jason Noah A</author>
+<affiliation confidence="0.972848333333333">Science &amp; Engineering, University of Washington, of Computer Science, Carnegie Mellon University, of Linguistics, University of Texas at Austin,</affiliation>
+<abstract confidence="0.998259045454546">Categorial Grammar is a lexicalized grammar formalism in which words are associated with categories that specify the syntactic configurations in which they may occur. We present a novel parsing model with the capacity to capture the associative adjacent-category intrinsic to parameterizing the relationships between each constituent label and the preterminal categories directly to its left and right, biasing the model toward constituent categories that can combine with their contexts. This builds on the intuitions of Klein and Manning’s (2002) “constituentcontext” model, which demonstrated the value of modeling context, but has the advantage of being able to exploit the propof Our experiments show that our model outperforms a baseline in which this context information is not captured.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Marco Baroni</author>
+<author>Silvia Bernardini</author>
+<author>Adriano Ferraresi</author>
+<author>Eros Zanchetta</author>
+</authors>
+<title>The WaCky wide web: a collection of very large linguistically processed web-crawled corpora.</title>
+<date>1999</date>
+<journal>Language Resources and Evaluation,</journal>
+<volume>43</volume>
+<issue>3</issue>
+<contexts>
+<context position="28096" citStr="Baroni et al., 1999" startWordPosition="4803" endWordPosition="4806"> tag dictionaries, a set of raw (unannotated) sentences, a development set, and a test set. We use the same splits as Garrette et al. (2014). Since these treebanks use special representations for conjunctions, we chose to rewrite the trees to use conjunction categories of the form (X\X)/X rather than introducing special conjunction rules. In order to increase the amount of raw data available to the sampler, we supplemented the English data with raw, unannotated newswire sentences from the NYT Gigaword 5 corpus (Parker et al., 2011) and supplemented Italian with the out-of-domain WaCky corpus (Baroni et al., 1999). For English and Italian, this allowed us to use 100k raw tokens for training (Chinese uses 62k). For Chinese and Italian, for training efficiency, we used only raw sentences that were 50 words or fewer (note that we did not drop tag dictionary set or test set sentences). The English development set was used to tune hyperparameters using grid search, and the same hyperparameters were then used for all three languages. For the category grammar, we used ppunc=0.1, pterm=0.7, pmod=0.2, pfwd=0.5. For the priors, we use αROOT=1, αBIN=100, αUN=100, αTERM=104, αλ=3, αLCTX=αRCTX=103.6 For the context</context>
+</contexts>
+<marker>Baroni, Bernardini, Ferraresi, Zanchetta, 1999</marker>
+<rawString>Marco Baroni, Silvia Bernardini, Adriano Ferraresi, and Eros Zanchetta. 1999. The WaCky wide web: a collection of very large linguistically processed web-crawled corpora. Language Resources and Evaluation, 43(3).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yonatan Bisk</author>
+<author>Julia Hockenmaier</author>
+</authors>
+<title>Simple robust grammar induction with combinatory categorial grammar.</title>
+<date>2012</date>
+<booktitle>In Proc. of AAAI.</booktitle>
+<contexts>
+<context position="3478" citStr="Bisk and Hockenmaier, 2012" startWordPosition="534" endWordPosition="537">G is a lexicalized grammar formalism in which every constituent in a sentence is associated with a structured category that specifies its syntactic relationship to other constituents. For example, a category might encode that “this constituent can combine with a noun phrase to the right (an object) and then a noun phrase to the left (a subject) to produce a sentence” instead of simply VERB. CCG has proven useful as a framework for grammar induction due to its ability to incorporate linguistic knowledge to guide parser learning by, for example, specifying rules in lexical-expansion algorithms (Bisk and Hockenmaier, 2012; 2013) or encoding that information as priors within a Bayesian framework (Garrette et al., 2015). Baldridge observed is that, cross-linguistically, grammars prefer simpler syntactic structures when possible, and that due to the natural correspondence of categories and syntactic structure, biasing toward simpler categories encourages simpler structures. In previous work, we were able to incorporate this preference into a Bayesian parsing model, biasing PCFG productions toward sim22 Proceedings of the 19th Conference on Computational Language Learning, pages 22–31, Beijing, China, July 30-31, </context>
+<context position="36770" citStr="Bisk and Hockenmaier (2012" startWordPosition="6241" endWordPosition="6244">nguistic knowledge. Naseem et al. (2010) induced dependency parsers by handconstructing a small set of linguistically-universal dependency rules and using them as soft constraints during learning. These rules were useful for disambiguating between various structures in cases where the data alone suggests multiple valid analyses. Boonkwan and Steedman (2011) made use of language-specific linguistic knowledge collected from non-native linguists via a questionnaire that covered a variety of syntactic parameters. They were able to use this information to induce CCG parsers for multiple languages. Bisk and Hockenmaier (2012; 2013) induced CCG parsers by using a smaller number of linguistically-universal principles to propose syntactic categories for each word in a sentence, allowing EM to estimate the model parameters. This allowed them to induce the inventory of languagespecific types from the training data, without prior language-specific knowledge. 7 Conclusion Because of the structured nature of CCG categories and the logical framework in which they must assemble to form valid parse trees, the CCG formalism offers multiple opportunities to bias model learning based on universal, intrinsic properties of the g</context>
+</contexts>
+<marker>Bisk, Hockenmaier, 2012</marker>
+<rawString>Yonatan Bisk and Julia Hockenmaier. 2012. Simple robust grammar induction with combinatory categorial grammar. In Proc. of AAAI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yonatan Bisk</author>
+<author>Julia Hockenmaier</author>
+</authors>
+<title>An HDP model for inducing combinatory categorial grammars.</title>
+<date>2013</date>
+<journal>Transactions of the Association for Computational Linguistics,</journal>
+<volume>1</volume>
+<marker>Bisk, Hockenmaier, 2013</marker>
+<rawString>Yonatan Bisk and Julia Hockenmaier. 2013. An HDP model for inducing combinatory categorial grammars. Transactions of the Association for Computational Linguistics, 1.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Prachya Boonkwan</author>
+<author>Mark Steedman</author>
+</authors>
+<title>Grammar induction from text using small syntactic prototypes.</title>
+<date>2011</date>
+<booktitle>In Proc. of IJCNLP.</booktitle>
+<contexts>
+<context position="36503" citStr="Boonkwan and Steedman (2011)" startWordPosition="6200" endWordPosition="6203"> and the types of the constituents, allowing us to take advantage of the natural a priori knowledge about which contexts fit with which constituent labels. Other researchers have shown positive results for grammar induction by introducing relatively small amounts of linguistic knowledge. Naseem et al. (2010) induced dependency parsers by handconstructing a small set of linguistically-universal dependency rules and using them as soft constraints during learning. These rules were useful for disambiguating between various structures in cases where the data alone suggests multiple valid analyses. Boonkwan and Steedman (2011) made use of language-specific linguistic knowledge collected from non-native linguists via a questionnaire that covered a variety of syntactic parameters. They were able to use this information to induce CCG parsers for multiple languages. Bisk and Hockenmaier (2012; 2013) induced CCG parsers by using a smaller number of linguistically-universal principles to propose syntactic categories for each word in a sentence, allowing EM to estimate the model parameters. This allowed them to induce the inventory of languagespecific types from the training data, without prior language-specific knowledge</context>
+</contexts>
+<marker>Boonkwan, Steedman, 2011</marker>
+<rawString>Prachya Boonkwan and Mark Steedman. 2011. Grammar induction from text using small syntactic prototypes. In Proc. of IJCNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Johan Bos</author>
+<author>Cristina Bosco</author>
+<author>Alessandro Mazzei</author>
+</authors>
+<title>Converting a dependency treebank to a categorial grammar treebank for Italian.</title>
+<date>2009</date>
+<booktitle>Proc. of the Eighth International Workshop on Treebanks and Linguistic Theories (TLT8).</booktitle>
+<editor>In M. Passarotti, Adam Przepi´orkowski, S. Raynaud, and Frank Van Eynde, editors,</editor>
+<contexts>
+<context position="27325" citStr="Bos et al., 2009" startWordPosition="4669" endWordPosition="4672">sentences efficiently, we drop the context parameters, making the model a standard PCFG, which allows us to use the probabilistic CKY algorithm. 5 Experiments In our evaluation we compared our supertagcontext approach to (our reimplementation of) the best-performing model of our previous work (Garrette et al., 2015), which SCM extends. We evaluated on the English CCGBank (Hockenmaier and Steedman, 2007), which is a transformation of the Penn Treebank (Marcus et al., 1993); the CTBCCG (Tse and Curran, 2010) transformation of the Penn Chinese Treebank (Xue et al., 2005); and the CCG-TUT corpus (Bos et al., 2009), built from the TUT corpus of Italian text (Bosco et al., 2000). Each corpus was divided into four distinct data sets: a set from which we extract the tag dictionaries, a set of raw (unannotated) sentences, a development set, and a test set. We use the same splits as Garrette et al. (2014). Since these treebanks use special representations for conjunctions, we chose to rewrite the trees to use conjunction categories of the form (X\X)/X rather than introducing special conjunction rules. In order to increase the amount of raw data available to the sampler, we supplemented the English data with </context>
+</contexts>
+<marker>Bos, Bosco, Mazzei, 2009</marker>
+<rawString>Johan Bos, Cristina Bosco, and Alessandro Mazzei. 2009. Converting a dependency treebank to a categorial grammar treebank for Italian. In M. Passarotti, Adam Przepi´orkowski, S. Raynaud, and Frank Van Eynde, editors, Proc. of the Eighth International Workshop on Treebanks and Linguistic Theories (TLT8).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Cristina Bosco</author>
+<author>Vincenzo Lombardo</author>
+<author>Daniela Vassallo</author>
+<author>Leonardo Lesmo</author>
+</authors>
+<title>Building a treebank for Italian: a data-driven annotation schema.</title>
+<date>2000</date>
+<booktitle>In Proc. of LREC.</booktitle>
+<contexts>
+<context position="27389" citStr="Bosco et al., 2000" startWordPosition="4681" endWordPosition="4684">the model a standard PCFG, which allows us to use the probabilistic CKY algorithm. 5 Experiments In our evaluation we compared our supertagcontext approach to (our reimplementation of) the best-performing model of our previous work (Garrette et al., 2015), which SCM extends. We evaluated on the English CCGBank (Hockenmaier and Steedman, 2007), which is a transformation of the Penn Treebank (Marcus et al., 1993); the CTBCCG (Tse and Curran, 2010) transformation of the Penn Chinese Treebank (Xue et al., 2005); and the CCG-TUT corpus (Bos et al., 2009), built from the TUT corpus of Italian text (Bosco et al., 2000). Each corpus was divided into four distinct data sets: a set from which we extract the tag dictionaries, a set of raw (unannotated) sentences, a development set, and a test set. We use the same splits as Garrette et al. (2014). Since these treebanks use special representations for conjunctions, we chose to rewrite the trees to use conjunction categories of the form (X\X)/X rather than introducing special conjunction rules. In order to increase the amount of raw data available to the sampler, we supplemented the English data with raw, unannotated newswire sentences from the NYT Gigaword 5 corp</context>
+</contexts>
+<marker>Bosco, Lombardo, Vassallo, Lesmo, 2000</marker>
+<rawString>Cristina Bosco, Vincenzo Lombardo, Daniela Vassallo, and Leonardo Lesmo. 2000. Building a treebank for Italian: a data-driven annotation schema. In Proc. of LREC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Zhiyi Chi</author>
+</authors>
+<title>Statistical properties of probabilistic context-free grammars. Computational Linguistics.</title>
+<date>1999</date>
+<contexts>
+<context position="16239" citStr="Chi, 1999" startWordPosition="2733" endWordPosition="2734"> an adverb that modifies a verb); and (4) operators may occur at different rates, as given by pfwd. We can use PCAT to define priors on our production parameters that bias our model toward rules 1Note that this version has also updated the probability definitions for modifiers to be sums, incorporating the fact that any A/A is also a A/B (likewise for A\A). This ensures that our grammar defines a valid probability distribution. 2The probability distribution over categories is guaranteed to be proper so long as pterm &gt; 2 since the probability of the depth of a tree will decrease geometrically (Chi, 1999). Bik Ckj ti-1 ti tk-1 tk tj-1 tj 25 that result in a priori more likely categories:3 θROOT-0 (t) = PC AT (t) θBIN-0((u, v)/\ CAT(u) · PCAT(v) θUN-0((u)/) = For simplicity, we assume the production-type mixture prior to be uniform: λ0 =(13, 13, 13). 3.2 Terminal production prior means We employ the same procedure as our previous work for setting the terminal production prior distributions θTERM-0 t (w) by estimating word-givencategory relationships from the weak supervision: the tag dictionary and raw corpus (Garrette and Baldridge, 2012; Garrette et al., 2015).4 This procedure attempts to aut</context>
+</contexts>
+<marker>Chi, 1999</marker>
+<rawString>Zhiyi Chi. 1999. Statistical properties of probabilistic context-free grammars. Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stephen Clark</author>
+<author>James R Curran</author>
+</authors>
+<title>Widecoverage efficient statistical parsing with CCG and log-linear models.</title>
+<date>2007</date>
+<journal>Computational Linguistics,</journal>
+<volume>33</volume>
+<contexts>
+<context position="9433" citStr="Clark and Curran (2007)" startWordPosition="1510" endWordPosition="1513">np) that serves as its subject. 23 n np/n n/n n s\np The lazy dog sleeps s s\np pp pp/np np The man walks to work np np/n n (s\np)/pp Figure 2: Higher-level category n subsumes the categories of its constituents. Thus, n should have a strong prior on combinability with its adjacent supertags np/n and s\np. Figure 1: CCG parse for “The man walks to work.” We follow Lewis and Steedman (2014) in allowing a small set of generic, linguistically-plausible unary and binary grammar rules. We further add rules for combining with punctuation to the left and right and allow for the merge rule X → X X of Clark and Curran (2007). 3 Generative Model In this section, we present our novel supertagcontext model (SCM) that augments a standard PCFG with parameters governing the supertags to the left and right of each constituent. The CCG formalism is said to be naturally associative since a constituent label is often able to combine on either the left or the right. As a motivating example, consider the sentence “The lazy dog sleeps”, as shown in Figure 2. The word lazy, with category n/n, can either combine with dog (n) via the Forward Application rule (&gt;), or with The (np/n) via the Forward Composition (&gt;B) rule. Baldridg</context>
+</contexts>
+<marker>Clark, Curran, 2007</marker>
+<rawString>Stephen Clark and James R. Curran. 2007. Widecoverage efficient statistical parsing with CCG and log-linear models. Computational Linguistics, 33.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dan Garrette</author>
+<author>Jason Baldridge</author>
+</authors>
+<title>Typesupervised hidden Markov models for part-ofspeech tagging with incomplete tag dictionaries.</title>
+<date>2012</date>
+<booktitle>In Proc. of EMNLP.</booktitle>
+<contexts>
+<context position="16782" citStr="Garrette and Baldridge, 2012" startWordPosition="2820" endWordPosition="2823"> since the probability of the depth of a tree will decrease geometrically (Chi, 1999). Bik Ckj ti-1 ti tk-1 tk tj-1 tj 25 that result in a priori more likely categories:3 θROOT-0 (t) = PC AT (t) θBIN-0((u, v)/\ CAT(u) · PCAT(v) θUN-0((u)/) = For simplicity, we assume the production-type mixture prior to be uniform: λ0 =(13, 13, 13). 3.2 Terminal production prior means We employ the same procedure as our previous work for setting the terminal production prior distributions θTERM-0 t (w) by estimating word-givencategory relationships from the weak supervision: the tag dictionary and raw corpus (Garrette and Baldridge, 2012; Garrette et al., 2015).4 This procedure attempts to automatically estimate the frequency of each word/tag combination by dividing the number of raw-corpus occurrences of each word in the dictionary evenly across all of its associated tags. These counts are then combined with estimates of the “openness” of each tag in order to assess its likelihood of appearing with new words. 3.3 Context parameter prior means In order to encourage our model to choose trees in which the constituent labels “fit” into their supertag contexts, we want to bias our context parameters toward context categories that</context>
+</contexts>
+<marker>Garrette, Baldridge, 2012</marker>
+<rawString>Dan Garrette and Jason Baldridge. 2012. Typesupervised hidden Markov models for part-ofspeech tagging with incomplete tag dictionaries. In Proc. of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dan Garrette</author>
+<author>Chris Dyer</author>
+<author>Jason Baldridge</author>
+<author>Noah A Smith</author>
+</authors>
+<title>Weakly-supervised Bayesian learning of a CCG supertagger.</title>
+<date>2014</date>
+<booktitle>In Proc. of CoNLL.</booktitle>
+<contexts>
+<context position="4477" citStr="Garrette et al., 2014" startWordPosition="681" endWordPosition="684"> were able to incorporate this preference into a Bayesian parsing model, biasing PCFG productions toward sim22 Proceedings of the 19th Conference on Computational Language Learning, pages 22–31, Beijing, China, July 30-31, 2015. c�2015 Association for Computational Linguistics pler categories by encoding a notion of category simplicity into a prior (Garrette et al., 2015). Baldridge further notes that due to the natural associativity of CCG, adjacent categories tend to be combinable. We previously showed that incorporating this intuition into a Bayesian prior can help train a CCG supertagger (Garrette et al., 2014). In this paper, we present a novel parsing model that is designed specifically for the capacity to capture both of these universal, intrinsic properties of CCG. We do so by extending our previous, PCFG-based parsing model to include parameters that govern the relationship between constituent categories and the preterminal categories (also known as supertags) to the left and right. The advantage of modeling context within a CCG framework is that while CCM must learn which contexts are likely purely from the data, the CCG categories give us obvious a priori information about whether a context i</context>
+<context position="14419" citStr="Garrette et al., 2014" startWordPosition="2399" endWordPosition="2402">milarly, we use the end symbol (E) for the right-side context of the right-frontier. We next discuss how the prior distributions are constructed to encode desirable biases, using universal CCG properties. 3.1 Non-terminal production prior means For the root, binary, and unary parameters, we want to choose prior means that encode our bias toward cross-linguistically-plausible categories. To formalize the notion of what it means for a category to be more “plausible”, we extend the category generator of our previous work, which we will call PCAT. We can define PCAT using a probabilistic grammar (Garrette et al., 2014). The grammar may first generate a start or end category ((S),(E)) with probability pse or a special tokendeletion category ((D); explained in §5) with probability pdel, or a standard CCG category C: X—(S) |(E) pse X—(D) pdel X—C (1— (2pse + pdel)) &apos; PC(C) For each sentence s, there will be one (S) and one (E), so we set pse = 1/(25 + 2), since the average sentence length in the corpora is roughly 25. To discourage the model from deleting tokens (only applies during testing), we set pdel = 10−100. For PC, the distribution over standard categories, we use a recursive definition based on the str</context>
+<context position="17675" citStr="Garrette et al. (2014)" startWordPosition="2966" endWordPosition="2969">d with estimates of the “openness” of each tag in order to assess its likelihood of appearing with new words. 3.3 Context parameter prior means In order to encourage our model to choose trees in which the constituent labels “fit” into their supertag contexts, we want to bias our context parameters toward context categories that are combinable with the constituent label. The right-side context of a non-terminal category — the probability of generating a category to the right of the current constituent’s category — corresponds directly to the category transitions used for the HMM supertagger of Garrette et al. (2014). Thus, the right-side context prior mean θRCTX-0 can be biased in exactly the same way as t the HMM supertagger’s transitions: toward context supertags that connect to the constituent label. To encode a notion of combinability, we follow Baldridge’s (2008) definition. Briefly, let κ(t, u) E {0, 1} be an indicator of whether t combines with u (in that order). For any binary rule that can combine t to u, κ(t, u)=1. To ensure that our prior captures the natural associativity of CCG, we define combinability in this context to include composition rules as well as application rules. If 3For our exp</context>
+<context position="27616" citStr="Garrette et al. (2014)" startWordPosition="4724" endWordPosition="4727">us work (Garrette et al., 2015), which SCM extends. We evaluated on the English CCGBank (Hockenmaier and Steedman, 2007), which is a transformation of the Penn Treebank (Marcus et al., 1993); the CTBCCG (Tse and Curran, 2010) transformation of the Penn Chinese Treebank (Xue et al., 2005); and the CCG-TUT corpus (Bos et al., 2009), built from the TUT corpus of Italian text (Bosco et al., 2000). Each corpus was divided into four distinct data sets: a set from which we extract the tag dictionaries, a set of raw (unannotated) sentences, a development set, and a test set. We use the same splits as Garrette et al. (2014). Since these treebanks use special representations for conjunctions, we chose to rewrite the trees to use conjunction categories of the form (X\X)/X rather than introducing special conjunction rules. In order to increase the amount of raw data available to the sampler, we supplemented the English data with raw, unannotated newswire sentences from the NYT Gigaword 5 corpus (Parker et al., 2011) and supplemented Italian with the out-of-domain WaCky corpus (Baroni et al., 1999). For English and Italian, this allowed us to use 100k raw tokens for training (Chinese uses 62k). For Chinese and Itali</context>
+</contexts>
+<marker>Garrette, Dyer, Baldridge, Smith, 2014</marker>
+<rawString>Dan Garrette, Chris Dyer, Jason Baldridge, and Noah A. Smith. 2014. Weakly-supervised Bayesian learning of a CCG supertagger. In Proc. of CoNLL.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>Dan Garrette</author>
+</authors>
+<location>Chris Dyer, Jason Baldridge, and</location>
+<marker>Garrette, </marker>
+<rawString>Dan Garrette, Chris Dyer, Jason Baldridge, and</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Noah A Smith</author>
+</authors>
+<title>Weakly-supervised grammar-informed Bayesian CCG parser learning.</title>
+<date>2015</date>
+<booktitle>In Proc. of AAAI.</booktitle>
+<marker>Smith, 2015</marker>
+<rawString>Noah A. Smith. 2015. Weakly-supervised grammar-informed Bayesian CCG parser learning. In Proc. of AAAI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Sharon Goldwater</author>
+</authors>
+<title>Nonparametric Bayesian Models of Lexical Acquisition.</title>
+<date>2007</date>
+<tech>Ph.D. thesis,</tech>
+<institution>Brown University.</institution>
+<contexts>
+<context position="6646" citStr="Goldwater, 2007" startWordPosition="1033" endWordPosition="1034">may be overridden when there is compelling contradictory evidence in the data. Methodologically, this work serves as an example of how linguistic-theoretical commitments can be used to benefit data-driven methods, not only through the construction of a model family from a grammar, as done in our previous work, but also when exploiting statistical associations about which the theory is silent. While there has been much work in computational modeling of the interaction between universal grammar and observable data in the context of studying child language acquisition (e.g., Villavicencio, 2002; Goldwater, 2007), we are interested in applying these principles to the design of models and learning procedures that result in better parsing tools. Given our desire to train NLP models in low-supervision scenarios, the possibility of constructing inductive biases out of universal properties of language is enticing: if we can do this well, then it only needs to be done once, and can be applied to any language or domain without adaptation. In this paper, we seek to learn from only raw data and an incomplete dictionary mapping some words to sets of potential supertags. In order to estimate the parameters of ou</context>
+</contexts>
+<marker>Goldwater, 2007</marker>
+<rawString>Sharon Goldwater. 2007. Nonparametric Bayesian Models of Lexical Acquisition. Ph.D. thesis, Brown University.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Joshua Goodman</author>
+</authors>
+<title>Parsing inside-out.</title>
+<date>1998</date>
+<tech>Ph.D. thesis,</tech>
+<institution>Harvard University.</institution>
+<contexts>
+<context position="22635" citStr="Goodman (1998)" startWordPosition="3817" endWordPosition="3818">tribution Q that approximates the full distribution and for which direct sampling is tractable, and then choose to accept or reject those trees based on the true distribution P. For our model, there is a straightforward and intuitive choice for the proposal distribution: the PCFG model without our context parameters: (θROOT, θBIN, θUN, θTERM, λ), which is known to have an efficient sampling method. Our acceptance step is therefore based on the remaining parameters: the context (θLCTX, θRCTX). To sample from our proposal distribution, we use a blocked Gibbs sampler based on the one proposed by Goodman (1998) and used by Johnson et al. (2007) that samples entire parse trees. For a sentence w, the strategy is to use the Inside algorithm (Lari and Young, 1990) to inductively compute, for each potential non-terminal position spanning words wi through wj−1 and category t, going “up” the tree, the probability of generating wi, ... , wj−1 via any arrangement of productions that is rooted by yij = t. p(wi |yi,i+1 = t) = λt(T) · θTERM t (wi) +Et→u λt(U) · θUN t (hui) · p(wi:j−1 |yij = u) p(wi:j−1 |yij = t) = Et→u λt(U) · θUN t (hui) · p(wi:j−1 |yij = u) + Et→u v Ei&lt;k&lt;j λt (B) · θtIN(hu, vi) · p(wi:k−1 |yi</context>
+</contexts>
+<marker>Goodman, 1998</marker>
+<rawString>Joshua Goodman. 1998. Parsing inside-out. Ph.D. thesis, Harvard University.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mark Johnson</author>
+<author>Thomas Griffiths</author>
+<author>Sharon Goldwater</author>
+</authors>
+<title>Bayesian inference for PCFGs via Markov chain Monte Carlo.</title>
+<date>2007</date>
+<booktitle>In Proc. of NAACL.</booktitle>
+<contexts>
+<context position="7322" citStr="Johnson et al. (2007)" startWordPosition="1151" endWordPosition="1154"> design of models and learning procedures that result in better parsing tools. Given our desire to train NLP models in low-supervision scenarios, the possibility of constructing inductive biases out of universal properties of language is enticing: if we can do this well, then it only needs to be done once, and can be applied to any language or domain without adaptation. In this paper, we seek to learn from only raw data and an incomplete dictionary mapping some words to sets of potential supertags. In order to estimate the parameters of our model, we develop a blocked sampler based on that of Johnson et al. (2007) to sample parse trees for sentences in the raw training corpus according to their posterior probabilities. However, due to the very large sets of potential supertags used in a parse, computing inside charts is intractable, so we design a Metropolis-Hastings step that allows us to sample efficiently from the correct posterior. Our experiments show that the incorporation of supertag context parameters into the model improves learning, and that placing combinability-preferring priors on those parameters yields further gains in many scenarios. 2 Combinatory Categorial Grammar In the CCG formalism</context>
+<context position="20605" citStr="Johnson et al. (2007)" startWordPosition="3485" endWordPosition="3489">: { σ · 1/|T |if κ(t, r) σ &gt; 1 Pright(r |t) = 1/|T PCATt(r |t) = { PCAT(r) (r) otherwiseσ &gt; 1 Distributions Pleft(.e |t) and P left CAT(.e |t) are defined in the same way, but with the combinability direction flipped: κ(.e, t), since the left context supertag precedes the constituent category. 4 Posterior Inference We wish to infer the distribution over CCG parses, given the model we just described and a corpus of sentences. Since there is no way to analytically compute these modes, we resort to Gibbs sampling to find an approximate solution. Our strategy is based on the approach presented by Johnson et al. (2007). At a high level, we alternate between resampling model parameters (θROOT, θBIN, θUN, θTERM, λ, θLCTX, θRCTX) given the current set of parse trees and resampling those trees given the PCAT(u) otherwise 26 current model parameters and observed word sequences. To efficiently sample new model parameters, we exploit Dirichlet-multinomial conjugacy. By repeating these alternating steps and accumulating the productions, we obtain an approximation of the required posterior quantities. Our inference procedure takes as input the distribution prior means, along with the raw corpus and tag dictionary. D</context>
+<context position="22669" citStr="Johnson et al. (2007)" startWordPosition="3822" endWordPosition="3826">es the full distribution and for which direct sampling is tractable, and then choose to accept or reject those trees based on the true distribution P. For our model, there is a straightforward and intuitive choice for the proposal distribution: the PCFG model without our context parameters: (θROOT, θBIN, θUN, θTERM, λ), which is known to have an efficient sampling method. Our acceptance step is therefore based on the remaining parameters: the context (θLCTX, θRCTX). To sample from our proposal distribution, we use a blocked Gibbs sampler based on the one proposed by Goodman (1998) and used by Johnson et al. (2007) that samples entire parse trees. For a sentence w, the strategy is to use the Inside algorithm (Lari and Young, 1990) to inductively compute, for each potential non-terminal position spanning words wi through wj−1 and category t, going “up” the tree, the probability of generating wi, ... , wj−1 via any arrangement of productions that is rooted by yij = t. p(wi |yi,i+1 = t) = λt(T) · θTERM t (wi) +Et→u λt(U) · θUN t (hui) · p(wi:j−1 |yij = u) p(wi:j−1 |yij = t) = Et→u λt(U) · θUN t (hui) · p(wi:j−1 |yij = u) + Et→u v Ei&lt;k&lt;j λt (B) · θtIN(hu, vi) · p(wi:k−1 |yik = u) · p(wk:j−1 |ykj = v) We the</context>
+</contexts>
+<marker>Johnson, Griffiths, Goldwater, 2007</marker>
+<rawString>Mark Johnson, Thomas Griffiths, and Sharon Goldwater. 2007. Bayesian inference for PCFGs via Markov chain Monte Carlo. In Proc. of NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dan Klein</author>
+<author>Christopher D Manning</author>
+</authors>
+<title>A generative constituent-context model for improved grammar induction.</title>
+<date>2002</date>
+<booktitle>In Proc. of ACL.</booktitle>
+<contexts>
+<context position="1712" citStr="Klein and Manning (2002)" startWordPosition="248" endWordPosition="251">it the properties of CCG. Our experiments show that our model outperforms a baseline in which this context information is not captured. 1 Introduction Learning parsers from incomplete or indirect supervision is an important component of moving NLP research toward new domains and languages. But with less information, it becomes necessary to devise ways of making better use of the information that is available. In general, this means constructing inductive biases that take advantage of unannotated data to train probabilistic models. One important example is the constituentcontext model (CCM) of Klein and Manning (2002), which was specifically designed to capture the linguistic observation made by Radford (1988) that there are regularities to the contexts in which constituents appear. This phenomenon, known as substitutability, says that phrases of the same type appear in similar contexts. For example, the part-of-speech (POS) sequence ADJ NOUN frequently occurs between the tags DET and VERB. This DET—VERB context also frequently applies to the single-word sequence NOUN and to ADJ ADJ NOUN. From this, we might deduce that DET— VERB is a likely context for a noun phrase. CCM is able to learn which POS context</context>
+<context position="13492" citStr="Klein and Manning, 2002" startWordPosition="2250" endWordPosition="2253"> A tree is complete when all branches end in terminal words. See Figure 3 for a graphical depiction of the generative behavior of the process. Finally, since it is possible to generate a supertag context category that does not match the actual category generated by the neighboring constituent, we must allow our process to reject such invalid trees and re-attempt to sample. Like CCM, this model is deficient since the same supertags are generated multiple times, and parses with conflicting supertags are not valid. Since we are not generating from the model, this does not introduce difficulties (Klein and Manning, 2002). One additional complication that must be addressed is that left-frontier non-terminal categories — those whose subtree span includes the first word of the sentence — do not have a left-side supertag to use as context. For these cases, we use the special sentence-start symbol (S) to serve as context. Similarly, we use the end symbol (E) for the right-side context of the right-frontier. We next discuss how the prior distributions are constructed to encode desirable biases, using universal CCG properties. 3.1 Non-terminal production prior means For the root, binary, and unary parameters, we wan</context>
+<context position="35238" citStr="Klein and Manning (2002)" startWordPosition="6004" endWordPosition="6007"> adjacent supertags frequently helps the model. However, for English, we found that additionally biasing context priors toward simpler categories using P left CAT/P right CAT degraded performance. This is likely due to the fact that the priors on production parameters (BBIN, BUN) are already biasing the model toward likely categories, and that having the context parameters do the same ends up over-emphasizing the need for simple categories, preventing the model from choosing more complex categories when they are needed. On the other hand, this bias helps in Chinese and Italian. 6 Related Work Klein and Manning (2002)’s CCM is an unlabeled bracketing model that generates the span of part-of-speech tags that make up each constituent and the pair of tags surrounding each constituent span (as well as the spans and contexts of each non-constituent). They found that modeling constituent context aids in parser learning because it is able to capture the observation that the same contexts tend to appear repeatedly in a corpus, even with different constituents. While CCM is designed to learn which tag pairs make for likely contexts, without regard for the constituents themselves, our model attempts to learn the rel</context>
+</contexts>
+<marker>Klein, Manning, 2002</marker>
+<rawString>Dan Klein and Christopher D. Manning. 2002. A generative constituent-context model for improved grammar induction. In Proc. of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Karim Lari</author>
+<author>Steve J Young</author>
+</authors>
+<title>The estimation of stochastic context-free grammars using the inside-outside algorithm. Computer Speech and Language,</title>
+<date>1990</date>
+<pages>4--35</pages>
+<contexts>
+<context position="22787" citStr="Lari and Young, 1990" startWordPosition="3844" endWordPosition="3847">ased on the true distribution P. For our model, there is a straightforward and intuitive choice for the proposal distribution: the PCFG model without our context parameters: (θROOT, θBIN, θUN, θTERM, λ), which is known to have an efficient sampling method. Our acceptance step is therefore based on the remaining parameters: the context (θLCTX, θRCTX). To sample from our proposal distribution, we use a blocked Gibbs sampler based on the one proposed by Goodman (1998) and used by Johnson et al. (2007) that samples entire parse trees. For a sentence w, the strategy is to use the Inside algorithm (Lari and Young, 1990) to inductively compute, for each potential non-terminal position spanning words wi through wj−1 and category t, going “up” the tree, the probability of generating wi, ... , wj−1 via any arrangement of productions that is rooted by yij = t. p(wi |yi,i+1 = t) = λt(T) · θTERM t (wi) +Et→u λt(U) · θUN t (hui) · p(wi:j−1 |yij = u) p(wi:j−1 |yij = t) = Et→u λt(U) · θUN t (hui) · p(wi:j−1 |yij = u) + Et→u v Ei&lt;k&lt;j λt (B) · θtIN(hu, vi) · p(wi:k−1 |yik = u) · p(wk:j−1 |ykj = v) We then pass “downward” through the chart, sampling productions until we reach a terminal word on all branches. y0n ∼ θtOO(T</context>
+</contexts>
+<marker>Lari, Young, 1990</marker>
+<rawString>Karim Lari and Steve J. Young. 1990. The estimation of stochastic context-free grammars using the inside-outside algorithm. Computer Speech and Language, 4:35–56.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mike Lewis</author>
+<author>Mark Steedman</author>
+</authors>
+<title>A* CCG parsing with a supertag-factored model.</title>
+<date>2014</date>
+<booktitle>In Proc. of EMNLP.</booktitle>
+<contexts>
+<context position="9202" citStr="Lewis and Steedman (2014)" startWordPosition="1468" endWordPosition="1471">ehavior of the function. A category (s\np)/pp might describe an intransitive verb with a prepositional phrase complement; it combines on the right (/) with a constituent with category pp, and then on the left (\) with a noun phrase (np) that serves as its subject. 23 n np/n n/n n s\np The lazy dog sleeps s s\np pp pp/np np The man walks to work np np/n n (s\np)/pp Figure 2: Higher-level category n subsumes the categories of its constituents. Thus, n should have a strong prior on combinability with its adjacent supertags np/n and s\np. Figure 1: CCG parse for “The man walks to work.” We follow Lewis and Steedman (2014) in allowing a small set of generic, linguistically-plausible unary and binary grammar rules. We further add rules for combining with punctuation to the left and right and allow for the merge rule X → X X of Clark and Curran (2007). 3 Generative Model In this section, we present our novel supertagcontext model (SCM) that augments a standard PCFG with parameters governing the supertags to the left and right of each constituent. The CCG formalism is said to be naturally associative since a constituent label is often able to combine on either the left or the right. As a motivating example, consid</context>
+</contexts>
+<marker>Lewis, Steedman, 2014</marker>
+<rawString>Mike Lewis and Mark Steedman. 2014. A* CCG parsing with a supertag-factored model. In Proc. of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mitchell P Marcus</author>
+<author>Beatrice Santorini</author>
+<author>Mary Ann Marcinkiewicz</author>
+</authors>
+<title>Building a large annotated corpus of English: The Penn Treebank.</title>
+<date>1993</date>
+<journal>Computational Linguistics,</journal>
+<volume>19</volume>
+<issue>2</issue>
+<contexts>
+<context position="27184" citStr="Marcus et al., 1993" startWordPosition="4644" endWordPosition="4647">wing a Dirichlet sample based on the vector of counts, we simply normalize those counts. However, since we require a final model that can parse sentences efficiently, we drop the context parameters, making the model a standard PCFG, which allows us to use the probabilistic CKY algorithm. 5 Experiments In our evaluation we compared our supertagcontext approach to (our reimplementation of) the best-performing model of our previous work (Garrette et al., 2015), which SCM extends. We evaluated on the English CCGBank (Hockenmaier and Steedman, 2007), which is a transformation of the Penn Treebank (Marcus et al., 1993); the CTBCCG (Tse and Curran, 2010) transformation of the Penn Chinese Treebank (Xue et al., 2005); and the CCG-TUT corpus (Bos et al., 2009), built from the TUT corpus of Italian text (Bosco et al., 2000). Each corpus was divided into four distinct data sets: a set from which we extract the tag dictionaries, a set of raw (unannotated) sentences, a development set, and a test set. We use the same splits as Garrette et al. (2014). Since these treebanks use special representations for conjunctions, we chose to rewrite the trees to use conjunction categories of the form (X\X)/X rather than introd</context>
+</contexts>
+<marker>Marcus, Santorini, Marcinkiewicz, 1993</marker>
+<rawString>Mitchell P. Marcus, Beatrice Santorini, and Mary Ann Marcinkiewicz. 1993. Building a large annotated corpus of English: The Penn Treebank. Computational Linguistics, 19(2).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tahira Naseem</author>
+<author>Harr Chen</author>
+<author>Regina Barzilay</author>
+<author>Mark Johnson</author>
+</authors>
+<title>Using universal linguistic knowledge to guide grammar induction.</title>
+<date>2010</date>
+<booktitle>In Proc. of EMNLP.</booktitle>
+<contexts>
+<context position="36184" citStr="Naseem et al. (2010)" startWordPosition="6154" endWordPosition="6157">pture the observation that the same contexts tend to appear repeatedly in a corpus, even with different constituents. While CCM is designed to learn which tag pairs make for likely contexts, without regard for the constituents themselves, our model attempts to learn the relationships between context categories and the types of the constituents, allowing us to take advantage of the natural a priori knowledge about which contexts fit with which constituent labels. Other researchers have shown positive results for grammar induction by introducing relatively small amounts of linguistic knowledge. Naseem et al. (2010) induced dependency parsers by handconstructing a small set of linguistically-universal dependency rules and using them as soft constraints during learning. These rules were useful for disambiguating between various structures in cases where the data alone suggests multiple valid analyses. Boonkwan and Steedman (2011) made use of language-specific linguistic knowledge collected from non-native linguists via a questionnaire that covered a variety of syntactic parameters. They were able to use this information to induce CCG parsers for multiple languages. Bisk and Hockenmaier (2012; 2013) induce</context>
+</contexts>
+<marker>Naseem, Chen, Barzilay, Johnson, 2010</marker>
+<rawString>Tahira Naseem, Harr Chen, Regina Barzilay, and Mark Johnson. 2010. Using universal linguistic knowledge to guide grammar induction. In Proc. of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Robert Parker</author>
+<author>David Graff</author>
+<author>Junbo Kong</author>
+<author>Ke Chen</author>
+<author>Kazuaki Maeda</author>
+</authors>
+<date>2011</date>
+<booktitle>English Gigaword Fifth Edition LDC2011T07. Linguistic Data Consortium.</booktitle>
+<contexts>
+<context position="28013" citStr="Parker et al., 2011" startWordPosition="4789" endWordPosition="4792">ch corpus was divided into four distinct data sets: a set from which we extract the tag dictionaries, a set of raw (unannotated) sentences, a development set, and a test set. We use the same splits as Garrette et al. (2014). Since these treebanks use special representations for conjunctions, we chose to rewrite the trees to use conjunction categories of the form (X\X)/X rather than introducing special conjunction rules. In order to increase the amount of raw data available to the sampler, we supplemented the English data with raw, unannotated newswire sentences from the NYT Gigaword 5 corpus (Parker et al., 2011) and supplemented Italian with the out-of-domain WaCky corpus (Baroni et al., 1999). For English and Italian, this allowed us to use 100k raw tokens for training (Chinese uses 62k). For Chinese and Italian, for training efficiency, we used only raw sentences that were 50 words or fewer (note that we did not drop tag dictionary set or test set sentences). The English development set was used to tune hyperparameters using grid search, and the same hyperparameters were then used for all three languages. For the category grammar, we used ppunc=0.1, pterm=0.7, pmod=0.2, pfwd=0.5. For the priors, we</context>
+</contexts>
+<marker>Parker, Graff, Kong, Chen, Maeda, 2011</marker>
+<rawString>Robert Parker, David Graff, Junbo Kong, Ke Chen, and Kazuaki Maeda. 2011. English Gigaword Fifth Edition LDC2011T07. Linguistic Data Consortium.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andrew Radford</author>
+</authors>
+<title>Transformational Grammar.</title>
+<date>1988</date>
+<publisher>Cambridge University Press.</publisher>
+<contexts>
+<context position="1806" citStr="Radford (1988)" startWordPosition="264" endWordPosition="265">xt information is not captured. 1 Introduction Learning parsers from incomplete or indirect supervision is an important component of moving NLP research toward new domains and languages. But with less information, it becomes necessary to devise ways of making better use of the information that is available. In general, this means constructing inductive biases that take advantage of unannotated data to train probabilistic models. One important example is the constituentcontext model (CCM) of Klein and Manning (2002), which was specifically designed to capture the linguistic observation made by Radford (1988) that there are regularities to the contexts in which constituents appear. This phenomenon, known as substitutability, says that phrases of the same type appear in similar contexts. For example, the part-of-speech (POS) sequence ADJ NOUN frequently occurs between the tags DET and VERB. This DET—VERB context also frequently applies to the single-word sequence NOUN and to ADJ ADJ NOUN. From this, we might deduce that DET— VERB is a likely context for a noun phrase. CCM is able to learn which POS contexts are likely, and does so via a probabilistic generative model, providing a statistical, data-</context>
+</contexts>
+<marker>Radford, 1988</marker>
+<rawString>Andrew Radford. 1988. Transformational Grammar. Cambridge University Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mark Steedman</author>
+<author>Jason Baldridge</author>
+</authors>
+<title>Combinatory categorial grammar.</title>
+<date>2011</date>
+<booktitle>In Robert Borsley and Kersti Borjars, editors, Non-Transformational Syntax: Formal and Explicit Models of Grammar.</booktitle>
+<publisher>WileyBlackwell.</publisher>
+<contexts>
+<context position="2796" citStr="Steedman and Baldridge, 2011" startWordPosition="420" endWordPosition="423">NOUN and to ADJ ADJ NOUN. From this, we might deduce that DET— VERB is a likely context for a noun phrase. CCM is able to learn which POS contexts are likely, and does so via a probabilistic generative model, providing a statistical, data-driven take on substitutability. However, since there is nothing intrinsic about the POS pair DET—VERB that indicates a priori that it is a likely constituent context, this fact must be inferred entirely from the data. Baldridge (2008) observed that unlike opaque, atomic POS labels, the rich structures of Combinatory Categorial Grammar (CCG) (Steedman, 2000; Steedman and Baldridge, 2011) categories reflect universal grammatical properties. CCG is a lexicalized grammar formalism in which every constituent in a sentence is associated with a structured category that specifies its syntactic relationship to other constituents. For example, a category might encode that “this constituent can combine with a noun phrase to the right (an object) and then a noun phrase to the left (a subject) to produce a sentence” instead of simply VERB. CCG has proven useful as a framework for grammar induction due to its ability to incorporate linguistic knowledge to guide parser learning by, for exa</context>
+</contexts>
+<marker>Steedman, Baldridge, 2011</marker>
+<rawString>Mark Steedman and Jason Baldridge. 2011. Combinatory categorial grammar. In Robert Borsley and Kersti Borjars, editors, Non-Transformational Syntax: Formal and Explicit Models of Grammar. WileyBlackwell.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mark Steedman</author>
+</authors>
+<title>The Syntactic Process.</title>
+<date>2000</date>
+<publisher>MIT Press.</publisher>
+<contexts>
+<context position="2765" citStr="Steedman, 2000" startWordPosition="418" endWordPosition="419">e-word sequence NOUN and to ADJ ADJ NOUN. From this, we might deduce that DET— VERB is a likely context for a noun phrase. CCM is able to learn which POS contexts are likely, and does so via a probabilistic generative model, providing a statistical, data-driven take on substitutability. However, since there is nothing intrinsic about the POS pair DET—VERB that indicates a priori that it is a likely constituent context, this fact must be inferred entirely from the data. Baldridge (2008) observed that unlike opaque, atomic POS labels, the rich structures of Combinatory Categorial Grammar (CCG) (Steedman, 2000; Steedman and Baldridge, 2011) categories reflect universal grammatical properties. CCG is a lexicalized grammar formalism in which every constituent in a sentence is associated with a structured category that specifies its syntactic relationship to other constituents. For example, a category might encode that “this constituent can combine with a noun phrase to the right (an object) and then a noun phrase to the left (a subject) to produce a sentence” instead of simply VERB. CCG has proven useful as a framework for grammar induction due to its ability to incorporate linguistic knowledge to gu</context>
+</contexts>
+<marker>Steedman, 2000</marker>
+<rawString>Mark Steedman. 2000. The Syntactic Process. MIT Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Daniel Tse</author>
+<author>James R Curran</author>
+</authors>
+<title>Chinese CCGbank: Extracting CCG derivations from the Penn Chinese Treebank.</title>
+<date>2010</date>
+<booktitle>In Proc. of COLING.</booktitle>
+<contexts>
+<context position="27219" citStr="Tse and Curran, 2010" startWordPosition="4651" endWordPosition="4654">he vector of counts, we simply normalize those counts. However, since we require a final model that can parse sentences efficiently, we drop the context parameters, making the model a standard PCFG, which allows us to use the probabilistic CKY algorithm. 5 Experiments In our evaluation we compared our supertagcontext approach to (our reimplementation of) the best-performing model of our previous work (Garrette et al., 2015), which SCM extends. We evaluated on the English CCGBank (Hockenmaier and Steedman, 2007), which is a transformation of the Penn Treebank (Marcus et al., 1993); the CTBCCG (Tse and Curran, 2010) transformation of the Penn Chinese Treebank (Xue et al., 2005); and the CCG-TUT corpus (Bos et al., 2009), built from the TUT corpus of Italian text (Bosco et al., 2000). Each corpus was divided into four distinct data sets: a set from which we extract the tag dictionaries, a set of raw (unannotated) sentences, a development set, and a test set. We use the same splits as Garrette et al. (2014). Since these treebanks use special representations for conjunctions, we chose to rewrite the trees to use conjunction categories of the form (X\X)/X rather than introducing special conjunction rules. In</context>
+</contexts>
+<marker>Tse, Curran, 2010</marker>
+<rawString>Daniel Tse and James R. Curran. 2010. Chinese CCGbank: Extracting CCG derivations from the Penn Chinese Treebank. In Proc. of COLING.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Aline Villavicencio</author>
+</authors>
+<title>The acquisition of a unification-based generalised categorial grammar.</title>
+<date>2002</date>
+<tech>Ph.D. thesis,</tech>
+<institution>University of Cambridge.</institution>
+<contexts>
+<context position="6628" citStr="Villavicencio, 2002" startWordPosition="1031" endWordPosition="1032">priate grammars, but may be overridden when there is compelling contradictory evidence in the data. Methodologically, this work serves as an example of how linguistic-theoretical commitments can be used to benefit data-driven methods, not only through the construction of a model family from a grammar, as done in our previous work, but also when exploiting statistical associations about which the theory is silent. While there has been much work in computational modeling of the interaction between universal grammar and observable data in the context of studying child language acquisition (e.g., Villavicencio, 2002; Goldwater, 2007), we are interested in applying these principles to the design of models and learning procedures that result in better parsing tools. Given our desire to train NLP models in low-supervision scenarios, the possibility of constructing inductive biases out of universal properties of language is enticing: if we can do this well, then it only needs to be done once, and can be applied to any language or domain without adaptation. In this paper, we seek to learn from only raw data and an incomplete dictionary mapping some words to sets of potential supertags. In order to estimate th</context>
+</contexts>
+<marker>Villavicencio, 2002</marker>
+<rawString>Aline Villavicencio. 2002. The acquisition of a unification-based generalised categorial grammar. Ph.D. thesis, University of Cambridge.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Nianwen Xue</author>
+<author>Fei Xia</author>
+<author>Fu-Dong Chiou</author>
+<author>Martha Palmer</author>
+</authors>
+<title>The Penn Chinese TreeBank: Phrase structure annotation of a large corpus.</title>
+<date>2005</date>
+<journal>Natural Language Engineering,</journal>
+<volume>11</volume>
+<issue>2</issue>
+<contexts>
+<context position="27282" citStr="Xue et al., 2005" startWordPosition="4661" endWordPosition="4664">ce we require a final model that can parse sentences efficiently, we drop the context parameters, making the model a standard PCFG, which allows us to use the probabilistic CKY algorithm. 5 Experiments In our evaluation we compared our supertagcontext approach to (our reimplementation of) the best-performing model of our previous work (Garrette et al., 2015), which SCM extends. We evaluated on the English CCGBank (Hockenmaier and Steedman, 2007), which is a transformation of the Penn Treebank (Marcus et al., 1993); the CTBCCG (Tse and Curran, 2010) transformation of the Penn Chinese Treebank (Xue et al., 2005); and the CCG-TUT corpus (Bos et al., 2009), built from the TUT corpus of Italian text (Bosco et al., 2000). Each corpus was divided into four distinct data sets: a set from which we extract the tag dictionaries, a set of raw (unannotated) sentences, a development set, and a test set. We use the same splits as Garrette et al. (2014). Since these treebanks use special representations for conjunctions, we chose to rewrite the trees to use conjunction categories of the form (X\X)/X rather than introducing special conjunction rules. In order to increase the amount of raw data available to the samp</context>
+</contexts>
+<marker>Xue, Xia, Chiou, Palmer, 2005</marker>
+<rawString>Nianwen Xue, Fei Xia, Fu-Dong Chiou, and Martha Palmer. 2005. The Penn Chinese TreeBank: Phrase structure annotation of a large corpus. Natural Language Engineering, 11(2):207–238.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Luke S Zettlemoyer</author>
+<author>Michael Collins</author>
+</authors>
+<title>Online learning of relaxed CCG grammars for parsing to logical form.</title>
+<date>2007</date>
+<booktitle>In Proc. of EMNLP.</booktitle>
+<contexts>
+<context position="31967" citStr="Zettlemoyer and Collins (2007)" startWordPosition="5459" endWordPosition="5462">n we would have to take a score of zero for that sentence: every dependency would be “wrong”. Thus, it is important that we make a best effort to find a parse. To accomplish this, we implemented a parsing backoff strategy. The parser first tries to find a valid parse that has either sdcl or np at its root. If that fails, then it searches for a parse with any root. If no parse is found yet, then the parser attempts to strategically allow tokens to subsume a neighbor by making it a dependent (first with a restricted root set, then without). This is similar to the “deletion” strategy employed by Zettlemoyer and Collins (2007), but we do it directly in the grammar. We add unary rules of the form (D)-*u for every potential supertag u in the tree. Then, at each node spanning exactly two tokens (but no higher in the tree), we allow rules t-*((D), v) and t-*(v, (D)). Recall that in §3.1, we stated that (D) is given extremely low probability, meaning that the parser will avoid its use unless it is absolutely necessary. Additionally, since u will still remain as the preterminal, it will be the category examined as the context by adjacent constituents. For each language and level of supervision, we executed four experimen</context>
+</contexts>
+<marker>Zettlemoyer, Collins, 2007</marker>
+<rawString>Luke S. Zettlemoyer and Michael Collins. 2007. Online learning of relaxed CCG grammars for parsing to logical form. In Proc. of EMNLP.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

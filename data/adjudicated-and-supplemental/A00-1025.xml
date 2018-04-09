@@ -1,0 +1,1411 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.002944">
+<title confidence="0.999239">
+Examining the Role of Statistical and Linguistic Knowledge
+Sources in a General-Knowledge Question-Answering System
+</title>
+<author confidence="0.998413">
+Claire Cardiel and Vincent Ng&apos; and David Pierce&apos; and Chris Buckley2
+</author>
+<affiliation confidence="0.999304">
+Department of Computer Science, Cornell University, Ithaca, NY 148531
+</affiliation>
+<address confidence="0.796295">
+SaBIR Research2
+</address>
+<email confidence="0.999281">
+E-mail: cardie,yung,pierce@cs.cornell.edu, chrisb@sabir.com
+</email>
+<sectionHeader confidence="0.993921" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999987652173913">
+We describe and evaluate an implemented system
+for general-knowledge question answering. The sys-
+tem combines techniques for standard ad-hoc infor-
+mation retrieval (IR), query-dependent text summa-
+rization, and shallow syntactic and semantic sen-
+tence analysis. In a series of experiments we examine
+the role of each statistical and linguistic knowledge
+source in the question-answering system. In con-
+trast to previous results, we find first that statisti-
+cal knowledge of word co-occurrences as computed
+by IR vector space methods can be used to quickly
+and accurately locate the relevant documents for
+each question. The use of query-dependent text
+summarization techniques, however, provides only
+small increases in performance and severely limits
+recall levels when inaccurate. Nevertheless, it is the
+text summarization component that allows subse-
+quent linguistic filters to focus on relevant passages.
+We find that even very weak linguistic knowledge
+can offer substantial improvements over purely IR-
+based techniques for question answering, especially
+when smoothly integrated with statistical prefer-
+ences computed by the IR subsystems.
+</bodyText>
+<sectionHeader confidence="0.999134" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.99653575">
+In this paper, we describe and evaluate an imple-
+mented system for general-knowledge question an-
+swering. Open-ended question-answering systems
+that allow users to pose a question of any type, in
+any language, without domain restrictions, remain
+beyond the scope of today&apos;s text-processing systems.
+We investigate instead a restricted, but nevertheless
+useful variation of the problem (TREC-8, 2000):
+Given a large text collection and a set of
+questions specified in English, find answers
+to the questions in the collection.
+In addition, the restricted task guarantees that:
+</bodyText>
+<listItem confidence="0.9932998">
+• the answer exists in the collection,
+• all supporting information for the answer lies in
+a single document, and
+• the answer is short — less than 50 bytes in
+length.
+</listItem>
+<bodyText confidence="0.999547047619048">
+Consider, for example, the question Which country
+has the largest part of the Amazon rain forest?, taken
+from the TREC8 Question Answering development
+corpus. The answer (in document LA032590-0089)
+is Brazil.
+Previous research has addressed similar question-
+answering (QA) scenarios using a variety of natu-
+ral language processing (NLP) and information re-
+trieval (IR) techniques. Lehnert (1978) tackles the
+difficult task of answering questions in the context of
+story understanding. Unlike our restricted QA task,
+questions to Lehnert&apos;s system often require answers
+that are not explicitly mentioned in the story. Her
+goal then is to answer questions by making infer-
+ences about actions and actors in the story using
+world knowledge in the form of scripts, plans, and
+goals (Schank and Abelson, 1977). More recently,
+Burke et al. (1995; 1997) describe a system that an-
+swers natural language questions using a database of
+question-answer pairs built from existing frequently-
+asked question (FAQ) files. Their FAQFinder sys-
+tem uses IR techniques to match the given question
+to questions in the database. It then uses the Word-
+Net lexical semantic knowledge base (Miller et al.,
+1990; Fellbaum, 1998) to improve the quality of the
+match.
+Kupiec (1993) investigates a closed-class QA task
+that is similar in many respects to the TREC8
+QA task that we address here: the system answers
+general-knowledge questions using an encyclopedia.
+In addition, Kupiec assumes that all answers are
+noun phrases. Although our task does not explic-
+itly include a &amp;quot;noun phrase&amp;quot; constraint, the answer
+length restriction effectively imposes the same bias
+toward noun phrase answers. Kupiec&apos;s MURAX sys-
+tem applies a combination of statistical (IR) and
+linguistic (NLP) techniques. A series of secondary
+boolean search queries with proximity constraints is
+combined with shallow parsing methods to find rele-
+vant sections of the encyclopedia, to extract answer
+hypotheses, and to confirm phrase relations speci-
+fied in the question. In an evaluation on 70 &amp;quot;Trivial
+</bodyText>
+<page confidence="0.988566">
+180
+</page>
+<figure confidence="0.884737928571429">
+document
+collection
+Parsing
+Retrieval documents,
+Summarization text passages
+Semantic
+Types
+question —ow
+Linguistic
+Relationships
+IR Subsystems
+Linguistic Filters
+answer
+hypotheses
+</figure>
+<figureCaption confidence="0.999981">
+Figure 1: General Architecture of the Question-Answering System
+</figureCaption>
+<bodyText confidence="0.999987372881356">
+Pursuit&amp;quot; who and what questions, Kupiec concludes
+that robust natural language analysis can add to the
+quality of the information retrieval process. In addi-
+tion, he claims that, for their closed-class QA task,
+vector space IR methods (Salton et al., 1975) appear
+inadequate.
+We present here a new approach to the re-
+stricted question-answering task described above.
+Like MURAX, our system draws from both statisti-
+cal and linguistic sources to find answers to general-
+knowledge questions. The underlying architecture of
+the system, however, is very different: it combines
+vector space IR techniques for document retrieval, a
+vector space approach to query-dependent text sum-
+marization, shallow corpus-based syntactic analysis,
+and knowledge-based semantic analysis. We eval-
+uate the system on the TREC8 QA development
+corpus as well as the TREC8 QA test corpus. In
+particular, all parameters for the final QA system
+are determined using the development corpus. Our
+current results are encouraging but not outstanding:
+the system is able to correctly answer 22 out of 38 of
+the development questions and 91 out of 200 of the
+test questions given five guesses for each question.
+Furthermore, the first guess is correct for 16 out of
+the 22 development questions and 53 out of 91 of the
+test questions.
+More importantly, we investigate the relative role
+of each statistical and linguistic knowledge source
+in the proposed IR/NLP question-answering system.
+In contrast to previous results, we find that sta-
+tistical knowledge of word co-occurrences as com-
+puted by vector space models of IR can be used to
+quickly and accurately locate relevant documents in
+the restricted QA task. When used in isolation, vec-
+tor space methods for query-dependent text summa-
+rization, however, provide relatively small increases
+in performance. In addition, we find that the text
+summarization component can severely limit recall
+levels. Nevertheless, it is the summarization compo-
+nent that allows the linguistic filters to focus on rele-
+vant passages. In particular, we find that very weak
+linguistic knowledge can offer substantial improve-
+ments over purely IR-based techniques for question
+answering, especially when smoothly integrated with
+the statistical preferences computed by the IR sub-
+systems.
+In the next section, we describe the general archi-
+tecture of the question-answering system. Section 3
+describes the baseline system and its information re-
+trieval component. Sections 4-7 describe and evalu-
+ate a series of variations to the baseline system that
+incorporate, in turn, query-dependent text summa-
+rization, a syntactic filter, a semantic filter, and an
+algorithm that allows syntactic knowledge to influ-
+ence the initial ordering of summary extracts. Sec-
+tion 8 compares our approach to some of those in
+the recent TREC8 QA evaluation (TREC-8, 2000)
+and describes directions for future work.
+</bodyText>
+<sectionHeader confidence="0.922515" genericHeader="introduction">
+2 System Architecture
+</sectionHeader>
+<bodyText confidence="0.999933352941176">
+The basic architecture of the question-answering sys-
+tem is depicted in Figure 1. It contains two main
+components: the IR subsystems and the linguistic
+filters. As a preliminary, offline step, the IR sub-
+system first indexes the text collection from which
+answers are to be extracted. Given a question, the
+goal of the IR component is then to return a ranked
+list of those text chunks (e.g. documents, sentences,
+or paragraphs) from the indexed collection that are
+most relevant to the query and from which answer
+hypotheses can be extracted. Next, the QA system
+optionally applies one or more linguistic filters to
+the text chunks to extract an ordered list of answer
+hypotheses. The top hypotheses are concatenated to
+form five 50-byte guesses as allowed by the TREC8
+guidelines. Note that many of these guesses may
+be difficult to read and judged as incorrect by the
+</bodyText>
+<page confidence="0.997475">
+181
+</page>
+<bodyText confidence="0.994356333333333">
+TREC8 assessors: we will also describe the results
+of generating single phrases as guesses wherever this
+is possible.
+In the sections below, we present and evaluate a
+series of instantiations of this general architecture,
+each of which makes different assumptions regarding
+the type of information that will best support the
+QA task. The next section begins by describing the
+baseline QA system.
+</bodyText>
+<sectionHeader confidence="0.7275085" genericHeader="method">
+3 The Vector Space Model for
+Document Retrieval
+</sectionHeader>
+<bodyText confidence="0.98415414516129">
+It is clear that a successful QA system will need
+some way to find the documents that are most rele-
+vant to the user&apos;s question. In a baseline system, we
+assume that standard IR techniques can be used for
+this task. In contrast to MURAX, however, we hy-
+pothesize that the vector space retrieval model will
+suffice. In the vector space model, both the ques-
+tion and the documents are represented as vectors
+with one entry for every unique word that appears
+in the collection. Each entry is the term weight, a
+real number that indicates the presence or absence
+of the word in the text. The similarity between a
+question vector, Q = qi, q21• • • qn) and a document
+vector, D = d1, d2,. , cin, is traditionally computed
+using a cosine similarity measure:
+Sim(Q , D) = E di • qi
+Using this measure, the IR system returns a ranked
+list of those documents most similar to the question.
+The Baseline QA System: The Smart Vec-
+tor Space Model. For the IR component of the
+baseline QA system, we use Smart (Salton, 1971),
+a sophisticated text-processing system based on the
+vector space model and employed as the retrieval
+engine for a number of the top-performing systems
+at recent Text REtrieval Conferences (e.g. Buckley
+et al., 1998a, 1998b). Given a question, Smart re-
+turns a ranked list of the documents most relevant
+to the question. For the baseline QA system and all
+subsequent variations, we use Smart with standard
+term-weighting strategies and do not use automatic
+relevance feedback (Buckley, 1995). In addition, the
+baseline system applies no linguistic filters. To gen-
+erate answers for a particular question, the system
+starts at the beginning of the top-ranked document
+returned by Smart for the question and constructs
+five 50-byte chunks consisting of document text with
+stopwords removed.
+1We use Lnu term weighting for documents and /tu term
+weighting for the question (Singhal et al., 1996).
+Evaluation. As noted above, we evaluate each
+variation of our QA system on 38 TREC8 devel-
+opment questions and 200 TREC8 test questions.
+The indexed collection is TREC disks 4 and 5 (with-
+out Congressional Records). Results for the baseline
+Smart IR QA system are shown in the first row of
+Table 1. The system gets 3 out of 38 development
+questions and 29 out of 200 test questions correct.
+We judge the system correct if any of the five guesses
+contains each word of one of the answers. The final
+column of results shows the mean answer rank across
+all questions correctly answered.
+Smart is actually performing much better than its
+scores would suggest. For 18 of the 38 development
+questions, the answer appears in the top-ranked doc-
+ument; for 33 questions, the answer appears in one
+of the top seven documents. For only two questions
+does Smart fail to retrieve a good document in the
+top 25 documents. For the test corpus, over half
+of the 200 questions are answered in the top-ranked
+document (110); over 75% of the questions (155) are
+answered in top five documents. Only 19 questions
+were not answered in the top 20 documents.
+</bodyText>
+<sectionHeader confidence="0.976192" genericHeader="method">
+4 Query-Dependent Text
+Summarization for Question
+</sectionHeader>
+<subsectionHeader confidence="0.584008">
+Answering
+</subsectionHeader>
+<bodyText confidence="0.997768615384615">
+We next hypothesize that query-dependent text
+summarization algorithms will improve the perfor- •
+mance of the QA system by focusing the system
+on the most relevant portions of the retrieved doc-
+uments. The goal for query-dependent summariza-
+tion algorithms is to provide a short summary of
+a document with respect to a specific query. Al-
+though a number of methods for query-dependent
+text summarization are beginning to be developed
+and evaluated in a variety of realistic settings (Mani
+et al., 1999), we again propose the use of vector space
+methods from IR, which can be easily extended to
+the summarization task (Salton et al., 1994):
+</bodyText>
+<listItem confidence="0.984828636363636">
+1. Given a question and a document, divide the
+document into chunks (e.g. sentences, para-
+graphs, 200-word passages).
+2. Generate the vector representation for the ques-
+tion and for each document chunk.
+3. Use the cosine similarity measure to determine
+the similarity of each chunk to the question.
+4. Return as the query-dependent summary the
+most similar chunks up to a predetermined sum-
+mary length (e.g. 10% or 20% of the original
+document).
+</listItem>
+<bodyText confidence="0.9840705">
+This approach to text summarization was shown
+to be quite successful in the recent SUMMAC eval-
+uation of text summarization systems (Mani et al.,
+1999; Buckley et al., 1999). Our general assumption
+</bodyText>
+<page confidence="0.99136">
+182
+</page>
+<bodyText confidence="0.990234901960784">
+here is that IR approaches can be used to quickly
+and accurately find both relevant documents and
+relevant document portions. In related work, Chali
+et al. (1999) also propose text summarization tech-
+niques as a primary component for their QA system.
+They employ a combination of vector-space meth-
+ods and lexical chaining to derive their sentence-
+based summaries. We hypothesize that deeper anal-
+ysis of the summary extracts is better accomplished
+by methods from NLP that can determine syntac-
+tic and semantic relationships between relevant con-
+stituents. There is a risk in using query-dependent
+summaries to focus the search for answer hypothe-
+ses, however: if the summarization algorithm is inac-
+curate, the desired answers will occur outside of the
+summaries and will not be accessible to subsequent
+components of the QA system.
+The Query-Dependent Text Summarization
+QA System. In the next version of the QA sys-
+tem, we augment the baseline system to perform
+query-dependent text summarization for the top k
+retrieved documents. More specifically, the IR sub-
+system returns the summary extracts (sentences or
+paragraphs) for the top k documents after sort-
+ing them according to their cosine similarity scores
+w.r.t. the question. As before, no linguistic filters are
+applied, and answers are generated by constructing
+50-byte chunks from the ordered extracts after re-
+moving stopwords. In the experiments below, k =
+for the development questions and k = 6 for the test
+questions.2
+Evaluation. Results for the Text Summarization
+QA system using sentence-based summaries are
+shown in the second row of Table 1. Here we see
+a relatively small improvement: the system now
+answers four development and 45 test questions
+correctly. The mean answer rank, however, im-
+proves noticeably from 3.33 to 2.25 for the develop-
+ment corpus and from 3.07 to 2.67 for the test cor-
+pus. Paragraph-based summaries yield similar but
+slightly smaller improvements; as a result, sentence
+summaries are used exclusively in subsequent sec-
+tions. Unfortunately, the system&apos;s reliance on query-
+dependent text summarization actually limits its po-
+tential: in only 23 of the 38 development questions
+(61%), for example, does the correct answer appear
+in the summary for one of the top k = 7 documents.
+The QA system cannot hope to answer correctly any
+of the remaining 15 questions. For only 135 of the
+200 questions in the test corpus (67.5%) does the
+correct answer appear in the summary for one of
+</bodyText>
+<footnote confidence="0.9564926">
+2The value for k was chosen so that at least 80% of the
+questions in the set had answers appearing in the retrieved
+documents ranked 1—k. We have not experimented exten-
+sively with many values of k and expect that better perfor-
+mance can be obtained by tuning k for each text collection.
+</footnote>
+<bodyText confidence="0.998044642857143">
+the top k = 6 documents.3 It is possible that au-
+tomatic relevance feedback or coreference resolution
+would improve performance. We are investigating
+these options in current work.
+The decision of whether or not to incorporate text
+summarization in the QA system depends, in part,
+on the ability of subsequent processing components
+(i.e. the linguistic filters) to locate answer hypothe-
+ses. If subsequent components are very good at
+discarding implausible answers, then summarization
+methods may limit system performance. Therefore,
+we investigate next the use of two linguistic filters in
+conjunction with the query-dependent text summa-
+rization methods evaluated here.
+</bodyText>
+<sectionHeader confidence="0.9865685" genericHeader="method">
+5 Incorporating the Noun Phrase
+Filter
+</sectionHeader>
+<bodyText confidence="0.98211015">
+The restricted QA task that we investigate requires
+answers to be short — no more than 50 bytes in
+length. This effectively eliminates how or why ques-
+tions from consideration. Almost all of the remain-
+ing question types are likely to have noun phrases as
+answers. In the TREC8 development corpus, for ex-
+ample, 36 of 38 questions have noun phrase answers.
+As a result, we next investigate the use of a
+very simple linguistic filter that considers only noun
+phrases as answer hypotheses. The filter operates on
+the ordered list of summary extracts for a particular
+question and produces a list of answer hypotheses,
+one for each noun phrase (NP) in the extracts in the
+left-to-right order in which they appeared.
+The NP-based QA System. Our implementa-
+tion of the NP-based QA system uses the Empire
+noun phrase finder, which is described in detail in
+Cardie and Pierce (1998). Empire identifies base
+NPs — non-recursive noun phrases — using a very
+simple algorithm that matches part-of-speech tag se-
+quences based on a learned noun phrase grammar.
+The approach is able to achieve 94% precision and
+recall for base NPs derived from the Penn Treebank
+Wall Street Journal (Marcus et al., 1993). In the
+experiments below, the NP filter follows the applica-
+tion of the document retrieval and text summariza-
+tion components. Pronoun answer hypotheses are
+discarded, and the NPs are assembled into 50-byte
+chunks.
+Evaluation. Results for the NP-based QA sys-
+tem are shown in the third row of Table 1. The
+noun phrase filter markedly improves system per-
+formance for the development corpus, nearly dou-
+3Paragraph-based summaries provide better coverage on
+the test corpus than sentence-based summaries: for 151 ques-
+tions, the correct answer appears in the summary for one of
+the top k documents. This suggests that paragraph sum-
+maries might be better suited for use with more sophisticated
+linguistic filters that are capable of discerning the answer in
+the larger summary.
+</bodyText>
+<page confidence="0.994554">
+183
+</page>
+<table confidence="0.993736625">
+Development Corpus Test Corpus
+Question-Answering System Variation Correct (%) MAR Correct (%) MAR
+Smart Vector Space Model 3/38 0.079 3.33 29/200 0.145 3.07
+Query-Dependent Text Summarization 4/38 0.105 2.25 45/200 0.225 2.67
+Text Summarization + NPs 7/38 0.184 2.29 50/200 0.250 2.66
+Text Summarization + NPs + Semantic Type 21/38 0.553 1.38 86/200 0.430 1.90
+Text Summarization with Syntactic Ordering + 22/38 0.579 1.32 91/200 0.455 1.82
+NPs + Semantic Type
+</table>
+<tableCaption confidence="0.997106">
+Table 1: Evaluation of the Role of Statistical and Limited Linguistic Knowledge for the TREC8 Question
+</tableCaption>
+<bodyText confidence="0.970589517241379">
+Answering Task. Results for 38 development and 200 test questions are shown. The mean answer rank
+(MAR) is computed w.r.t. all questions correctly answered.
+Ming the number of questions answered correctly.
+We found these results somewhat surprising since
+this linguistic filter is rather weak: we expected it
+to work well only in combination with the semantic
+filter described below. The noun phrase filter has
+much less of an effect on the test corpus, improving
+performance on questions answered from 45 to 50.
+In a separate experiment, we applied the NP filter
+to the baseline system that includes no text summa-
+rization component. Here the NP filter does not
+improve performance — the system gets only two
+questions correct. This indicates that the NP filter
+depends critically on the text summarization com-
+ponent. As a result, we will continue to use query-
+dependent text summarization in the experiments
+below.
+The NP filter provides the first opportunity to
+look at single-phrase answers. The preceding QA
+systems produced answers that were rather unnat-
+urally chunked into 50-byte strings. When such
+chunking is disabled, only one development and 20
+test questions are answered. The difference in per-
+formance between the NP filter with chunking and
+the NP filter alone clearly indicates that the NP fil-
+ter is extracting good guesses, but that subsequent
+linguistic processing is needed to promote the best
+guesses to the top of the ranked guess list.
+</bodyText>
+<sectionHeader confidence="0.991803" genericHeader="method">
+6 Incorporating Semantic Type
+Information
+</sectionHeader>
+<bodyText confidence="0.996834767857143">
+The NP filter does not explicitly consider the ques-
+tion in its search for noun phrase answers. It is clear,
+however, that a QA system must pay greater atten-
+tion to the syntactic and semantic constraints spec-
+ified in the question. For example, a question like
+Who was president of the US in 1995? indicates
+that the answer is likely to be a person. In addition,
+there should be supporting evidence from the answer
+document that the person was president, and, more
+specifically, held this office in the US and in 1995.
+We introduce here a second linguistic filter that
+considers the primary semantic constraint from the
+question. The filter begins by determining the ques-
+tion type, i.e. the semantic type requested in the
+question. It then takes the ordered set of summary
+extracts supplied by the IR subsytem, uses the syn-
+tactic filter from Section 5 to extract NPs, and gen-
+erates an answer hypothesis for every noun phrase
+that is semantically compatible with the question
+type. Our implementation of this semantic class fil-
+ter is described below. The filter currently makes no
+attempt to confirm other linguistic relations men-
+tioned in the question.
+The Semantic Type Checking QA System.
+For most questions, the question word itself deter-
+mines the semantic type of the answer. This is true
+for who, where, and when questions, for example,
+which request a person, place, and time expression
+as an answer. For many which and what questions,
+however, determining the question type requires ad-
+ditional syntactic analysis. For these, we currently
+extract the head noun in the question as the question
+type. For example, in Which country has the largest
+part of the Amazon rain forest? we identify country
+as the question type. Our heuristics for determining
+question type were based on the development cor-
+pus and were designed to be general, but have not
+yet been directly evaluated on a separate question
+corpus.
+Given the question type and an answer hypoth-
+esis, the Semantic Type Checking QA System then
+uses WordNet to check that an appropriate ancestor-
+descendent relationship holds. Given Brazil as an
+answer hypothesis for the above question, for exam-
+ple, Wordnet&apos;s type hierarchy confirms that Brazil
+is a subtype of country, allowing the system to con-
+clude that the semantic type of the answer hypoth-
+esis matches the question type.
+For words (mostly proper nouns) that do not ap-
+pear in WordNet, heuristics are used to determine
+semantic type. There are heuristics to recognize
+13 basic question types: Person, Location, Date,
+Month, Year, Time, Age, Weight, Area, Volume,
+Length, Amount, and Number. For Person ques-
+tions, for example, the system relies primarily on a
+rule that checks for capitalization and abbreviations
+</bodyText>
+<page confidence="0.997597">
+184
+</page>
+<bodyText confidence="0.999978272727273">
+in order to identify phrases that correspond to peo-
+ple. There are approximately 20 such rules that to-
+gether cover all 13 question types listed above. The
+rules effectively operate as a very simple named en-
+tity identifier.
+Evaluation. Results for the Semantic Type
+Checking variation of the QA system are shown in
+the fourth row of Table 1. Here we see a dramatic
+increase in performance: the system answers three
+times as many development questions (21) correctly
+over the previous variation. This is especially en-
+couraging given that the IR and text summarization
+components limit the maximum number correct to
+23. In addition, the mean answer rank improves
+from 2.29 to 1.38. A closer look at Table 1, however,
+indicates problems with the semantic type checking
+linguistic filter. While performance on the develop-
+ment corpus increases by 37 percentage points (from
+18.4% correct to 55.3% correct), relative gains for
+the test corpus are much smaller. There is only an
+improvement of 18 percentage points, from 25.0%
+correct (50/200) to 43.0% correct (86/200). This
+is a clear indication that the heuristics used in the
+semantic type checking component, which were de-
+signed based on the development corpus, do not gen-
+eralize well to different question sets. Replacing the
+current heuristics with a Named Entity identifica-
+tion component or learning the heuristics using stan-
+dard inductive learning techniques should help with
+the scalability of this linguistic filter.
+Nevertheless, it is somewhat surprising that very
+weak syntactic information (the NP filter) and weak
+semantic class information (question type checking)
+can produce such improvements. In particular, it
+appears that it is reasonable to rely implicitly on
+the IR subsystems to enforce the other linguistic re-
+lationships specified in the query (e.g. that Clinton
+is president, that this office was held in the US and
+in 1995).
+Finally, when 50-byte chunking is disabled for
+the semantic type checking QA variation, there is
+a decrease in the number of questions correctly an-
+swered, to 19 and 57 for the development and test
+corpus, respectively.
+</bodyText>
+<sectionHeader confidence="0.986394" genericHeader="method">
+7 Syntactic Preferences for Ordering
+Summary Extracts
+</sectionHeader>
+<bodyText confidence="0.9983486">
+Syntactic and semantic linguistic knowledge has
+been used thus far as post-processing filters that lo-
+cate and confirm answer hypotheses from the statis-
+tically specified summary extracts. We hypothesized
+that further improvements might be made by allow-
+ing this linguistic knowledge to influence the initial
+ordering of text chunks for the linguistic filters. In a
+final system, we begin to investigate this claim. Our
+general approach is to define a new scoring mea-
+sure that operates on the summary extracts and can
+be used to reorder the extracts based on linguistic
+knowledge.
+The QA System with Linguistic Reordering
+of Summary Extracts. As described above, our
+final version of the QA system ranks summary ex-
+tracts according to both their vector space similarity
+to the question as well as linguistic evidence that the
+answer lies within the extract. In particular, each
+summary extract E for question q is ranked accord-
+ing to a new score, sq:
+</bodyText>
+<equation confidence="0.990511">
+sq(E) = w(E) • LRq(E)
+</equation>
+<bodyText confidence="0.9929863125">
+The intuition behind the new score is to prefer sum-
+mary extracts that exhibit the same linguistic rela-
+tionships as the question (as indicated by LRq) and
+to give more weight (as indicated by w) to linguistic
+relationship matches in extracts from higher-ranked
+documents. More specifically, ISq(E) is the num-
+ber of linguistic relationships from the question that
+appear in E. In the experiments below, LRq(E)
+is just the number of base NPs from the question
+that appear in the summary extract. In future
+work, we plan to include other pairwise linguistic
+relationships (e.g. subject-verb relationships, verb-
+object relationships, pp-attachment relationships).
+The weight w(E) is a number between 0 and 1 that
+is based on the retrieval rank r of the document that
+contains E:
+</bodyText>
+<equation confidence="0.990746">
+w(E) = max(m,1 — p • r)
+</equation>
+<bodyText confidence="0.999907192307693">
+In our experiments, m = 0.5 and p = 0.1. Both
+values were selected manually based on the develop-
+ment corpus; an extensive search for the best such
+values was not done.
+The summary extracts are sorted according to the
+new scoring measure and the ranked list of sentences
+is provided to the linguistic filters as before.
+Evaluation. Results for this final variation of the
+QA system are shown in the bottom row of Table 1.
+Here we see a fairly minor increase in performance
+over the use of linguistic filters alone: the system
+answers only one more question correctly than the
+previous variation for the development corpus and
+answers five additional questions for the test cor-
+pus. The mean answer rank improves only negligi-
+bly. Sixteen of the 22 correct answers (73%) appear
+as the top-ranked guess for the development corpus;
+only 53 out of 91 correct answers (58%) appear as
+the top-ranked guess for the test corpus. Unfortu-
+nately, when 50-byte chunking is disabled, system
+performance drops precipitously, by 5% (to 20 out
+of 38) for the development corpus and by 13% (to
+65 out of 200) for the test corpus. As noted above,
+this indicates that the filters are finding the answers,
+but more sophisticated linguistic sorting is needed
+to promote the best answers to the top. Through
+</bodyText>
+<page confidence="0.997704">
+185
+</page>
+<bodyText confidence="0.999983333333333">
+its LRq term, the new scoring measure does pro-
+vide a mechanism for allowing other linguistic re-
+lationships to influence the initial ordering of sum-
+mary extracts. The current results, however, indi-
+cate that with only very weak syntactic information
+(i.e. base noun phrases), the new scoring measure
+is only marginally successful in reordering the sum-
+mary extracts based on syntactic information.
+As noted above, the final system (with the liberal
+50-byte answer chunker) correctly answers 22 out of
+38 questions for the development corpus. Of the 16
+errors, the text retrieval component is responsible for
+five (31.2%), the text summarization component for
+ten (62.5%), and the linguistic filters for one (6.3%).
+In this analysis we consider the linguistic filters re-
+sponsible for an error if they were unable to pro-
+mote an available answer hypothesis to one of the
+top five guesses. A slightly different situation arises
+for the test corpus: of the 109 errors, the text re-
+trieval component is responsible for 39 (35.8%), the
+text summarization component for 26 (23.9%), and
+the linguistic filters for 44 (40.4%). As discussed in
+Section 6, the heuristics that comprise the semantic
+type checking filter do not scale to the test corpus
+and are the primary reason for the larger percentage
+of errors attributed to the linguistic filters for that
+corpus.
+</bodyText>
+<sectionHeader confidence="0.999293" genericHeader="related work">
+8 Related Work and Conclusions
+</sectionHeader>
+<bodyText confidence="0.999949671641791">
+We have described and evaluated a series of
+question-answering systems, each of which incorpo-
+rates a different combination of statistical and lin-
+guistic knowledge sources. We find that even very
+weak linguistic knowledge can offer substantial im-
+provements over purely IR-based techniques espe-
+cially when smoothly integrated with the text pas-
+sage preferences computed by the IR subsystems.
+Although our primary goal was to investigate the
+use of statistical and linguistic knowledge sources, it
+is possible to compare our approach and our results
+to those for systems in the recent TREC8 QA evalu-
+ation. Scores on the TREC8 test corpus for systems
+participating in the QA evaluation ranged between
+3 and 146 correct. Discarding the top three scores
+and the worst three scores, the remaining eight sys-
+tems achieved between 52 and 91 correct. Using the
+liberal answer chunker, our final QA system equals
+the best of these systems (91 correct); without it,
+our score of 65 correct places our QA system near
+the middle of this group of eight.
+Like the work described here, virtually all of the
+top-ranked TREC8 systems use a combination of
+IR, and shallow NLP for their QA systems. IBM&apos;s
+AnSel system (Prager et al., 2000), for example,
+employs finite-state patterns as its primary shallow
+NLP component. These are used to recognize a
+fairly broad set of about 20 named entities. The
+IR component indexes only text passages associ-
+ated with these entities. The AT&amp;T QA system
+(Singhal et al., 2000), the Qanda system (Breck et
+al., 2000), and the SyncMatcher system (Oard et
+al., 2000) all employ vector-space methods from IR,
+named entity identifiers, and a fairly simple ques-
+tion type determiner. In addition, SyncMatcher
+uses a broad-coverage dependency parser to enforce
+phrase relationship constraints. Instead of the vec-
+tor space model, the LASSO system (Moldovan et
+al., 2000) uses boolean search operators for para-
+graph retrieval. Recognition of answer hypotheses
+in their system relies on identifying named entities.
+Finally, the Cymphony QA system (Srihari and Li,
+2000) relies heavily on named entity identification; it
+also employs standard IR techniques and a shallow
+parser.
+In terms of statistical and linguistic knowledge
+sources employed, the primary difference between
+these systems and ours is our lack of an adequate
+named entity tagger. Incorporation of such a tag-
+ger will be a focus of future work. In addition, we
+believe that the retrieval and summarization compo-
+nents can be improved by incorporating automatic
+relevance feedback (Buckley, 1995) and coreference
+resolution. Morton (1999), for example, shows that
+coreference resolution improves passage retrieval for
+their question-answering system. We also plan to
+reconsider paragraph-based summaries given their
+coverage on the test corpus. The most critical area
+for improvement, however, is the linguistic filters.
+The semantic type filter will be greatly improved by
+the addition of a named entity tagger, but we believe
+that additional gains can be attained by augmenting
+named entity identification with information from
+WordNet. Finally, we currently make no attempt to
+confirm any phrase relations from the query. With-
+out this, system performance will remain severely
+limited.
+</bodyText>
+<sectionHeader confidence="0.996436" genericHeader="conclusions">
+9 Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.9858985">
+This work was supported in part by NSF Grants IRI-
+9624639 and GER-9454149.
+</bodyText>
+<sectionHeader confidence="0.998585" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999456">
+E. Breck, J. Burger, L. Ferro, D. House, M. Light,
+and I. Mani. 2000. A Sys Called Qanda. In
+E. Voorhees, editor, Proceedings of the Eighth
+Text REtrieval Conference TREC 8. NIST Spe-
+cial Publication. In press.
+C. Buckley, M. Mitra, J. Walz, and C. Cardie.
+1998a. SMART high precision: TREC 7. In
+E. Voorhees, editor, Proceedings of the Seventh
+Text REtrieval Conference TREC 7, pages 285-
+298. NIST Special Publication 500-242.
+C. Buckley, M. Mitra, J. Walz, and C. Cardie.
+1998b. Using clustering and superconcepts within
+</reference>
+<page confidence="0.996748">
+186
+</page>
+<reference confidence="0.978847026785714">
+SMART : TREC 6. In E. Voorhees, editor, Pro-
+ceedings of the Sixth Text REtrieval Conference
+TREC 6, pages 107-124. NIST Special Publica-
+tion 500-240.
+C. Buckley, C. Cardie, S. Mardis, M. Mitra,
+D. Pierce, K. Wagstaff, and J. Walz. 1999. The
+Smart/Empire TIPSTER IR System. In Proceed-
+ings, TIPSTER Text Program (Phase III). Mor-
+gan Kaufmann. To appear.
+Chris Buckley. 1995. Massive Query Expansion
+for Relevance Feedback Cornell University, Ph.D.
+Thesis, Ithaca, New York.
+R. Burke, K. Hammond, and J. Kozlovsky.
+1995. Knowledge-Based Information Retrieval
+from Semi-Structured Text. In Working Notes of
+the AAAI Fall Symposium on Al Applications in
+Knowledge Navigation and Retrieval, pages 19-24.
+AAAI Press.
+R. Burke, K. Hammond, V. Kulyuldn, S. Lyti-
+nen, N. Tomuro, and S. Schoenberg. 1997. ques-
+tion answering from Frequently-Asked Question
+Files. Technical Report TR-97-05, University of
+Chicago.
+C. Cardie and D. Pierce. 1998. Error-Driven Prun-
+ing of Treebank Grammars for Base Noun Phrase
+Identification. In Proceedings of the 36th An-
+nual Meeting of the Association for Computa-
+tional Linguistics and COLING-98, pages 218-
+224, University of Montreal, Montreal, Canada.
+Association for Computational Linguistics.
+Y. Chali, S. Matwin, and S. Szpakowicz. 1999.
+Query-Biased Text Summarization as a Question-
+Answering Technique. In Proceedings of the AAAI
+Fall Symposium on Question Answering Systems,
+pages 52-56. AAAI Press. AAAI TR FS-99-02.
+C. Fellbaum. 1998. WordNet: An Electronical Lex-
+ical Database. MIT Press, Cambridge, MA.
+J. Kupiec. 1993. MURAX: A Robust Linguistic ap-
+proach For Question Answering Using An On-
+Line Encyclopedia. In Proceedings of ACM SI-
+GIR, pages 181-190.
+W. Lehnert. 1978. The Process of Question Answer-
+ing. Lawrence Erlbaum Associates, Hillsdale, NJ.
+I. Mani, T. Firmin, D. House, G. Klein, B. Sund-
+heim, and L. Hirschman. 1999. The TIPSTER
+SUMMAC Text Summarization Evaluation. In
+Ninth Annual Meeting of the EACL, University
+of Bergen, Bergen, Norway.
+M. Marcus, M. Marcinkiewicz, and B. Santorini.
+1993. Building a Large Annotated Corpus of En-
+glish: The Penn Treebank. Computational Lin-
+guistics, 19(2):313-330.
+G. A. Miller, R. Beckwith, C. Fellbaum, D. Gross,
+and K. J. Miller. 1990. WordNet: an on-line lex-
+ical database. International Journal of Lexicogra-
+phy, 3(4):235-245.
+D. Moldovan, S. Harabagiu, M. Pa§ca, R. Mihal-
+cea, R. Goodrum, R. Girju, and V. Rus. 2000.
+LASSO: A Tool for Surfing the Answer Net. In
+E. Voorhees, editor, Proceedings of the Eighth
+Text REtrieval Conference TREC 8. NIST Spe-
+cial Publication. In press.
+T. S. Morton. 1999. Using Coreference to Im-
+prove Passage Retrieval for Question Answering.
+In Proceedings of the AAAI Fall Symposium on
+Question Answering Systems, pages 72-74. AAAI
+Press. AAAI TR FS-99-02.
+D. W. Oard, J. Wang, D. Lin, and I. Soboroff. 2000.
+TREC-8 Experiments at Maryland: CUR, QA
+and Routing. In E. Voorhees, editor, Proceedings
+of the Eighth Text REtrieval Conference TREC 8.
+NIST Special Publication. In press.
+J. Prager, D. Radev, E. Brown, A. Coden, and
+V. Samn. 2000. The Use of Predictive Anno-
+tation for Question Answering in TREC8. In
+E. Voorheari, editor, Proceedings of the Eighth
+Text REtrieval Conference TREC 8. NIST Spe-
+cial Publication. In press.
+G. Salton, A. Wong, and C.S. Yang. 1975. A vector
+space model for information retrieval. Communi-
+cations of the ACM, 18(11):613-620.
+G. Salton, J. Allan, C. Buckley, and M. Mitra. 1994.
+Automatic analysis, theme generation and sum-
+marization of machine-readable texts. Science,
+264:1421-1426, June.
+Gerard Salton, editor. 1971. The SMART Re-
+trieval System-Experiments in Automatic Doc-
+ument Processing. Prentice Hall Inc., Englewood
+Cliffs, NJ.
+R. C. Schank and R. P. Abelson. 1977. Scripts,
+plans, goals, and understanding. Lawrence Erl-
+baum Associates, Hillsdale, NJ.
+Amit Singhal, Chris Buckley, and Mandar Mitra.
+1996. Pivoted document length normalization. In
+H. Frei, D. Harman, P. Schauble, and R. Wilkin-
+son, editors, Proceedings of the Nineteenth An-
+nual International ACM SIGIR Conference on
+Research and Development in Information Re-
+trieval, pages 21-29. Association for Computing
+Machinery.
+A. Singhal, S. Abney, M. Bacchiani, M. Collins,
+D. Hindle, and F. Pereira. 2000. AT&amp;T at TREC-
+8. In E. Voorhees, editor, Proceedings of the
+Eighth Text REtrieval Conference TREC 8. NIST
+Special Publication. In press.
+R. Srihari and W. Li. 2000. Question Answer-
+ing Supported by Information Extraction. In
+E. Voorhees, editor, Proceedings of the Eighth
+Text REtrieval Conference TREC 8. NIST Spe-
+cial Publication. In press.
+TREC-8. 2000. Proceedings of the Eighth Text RE-
+trieval Conference TREC 8. NIST. In press.
+</reference>
+<page confidence="0.997908">
+187
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.625083">
+<title confidence="0.9936135">Examining the Role of Statistical and Linguistic Knowledge Sources in a General-Knowledge Question-Answering System</title>
+<author confidence="0.992663">Cardiel Ng&apos; Pierce&apos; Chris</author>
+<address confidence="0.703655">of Computer Science, Cornell University, Ithaca, NY</address>
+<email confidence="0.999666">E-mail:cardie,yung,pierce@cs.cornell.edu,chrisb@sabir.com</email>
+<abstract confidence="0.996105416666666">We describe and evaluate an implemented system for general-knowledge question answering. The system combines techniques for standard ad-hoc information retrieval (IR), query-dependent text summarization, and shallow syntactic and semantic sentence analysis. In a series of experiments we examine the role of each statistical and linguistic knowledge source in the question-answering system. In contrast to previous results, we find first that statistical knowledge of word co-occurrences as computed by IR vector space methods can be used to quickly and accurately locate the relevant documents for each question. The use of query-dependent text summarization techniques, however, provides only small increases in performance and severely limits recall levels when inaccurate. Nevertheless, it is the text summarization component that allows subsequent linguistic filters to focus on relevant passages. We find that even very weak linguistic knowledge can offer substantial improvements over purely IRbased techniques for question answering, especially when smoothly integrated with statistical preferences computed by the IR subsystems.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>E Breck</author>
+<author>J Burger</author>
+<author>L Ferro</author>
+<author>D House</author>
+<author>M Light</author>
+<author>I Mani</author>
+</authors>
+<title>A Sys Called Qanda. In</title>
+<date>2000</date>
+<booktitle>Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</booktitle>
+<editor>E. Voorhees, editor,</editor>
+<contexts>
+<context position="31441" citStr="Breck et al., 2000" startWordPosition="5076" endWordPosition="5079"> these systems (91 correct); without it, our score of 65 correct places our QA system near the middle of this group of eight. Like the work described here, virtually all of the top-ranked TREC8 systems use a combination of IR, and shallow NLP for their QA systems. IBM&apos;s AnSel system (Prager et al., 2000), for example, employs finite-state patterns as its primary shallow NLP component. These are used to recognize a fairly broad set of about 20 named entities. The IR component indexes only text passages associated with these entities. The AT&amp;T QA system (Singhal et al., 2000), the Qanda system (Breck et al., 2000), and the SyncMatcher system (Oard et al., 2000) all employ vector-space methods from IR, named entity identifiers, and a fairly simple question type determiner. In addition, SyncMatcher uses a broad-coverage dependency parser to enforce phrase relationship constraints. Instead of the vector space model, the LASSO system (Moldovan et al., 2000) uses boolean search operators for paragraph retrieval. Recognition of answer hypotheses in their system relies on identifying named entities. Finally, the Cymphony QA system (Srihari and Li, 2000) relies heavily on named entity identification; it also e</context>
+</contexts>
+<marker>Breck, Burger, Ferro, House, Light, Mani, 2000</marker>
+<rawString>E. Breck, J. Burger, L. Ferro, D. House, M. Light, and I. Mani. 2000. A Sys Called Qanda. In E. Voorhees, editor, Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Buckley</author>
+<author>M Mitra</author>
+<author>J Walz</author>
+<author>C Cardie</author>
+</authors>
+<title>SMART high precision: TREC 7.</title>
+<date>1998</date>
+<journal>NIST Special Publication</journal>
+<booktitle>Proceedings of the Seventh Text REtrieval Conference TREC 7,</booktitle>
+<pages>285--298</pages>
+<editor>In E. Voorhees, editor,</editor>
+<contexts>
+<context position="9949" citStr="Buckley et al., 1998" startWordPosition="1550" endWordPosition="1553">en a question vector, Q = qi, q21• • • qn) and a document vector, D = d1, d2,. , cin, is traditionally computed using a cosine similarity measure: Sim(Q , D) = E di • qi Using this measure, the IR system returns a ranked list of those documents most similar to the question. The Baseline QA System: The Smart Vector Space Model. For the IR component of the baseline QA system, we use Smart (Salton, 1971), a sophisticated text-processing system based on the vector space model and employed as the retrieval engine for a number of the top-performing systems at recent Text REtrieval Conferences (e.g. Buckley et al., 1998a, 1998b). Given a question, Smart returns a ranked list of the documents most relevant to the question. For the baseline QA system and all subsequent variations, we use Smart with standard term-weighting strategies and do not use automatic relevance feedback (Buckley, 1995). In addition, the baseline system applies no linguistic filters. To generate answers for a particular question, the system starts at the beginning of the top-ranked document returned by Smart for the question and constructs five 50-byte chunks consisting of document text with stopwords removed. 1We use Lnu term weighting f</context>
+</contexts>
+<marker>Buckley, Mitra, Walz, Cardie, 1998</marker>
+<rawString>C. Buckley, M. Mitra, J. Walz, and C. Cardie. 1998a. SMART high precision: TREC 7. In E. Voorhees, editor, Proceedings of the Seventh Text REtrieval Conference TREC 7, pages 285-298. NIST Special Publication 500-242.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Buckley</author>
+<author>M Mitra</author>
+<author>J Walz</author>
+<author>C Cardie</author>
+</authors>
+<title>Using clustering and superconcepts within SMART : TREC 6.</title>
+<date>1998</date>
+<journal>NIST Special Publication</journal>
+<booktitle>Proceedings of the Sixth Text REtrieval Conference TREC 6,</booktitle>
+<pages>107--124</pages>
+<editor>In E. Voorhees, editor,</editor>
+<contexts>
+<context position="9949" citStr="Buckley et al., 1998" startWordPosition="1550" endWordPosition="1553">en a question vector, Q = qi, q21• • • qn) and a document vector, D = d1, d2,. , cin, is traditionally computed using a cosine similarity measure: Sim(Q , D) = E di • qi Using this measure, the IR system returns a ranked list of those documents most similar to the question. The Baseline QA System: The Smart Vector Space Model. For the IR component of the baseline QA system, we use Smart (Salton, 1971), a sophisticated text-processing system based on the vector space model and employed as the retrieval engine for a number of the top-performing systems at recent Text REtrieval Conferences (e.g. Buckley et al., 1998a, 1998b). Given a question, Smart returns a ranked list of the documents most relevant to the question. For the baseline QA system and all subsequent variations, we use Smart with standard term-weighting strategies and do not use automatic relevance feedback (Buckley, 1995). In addition, the baseline system applies no linguistic filters. To generate answers for a particular question, the system starts at the beginning of the top-ranked document returned by Smart for the question and constructs five 50-byte chunks consisting of document text with stopwords removed. 1We use Lnu term weighting f</context>
+</contexts>
+<marker>Buckley, Mitra, Walz, Cardie, 1998</marker>
+<rawString>C. Buckley, M. Mitra, J. Walz, and C. Cardie. 1998b. Using clustering and superconcepts within SMART : TREC 6. In E. Voorhees, editor, Proceedings of the Sixth Text REtrieval Conference TREC 6, pages 107-124. NIST Special Publication 500-240.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Buckley</author>
+<author>C Cardie</author>
+<author>S Mardis</author>
+<author>M Mitra</author>
+<author>D Pierce</author>
+<author>K Wagstaff</author>
+<author>J Walz</author>
+</authors>
+<date>1999</date>
+<booktitle>The Smart/Empire TIPSTER IR System. In Proceedings, TIPSTER Text Program (Phase III).</booktitle>
+<publisher>Morgan Kaufmann.</publisher>
+<note>To appear.</note>
+<contexts>
+<context position="13072" citStr="Buckley et al., 1999" startWordPosition="2070" endWordPosition="2073">994): 1. Given a question and a document, divide the document into chunks (e.g. sentences, paragraphs, 200-word passages). 2. Generate the vector representation for the question and for each document chunk. 3. Use the cosine similarity measure to determine the similarity of each chunk to the question. 4. Return as the query-dependent summary the most similar chunks up to a predetermined summary length (e.g. 10% or 20% of the original document). This approach to text summarization was shown to be quite successful in the recent SUMMAC evaluation of text summarization systems (Mani et al., 1999; Buckley et al., 1999). Our general assumption 182 here is that IR approaches can be used to quickly and accurately find both relevant documents and relevant document portions. In related work, Chali et al. (1999) also propose text summarization techniques as a primary component for their QA system. They employ a combination of vector-space methods and lexical chaining to derive their sentencebased summaries. We hypothesize that deeper analysis of the summary extracts is better accomplished by methods from NLP that can determine syntactic and semantic relationships between relevant constituents. There is a risk in </context>
+</contexts>
+<marker>Buckley, Cardie, Mardis, Mitra, Pierce, Wagstaff, Walz, 1999</marker>
+<rawString>C. Buckley, C. Cardie, S. Mardis, M. Mitra, D. Pierce, K. Wagstaff, and J. Walz. 1999. The Smart/Empire TIPSTER IR System. In Proceedings, TIPSTER Text Program (Phase III). Morgan Kaufmann. To appear.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chris Buckley</author>
+</authors>
+<title>Massive Query Expansion for Relevance Feedback</title>
+<date>1995</date>
+<tech>Ph.D. Thesis,</tech>
+<institution>Cornell University,</institution>
+<location>Ithaca, New York.</location>
+<contexts>
+<context position="10224" citStr="Buckley, 1995" startWordPosition="1595" endWordPosition="1596">seline QA System: The Smart Vector Space Model. For the IR component of the baseline QA system, we use Smart (Salton, 1971), a sophisticated text-processing system based on the vector space model and employed as the retrieval engine for a number of the top-performing systems at recent Text REtrieval Conferences (e.g. Buckley et al., 1998a, 1998b). Given a question, Smart returns a ranked list of the documents most relevant to the question. For the baseline QA system and all subsequent variations, we use Smart with standard term-weighting strategies and do not use automatic relevance feedback (Buckley, 1995). In addition, the baseline system applies no linguistic filters. To generate answers for a particular question, the system starts at the beginning of the top-ranked document returned by Smart for the question and constructs five 50-byte chunks consisting of document text with stopwords removed. 1We use Lnu term weighting for documents and /tu term weighting for the question (Singhal et al., 1996). Evaluation. As noted above, we evaluate each variation of our QA system on 38 TREC8 development questions and 200 TREC8 test questions. The indexed collection is TREC disks 4 and 5 (without Congress</context>
+<context position="32474" citStr="Buckley, 1995" startWordPosition="5235" endWordPosition="5236">swer hypotheses in their system relies on identifying named entities. Finally, the Cymphony QA system (Srihari and Li, 2000) relies heavily on named entity identification; it also employs standard IR techniques and a shallow parser. In terms of statistical and linguistic knowledge sources employed, the primary difference between these systems and ours is our lack of an adequate named entity tagger. Incorporation of such a tagger will be a focus of future work. In addition, we believe that the retrieval and summarization components can be improved by incorporating automatic relevance feedback (Buckley, 1995) and coreference resolution. Morton (1999), for example, shows that coreference resolution improves passage retrieval for their question-answering system. We also plan to reconsider paragraph-based summaries given their coverage on the test corpus. The most critical area for improvement, however, is the linguistic filters. The semantic type filter will be greatly improved by the addition of a named entity tagger, but we believe that additional gains can be attained by augmenting named entity identification with information from WordNet. Finally, we currently make no attempt to confirm any phra</context>
+</contexts>
+<marker>Buckley, 1995</marker>
+<rawString>Chris Buckley. 1995. Massive Query Expansion for Relevance Feedback Cornell University, Ph.D. Thesis, Ithaca, New York.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Burke</author>
+<author>K Hammond</author>
+<author>J Kozlovsky</author>
+</authors>
+<title>Knowledge-Based Information Retrieval from Semi-Structured Text.</title>
+<date>1995</date>
+<booktitle>In Working Notes of the AAAI Fall Symposium on Al Applications in Knowledge Navigation and Retrieval,</booktitle>
+<pages>pages</pages>
+<publisher>AAAI Press.</publisher>
+<contexts>
+<context position="3066" citStr="Burke et al. (1995" startWordPosition="448" endWordPosition="451">us research has addressed similar questionanswering (QA) scenarios using a variety of natural language processing (NLP) and information retrieval (IR) techniques. Lehnert (1978) tackles the difficult task of answering questions in the context of story understanding. Unlike our restricted QA task, questions to Lehnert&apos;s system often require answers that are not explicitly mentioned in the story. Her goal then is to answer questions by making inferences about actions and actors in the story using world knowledge in the form of scripts, plans, and goals (Schank and Abelson, 1977). More recently, Burke et al. (1995; 1997) describe a system that answers natural language questions using a database of question-answer pairs built from existing frequentlyasked question (FAQ) files. Their FAQFinder system uses IR techniques to match the given question to questions in the database. It then uses the WordNet lexical semantic knowledge base (Miller et al., 1990; Fellbaum, 1998) to improve the quality of the match. Kupiec (1993) investigates a closed-class QA task that is similar in many respects to the TREC8 QA task that we address here: the system answers general-knowledge questions using an encyclopedia. In add</context>
+</contexts>
+<marker>Burke, Hammond, Kozlovsky, 1995</marker>
+<rawString>R. Burke, K. Hammond, and J. Kozlovsky. 1995. Knowledge-Based Information Retrieval from Semi-Structured Text. In Working Notes of the AAAI Fall Symposium on Al Applications in Knowledge Navigation and Retrieval, pages 19-24. AAAI Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Burke</author>
+<author>K Hammond</author>
+<author>V Kulyuldn</author>
+<author>S Lytinen</author>
+<author>N Tomuro</author>
+<author>S Schoenberg</author>
+</authors>
+<title>question answering from Frequently-Asked Question Files.</title>
+<date>1997</date>
+<tech>Technical Report TR-97-05,</tech>
+<institution>University of Chicago.</institution>
+<marker>Burke, Hammond, Kulyuldn, Lytinen, Tomuro, Schoenberg, 1997</marker>
+<rawString>R. Burke, K. Hammond, V. Kulyuldn, S. Lytinen, N. Tomuro, and S. Schoenberg. 1997. question answering from Frequently-Asked Question Files. Technical Report TR-97-05, University of Chicago.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Cardie</author>
+<author>D Pierce</author>
+</authors>
+<title>Error-Driven Pruning of Treebank Grammars for Base Noun Phrase Identification.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the 36th Annual Meeting of the Association for Computational Linguistics and COLING-98,</booktitle>
+<pages>218--224</pages>
+<institution>University of Montreal, Montreal, Canada. Association for Computational Linguistics.</institution>
+<contexts>
+<context position="17427" citStr="Cardie and Pierce (1998)" startWordPosition="2781" endWordPosition="2784">ses as answers. In the TREC8 development corpus, for example, 36 of 38 questions have noun phrase answers. As a result, we next investigate the use of a very simple linguistic filter that considers only noun phrases as answer hypotheses. The filter operates on the ordered list of summary extracts for a particular question and produces a list of answer hypotheses, one for each noun phrase (NP) in the extracts in the left-to-right order in which they appeared. The NP-based QA System. Our implementation of the NP-based QA system uses the Empire noun phrase finder, which is described in detail in Cardie and Pierce (1998). Empire identifies base NPs — non-recursive noun phrases — using a very simple algorithm that matches part-of-speech tag sequences based on a learned noun phrase grammar. The approach is able to achieve 94% precision and recall for base NPs derived from the Penn Treebank Wall Street Journal (Marcus et al., 1993). In the experiments below, the NP filter follows the application of the document retrieval and text summarization components. Pronoun answer hypotheses are discarded, and the NPs are assembled into 50-byte chunks. Evaluation. Results for the NP-based QA system are shown in the third r</context>
+</contexts>
+<marker>Cardie, Pierce, 1998</marker>
+<rawString>C. Cardie and D. Pierce. 1998. Error-Driven Pruning of Treebank Grammars for Base Noun Phrase Identification. In Proceedings of the 36th Annual Meeting of the Association for Computational Linguistics and COLING-98, pages 218-224, University of Montreal, Montreal, Canada. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Chali</author>
+<author>S Matwin</author>
+<author>S Szpakowicz</author>
+</authors>
+<title>Query-Biased Text Summarization as a QuestionAnswering Technique.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the AAAI Fall Symposium on Question Answering Systems,</booktitle>
+<pages>52--56</pages>
+<publisher>AAAI Press. AAAI TR</publisher>
+<contexts>
+<context position="13263" citStr="Chali et al. (1999)" startWordPosition="2101" endWordPosition="2104">cument chunk. 3. Use the cosine similarity measure to determine the similarity of each chunk to the question. 4. Return as the query-dependent summary the most similar chunks up to a predetermined summary length (e.g. 10% or 20% of the original document). This approach to text summarization was shown to be quite successful in the recent SUMMAC evaluation of text summarization systems (Mani et al., 1999; Buckley et al., 1999). Our general assumption 182 here is that IR approaches can be used to quickly and accurately find both relevant documents and relevant document portions. In related work, Chali et al. (1999) also propose text summarization techniques as a primary component for their QA system. They employ a combination of vector-space methods and lexical chaining to derive their sentencebased summaries. We hypothesize that deeper analysis of the summary extracts is better accomplished by methods from NLP that can determine syntactic and semantic relationships between relevant constituents. There is a risk in using query-dependent summaries to focus the search for answer hypotheses, however: if the summarization algorithm is inaccurate, the desired answers will occur outside of the summaries and w</context>
+</contexts>
+<marker>Chali, Matwin, Szpakowicz, 1999</marker>
+<rawString>Y. Chali, S. Matwin, and S. Szpakowicz. 1999. Query-Biased Text Summarization as a QuestionAnswering Technique. In Proceedings of the AAAI Fall Symposium on Question Answering Systems, pages 52-56. AAAI Press. AAAI TR FS-99-02.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Fellbaum</author>
+</authors>
+<title>WordNet: An Electronical Lexical Database.</title>
+<date>1998</date>
+<publisher>MIT Press,</publisher>
+<location>Cambridge, MA.</location>
+<contexts>
+<context position="3426" citStr="Fellbaum, 1998" startWordPosition="507" endWordPosition="508">explicitly mentioned in the story. Her goal then is to answer questions by making inferences about actions and actors in the story using world knowledge in the form of scripts, plans, and goals (Schank and Abelson, 1977). More recently, Burke et al. (1995; 1997) describe a system that answers natural language questions using a database of question-answer pairs built from existing frequentlyasked question (FAQ) files. Their FAQFinder system uses IR techniques to match the given question to questions in the database. It then uses the WordNet lexical semantic knowledge base (Miller et al., 1990; Fellbaum, 1998) to improve the quality of the match. Kupiec (1993) investigates a closed-class QA task that is similar in many respects to the TREC8 QA task that we address here: the system answers general-knowledge questions using an encyclopedia. In addition, Kupiec assumes that all answers are noun phrases. Although our task does not explicitly include a &amp;quot;noun phrase&amp;quot; constraint, the answer length restriction effectively imposes the same bias toward noun phrase answers. Kupiec&apos;s MURAX system applies a combination of statistical (IR) and linguistic (NLP) techniques. A series of secondary boolean search que</context>
+</contexts>
+<marker>Fellbaum, 1998</marker>
+<rawString>C. Fellbaum. 1998. WordNet: An Electronical Lexical Database. MIT Press, Cambridge, MA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Kupiec</author>
+</authors>
+<title>MURAX: A Robust Linguistic approach For Question Answering Using An OnLine Encyclopedia.</title>
+<date>1993</date>
+<booktitle>In Proceedings of ACM SIGIR,</booktitle>
+<pages>181--190</pages>
+<contexts>
+<context position="3477" citStr="Kupiec (1993)" startWordPosition="516" endWordPosition="517">o answer questions by making inferences about actions and actors in the story using world knowledge in the form of scripts, plans, and goals (Schank and Abelson, 1977). More recently, Burke et al. (1995; 1997) describe a system that answers natural language questions using a database of question-answer pairs built from existing frequentlyasked question (FAQ) files. Their FAQFinder system uses IR techniques to match the given question to questions in the database. It then uses the WordNet lexical semantic knowledge base (Miller et al., 1990; Fellbaum, 1998) to improve the quality of the match. Kupiec (1993) investigates a closed-class QA task that is similar in many respects to the TREC8 QA task that we address here: the system answers general-knowledge questions using an encyclopedia. In addition, Kupiec assumes that all answers are noun phrases. Although our task does not explicitly include a &amp;quot;noun phrase&amp;quot; constraint, the answer length restriction effectively imposes the same bias toward noun phrase answers. Kupiec&apos;s MURAX system applies a combination of statistical (IR) and linguistic (NLP) techniques. A series of secondary boolean search queries with proximity constraints is combined with sh</context>
+</contexts>
+<marker>Kupiec, 1993</marker>
+<rawString>J. Kupiec. 1993. MURAX: A Robust Linguistic approach For Question Answering Using An OnLine Encyclopedia. In Proceedings of ACM SIGIR, pages 181-190.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W Lehnert</author>
+</authors>
+<title>The Process of Question Answering. Lawrence Erlbaum Associates,</title>
+<date>1978</date>
+<location>Hillsdale, NJ.</location>
+<contexts>
+<context position="2625" citStr="Lehnert (1978)" startWordPosition="378" endWordPosition="379">on. In addition, the restricted task guarantees that: • the answer exists in the collection, • all supporting information for the answer lies in a single document, and • the answer is short — less than 50 bytes in length. Consider, for example, the question Which country has the largest part of the Amazon rain forest?, taken from the TREC8 Question Answering development corpus. The answer (in document LA032590-0089) is Brazil. Previous research has addressed similar questionanswering (QA) scenarios using a variety of natural language processing (NLP) and information retrieval (IR) techniques. Lehnert (1978) tackles the difficult task of answering questions in the context of story understanding. Unlike our restricted QA task, questions to Lehnert&apos;s system often require answers that are not explicitly mentioned in the story. Her goal then is to answer questions by making inferences about actions and actors in the story using world knowledge in the form of scripts, plans, and goals (Schank and Abelson, 1977). More recently, Burke et al. (1995; 1997) describe a system that answers natural language questions using a database of question-answer pairs built from existing frequentlyasked question (FAQ) </context>
+</contexts>
+<marker>Lehnert, 1978</marker>
+<rawString>W. Lehnert. 1978. The Process of Question Answering. Lawrence Erlbaum Associates, Hillsdale, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Mani</author>
+<author>T Firmin</author>
+<author>D House</author>
+<author>G Klein</author>
+<author>B Sundheim</author>
+<author>L Hirschman</author>
+</authors>
+<title>The TIPSTER SUMMAC Text Summarization Evaluation.</title>
+<date>1999</date>
+<booktitle>In Ninth Annual Meeting of the EACL,</booktitle>
+<institution>University of Bergen,</institution>
+<location>Bergen,</location>
+<contexts>
+<context position="12319" citStr="Mani et al., 1999" startWordPosition="1944" endWordPosition="1947">y 19 questions were not answered in the top 20 documents. 4 Query-Dependent Text Summarization for Question Answering We next hypothesize that query-dependent text summarization algorithms will improve the perfor- • mance of the QA system by focusing the system on the most relevant portions of the retrieved documents. The goal for query-dependent summarization algorithms is to provide a short summary of a document with respect to a specific query. Although a number of methods for query-dependent text summarization are beginning to be developed and evaluated in a variety of realistic settings (Mani et al., 1999), we again propose the use of vector space methods from IR, which can be easily extended to the summarization task (Salton et al., 1994): 1. Given a question and a document, divide the document into chunks (e.g. sentences, paragraphs, 200-word passages). 2. Generate the vector representation for the question and for each document chunk. 3. Use the cosine similarity measure to determine the similarity of each chunk to the question. 4. Return as the query-dependent summary the most similar chunks up to a predetermined summary length (e.g. 10% or 20% of the original document). This approach to te</context>
+</contexts>
+<marker>Mani, Firmin, House, Klein, Sundheim, Hirschman, 1999</marker>
+<rawString>I. Mani, T. Firmin, D. House, G. Klein, B. Sundheim, and L. Hirschman. 1999. The TIPSTER SUMMAC Text Summarization Evaluation. In Ninth Annual Meeting of the EACL, University of Bergen, Bergen, Norway.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Marcus</author>
+<author>M Marcinkiewicz</author>
+<author>B Santorini</author>
+</authors>
+<title>Building a Large Annotated Corpus of English: The Penn Treebank. Computational Linguistics,</title>
+<date>1993</date>
+<pages>19--2</pages>
+<contexts>
+<context position="17741" citStr="Marcus et al., 1993" startWordPosition="2833" endWordPosition="2836">stion and produces a list of answer hypotheses, one for each noun phrase (NP) in the extracts in the left-to-right order in which they appeared. The NP-based QA System. Our implementation of the NP-based QA system uses the Empire noun phrase finder, which is described in detail in Cardie and Pierce (1998). Empire identifies base NPs — non-recursive noun phrases — using a very simple algorithm that matches part-of-speech tag sequences based on a learned noun phrase grammar. The approach is able to achieve 94% precision and recall for base NPs derived from the Penn Treebank Wall Street Journal (Marcus et al., 1993). In the experiments below, the NP filter follows the application of the document retrieval and text summarization components. Pronoun answer hypotheses are discarded, and the NPs are assembled into 50-byte chunks. Evaluation. Results for the NP-based QA system are shown in the third row of Table 1. The noun phrase filter markedly improves system performance for the development corpus, nearly dou3Paragraph-based summaries provide better coverage on the test corpus than sentence-based summaries: for 151 questions, the correct answer appears in the summary for one of the top k documents. This su</context>
+</contexts>
+<marker>Marcus, Marcinkiewicz, Santorini, 1993</marker>
+<rawString>M. Marcus, M. Marcinkiewicz, and B. Santorini. 1993. Building a Large Annotated Corpus of English: The Penn Treebank. Computational Linguistics, 19(2):313-330.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G A Miller</author>
+<author>R Beckwith</author>
+<author>C Fellbaum</author>
+<author>D Gross</author>
+<author>K J Miller</author>
+</authors>
+<title>WordNet: an on-line lexical database.</title>
+<date>1990</date>
+<journal>International Journal of Lexicography,</journal>
+<pages>3--4</pages>
+<contexts>
+<context position="3409" citStr="Miller et al., 1990" startWordPosition="503" endWordPosition="506">answers that are not explicitly mentioned in the story. Her goal then is to answer questions by making inferences about actions and actors in the story using world knowledge in the form of scripts, plans, and goals (Schank and Abelson, 1977). More recently, Burke et al. (1995; 1997) describe a system that answers natural language questions using a database of question-answer pairs built from existing frequentlyasked question (FAQ) files. Their FAQFinder system uses IR techniques to match the given question to questions in the database. It then uses the WordNet lexical semantic knowledge base (Miller et al., 1990; Fellbaum, 1998) to improve the quality of the match. Kupiec (1993) investigates a closed-class QA task that is similar in many respects to the TREC8 QA task that we address here: the system answers general-knowledge questions using an encyclopedia. In addition, Kupiec assumes that all answers are noun phrases. Although our task does not explicitly include a &amp;quot;noun phrase&amp;quot; constraint, the answer length restriction effectively imposes the same bias toward noun phrase answers. Kupiec&apos;s MURAX system applies a combination of statistical (IR) and linguistic (NLP) techniques. A series of secondary b</context>
+</contexts>
+<marker>Miller, Beckwith, Fellbaum, Gross, Miller, 1990</marker>
+<rawString>G. A. Miller, R. Beckwith, C. Fellbaum, D. Gross, and K. J. Miller. 1990. WordNet: an on-line lexical database. International Journal of Lexicography, 3(4):235-245.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Moldovan</author>
+<author>S Harabagiu</author>
+<author>M Pa§ca</author>
+<author>R Mihalcea</author>
+<author>R Goodrum</author>
+<author>R Girju</author>
+<author>V Rus</author>
+</authors>
+<date>2000</date>
+<marker>Moldovan, Harabagiu, Pa§ca, Mihalcea, Goodrum, Girju, Rus, 2000</marker>
+<rawString>D. Moldovan, S. Harabagiu, M. Pa§ca, R. Mihalcea, R. Goodrum, R. Girju, and V. Rus. 2000.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>LASSO</author>
+</authors>
+<title>A Tool for Surfing the Answer Net. In</title>
+<booktitle>Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</booktitle>
+<editor>E. Voorhees, editor,</editor>
+<marker>LASSO, </marker>
+<rawString>LASSO: A Tool for Surfing the Answer Net. In E. Voorhees, editor, Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T S Morton</author>
+</authors>
+<title>Using Coreference to Improve Passage Retrieval for Question Answering.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the AAAI Fall Symposium on Question Answering Systems,</booktitle>
+<pages>72--74</pages>
+<publisher>AAAI Press. AAAI TR</publisher>
+<contexts>
+<context position="32516" citStr="Morton (1999)" startWordPosition="5240" endWordPosition="5241">dentifying named entities. Finally, the Cymphony QA system (Srihari and Li, 2000) relies heavily on named entity identification; it also employs standard IR techniques and a shallow parser. In terms of statistical and linguistic knowledge sources employed, the primary difference between these systems and ours is our lack of an adequate named entity tagger. Incorporation of such a tagger will be a focus of future work. In addition, we believe that the retrieval and summarization components can be improved by incorporating automatic relevance feedback (Buckley, 1995) and coreference resolution. Morton (1999), for example, shows that coreference resolution improves passage retrieval for their question-answering system. We also plan to reconsider paragraph-based summaries given their coverage on the test corpus. The most critical area for improvement, however, is the linguistic filters. The semantic type filter will be greatly improved by the addition of a named entity tagger, but we believe that additional gains can be attained by augmenting named entity identification with information from WordNet. Finally, we currently make no attempt to confirm any phrase relations from the query. Without this,</context>
+</contexts>
+<marker>Morton, 1999</marker>
+<rawString>T. S. Morton. 1999. Using Coreference to Improve Passage Retrieval for Question Answering. In Proceedings of the AAAI Fall Symposium on Question Answering Systems, pages 72-74. AAAI Press. AAAI TR FS-99-02.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D W Oard</author>
+<author>J Wang</author>
+<author>D Lin</author>
+<author>I Soboroff</author>
+</authors>
+<title>TREC-8 Experiments at Maryland: CUR, QA and Routing.</title>
+<date>2000</date>
+<booktitle>Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</booktitle>
+<editor>In E. Voorhees, editor,</editor>
+<contexts>
+<context position="31489" citStr="Oard et al., 2000" startWordPosition="5084" endWordPosition="5087">e of 65 correct places our QA system near the middle of this group of eight. Like the work described here, virtually all of the top-ranked TREC8 systems use a combination of IR, and shallow NLP for their QA systems. IBM&apos;s AnSel system (Prager et al., 2000), for example, employs finite-state patterns as its primary shallow NLP component. These are used to recognize a fairly broad set of about 20 named entities. The IR component indexes only text passages associated with these entities. The AT&amp;T QA system (Singhal et al., 2000), the Qanda system (Breck et al., 2000), and the SyncMatcher system (Oard et al., 2000) all employ vector-space methods from IR, named entity identifiers, and a fairly simple question type determiner. In addition, SyncMatcher uses a broad-coverage dependency parser to enforce phrase relationship constraints. Instead of the vector space model, the LASSO system (Moldovan et al., 2000) uses boolean search operators for paragraph retrieval. Recognition of answer hypotheses in their system relies on identifying named entities. Finally, the Cymphony QA system (Srihari and Li, 2000) relies heavily on named entity identification; it also employs standard IR techniques and a shallow pars</context>
+</contexts>
+<marker>Oard, Wang, Lin, Soboroff, 2000</marker>
+<rawString>D. W. Oard, J. Wang, D. Lin, and I. Soboroff. 2000. TREC-8 Experiments at Maryland: CUR, QA and Routing. In E. Voorhees, editor, Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Prager</author>
+<author>D Radev</author>
+<author>E Brown</author>
+<author>A Coden</author>
+<author>V Samn</author>
+</authors>
+<title>The Use of Predictive Annotation for Question Answering in TREC8.</title>
+<date>2000</date>
+<booktitle>Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</booktitle>
+<editor>In E. Voorheari, editor,</editor>
+<contexts>
+<context position="31127" citStr="Prager et al., 2000" startWordPosition="5024" endWordPosition="5027">tion. Scores on the TREC8 test corpus for systems participating in the QA evaluation ranged between 3 and 146 correct. Discarding the top three scores and the worst three scores, the remaining eight systems achieved between 52 and 91 correct. Using the liberal answer chunker, our final QA system equals the best of these systems (91 correct); without it, our score of 65 correct places our QA system near the middle of this group of eight. Like the work described here, virtually all of the top-ranked TREC8 systems use a combination of IR, and shallow NLP for their QA systems. IBM&apos;s AnSel system (Prager et al., 2000), for example, employs finite-state patterns as its primary shallow NLP component. These are used to recognize a fairly broad set of about 20 named entities. The IR component indexes only text passages associated with these entities. The AT&amp;T QA system (Singhal et al., 2000), the Qanda system (Breck et al., 2000), and the SyncMatcher system (Oard et al., 2000) all employ vector-space methods from IR, named entity identifiers, and a fairly simple question type determiner. In addition, SyncMatcher uses a broad-coverage dependency parser to enforce phrase relationship constraints. Instead of the </context>
+</contexts>
+<marker>Prager, Radev, Brown, Coden, Samn, 2000</marker>
+<rawString>J. Prager, D. Radev, E. Brown, A. Coden, and V. Samn. 2000. The Use of Predictive Annotation for Question Answering in TREC8. In E. Voorheari, editor, Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Salton</author>
+<author>A Wong</author>
+<author>C S Yang</author>
+</authors>
+<title>A vector space model for information retrieval.</title>
+<date>1975</date>
+<journal>Communications of the ACM,</journal>
+<pages>18--11</pages>
+<contexts>
+<context position="4771" citStr="Salton et al., 1975" startWordPosition="705" endWordPosition="708">tract answer hypotheses, and to confirm phrase relations specified in the question. In an evaluation on 70 &amp;quot;Trivial 180 document collection Parsing Retrieval documents, Summarization text passages Semantic Types question —ow Linguistic Relationships IR Subsystems Linguistic Filters answer hypotheses Figure 1: General Architecture of the Question-Answering System Pursuit&amp;quot; who and what questions, Kupiec concludes that robust natural language analysis can add to the quality of the information retrieval process. In addition, he claims that, for their closed-class QA task, vector space IR methods (Salton et al., 1975) appear inadequate. We present here a new approach to the restricted question-answering task described above. Like MURAX, our system draws from both statistical and linguistic sources to find answers to generalknowledge questions. The underlying architecture of the system, however, is very different: it combines vector space IR techniques for document retrieval, a vector space approach to query-dependent text summarization, shallow corpus-based syntactic analysis, and knowledge-based semantic analysis. We evaluate the system on the TREC8 QA development corpus as well as the TREC8 QA test corpu</context>
+</contexts>
+<marker>Salton, Wong, Yang, 1975</marker>
+<rawString>G. Salton, A. Wong, and C.S. Yang. 1975. A vector space model for information retrieval. Communications of the ACM, 18(11):613-620.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Salton</author>
+<author>J Allan</author>
+<author>C Buckley</author>
+<author>M Mitra</author>
+</authors>
+<title>Automatic analysis, theme generation and summarization of machine-readable texts.</title>
+<date>1994</date>
+<journal>Science,</journal>
+<pages>264--1421</pages>
+<contexts>
+<context position="12455" citStr="Salton et al., 1994" startWordPosition="1968" endWordPosition="1971">ize that query-dependent text summarization algorithms will improve the perfor- • mance of the QA system by focusing the system on the most relevant portions of the retrieved documents. The goal for query-dependent summarization algorithms is to provide a short summary of a document with respect to a specific query. Although a number of methods for query-dependent text summarization are beginning to be developed and evaluated in a variety of realistic settings (Mani et al., 1999), we again propose the use of vector space methods from IR, which can be easily extended to the summarization task (Salton et al., 1994): 1. Given a question and a document, divide the document into chunks (e.g. sentences, paragraphs, 200-word passages). 2. Generate the vector representation for the question and for each document chunk. 3. Use the cosine similarity measure to determine the similarity of each chunk to the question. 4. Return as the query-dependent summary the most similar chunks up to a predetermined summary length (e.g. 10% or 20% of the original document). This approach to text summarization was shown to be quite successful in the recent SUMMAC evaluation of text summarization systems (Mani et al., 1999; Buck</context>
+</contexts>
+<marker>Salton, Allan, Buckley, Mitra, 1994</marker>
+<rawString>G. Salton, J. Allan, C. Buckley, and M. Mitra. 1994. Automatic analysis, theme generation and summarization of machine-readable texts. Science, 264:1421-1426, June.</rawString>
+</citation>
+<citation valid="true">
+<date>1971</date>
+<booktitle>The SMART Retrieval System-Experiments in Automatic Document Processing.</booktitle>
+<editor>Gerard Salton, editor.</editor>
+<publisher>Prentice Hall Inc.,</publisher>
+<location>Englewood Cliffs, NJ.</location>
+<marker>1971</marker>
+<rawString>Gerard Salton, editor. 1971. The SMART Retrieval System-Experiments in Automatic Document Processing. Prentice Hall Inc., Englewood Cliffs, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R C Schank</author>
+<author>R P Abelson</author>
+</authors>
+<title>Scripts, plans, goals, and understanding. Lawrence Erlbaum Associates,</title>
+<date>1977</date>
+<location>Hillsdale, NJ.</location>
+<contexts>
+<context position="3031" citStr="Schank and Abelson, 1977" startWordPosition="442" endWordPosition="445"> document LA032590-0089) is Brazil. Previous research has addressed similar questionanswering (QA) scenarios using a variety of natural language processing (NLP) and information retrieval (IR) techniques. Lehnert (1978) tackles the difficult task of answering questions in the context of story understanding. Unlike our restricted QA task, questions to Lehnert&apos;s system often require answers that are not explicitly mentioned in the story. Her goal then is to answer questions by making inferences about actions and actors in the story using world knowledge in the form of scripts, plans, and goals (Schank and Abelson, 1977). More recently, Burke et al. (1995; 1997) describe a system that answers natural language questions using a database of question-answer pairs built from existing frequentlyasked question (FAQ) files. Their FAQFinder system uses IR techniques to match the given question to questions in the database. It then uses the WordNet lexical semantic knowledge base (Miller et al., 1990; Fellbaum, 1998) to improve the quality of the match. Kupiec (1993) investigates a closed-class QA task that is similar in many respects to the TREC8 QA task that we address here: the system answers general-knowledge ques</context>
+</contexts>
+<marker>Schank, Abelson, 1977</marker>
+<rawString>R. C. Schank and R. P. Abelson. 1977. Scripts, plans, goals, and understanding. Lawrence Erlbaum Associates, Hillsdale, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Amit Singhal</author>
+<author>Chris Buckley</author>
+<author>Mandar Mitra</author>
+</authors>
+<title>Pivoted document length normalization.</title>
+<date>1996</date>
+<booktitle>Proceedings of the Nineteenth Annual International ACM SIGIR Conference on Research and Development in Information Retrieval,</booktitle>
+<pages>21--29</pages>
+<editor>In H. Frei, D. Harman, P. Schauble, and R. Wilkinson, editors,</editor>
+<publisher>Association for Computing Machinery.</publisher>
+<contexts>
+<context position="10624" citStr="Singhal et al., 1996" startWordPosition="1656" endWordPosition="1659">st of the documents most relevant to the question. For the baseline QA system and all subsequent variations, we use Smart with standard term-weighting strategies and do not use automatic relevance feedback (Buckley, 1995). In addition, the baseline system applies no linguistic filters. To generate answers for a particular question, the system starts at the beginning of the top-ranked document returned by Smart for the question and constructs five 50-byte chunks consisting of document text with stopwords removed. 1We use Lnu term weighting for documents and /tu term weighting for the question (Singhal et al., 1996). Evaluation. As noted above, we evaluate each variation of our QA system on 38 TREC8 development questions and 200 TREC8 test questions. The indexed collection is TREC disks 4 and 5 (without Congressional Records). Results for the baseline Smart IR QA system are shown in the first row of Table 1. The system gets 3 out of 38 development questions and 29 out of 200 test questions correct. We judge the system correct if any of the five guesses contains each word of one of the answers. The final column of results shows the mean answer rank across all questions correctly answered. Smart is actuall</context>
+</contexts>
+<marker>Singhal, Buckley, Mitra, 1996</marker>
+<rawString>Amit Singhal, Chris Buckley, and Mandar Mitra. 1996. Pivoted document length normalization. In H. Frei, D. Harman, P. Schauble, and R. Wilkinson, editors, Proceedings of the Nineteenth Annual International ACM SIGIR Conference on Research and Development in Information Retrieval, pages 21-29. Association for Computing Machinery.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Singhal</author>
+<author>S Abney</author>
+<author>M Bacchiani</author>
+<author>M Collins</author>
+<author>D Hindle</author>
+<author>F Pereira</author>
+</authors>
+<title>AT&amp;T at TREC8. In</title>
+<date>2000</date>
+<booktitle>Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</booktitle>
+<editor>E. Voorhees, editor,</editor>
+<contexts>
+<context position="31402" citStr="Singhal et al., 2000" startWordPosition="5069" endWordPosition="5072">r, our final QA system equals the best of these systems (91 correct); without it, our score of 65 correct places our QA system near the middle of this group of eight. Like the work described here, virtually all of the top-ranked TREC8 systems use a combination of IR, and shallow NLP for their QA systems. IBM&apos;s AnSel system (Prager et al., 2000), for example, employs finite-state patterns as its primary shallow NLP component. These are used to recognize a fairly broad set of about 20 named entities. The IR component indexes only text passages associated with these entities. The AT&amp;T QA system (Singhal et al., 2000), the Qanda system (Breck et al., 2000), and the SyncMatcher system (Oard et al., 2000) all employ vector-space methods from IR, named entity identifiers, and a fairly simple question type determiner. In addition, SyncMatcher uses a broad-coverage dependency parser to enforce phrase relationship constraints. Instead of the vector space model, the LASSO system (Moldovan et al., 2000) uses boolean search operators for paragraph retrieval. Recognition of answer hypotheses in their system relies on identifying named entities. Finally, the Cymphony QA system (Srihari and Li, 2000) relies heavily on</context>
+</contexts>
+<marker>Singhal, Abney, Bacchiani, Collins, Hindle, Pereira, 2000</marker>
+<rawString>A. Singhal, S. Abney, M. Bacchiani, M. Collins, D. Hindle, and F. Pereira. 2000. AT&amp;T at TREC8. In E. Voorhees, editor, Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Srihari</author>
+<author>W Li</author>
+</authors>
+<title>Question Answering Supported by Information Extraction.</title>
+<date>2000</date>
+<booktitle>Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</booktitle>
+<editor>In E. Voorhees, editor,</editor>
+<contexts>
+<context position="31984" citStr="Srihari and Li, 2000" startWordPosition="5157" endWordPosition="5160">e AT&amp;T QA system (Singhal et al., 2000), the Qanda system (Breck et al., 2000), and the SyncMatcher system (Oard et al., 2000) all employ vector-space methods from IR, named entity identifiers, and a fairly simple question type determiner. In addition, SyncMatcher uses a broad-coverage dependency parser to enforce phrase relationship constraints. Instead of the vector space model, the LASSO system (Moldovan et al., 2000) uses boolean search operators for paragraph retrieval. Recognition of answer hypotheses in their system relies on identifying named entities. Finally, the Cymphony QA system (Srihari and Li, 2000) relies heavily on named entity identification; it also employs standard IR techniques and a shallow parser. In terms of statistical and linguistic knowledge sources employed, the primary difference between these systems and ours is our lack of an adequate named entity tagger. Incorporation of such a tagger will be a focus of future work. In addition, we believe that the retrieval and summarization components can be improved by incorporating automatic relevance feedback (Buckley, 1995) and coreference resolution. Morton (1999), for example, shows that coreference resolution improves passage re</context>
+</contexts>
+<marker>Srihari, Li, 2000</marker>
+<rawString>R. Srihari and W. Li. 2000. Question Answering Supported by Information Extraction. In E. Voorhees, editor, Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST Special Publication. In press.</rawString>
+</citation>
+<citation valid="true">
+<date>2000</date>
+<booktitle>Proceedings of the Eighth Text REtrieval Conference TREC 8.</booktitle>
+<publisher>NIST. In press.</publisher>
+<marker>2000</marker>
+<rawString>TREC-8. 2000. Proceedings of the Eighth Text REtrieval Conference TREC 8. NIST. In press.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

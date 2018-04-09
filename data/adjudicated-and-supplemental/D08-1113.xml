@@ -1,0 +1,1498 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000057">
+<title confidence="0.9968405">
+Latent-Variable Modeling of String Transductions
+with Finite-State Methods*
+</title>
+<author confidence="0.998585">
+Markus Dreyer and Jason R. Smith and Jason Eisner
+</author>
+<affiliation confidence="0.942999">
+Department of Computer Science
+Johns Hopkins University
+</affiliation>
+<address confidence="0.799356">
+Baltimore, MD 21218, USA
+</address>
+<email confidence="0.999341">
+{markus,jsmith,jason}@cs.jhu.edu
+</email>
+<sectionHeader confidence="0.993909" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999447947368421">
+String-to-string transduction is a central prob-
+lem in computational linguistics and natural
+language processing. It occurs in tasks as di-
+verse as name transliteration, spelling correc-
+tion, pronunciation modeling and inflectional
+morphology. We present a conditional log-
+linear model for string-to-string transduction,
+which employs overlapping features over la-
+tent alignment sequences, and which learns la-
+tent classes and latent string pair regions from
+incomplete training data. We evaluate our ap-
+proach on morphological tasks and demon-
+strate that latent variables can dramatically
+improve results, even when trained on small
+data sets. On the task of generating mor-
+phological forms, we outperform a baseline
+method reducing the error rate by up to 48%.
+On a lemmatization task, we reduce the error
+rates in Wicentowski (2002) by 38–92%.
+</bodyText>
+<sectionHeader confidence="0.998985" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.9973">
+A recurring problem in computational linguistics
+and language processing is transduction of charac-
+ter strings, e.g., words. That is, one wishes to model
+some systematic mapping from an input string x to
+an output string y. Applications include:
+</bodyText>
+<listItem confidence="0.999742428571429">
+• phonology: underlying representation H surface
+representation
+• orthography: pronunciation H spelling
+• morphology: inflected form H lemma, or differ-
+ently inflected form
+• fuzzy name matching (duplicate detection) and
+spelling correction: spelling H variant spelling
+</listItem>
+<bodyText confidence="0.959924666666667">
+*This work was supported by the Human Language Tech-
+nology Center of Excellence and by National Science Founda-
+tion grant No. 0347822 to the final author. We would also like
+to thank Richard Wicentowski for providing us with datasets for
+lemmatization, and the anonymous reviewers for their valuable
+feedback.
+</bodyText>
+<listItem confidence="0.9920505">
+• lexical translation (cognates, loanwords, translit-
+erated names): English word H foreign word
+</listItem>
+<bodyText confidence="0.99986875">
+We present a configurable and robust framework
+for solving such word transduction problems. Our
+results in morphology generation show that the pre-
+sented approach improves upon the state of the art.
+</bodyText>
+<sectionHeader confidence="0.949873" genericHeader="method">
+2 Model Structure
+</sectionHeader>
+<bodyText confidence="0.9998625">
+A weighted edit distance model (Ristad and Yian-
+ilos, 1998) would consider each character in isola-
+tion. To consider more context, we pursue a very
+natural generalization. Given an input x, we evalu-
+ate a candidate output y by moving a sliding window
+over the aligned (x, y) pair. More precisely, since
+many alignments are possible, we sum over all these
+possibilities, evaluating each alignment separately.1
+At each window position, we accumulate log-
+probability based on the material that appears within
+the current window. The window is a few charac-
+ters wide, and successive window positions over-
+lap. This stands in contrast to a competing approach
+(Sherif and Kondrak, 2007; Zhao et al., 2007)
+that is inspired by phrase-based machine translation
+(Koehn et al., 2007), which segments the input string
+into substrings that are transduced independently, ig-
+noring context.2
+</bodyText>
+<footnote confidence="0.707717">
+1At the other extreme, Freitag and Khadivi (2007) use no
+alignment; each feature takes its own view of how (x, y) relate.
+2We feel that this independence is inappropriate. By anal-
+</footnote>
+<bodyText confidence="0.8119132">
+ogy, it would be a poor idea for a language model to score a
+string highly if it could be segmented into independently fre-
+quent n-grams. Rather, language models use overlapping n-
+grams (indeed, it is the language model that rescues phrase-
+based MT from producing disjointed translations). We believe
+phrase-based MT avoids overlapping phrases in the channel
+model only because these would complicate the modeling of
+reordering (though see, e.g., Schwenk et al. (2007) and Casacu-
+berta (2000)). But in the problems of section 1, letter reordering
+is rare and we may assume it is local to a window.
+</bodyText>
+<page confidence="0.941537">
+1080
+</page>
+<note confidence="0.9909735">
+Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 1080–1089,
+Honolulu, October 2008. c�2008 Association for Computational Linguistics
+</note>
+<figureCaption confidence="0.9968086">
+Figure 1: One of many possible alignment strings A for
+the observed pair breaking/broke, enriched with latent
+strings `1 and `2. Observed letters are shown in bold. The
+box marks a trigram to be scored. See Fig. 2 for features
+that fire on this trigram.
+</figureCaption>
+<bodyText confidence="0.999923333333333">
+Joint n-gram models over the input and output di-
+mensions have been used before, but not for mor-
+phology, where we will apply them.3 Most notable
+is the local log-linear grapheme-to-phoneme model
+of Chen (2003), as well as generative models for
+that task (Deligne et al. (1995), Galescu and Allen
+(2001), Bisani and Ney (2002)).
+We advance that approach by adding new latent
+dimensions to the (input, output) tuples (see Fig. 1).4
+This enables us to use certain linguistically inspired
+features and discover unannotated information. Our
+features consider less or more than a literal n-gram.
+On the one hand, we generalize with features that
+abstract away from the n-gram window contents; on
+the other, we specialize the n-gram with features that
+make use of the added latent linguistic structure.
+In section 5, we briefly sketch our framework for
+concisely expressing and efficiently implementing
+models of this form. Our framework uses familiar
+log-linear techniques for stochastic modeling, and
+weighted finite-state methods both for implementa-
+tion and for specifying features. It appears general
+enough to cover most prior work on word transduc-
+tion. We imagine that it will be useful for future
+work as well: one might easily add new, linguisti-
+cally interesting classes of features, each class de-
+fined by a regular expression.
+</bodyText>
+<subsectionHeader confidence="0.996317">
+2.1 Basic notation
+</subsectionHeader>
+<bodyText confidence="0.999702333333333">
+We use an input alphabet Ex and output alphabet
+Ey. We conventionally use x ∈ E∗x to denote the
+input string and y ∈ E∗y to denote the output string.
+</bodyText>
+<footnote confidence="0.9539948">
+3Clark (2001) does use pair HMMs for morphology.
+4Demberg et al. (2007) similarly added extra dimensions.
+However, their added dimensions were supervised, not latent,
+and their model was a standard generative n-gram model whose
+generalization was limited to standard n-gram smoothing.
+</footnote>
+<bodyText confidence="0.975761">
+There are many possible alignments between x
+and y. We represent each as an alignment string
+A ∈ E∗xy, over an alignment alphabet of ordered
+def
+pairs, Exy = ((Ex ∪ {E}) × (Ey ∪ {E})) − {(�, �)}.
+For example, one alignment of x = breaking
+with y = broke is the 9-character string A =
+(b, b)(r, r)(e, o)(a, c)(k, k)(c, e)(i, c)(n, c)(g, E).
+It is pictured in the first two lines of Fig. 1.
+The remainder of Fig. 1 shows how we intro-
+duce latent variables, by enriching the alignment
+characters to be tuples rather than pairs. Let E def =
+(Exy × Et� × Et, × · · · × EtK), where Et, are al-
+phabets used for the latent variables `i.
+FSA and FST stand for “finite-state acceptor” and
+“finite-state transducer,” while WFSA and WFST
+are their weighted variants. The ◦ symbol denotes
+composition.
+Let T be a relation and w a string. We write T[w]
+to denote the image of w under T (i.e., range(w ◦
+T)), a set of 0 or more strings. Similarly, if W is a
+weighted language (typically encoded by a WFSA),
+we write W [w] to denote the weight of w in W.
+Let πx ⊆ E∗ × E∗x denote the deterministic reg-
+ular relation that projects an alignment string to its
+corresponding input string, so that πx[A] = x. Sim-
+ilarly, define πy ⊆ E∗ × E∗y so that πy[A] = y. Let
+Axy be the set of alignment strings A compatible
+def
+with x and y; formally, Axy = {A ∈ E∗ : πx[A] =
+x ∧ πy[A] = y}. This set will range over all possible
+alignments between x and y, and also all possible
+configurations of the latent variables.
+</bodyText>
+<subsectionHeader confidence="0.997023">
+2.2 Log-linear modeling
+</subsectionHeader>
+<bodyText confidence="0.999980166666667">
+We use a standard log-linear model whose features
+are defined on alignment strings A ∈ Axy, allow-
+ing them to be sensitive to the alignment of x and y.
+Given a collection of features fi : E∗ → R with as-
+sociated weights θi ∈ R, the conditional likelihood
+of the training data is
+</bodyText>
+<equation confidence="0.975889">
+EA∈A�y exp Ei θifi(A)
+pθ(y  |x) = ( )
+EyI EA∈ A.y. exp Ei θifi(A) 1
+</equation>
+<bodyText confidence="0.9996538">
+Given a parameter vector 0, we compute equa-
+tion (1) using a finite-state machine. We define a
+WFSA, Uθ, such that Uθ[A] yields the unnormalized
+probability uθ(A) def = exp Ei θifi(A) for any A ∈
+E∗. (See section 5 for the construction.) To obtain
+</bodyText>
+<page confidence="0.992148">
+1081
+</page>
+<bodyText confidence="0.995411333333333">
+the numerator of equation (1), with its EAEA y, we
+sum over all paths in U0 that are compatible with x
+and y. That is, we build x o 7r�1
+</bodyText>
+<equation confidence="0.612383333333333">
+x o U0 o 7ry o y and
+sum over all paths. For the denominator we build the
+larger machine x o 7r�1
+</equation>
+<bodyText confidence="0.999856105263158">
+x o U0 and again compute the
+pathsum. We use standard algorithms (Eisner, 2002)
+to compute the pathsums as well as their gradients
+with respect to 0 for optimization (section 4.1).
+Below, we will restrict our notion of valid align-
+ment strings in E*. U0 is constructed not to accept
+invalid ones, thus assigning them probability 0.
+Note that the possible output strings y&apos; in the de-
+nominator in equation (1) may have arbitrary length,
+leading to an infinite summation over alignment
+strings. Thus, for some values of 0, the sum in
+the denominator diverges and the probability dis-
+tribution is undefined. There exist principled ways
+to avoid such 0 during training. However, in our
+current work, we simply restrict to finitely many
+alignment strings (given x), by prohibiting as invalid
+those with &gt; k consecutive insertions (i.e., charac-
+ters like (E, a)).5 Finkel et al. (2008) and others have
+similarly bounded unary rule cycles in PCFGs.
+</bodyText>
+<subsectionHeader confidence="0.999706">
+2.3 Latent variables
+</subsectionHeader>
+<bodyText confidence="0.910752958333333">
+The alignment between x and y is a latent ex-
+planatory variable that helps model the distribution
+p(y  |x) but is not observed in training. Other latent
+variables can also be useful. Morphophonological
+changes are often sensitive to phonemes (whereas x
+and y may consist of graphemes); syllable bound-
+aries; a conjugation class; morpheme boundaries;
+and the position of the change within the form.
+Thus, as mentioned in section 2.1, we enrich the
+alignment string A so that it specifies additional la-
+tent variables to which features may wish to refer.
+In Fig. 1, two latent strings are added, enabling the
+features in Fig. 2(a)–(h). The first character is not
+5We set k to a value between 1 and 3, depending on the tasks,
+always ensuring that no input/output pairs observed in training
+are excluded. The insertion restriction does slightly enlarge the
+FSA UO: a state must keep track of the number of consecutive
+E symbols in the immediately preceding x input, and for a few
+states, this cannot be determined just from the immediately pre-
+ceding (n − 1)-gram. Despite this, we found empirically that
+our approximation is at least as fast as the exact method of Eis-
+ner (2002), who sums around cyclic subnetworks to numerical
+convergence. Furthermore, our approximation does not require
+us to detect divergence during training.
+</bodyText>
+<figureCaption confidence="0.995871">
+Figure 2: The boxes (a)-(h) represent some of the features
+that fire on the trigram shown in Fig. 1. These features are
+explained in detail in section 3.
+</figureCaption>
+<bodyText confidence="0.999903689655172">
+just an input/output pair, but the 4-tuple (b, b, 2, 1).
+Here, E1 indicates that this form pair (breaking /
+broke) as a whole is in a particular cluster, or word
+class, labeled with the arbitrary number 2. Notice in
+Fig. 1 that the class 2 is visible in all local windows
+throughout the string. It allows us to model how cer-
+tain phenomena, e.g. the vowel change from ea to
+o, are more likely in one class than in another. Form
+pairs in the same class as the breaking / broke ex-
+ample might include the following Germanic verbs:
+speak, break, steal, tear, and bear.
+Of course, word classes are latent (not labeled in
+our training data). Given x and y, A,,y will include
+alignment strings that specify class 1, and others
+that are identical except that they specify class 2;
+equation (1) sums over both possibilities.6 In a valid
+alignment string A, E1 must be a constant string such
+as 111... or 222..., as in Fig. 1, so that it spec-
+ifies a single class for the entire form pair. See sec-
+tions 4.2 and 4.3 for examples of what classes were
+learned in our experiments.
+The latent string E2 splits the string pair into num-
+bered regions. In a valid alignment string, the re-
+gion numbers must increase throughout E2, although
+numbers may be skipped to permit omitted regions.
+To guide the model to make a useful division into
+regions, we also require that identity characters such
+as (b, b) fall in even regions while change charac-
+ters such as (e, o) (substitutions, deletions, or inser-
+</bodyText>
+<footnote confidence="0.846442">
+6The latent class is comparable to the latent variable on the
+tree root symbol S in Matsuzaki et al. (2005).
+</footnote>
+<page confidence="0.994684">
+1082
+</page>
+<bodyText confidence="0.999725944444444">
+tions) fall in odd regions.7 Region numbers must not
+increase within a sequence of consecutive changes
+or consecutive identities.8 In Fig. 1, the start of re-
+gion 1 is triggered by e:o, the start of region 2 by
+the identity k:k, region 3 by c:e.
+Allowing region numbers to be skipped makes it
+possible to consistently assign similar labels to sim-
+ilar regions across different training examples. Ta-
+ble 2, for example, shows pairs that contain a vowel
+change in the middle, some of which contain an ad-
+ditional insertion of ge in the begining (verbinden
+/ verbunden, reibt / gerieben). We expect the model
+to learn to label the ge insertion with a 1 and vowel
+change with a 3, skipping region 1 in the examples
+where the ge insertion is not present (see section
+4.2, Analysis).
+In the next section we describe features over these
+enriched alignment strings.
+</bodyText>
+<sectionHeader confidence="0.99962" genericHeader="method">
+3 Features
+</sectionHeader>
+<bodyText confidence="0.997437244444444">
+One of the simplest ways of scoring a string is an n-
+gram model. In our log-linear model (1), we include
+ngram features fi(A), each of which counts the oc-
+currences in A of a particular n-gram of alignment
+characters. The log-linear framework lets us include
+ngram features of different lengths, a form of back-
+off smoothing (Wu and Khudanpur, 2000).
+We use additional backoff features on alignment
+strings to capture phonological, morphological, and
+orthographic generalizations. Examples are found in
+features (b)-(h) in Fig. 2. Feature (b) matches vowel
+and consonant character classes in the input and
+output dimensions. In the id/subst ngram feature,
+we have a similar abstraction, where the character
+classes ins, del, id, and subst are defined over in-
+put/output pairs, to match insertions, deletions, iden-
+tities (matches), and substitutions.
+In string transduction tasks, it is helpful to in-
+clude a language model of the target. While this
+can be done by mixing the transduction model with
+a separate language model, it is desirable to in-
+clude a target language model within the transduc-
+7This strict requirement means, perhaps unfortunately, that a
+single region cannot accommodate the change ayc:xyz unless
+the two y’s are not aligned to each other. It could be relaxed,
+however, to a prior or an initialization or learning bias.
+8The two boundary characters #, numbered 0 and max
+(max=6 in our experiments), are neither changes nor identities.
+tion model. We accomplish this by creating target
+language model features, such as (c) and (g) from
+Fig. 2, which ignore the input dimension. We also
+have features which mirror features (a)-(d) but ig-
+nore the latent classes and/or regions (e.g. features
+(e)-(h)).
+Notice that our choice of E only permits mono-
+tonic, 1-to-1 alignments, following Chen (2003).
+We may nonetheless favor the 2-to-1 alignment
+(ea,o) with bigram features such as (e,o)(a,c). A
+“collapsed” version of a feature will back off from
+the specific alignment of the characters within a win-
+dow: thus, (ea,o) is itself a feature. Currently, we
+only include collapsed target language model fea-
+tures. These ignore epsilons introduced by deletions
+in the alignment, so that collapsed ok fires in a win-
+dow that contains ock.
+</bodyText>
+<sectionHeader confidence="0.999547" genericHeader="method">
+4 Experiments
+</sectionHeader>
+<bodyText confidence="0.99998">
+We evaluate our model on two tasks of morphol-
+ogy generation. Predicting morphological forms has
+been shown to be useful for machine translation and
+other tasks.9 Here we describe two sets of exper-
+iments: an inflectional morphology task in which
+models are trained to transduce verbs from one form
+into another (section 4.2), and a lemmatization task
+(section 4.3), in which any inflected verb is to be re-
+duced to its root form.
+</bodyText>
+<subsectionHeader confidence="0.985158">
+4.1 Training and decoding
+</subsectionHeader>
+<bodyText confidence="0.9584035">
+We train 0 to maximize the regularized10 conditional
+log-likelihood11
+</bodyText>
+<equation confidence="0.861672">
+�
+(x,y*)EC
+</equation>
+<bodyText confidence="0.89365775">
+where C is a supervised training corpus. To max-
+imize (2) during training, we apply the gradient-
+based optimization method L-BFGS (Liu and No-
+cedal, 1989).12
+9E.g., Toutanova et al. (2008) improve MT performance
+by selecting correct morphological forms from a knowledge
+source. We instead focus on generalizing from observed forms
+and generating new forms (but see with rootlist in Table 3).
+</bodyText>
+<footnote confidence="0.8762334">
+10The variance a2 of the L2 prior is chosen by optimizing on
+development data. We are also interested in trying an L1 prior.
+11Alternatives would include faster error-driven methods
+(perceptron, MIRA) and slower max-margin Markov networks.
+12This worked a bit better than stochastic gradient descent.
+</footnote>
+<equation confidence="0.934232428571429">
+log p0(y*  |x) + ||0||2/2u2, (2)
+1083
+To decode a test example x, we wish to find
+y� = argmaxyEF,y pe(y x). Constructively, y� is the
+highest-probability string in the WFSA T [x], where
+T = Tr�1
+x oUB oTry is the trained transducer that maps
+</equation>
+<bodyText confidence="0.999969647058824">
+x nondeterministically to y. Alas, it is NP-hard to
+find the highest-probability string in a WFSA, even
+an acyclic one (Casacuberta and Higuera, 2000).
+The problem is that the probability of each string y
+is a sum over many paths in T [x] that reflect differ-
+ent alignments of y to x. Although it is straightfor-
+ward to use a determinization construction (Mohri,
+1997)13 to collapse these down to a single path per
+y (so that y� is easily read off the single best path),
+determinization can increase the WFSA’s size expo-
+nentially. We approximate by pruning T [x] back to
+its 1000-best paths before we determinize.14
+Since the alignments, classes and regions are not
+observed in C, we do not enjoy the convex objec-
+tive function of fully-supervised log-linear models.
+Training equation (2) therefore converges only to
+some local maximum that depends on the starting
+point in parameter space. To find a good starting
+point we employ staged training, a technique in
+which several models of ascending complexity are
+trained consecutively. The parameters of each more
+complex model are initialized with the trained pa-
+rameters of the previous simpler model.
+Our training is done in four stages. All weights
+are initialized to zero. ① We first train only fea-
+tures that fire on unigrams of alignment charac-
+ters, ignoring features that examine the latent strings
+or backed-off versions of the alignment characters
+(such as vowel/consonant or target language model
+features). The resulting model is equivalent to
+weighted edit distance (Ristad and Yianilos, 1998).
+② Next,15 we train all n-grams of alignment charac-
+ters, including higher-order n-grams, but no backed-
+off features or features that refer to latent strings.
+</bodyText>
+<footnote confidence="0.883931538461538">
+13Weighted determinization is not always possible, but it is
+in our case because our limit to k consecutive insertions guar-
+antees that T [x] is acyclic.
+14This value is high enough; we see no degradations in per-
+formance if we use only 100 or even 10 best paths. Below that,
+performance starts to drop slightly. In both of our tasks, our
+conditional distributions are usually peaked: the 5 best output
+candidates amass &gt; 99% of the probability mass on average.
+Entropy is reduced by latent classes and/or regions.
+15When unclamping a feature at the start of stages ②–④, we
+initialize it to a random value from [−0.01, 0.01].
+13SIA. liebte, pickte, redete, rieb, trieb, zuzog
+13SKE. liebe, picke, rede, reibe, treibe, zuziehe
+</footnote>
+<table confidence="0.802840333333333">
+2PIE. liebt, pickt, redet, reibt, treibt, zuzieht
+13PKE.lieben, picken, reden, reiben, treiben, zuziehen
+2PKE. abbrechet, entgegentretet, zuziehet
+z. abzubrechen, entgegenzutreten, zuzuziehen
+rP. redet, reibt, treibt, verbindet, ¨uberfischt
+pA.geredet, gerieben, getrieben, verbunden, ¨uberfischt
+</table>
+<tableCaption confidence="0.8291065">
+Table 2: CELEX forms used in our experiments. Changes
+from one form to the other are in bold (information not
+given in training). The changes from rP to pA are very
+complex. Note also the differing positions of zu in z.
+</tableCaption>
+<bodyText confidence="0.999773444444444">
+③ Next, we add backed-off features as well as all
+collapsed features. ④ Finally, we train all features.
+In our experiments, we permitted latent classes 1–
+2 and, where regions are used, regions 0–6. For
+speed, stages ②–④ used a pruned E that included
+only “plausible” alignment characters: a may not
+align to b unless it did so in the trained stage-(1)
+model’s optimal alignment of at least one training
+pair (x, y*).
+</bodyText>
+<subsectionHeader confidence="0.913972">
+4.2 Inflectional morphology
+</subsectionHeader>
+<bodyText confidence="0.985231904761905">
+We conducted several experiments on the CELEX
+morphological database. We arbitrarily consid-
+ered mapping the following German verb forms:16
+13SIA 13SKE, 2PIE —* 13PKE, 2PKE —* z,
+and rP pA.17 We refer to these tasks as 13SIA,
+2PIE, 2PKE and rP. Table 2 shows some examples
+of regular and irregular forms. Common phenomena
+include stem changes (ei:ie), prefixes inserted af-
+ter other morphemes (abzubrechen) and circumfixes
+(gerieben).
+We compile lists of form pairs from CELEX. For
+each task, we sample 2500 data pairs without re-
+placement, of which 500 are used for training, 1000
+as development and the remaining 1000 as test data.
+We train and evaluate models on this data and repeat
+16From the available languages in CELEX (German, Dutch,
+and English), we selected German as the language with the
+most interesting morphological phenomena, leaving the mul-
+tilingual comparison for the lemmatization task (section 4.3),
+where there were previous results to compare with. The 4 Ger-
+man datasets were picked arbitrarily.
+</bodyText>
+<footnote confidence="0.833123">
+17A key to these names: 13SIA=1st/3rd sg. ind. past;
+13SKE=1st/3rd sg. subjunct. pres.; 2PIE=2nd pl. ind. pres.;
+13PKE=1st/3rd pl. subjunct. pres.; 2PKE=2nd pl. subjunct.
+pres.; z=infinitive; rP=imperative pl.; pA=past part.
+</footnote>
+<page confidence="0.959014">
+1084
+</page>
+<table confidence="0.998984">
+ng vc tlm Features id lat.cl. lat.reg. 13SIA Task 2PKE rP
+tlm-coll 2PIE
+ngrams x 82.3 (.23) 88.6 (.11) 74.1 (.52) 70.1 (.66)
+x x 82.8 (.21) 88.9 (.11) 74.3 (.52) 70.0 (.68)
+x x 82.0 (.23) 88.7 (.11) 74.8 (.50) 69.8 (.67)
+x x x 82.5 (.22) 88.6 (.11) 74.9 (.50) 70.0 (.67)
+x x x 81.2 (.24) 88.7 (.11) 74.5 (.50) 68.6 (.69)
+ngrams+x x x x x 82.5 (.22) 88.8 (.11) 74.5 (.50) 69.2 (.69)
+x x 82.4 (.22) 88.9 (.11) 74.8 (.51) 69.9 (.68)
+x x x 83.0 (.21) 88.9 (.11) 74.9 (.50) 70.3 (.67)
+x x x 82.2 (.22) 88.8 (.11) 74.8 (.50) 70.0 (.67)
+x x x x 82.9 (.21) 88.6 (.11) 75.2 (.50) 69.7 (.68)
+x x x x 81.9 (.23) 88.6 (.11) 74.4 (.51) 69.1 (.68)
+x x x x x 82.8 (.21) 88.7 (.11) 74.7 (.50) 69.9 (.67)
+x x x x x x 84.8 (.19) 93.6 (.06) 75.7 (.48) 81.8 (.43)
+ngrams+x x x x x x x 87.4 (.16) 93.8 (.06) 88.0 (.28) 83.7 (.42)
++latent x x x x x x x 87.5 (.16) 93.4 (.07) 87.4 (.28) 84.9 (.39)
+Moses3 73.9 (.40) 92.0 (.09) 67.1 (.70) 67.6 (.77)
+Moses9 85.0 (.21) 94.0 (.06) 82.3 (.31) 70.8 (.67)
+Moses15 85.3 (.21) 94.0 (.06) 82.8 (.30) 70.8 (.67)
+</table>
+<tableCaption confidence="0.870834">
+Table 1: Exact-match accuracy and average edit distance (the latter in parentheses) versus the correct answer on the
+German inflection task, using different combinations of feature classes. The label ngrams corresponds to the second
+</tableCaption>
+<bodyText confidence="0.913272612244898">
+stage of training, ngrams+x to the third where backoff features may fire (vc = vowel/consonant, tlm = target LM, tlm-
+coll = collapsed tlm, id = identity/substitution/deletion features), and ngrams+x+latent to the fourth where features
+sensitive to latent classes and latent regions are allowed to fire. The highest n-gram order used is 3, except for Moses9
+and Moses15 which examine windows of up to 9 and 15 characters, respectively. We mark in bold the best result for
+each dataset, along with all results that are statistically indistinguishable (paired permutation test, p &lt; 0.05).
+the process 5 times. All results are averaged over
+these 5 runs.
+Table 1 and Fig. 3 report separate results after
+stages ©, OO , and ® of training, which include suc-
+cessively larger feature sets. These are respectively
+labeled ngrams, ngrams+x, and ngrams+x+latent.
+In Table 1, the last row in each section shows the
+full feature set at that stage (cf. Fig. 3), while earlier
+rows test feature subsets.18
+Our baseline is the SMT toolkit Moses (Koehn et
+al., 2007) run over letter strings rather than word
+strings. It is trained (on the same data splits) to
+find substring-to-substring phrase pairs and translate
+from one form into another (with phrase reordering
+turned off). Results reported as moses3 are obtained
+from Moses runs that are constrained to the same
+context windows that our models use, so the maxi-
+mum phrase length and the order of the target lan-
+guage model were set to 3. We also report results
+using much larger windows, moses9 and moses15.
+18The number k of consecutive insertions was set to 3.
+Results. The results in Table 1 show that including
+latent classes and/or regions improves the results
+dramatically. Compare the last line in ngrams+x
+to the last line in ngrams+x+latent. The accuracy
+numbers improve from 82.8 to 87.5 (13SIA), from
+88.7 to 93.4 (2PIE), from 74.7 to 87.4 (2PKE), and
+from 69.9 to 84.9 (rP).19 This shows that error re-
+ductions between 27% and 50% were reached. On
+3 of 4 tasks, even our simplest ngrams method beats
+the moses3 method that looks at the same amount of
+context.20 With our full model, in particular using
+latent features, we always outperform moses3—and
+even outperform moses15 on 3 of the 4 datasets, re-
+ducing the error rate by up to 48.3% (rP). On the
+fourth task (2PIE), our method and moses15 are sta-
+tistically tied. Moses15 has access to context win-
+dows of five times the size than we allowed our
+methods in our experiments.
+19All claims in the text are statistically significant under a
+paired permutation test (p &lt; .05).
+20This bears out our contention in footnote 2 that a “segment-
+ing” channel model is damaging. Moses cannot fully recover by
+using overlapping windows in the language model.
+</bodyText>
+<page confidence="0.993315">
+1085
+</page>
+<bodyText confidence="0.999986340909091">
+While the gains from backofffeatures in Table 1
+were modest (significant gains only on 13SIA), the
+learning curve in Fig. 3 suggests that they were help-
+ful for smaller training sets on 2PKE (see ngrams vs
+ngrams+x on 50 and 100) and helped consistently
+over different amounts of training data for 13SIA.
+Analysis. The types of errors that our system (and
+the moses baseline) make differ from task to task.
+Due to lack of space, we mainly focus on the com-
+plex rP task. Here, most errors come from wrongly
+copying the input to the output, without making a
+change (40-50% of the errors in all models, except
+for our model with latent classes and no regions,
+where it accounts for only 30% of the errors). This
+is so common because about half of the training ex-
+amples contain identical inputs and outputs (as in
+the imperative berechnet and the participle (ihr habt)
+berechnet). Another common error is to wrongly as-
+sume a regular conjugation (just insert the prefix ge-
+at the beginning). Interestingly, this error by sim-
+plification is more common in the Moses models
+(44% of moses3 errors, down to 40% for moses15)
+than in our models, where it accounts for 37% of
+the errors of our ngrams model and only 19% if la-
+tent classes or latent regions are used; however, it
+goes up to 27% if both latent classes and regions
+are used.21 All models for rP contain errors where
+wrong analogies to observed words are made (ver-
+schweisst/verschwissen in analogy to the observed
+durchweicht/durchwichen, or bebt/geboben in anal-
+ogy to hebt/gehoben). In the 2PKE task, most errors
+result from inserting the zu morpheme at a wrong
+place or inserting two of them, which is always
+wrong. This error type was greatly reduced by la-
+tent regions, which can discover different parame-
+ters for different positions, making it easier to iden-
+tify where to insert the zu.
+Analysis of the 2 latent classes (when used) shows
+that a split into regular and irregular conjugations
+has been learned. For the rP task we compute,
+for each data pair in development data, the poste-
+rior probabilities of membership in one or the other
+class. 98% of the regular forms, in which the past
+participle is built with ge- ... -t, fall into one class,
+</bodyText>
+<footnote confidence="0.969372333333333">
+21We suspect that training of the models that use classes and
+regions together was hurt by the increased non-convexity; an-
+nealing or better initialization might help.
+</footnote>
+<figureCaption confidence="0.994301333333333">
+Figure 3: Learning curves for German inflection tasks,
+13SIA (left) and 2PKE (right), as a function of the num-
+ber of training pairs. ngrams+x means all backoff fea-
+tures were used, ngrams+x+latent means all latent fea-
+tures were used in addition. Moses15 examines windows
+of up to 15 characters.
+</figureCaption>
+<bodyText confidence="0.998975611111111">
+which in turn consists nearly exclusively (96%) of
+these forms. Different irregular forms are lumped
+into the other class.
+The learned regions are consistent across different
+pairs. On development data for the rP task, 94.3%
+of all regions that are labeled 1 are the insertion se-
+quence (c,ge), region 3 consists of vowel changes
+93.7% of the time; region 5 represents the typical
+suffixes (t, en), (et, en), (t, n) (92.7%). In the
+2PKE task, region 0 contains different prefixes (e.g.
+entgegen in entgegenzutreten), regions 1 and 2 are
+empty, region 3 contains the zu affix, region 4 the
+stem, and region 5 contains the suffix.
+The pruned alignment alphabet excluded a few
+gold standard outputs so that the model contains
+paths for 98.9%–99.9% of the test examples. We
+verified that the insertion limit did not hurt oracle
+accuracy.
+</bodyText>
+<subsectionHeader confidence="0.999393">
+4.3 Lemmatization
+</subsectionHeader>
+<bodyText confidence="0.999890375">
+We apply our models to the task of lemmatization,
+where the goal is to generate the lemma given an in-
+flected word form. We compare our model to Wicen-
+towski (2002, chapter 3), an alternative supervised
+approach. Wicentowski’s Base model simply learns
+how to replace an arbitrarily long suffix string of an
+input word, choosing some previously observed suf-
+fix —* suffix replacement based on the input word’s
+</bodyText>
+<page confidence="0.973245">
+1086
+</page>
+<table confidence="0.999786285714286">
+Without rootlist (generation) With rootlist (selection)
+Wicentowski (2002) This paper Wicentowski (2002) This paper
+Lang. Base Af. WFA. n n+x n+x+l Base Af. WFA. n n+x n+x+l
+Basque 85.3 81.2 80.1 91.0 (.20) 91.1 (.20) 93.6 (.14) 94.5 94.0 95.0 90.9 (.29) 90.8 (.31) 90.9 (.30)
+English 91.0 94.7 93.1 92.4 (.09) 93.4 (.08) 96.9 (.05) 98.3 98.6 98.6 98.7 (.04) 98.7(.04) 98.7(.04)
+Irish 43.3 - 70.8 96.8 (.07) 97.0 (.06) 97.8 (.04) 43.9 - 89.1 99.6 (.02) 99.6 (.02) 99.5 (.03)
+Tagalog 0.3 80.3 81.7 80.5 (.32) 83.0 (.29) 88.6 (.19) 0.8 91.8 96.0 97.0 (.07) 97.2 (.07) 97.7 (.05)
+</table>
+<tableCaption confidence="0.9773628">
+Table 3: Exact-match accuracy and average edit distance (the latter in parentheses) on the 8 lemmatization tasks (2
+tasks x 4 languages). The numbers from Wicentowski (2002) are for his Base, Affix and WFAffix models. The
+numbers for our models are for the feature sets ngrams, ngrams+x, ngrams+x+latent. The best result per task is in
+bold (as are statistically indistinguishable results when we can do the comparison, i.e., for our own models). Corpus
+sizes: Basque 5,842, English 4,915, Irish 1,376, Tagalog 9,479.
+</tableCaption>
+<bodyText confidence="0.998921322580645">
+final n characters (interpolating across different val-
+ues of n). His Affix model essentially applies the
+Base model after stripping canonical prefixes and
+suffixes (given by a user-supplied list) from the input
+and output. Finally, his WFAffix uses similar meth-
+ods to also learn substring replacements for a stem
+vowel cluster and other linguistically significant re-
+gions in the form (identified by a deterministic align-
+ment and segmentation of training pairs). This ap-
+proach is a bit like our change regions combined
+with Moses’s region-independent phrase pairs.
+We compare against all three models. Note that
+Affix and WFAffix have an advantage that our mod-
+els do not, namely, user-supplied lists of canonical
+affixes for each language. It is interesting to see
+how our models with their more non-committal tri-
+gram structure compare to this. Table 3 reports re-
+sults on the data sets used in Wicentowski (2002),
+for Basque, English, Irish, and Tagalog. Follow-
+ing Wicentowski, 10-fold cross-validation was used.
+The columns n+x and n+x+l mean ngram+x and
+ngram+x+latent, respectively. As latent variables,
+we include 2 word classes but no change regions.22
+For completeness, Table 3 also compares with Wi-
+centowski (2002) on a selection (rather than genera-
+tion) task. Here, at test time, the lemma is selected
+from a candidate list of known lemmas, namely, all
+the output forms that appeared in training data.23
+These additional results are labeled with rootlist in
+the right half of Table 3.
+On the supervised generation task without rootlist,
+</bodyText>
+<footnote confidence="0.6835166">
+22The insertion limit k was set to 2 for Basque and 1 for the
+other languages.
+23Though test data contained no (input, output) pairs from
+training data, it reused many of the output forms, since many
+inflected inputs are to be mapped to the same output lemma.
+</footnote>
+<bodyText confidence="0.999722772727273">
+our models outperform Wicentowski (2002) by a
+large margin. Comparing our results that use la-
+tent classes (n+x+l) with Wicentowski’s best mod-
+els we observe error reductions ranging from about
+38% (Tagalog) to 92% (Irish). On the selection task
+with rootlist, we outperform Wicentowski (2002) in
+English, Irish, and Tagalog.
+Analysis. We examined the classes learned on En-
+glish lemmatization by our ngrams+x+latent model.
+For each of the input/output pairs in development
+data, we found the most probable latent class. For
+the most part, the 2 classes are separated based on
+whether or not the correct output ends in e. This
+use of latent classes helped address many errors like
+wronging / wronge or owed / ow). Such missing or
+surplus final e’s account for 72.5% of the errors for
+ngrams and 70.6% of the errors for ngrams+x, but
+only 34.0% of the errors for ngrams+x+latent.
+The test oracles are between 99.8% – 99.9%, due
+to the pruned alignment alphabet. As on the inflec-
+tion task, the insertion limit does not exclude any
+gold standard paths.
+</bodyText>
+<sectionHeader confidence="0.983906" genericHeader="method">
+5 Finite-State Feature Implementation
+</sectionHeader>
+<bodyText confidence="0.9997166">
+We used the OpenFST library (Allauzen et al., 2007)
+to implement all finite-state computations, using the
+expectation semiring (Eisner, 2002) for training.
+Our model is defined by the WFSA Ue, which is
+used to score alignment strings in E* (section 2.2).
+We now sketch how to construct U0 from features.
+n-gram construction The construction that we
+currently use is quite simple. All of our current
+features fire on windows of width &lt; 3. We build
+a WFSA with the structure of a 3-gram language
+</bodyText>
+<page confidence="0.989436">
+1087
+</page>
+<bodyText confidence="0.998375446808511">
+model over E*. Each of the JE J&apos; states remembers
+two previous alignment characters ab of history; for
+each c E E, it has an outgoing arc that accepts c (and
+leads to state bc). The weight of this arc is the total
+weight (from 0) of the small set of features that fire
+when the trigram window includes abc. By conven-
+tion, these also include features on bc and c (which
+may be regarded as backoff features ?bc and ??c).
+Since each character in E is actually a 4-tuple, this
+trigram machine is fairly large. We build it lazily
+(“on the fly”), constructing arcs only as needed to
+deal with training or test data.
+Feature templates Our experiments use over
+50,000 features. How do we specify these features
+to the above construction? Rather than writing ordi-
+nary code to extract features from a window, we find
+it convenient to harness FSTs as a “little language”
+(Bentley, 1986) for specifying entire sets of features.
+A feature template T is an nondeterministic FST
+that maps the contents of the sliding window, such
+as abc, to one or more features, which are also
+described as strings.24 The n-gram machine de-
+scribed above can compute T[((a&apos;b)&apos;c)&apos;] to find
+out what features fire on abc and its suffixes. One
+simple feature template performs “vowel/consonant
+backoff”; e.g., it maps abc to the feature named
+VCC. Fig. 2 showed the result of applying several
+actual feature templates to the window shown in
+Fig. 1. The extended regular expression calculus
+provides a flexible and concise notation for writ-
+ing down these FSTs. As a trivial example, the tri-
+gram “vowel/consonant backoff” transducer can be
+described as T = VVV, where V is a transducer
+that performs backoff on a single alignment charac-
+ter. Feature templates should make it easy to experi-
+ment with adding various kinds of linguistic knowl-
+edge. We have additional algorithms for compiling
+UB from a set of arbitrary feature templates,25 in-
+cluding templates whose features consider windows
+of variable or even unbounded width. The details are
+beyond the scope of this paper, but it is worth point-
+ing out that they exploit the fact that feature tem-
+plates are FSTs and not arbitrary code.
+24Formally, if i is a string naming a feature, then fi(A)
+counts the number of positions in A that are immediately pre-
+ceded by some string in T `[i].
+25Provided that the total number of features is finite.
+</bodyText>
+<sectionHeader confidence="0.999266" genericHeader="conclusions">
+6 Conclusions
+</sectionHeader>
+<bodyText confidence="0.999979804347826">
+The modeling framework we have presented here
+is, we believe, an attractive solution to most string
+transduction problems in NLP. Rather than learn the
+topology of an arbitrary WFST, one specifies the
+topology using a small set of feature templates, and
+simply trains the weights.
+We evaluated on two morphology generation
+tasks. When inflecting German verbs we, even with
+the simplest features, outperform the moses3 base-
+line on 3 out of 4 tasks, which uses the same amount
+of context as our models. Introducing more sophis-
+ticated features that have access to latent classes and
+regions improves our results dramatically, even on
+small training data sizes. Using these we outper-
+form moses9 and moses1S, which use long context
+windows, reducing error rates by up to 48%. On the
+lemmatization task we were able to improve the re-
+sults reported in Wicentowski (2002) on three out of
+four tested languages and reduce the error rates by
+38% to 92%. The model’s errors are often reason-
+able misgeneralizations (e.g., assume regular con-
+jugation where irregular would have been correct),
+and it is able to use even a small number of latent
+variables (including the latent alignment) to capture
+useful linguistic properties.
+In future work, we would like to identify a set of
+features, latent variables, and training methods that
+port well across languages and string-transduction
+tasks. We would like to use features that look at
+wide context on the input side, which is inexpen-
+sive (Jiampojamarn et al., 2007). Latent variables
+we wish to consider are an increased number of
+word classes; more flexible regions—see Petrov et
+al. (2007) on learning a state transition diagram for
+acoustic regions in phone recognition—and phono-
+logical features and syllable boundaries. Indeed, our
+local log-linear features over several aligned latent
+strings closely resemble the soft constraints used by
+phonologists (Eisner, 1997). Finally, rather than de-
+fine a fixed set of feature templates as in Fig. 2,
+we would like to refine empirically useful features
+during training, resulting in language-specific back-
+off patterns and adaptively sized n-gram windows.
+Many of these enhancements will increase the com-
+putational burden, and we are interested in strategies
+to mitigate this, including approximation methods.
+</bodyText>
+<page confidence="0.99491">
+1088
+</page>
+<sectionHeader confidence="0.995877" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999960520833333">
+Cyril Allauzen, Michael Riley, Johan Schalkwyk, Woj-
+ciech Skut, and Mehryar Mohri. 2007. OpenFst: A
+general and efficient weighted finite-state transducer
+library. In Proc. of CIAA, volume 4783.
+Jon Bentley. 1986. Programming pearls [column]. Com-
+munications of the ACM, 29(8), August.
+Maximilian Bisani and Hermann Ney. 2002. Inves-
+tigations on jointmultigram models for grapheme-to-
+phoneme conversion.
+Francisco Casacuberta and Colin De La Higuera. 2000.
+Computational complexity of problems on probabilis-
+tic grammars and transducers. In Proc. of the 5th Inter-
+national Colloquium on Grammatical Inference: Al-
+gorithms and Applications, volume 1891.
+Francisco Casacuberta. 2000. Inference of finite-
+state transducers by using regular grammars and mor-
+phisms. In A.L. Oliveira, editor, Grammatical Infer-
+ence: Algorithms and Applications, volume 1891.
+Stanley F. Chen. 2003. Conditional and joint models for
+grapheme-to-phoneme conversion. In Proc. of Inter-
+speech.
+Alexander Clark. 2001. Learning morphology with Pair
+Hidden Markov Models. In Proc. of the Student Work-
+shop at the 39th Annual Meeting of the Association for
+Computational Linguistics, Toulouse, France, July.
+Sabine Deligne, Francois Yvon, and Fr´ed´eric Bimbot.
+1995. Variable-length sequence matching for phonetic
+transcription using joint multigrams. In Eurospeech.
+Vera Demberg, Helmut Schmid, and Gregor M¨ohler.
+2007. Phonological constraints and morphological
+preprocessing for grapheme-to-phoneme conversion.
+In Proc. of ACL, Prague, Czech Republic, June.
+Jason Eisner. 1997. Efficient generation in primitive Op-
+timality Theory. In Proc. of ACL-EACL, Madrid, July.
+Jason Eisner. 2002. Parameter estimation for probabilis-
+tic finite-state transducers. In Proc. of ACL.
+Jenny Rose Finkel, Alex Kleeman, and Christopher D.
+Manning. 2008. Efficient, feature-based, conditional
+random field parsing. In Proceedings of ACL-08:
+HLT, pages 959–967, Columbus, Ohio, June. Associa-
+tion for Computational Linguistics.
+Dayne Freitag and Shahram Khadivi. 2007. A sequence
+alignment model based on the averaged perceptron. In
+Proc. of EMNLP-CoNLL.
+Lucian Galescu and James F. Allen. 2001. Bi-directional
+conversion between graphemes and phonemes using a
+joint N-gram model.
+Sittichai Jiampojamarn, Grzegorz Kondrak, and Tarek
+Sherif. 2007. Applying many-to-many alignments
+and hidden markov models to letter-to-phoneme con-
+version. In Proc. of NAACL-HLT, Rochester, New
+York, April.
+Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris
+Callison-Burch, Marcello Federico, Nicola Bertoldi,
+Brooke Cowan, Wade Shen, Christine Moran, Richard
+Zens, Chris Dyer, Ondrej Bojar, Alexandra Con-
+stantin, and Evan Herbst. 2007. Moses: Open source
+toolkit for statistical machine translation. In Proc.
+of ACL, Companion Volume, Prague, Czech Republic,
+June.
+Dong C. Liu and Jorge Nocedal. 1989. On the limited
+memory BFGS method for large scale optimization.
+Math. Programming, 45(3, (Ser. B)):503–528.
+Takuya Matsuzaki, Yusuke Miyao, and Jun’ichi Tsujii.
+2005. Probabilistic CFG with latent annotations. In
+Proc. of ACL, Ann Arbor, Michigan, June.
+Mehryar Mohri. 1997. Finite-state transducers in lan-
+guage and speech processing. Computational Linguis-
+tics, 23(2).
+Slav Petrov, Adam Pauls, and Dan Klein. 2007. Learning
+structured models for phone recognition. In Proc. of
+EMNLP-CoNLL.
+Eric Sven Ristad and Peter N. Yianilos. 1998. Learn-
+ing string-edit distance. IEEE Transactions on Pattern
+Analysis and Machine Intelligence, 20(5).
+Holger Schwenk, Marta R. Costa-jussa, and Jose A.
+R. Fonollosa. 2007. Smooth bilingual n-gram transla-
+tion. In Proc. of EMNLP-CoNLL, pages 430–438.
+Tarek Sherif and Grzegorz Kondrak. 2007. Substring-
+based transliteration. In Proc. of ACL, Prague, Czech
+Republic, June.
+Kristina Toutanova, Hisami Suzuki, and Achim Ruopp.
+2008. Applying morphology generation models to
+machine translation. In Proceedings of ACL-08: HLT,
+Columbus, Ohio, June.
+Richard Wicentowski. 2002. Modeling and Learning
+Multilingual Inflectional Morphology in a Minimally
+Supervised Framework. Ph.D. thesis, Johns-Hopkins
+University.
+Jun Wu and Sanjeev Khudanpur. 2000. Efficient training
+methods for maximum entropy language modeling. In
+Proc. of ICSLP, volume 3, Beijing, October.
+Bing Zhao, Nguyen Bach, Ian Lane, and Stephan Vo-
+gel. 2007. A log-linear block transliteration model
+based on bi-stream HMMs. In Proc. of NAACL-HLT,
+Rochester, New York, April.
+</reference>
+<page confidence="0.997312">
+1089
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.477749">
+<title confidence="0.9888305">Latent-Variable Modeling of String Finite-State</title>
+<author confidence="0.999874">Dreyer R Smith</author>
+<affiliation confidence="0.7766665">Department of Computer Johns Hopkins</affiliation>
+<address confidence="0.997985">Baltimore, MD 21218,</address>
+<abstract confidence="0.99274685">String-to-string transduction is a central problem in computational linguistics and natural language processing. It occurs in tasks as diverse as name transliteration, spelling correction, pronunciation modeling and inflectional morphology. We present a conditional loglinear model for string-to-string transduction, which employs overlapping features over latent alignment sequences, and which learns latent classes and latent string pair regions from incomplete training data. We evaluate our approach on morphological tasks and demonstrate that latent variables can dramatically improve results, even when trained on small data sets. On the task of generating morphological forms, we outperform a baseline method reducing the error rate by up to 48%. On a lemmatization task, we reduce the error rates in Wicentowski (2002) by 38–92%.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Cyril Allauzen</author>
+<author>Michael Riley</author>
+<author>Johan Schalkwyk</author>
+<author>Wojciech Skut</author>
+<author>Mehryar Mohri</author>
+</authors>
+<title>OpenFst: A general and efficient weighted finite-state transducer library.</title>
+<date>2007</date>
+<booktitle>In Proc. of CIAA,</booktitle>
+<volume>volume</volume>
+<pages>4783</pages>
+<contexts>
+<context position="33658" citStr="Allauzen et al., 2007" startWordPosition="5670" endWordPosition="5673">ss. For the most part, the 2 classes are separated based on whether or not the correct output ends in e. This use of latent classes helped address many errors like wronging / wronge or owed / ow). Such missing or surplus final e’s account for 72.5% of the errors for ngrams and 70.6% of the errors for ngrams+x, but only 34.0% of the errors for ngrams+x+latent. The test oracles are between 99.8% – 99.9%, due to the pruned alignment alphabet. As on the inflection task, the insertion limit does not exclude any gold standard paths. 5 Finite-State Feature Implementation We used the OpenFST library (Allauzen et al., 2007) to implement all finite-state computations, using the expectation semiring (Eisner, 2002) for training. Our model is defined by the WFSA Ue, which is used to score alignment strings in E* (section 2.2). We now sketch how to construct U0 from features. n-gram construction The construction that we currently use is quite simple. All of our current features fire on windows of width &lt; 3. We build a WFSA with the structure of a 3-gram language 1087 model over E*. Each of the JE J&apos; states remembers two previous alignment characters ab of history; for each c E E, it has an outgoing arc that accepts c</context>
+</contexts>
+<marker>Allauzen, Riley, Schalkwyk, Skut, Mohri, 2007</marker>
+<rawString>Cyril Allauzen, Michael Riley, Johan Schalkwyk, Wojciech Skut, and Mehryar Mohri. 2007. OpenFst: A general and efficient weighted finite-state transducer library. In Proc. of CIAA, volume 4783.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jon Bentley</author>
+</authors>
+<title>Programming pearls [column].</title>
+<date>1986</date>
+<journal>Communications of the ACM,</journal>
+<volume>29</volume>
+<issue>8</issue>
+<contexts>
+<context position="34981" citStr="Bentley, 1986" startWordPosition="5906" endWordPosition="5907">at fire when the trigram window includes abc. By convention, these also include features on bc and c (which may be regarded as backoff features ?bc and ??c). Since each character in E is actually a 4-tuple, this trigram machine is fairly large. We build it lazily (“on the fly”), constructing arcs only as needed to deal with training or test data. Feature templates Our experiments use over 50,000 features. How do we specify these features to the above construction? Rather than writing ordinary code to extract features from a window, we find it convenient to harness FSTs as a “little language” (Bentley, 1986) for specifying entire sets of features. A feature template T is an nondeterministic FST that maps the contents of the sliding window, such as abc, to one or more features, which are also described as strings.24 The n-gram machine described above can compute T[((a&apos;b)&apos;c)&apos;] to find out what features fire on abc and its suffixes. One simple feature template performs “vowel/consonant backoff”; e.g., it maps abc to the feature named VCC. Fig. 2 showed the result of applying several actual feature templates to the window shown in Fig. 1. The extended regular expression calculus provides a flexible a</context>
+</contexts>
+<marker>Bentley, 1986</marker>
+<rawString>Jon Bentley. 1986. Programming pearls [column]. Communications of the ACM, 29(8), August.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Maximilian Bisani</author>
+<author>Hermann Ney</author>
+</authors>
+<title>Investigations on jointmultigram models for grapheme-tophoneme conversion.</title>
+<date>2002</date>
+<contexts>
+<context position="4640" citStr="Bisani and Ney (2002)" startWordPosition="717" endWordPosition="720"> Association for Computational Linguistics Figure 1: One of many possible alignment strings A for the observed pair breaking/broke, enriched with latent strings `1 and `2. Observed letters are shown in bold. The box marks a trigram to be scored. See Fig. 2 for features that fire on this trigram. Joint n-gram models over the input and output dimensions have been used before, but not for morphology, where we will apply them.3 Most notable is the local log-linear grapheme-to-phoneme model of Chen (2003), as well as generative models for that task (Deligne et al. (1995), Galescu and Allen (2001), Bisani and Ney (2002)). We advance that approach by adding new latent dimensions to the (input, output) tuples (see Fig. 1).4 This enables us to use certain linguistically inspired features and discover unannotated information. Our features consider less or more than a literal n-gram. On the one hand, we generalize with features that abstract away from the n-gram window contents; on the other, we specialize the n-gram with features that make use of the added latent linguistic structure. In section 5, we briefly sketch our framework for concisely expressing and efficiently implementing models of this form. Our fram</context>
+</contexts>
+<marker>Bisani, Ney, 2002</marker>
+<rawString>Maximilian Bisani and Hermann Ney. 2002. Investigations on jointmultigram models for grapheme-tophoneme conversion.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Francisco Casacuberta</author>
+<author>Colin De La Higuera</author>
+</authors>
+<title>Computational complexity of problems on probabilistic grammars and transducers.</title>
+<date>2000</date>
+<booktitle>In Proc. of the 5th International Colloquium on Grammatical Inference: Algorithms and Applications,</booktitle>
+<volume>volume</volume>
+<pages>1891</pages>
+<contexts>
+<context position="17199" citStr="Casacuberta and Higuera, 2000" startWordPosition="2896" endWordPosition="2899">evelopment data. We are also interested in trying an L1 prior. 11Alternatives would include faster error-driven methods (perceptron, MIRA) and slower max-margin Markov networks. 12This worked a bit better than stochastic gradient descent. log p0(y* |x) + ||0||2/2u2, (2) 1083 To decode a test example x, we wish to find y� = argmaxyEF,y pe(y x). Constructively, y� is the highest-probability string in the WFSA T [x], where T = Tr�1 x oUB oTry is the trained transducer that maps x nondeterministically to y. Alas, it is NP-hard to find the highest-probability string in a WFSA, even an acyclic one (Casacuberta and Higuera, 2000). The problem is that the probability of each string y is a sum over many paths in T [x] that reflect different alignments of y to x. Although it is straightforward to use a determinization construction (Mohri, 1997)13 to collapse these down to a single path per y (so that y� is easily read off the single best path), determinization can increase the WFSA’s size exponentially. We approximate by pruning T [x] back to its 1000-best paths before we determinize.14 Since the alignments, classes and regions are not observed in C, we do not enjoy the convex objective function of fully-supervised log-l</context>
+</contexts>
+<marker>Casacuberta, Higuera, 2000</marker>
+<rawString>Francisco Casacuberta and Colin De La Higuera. 2000. Computational complexity of problems on probabilistic grammars and transducers. In Proc. of the 5th International Colloquium on Grammatical Inference: Algorithms and Applications, volume 1891.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Francisco Casacuberta</author>
+</authors>
+<title>Inference of finitestate transducers by using regular grammars and morphisms.</title>
+<date>2000</date>
+<booktitle>Grammatical Inference: Algorithms and Applications,</booktitle>
+<volume>volume</volume>
+<pages>1891</pages>
+<editor>In A.L. Oliveira, editor,</editor>
+<contexts>
+<context position="3773" citStr="Casacuberta (2000)" startWordPosition="574" endWordPosition="576"> use no alignment; each feature takes its own view of how (x, y) relate. 2We feel that this independence is inappropriate. By analogy, it would be a poor idea for a language model to score a string highly if it could be segmented into independently frequent n-grams. Rather, language models use overlapping ngrams (indeed, it is the language model that rescues phrasebased MT from producing disjointed translations). We believe phrase-based MT avoids overlapping phrases in the channel model only because these would complicate the modeling of reordering (though see, e.g., Schwenk et al. (2007) and Casacuberta (2000)). But in the problems of section 1, letter reordering is rare and we may assume it is local to a window. 1080 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 1080–1089, Honolulu, October 2008. c�2008 Association for Computational Linguistics Figure 1: One of many possible alignment strings A for the observed pair breaking/broke, enriched with latent strings `1 and `2. Observed letters are shown in bold. The box marks a trigram to be scored. See Fig. 2 for features that fire on this trigram. Joint n-gram models over the input and output dimensions </context>
+</contexts>
+<marker>Casacuberta, 2000</marker>
+<rawString>Francisco Casacuberta. 2000. Inference of finitestate transducers by using regular grammars and morphisms. In A.L. Oliveira, editor, Grammatical Inference: Algorithms and Applications, volume 1891.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stanley F Chen</author>
+</authors>
+<title>Conditional and joint models for grapheme-to-phoneme conversion.</title>
+<date>2003</date>
+<booktitle>In Proc. of Interspeech.</booktitle>
+<contexts>
+<context position="4524" citStr="Chen (2003)" startWordPosition="699" endWordPosition="700">rence on Empirical Methods in Natural Language Processing, pages 1080–1089, Honolulu, October 2008. c�2008 Association for Computational Linguistics Figure 1: One of many possible alignment strings A for the observed pair breaking/broke, enriched with latent strings `1 and `2. Observed letters are shown in bold. The box marks a trigram to be scored. See Fig. 2 for features that fire on this trigram. Joint n-gram models over the input and output dimensions have been used before, but not for morphology, where we will apply them.3 Most notable is the local log-linear grapheme-to-phoneme model of Chen (2003), as well as generative models for that task (Deligne et al. (1995), Galescu and Allen (2001), Bisani and Ney (2002)). We advance that approach by adding new latent dimensions to the (input, output) tuples (see Fig. 1).4 This enables us to use certain linguistically inspired features and discover unannotated information. Our features consider less or more than a literal n-gram. On the one hand, we generalize with features that abstract away from the n-gram window contents; on the other, we specialize the n-gram with features that make use of the added latent linguistic structure. In section 5,</context>
+<context position="15136" citStr="Chen (2003)" startWordPosition="2560" endWordPosition="2561">e ayc:xyz unless the two y’s are not aligned to each other. It could be relaxed, however, to a prior or an initialization or learning bias. 8The two boundary characters #, numbered 0 and max (max=6 in our experiments), are neither changes nor identities. tion model. We accomplish this by creating target language model features, such as (c) and (g) from Fig. 2, which ignore the input dimension. We also have features which mirror features (a)-(d) but ignore the latent classes and/or regions (e.g. features (e)-(h)). Notice that our choice of E only permits monotonic, 1-to-1 alignments, following Chen (2003). We may nonetheless favor the 2-to-1 alignment (ea,o) with bigram features such as (e,o)(a,c). A “collapsed” version of a feature will back off from the specific alignment of the characters within a window: thus, (ea,o) is itself a feature. Currently, we only include collapsed target language model features. These ignore epsilons introduced by deletions in the alignment, so that collapsed ok fires in a window that contains ock. 4 Experiments We evaluate our model on two tasks of morphology generation. Predicting morphological forms has been shown to be useful for machine translation and other</context>
+</contexts>
+<marker>Chen, 2003</marker>
+<rawString>Stanley F. Chen. 2003. Conditional and joint models for grapheme-to-phoneme conversion. In Proc. of Interspeech.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alexander Clark</author>
+</authors>
+<title>Learning morphology with Pair Hidden Markov Models.</title>
+<date>2001</date>
+<booktitle>In Proc. of the Student Workshop at the 39th Annual Meeting of the Association for Computational Linguistics,</booktitle>
+<location>Toulouse, France,</location>
+<contexts>
+<context position="5826" citStr="Clark (2001)" startWordPosition="911" endWordPosition="912">els of this form. Our framework uses familiar log-linear techniques for stochastic modeling, and weighted finite-state methods both for implementation and for specifying features. It appears general enough to cover most prior work on word transduction. We imagine that it will be useful for future work as well: one might easily add new, linguistically interesting classes of features, each class defined by a regular expression. 2.1 Basic notation We use an input alphabet Ex and output alphabet Ey. We conventionally use x ∈ E∗x to denote the input string and y ∈ E∗y to denote the output string. 3Clark (2001) does use pair HMMs for morphology. 4Demberg et al. (2007) similarly added extra dimensions. However, their added dimensions were supervised, not latent, and their model was a standard generative n-gram model whose generalization was limited to standard n-gram smoothing. There are many possible alignments between x and y. We represent each as an alignment string A ∈ E∗xy, over an alignment alphabet of ordered def pairs, Exy = ((Ex ∪ {E}) × (Ey ∪ {E})) − {(�, �)}. For example, one alignment of x = breaking with y = broke is the 9-character string A = (b, b)(r, r)(e, o)(a, c)(k, k)(c, e)(i, c)(n</context>
+</contexts>
+<marker>Clark, 2001</marker>
+<rawString>Alexander Clark. 2001. Learning morphology with Pair Hidden Markov Models. In Proc. of the Student Workshop at the 39th Annual Meeting of the Association for Computational Linguistics, Toulouse, France, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Sabine Deligne</author>
+<author>Francois Yvon</author>
+<author>Fr´ed´eric Bimbot</author>
+</authors>
+<title>Variable-length sequence matching for phonetic transcription using joint multigrams.</title>
+<date>1995</date>
+<booktitle>In Eurospeech.</booktitle>
+<contexts>
+<context position="4591" citStr="Deligne et al. (1995)" startWordPosition="709" endWordPosition="712">, pages 1080–1089, Honolulu, October 2008. c�2008 Association for Computational Linguistics Figure 1: One of many possible alignment strings A for the observed pair breaking/broke, enriched with latent strings `1 and `2. Observed letters are shown in bold. The box marks a trigram to be scored. See Fig. 2 for features that fire on this trigram. Joint n-gram models over the input and output dimensions have been used before, but not for morphology, where we will apply them.3 Most notable is the local log-linear grapheme-to-phoneme model of Chen (2003), as well as generative models for that task (Deligne et al. (1995), Galescu and Allen (2001), Bisani and Ney (2002)). We advance that approach by adding new latent dimensions to the (input, output) tuples (see Fig. 1).4 This enables us to use certain linguistically inspired features and discover unannotated information. Our features consider less or more than a literal n-gram. On the one hand, we generalize with features that abstract away from the n-gram window contents; on the other, we specialize the n-gram with features that make use of the added latent linguistic structure. In section 5, we briefly sketch our framework for concisely expressing and effic</context>
+</contexts>
+<marker>Deligne, Yvon, Bimbot, 1995</marker>
+<rawString>Sabine Deligne, Francois Yvon, and Fr´ed´eric Bimbot. 1995. Variable-length sequence matching for phonetic transcription using joint multigrams. In Eurospeech.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Vera Demberg</author>
+<author>Helmut Schmid</author>
+<author>Gregor M¨ohler</author>
+</authors>
+<title>Phonological constraints and morphological preprocessing for grapheme-to-phoneme conversion.</title>
+<date>2007</date>
+<booktitle>In Proc. of ACL,</booktitle>
+<location>Prague, Czech Republic,</location>
+<marker>Demberg, Schmid, M¨ohler, 2007</marker>
+<rawString>Vera Demberg, Helmut Schmid, and Gregor M¨ohler. 2007. Phonological constraints and morphological preprocessing for grapheme-to-phoneme conversion. In Proc. of ACL, Prague, Czech Republic, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jason Eisner</author>
+</authors>
+<title>Efficient generation in primitive Optimality Theory.</title>
+<date>1997</date>
+<booktitle>In Proc. of ACL-EACL,</booktitle>
+<location>Madrid,</location>
+<marker>Eisner, 1997</marker>
+<rawString>Jason Eisner. 1997. Efficient generation in primitive Optimality Theory. In Proc. of ACL-EACL, Madrid, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jason Eisner</author>
+</authors>
+<title>Parameter estimation for probabilistic finite-state transducers.</title>
+<date>2002</date>
+<booktitle>In Proc. of ACL.</booktitle>
+<contexts>
+<context position="8517" citStr="Eisner, 2002" startWordPosition="1431" endWordPosition="1432">) pθ(y |x) = ( ) EyI EA∈ A.y. exp Ei θifi(A) 1 Given a parameter vector 0, we compute equation (1) using a finite-state machine. We define a WFSA, Uθ, such that Uθ[A] yields the unnormalized probability uθ(A) def = exp Ei θifi(A) for any A ∈ E∗. (See section 5 for the construction.) To obtain 1081 the numerator of equation (1), with its EAEA y, we sum over all paths in U0 that are compatible with x and y. That is, we build x o 7r�1 x o U0 o 7ry o y and sum over all paths. For the denominator we build the larger machine x o 7r�1 x o U0 and again compute the pathsum. We use standard algorithms (Eisner, 2002) to compute the pathsums as well as their gradients with respect to 0 for optimization (section 4.1). Below, we will restrict our notion of valid alignment strings in E*. U0 is constructed not to accept invalid ones, thus assigning them probability 0. Note that the possible output strings y&apos; in the denominator in equation (1) may have arbitrary length, leading to an infinite summation over alignment strings. Thus, for some values of 0, the sum in the denominator diverges and the probability distribution is undefined. There exist principled ways to avoid such 0 during training. However, in our </context>
+<context position="10567" citStr="Eisner (2002)" startWordPosition="1777" endWordPosition="1779">1, two latent strings are added, enabling the features in Fig. 2(a)–(h). The first character is not 5We set k to a value between 1 and 3, depending on the tasks, always ensuring that no input/output pairs observed in training are excluded. The insertion restriction does slightly enlarge the FSA UO: a state must keep track of the number of consecutive E symbols in the immediately preceding x input, and for a few states, this cannot be determined just from the immediately preceding (n − 1)-gram. Despite this, we found empirically that our approximation is at least as fast as the exact method of Eisner (2002), who sums around cyclic subnetworks to numerical convergence. Furthermore, our approximation does not require us to detect divergence during training. Figure 2: The boxes (a)-(h) represent some of the features that fire on the trigram shown in Fig. 1. These features are explained in detail in section 3. just an input/output pair, but the 4-tuple (b, b, 2, 1). Here, E1 indicates that this form pair (breaking / broke) as a whole is in a particular cluster, or word class, labeled with the arbitrary number 2. Notice in Fig. 1 that the class 2 is visible in all local windows throughout the string.</context>
+<context position="33748" citStr="Eisner, 2002" startWordPosition="5683" endWordPosition="5684">in e. This use of latent classes helped address many errors like wronging / wronge or owed / ow). Such missing or surplus final e’s account for 72.5% of the errors for ngrams and 70.6% of the errors for ngrams+x, but only 34.0% of the errors for ngrams+x+latent. The test oracles are between 99.8% – 99.9%, due to the pruned alignment alphabet. As on the inflection task, the insertion limit does not exclude any gold standard paths. 5 Finite-State Feature Implementation We used the OpenFST library (Allauzen et al., 2007) to implement all finite-state computations, using the expectation semiring (Eisner, 2002) for training. Our model is defined by the WFSA Ue, which is used to score alignment strings in E* (section 2.2). We now sketch how to construct U0 from features. n-gram construction The construction that we currently use is quite simple. All of our current features fire on windows of width &lt; 3. We build a WFSA with the structure of a 3-gram language 1087 model over E*. Each of the JE J&apos; states remembers two previous alignment characters ab of history; for each c E E, it has an outgoing arc that accepts c (and leads to state bc). The weight of this arc is the total weight (from 0) of the small</context>
+</contexts>
+<marker>Eisner, 2002</marker>
+<rawString>Jason Eisner. 2002. Parameter estimation for probabilistic finite-state transducers. In Proc. of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jenny Rose Finkel</author>
+<author>Alex Kleeman</author>
+<author>Christopher D Manning</author>
+</authors>
+<title>Efficient, feature-based, conditional random field parsing.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL-08: HLT,</booktitle>
+<pages>959--967</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Columbus, Ohio,</location>
+<contexts>
+<context position="9313" citStr="Finkel et al. (2008)" startWordPosition="1562" endWordPosition="1565"> constructed not to accept invalid ones, thus assigning them probability 0. Note that the possible output strings y&apos; in the denominator in equation (1) may have arbitrary length, leading to an infinite summation over alignment strings. Thus, for some values of 0, the sum in the denominator diverges and the probability distribution is undefined. There exist principled ways to avoid such 0 during training. However, in our current work, we simply restrict to finitely many alignment strings (given x), by prohibiting as invalid those with &gt; k consecutive insertions (i.e., characters like (E, a)).5 Finkel et al. (2008) and others have similarly bounded unary rule cycles in PCFGs. 2.3 Latent variables The alignment between x and y is a latent explanatory variable that helps model the distribution p(y |x) but is not observed in training. Other latent variables can also be useful. Morphophonological changes are often sensitive to phonemes (whereas x and y may consist of graphemes); syllable boundaries; a conjugation class; morpheme boundaries; and the position of the change within the form. Thus, as mentioned in section 2.1, we enrich the alignment string A so that it specifies additional latent variables to w</context>
+</contexts>
+<marker>Finkel, Kleeman, Manning, 2008</marker>
+<rawString>Jenny Rose Finkel, Alex Kleeman, and Christopher D. Manning. 2008. Efficient, feature-based, conditional random field parsing. In Proceedings of ACL-08: HLT, pages 959–967, Columbus, Ohio, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dayne Freitag</author>
+<author>Shahram Khadivi</author>
+</authors>
+<title>A sequence alignment model based on the averaged perceptron.</title>
+<date>2007</date>
+<booktitle>In Proc. of EMNLP-CoNLL.</booktitle>
+<contexts>
+<context position="3155" citStr="Freitag and Khadivi (2007)" startWordPosition="471" endWordPosition="474">since many alignments are possible, we sum over all these possibilities, evaluating each alignment separately.1 At each window position, we accumulate logprobability based on the material that appears within the current window. The window is a few characters wide, and successive window positions overlap. This stands in contrast to a competing approach (Sherif and Kondrak, 2007; Zhao et al., 2007) that is inspired by phrase-based machine translation (Koehn et al., 2007), which segments the input string into substrings that are transduced independently, ignoring context.2 1At the other extreme, Freitag and Khadivi (2007) use no alignment; each feature takes its own view of how (x, y) relate. 2We feel that this independence is inappropriate. By analogy, it would be a poor idea for a language model to score a string highly if it could be segmented into independently frequent n-grams. Rather, language models use overlapping ngrams (indeed, it is the language model that rescues phrasebased MT from producing disjointed translations). We believe phrase-based MT avoids overlapping phrases in the channel model only because these would complicate the modeling of reordering (though see, e.g., Schwenk et al. (2007) and </context>
+</contexts>
+<marker>Freitag, Khadivi, 2007</marker>
+<rawString>Dayne Freitag and Shahram Khadivi. 2007. A sequence alignment model based on the averaged perceptron. In Proc. of EMNLP-CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Lucian Galescu</author>
+<author>James F Allen</author>
+</authors>
+<title>Bi-directional conversion between graphemes and phonemes using a joint N-gram model.</title>
+<date>2001</date>
+<contexts>
+<context position="4617" citStr="Galescu and Allen (2001)" startWordPosition="713" endWordPosition="716">lulu, October 2008. c�2008 Association for Computational Linguistics Figure 1: One of many possible alignment strings A for the observed pair breaking/broke, enriched with latent strings `1 and `2. Observed letters are shown in bold. The box marks a trigram to be scored. See Fig. 2 for features that fire on this trigram. Joint n-gram models over the input and output dimensions have been used before, but not for morphology, where we will apply them.3 Most notable is the local log-linear grapheme-to-phoneme model of Chen (2003), as well as generative models for that task (Deligne et al. (1995), Galescu and Allen (2001), Bisani and Ney (2002)). We advance that approach by adding new latent dimensions to the (input, output) tuples (see Fig. 1).4 This enables us to use certain linguistically inspired features and discover unannotated information. Our features consider less or more than a literal n-gram. On the one hand, we generalize with features that abstract away from the n-gram window contents; on the other, we specialize the n-gram with features that make use of the added latent linguistic structure. In section 5, we briefly sketch our framework for concisely expressing and efficiently implementing models</context>
+</contexts>
+<marker>Galescu, Allen, 2001</marker>
+<rawString>Lucian Galescu and James F. Allen. 2001. Bi-directional conversion between graphemes and phonemes using a joint N-gram model.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Sittichai Jiampojamarn</author>
+<author>Grzegorz Kondrak</author>
+<author>Tarek Sherif</author>
+</authors>
+<title>Applying many-to-many alignments and hidden markov models to letter-to-phoneme conversion.</title>
+<date>2007</date>
+<booktitle>In Proc. of NAACL-HLT,</booktitle>
+<location>Rochester, New York,</location>
+<contexts>
+<context position="37974" citStr="Jiampojamarn et al., 2007" startWordPosition="6404" endWordPosition="6407">t of four tested languages and reduce the error rates by 38% to 92%. The model’s errors are often reasonable misgeneralizations (e.g., assume regular conjugation where irregular would have been correct), and it is able to use even a small number of latent variables (including the latent alignment) to capture useful linguistic properties. In future work, we would like to identify a set of features, latent variables, and training methods that port well across languages and string-transduction tasks. We would like to use features that look at wide context on the input side, which is inexpensive (Jiampojamarn et al., 2007). Latent variables we wish to consider are an increased number of word classes; more flexible regions—see Petrov et al. (2007) on learning a state transition diagram for acoustic regions in phone recognition—and phonological features and syllable boundaries. Indeed, our local log-linear features over several aligned latent strings closely resemble the soft constraints used by phonologists (Eisner, 1997). Finally, rather than define a fixed set of feature templates as in Fig. 2, we would like to refine empirically useful features during training, resulting in language-specific backoff patterns </context>
+</contexts>
+<marker>Jiampojamarn, Kondrak, Sherif, 2007</marker>
+<rawString>Sittichai Jiampojamarn, Grzegorz Kondrak, and Tarek Sherif. 2007. Applying many-to-many alignments and hidden markov models to letter-to-phoneme conversion. In Proc. of NAACL-HLT, Rochester, New York, April.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>Philipp Koehn</author>
+</authors>
+<title>Hieu Hoang,</title>
+<location>Alexandra Birch, Chris Callison-Burch, Marcello Federico, Nicola Bertoldi,</location>
+<marker>Koehn, </marker>
+<rawString>Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris Callison-Burch, Marcello Federico, Nicola Bertoldi,</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Brooke Cowan</author>
+<author>Wade Shen</author>
+<author>Christine Moran</author>
+<author>Richard Zens</author>
+<author>Chris Dyer</author>
+<author>Ondrej Bojar</author>
+<author>Alexandra Constantin</author>
+<author>Evan Herbst</author>
+</authors>
+<title>Moses: Open source toolkit for statistical machine translation.</title>
+<date>2007</date>
+<booktitle>In Proc. of ACL, Companion Volume,</booktitle>
+<location>Prague, Czech Republic,</location>
+<marker>Cowan, Shen, Moran, Zens, Dyer, Bojar, Constantin, Herbst, 2007</marker>
+<rawString>Brooke Cowan, Wade Shen, Christine Moran, Richard Zens, Chris Dyer, Ondrej Bojar, Alexandra Constantin, and Evan Herbst. 2007. Moses: Open source toolkit for statistical machine translation. In Proc. of ACL, Companion Volume, Prague, Czech Republic, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dong C Liu</author>
+<author>Jorge Nocedal</author>
+</authors>
+<title>On the limited memory BFGS method for large scale optimization.</title>
+<date>1989</date>
+<journal>Math. Programming,</journal>
+<volume>45</volume>
+<issue>3</issue>
+<contexts>
+<context position="16269" citStr="Liu and Nocedal, 1989" startWordPosition="2744" endWordPosition="2748">dicting morphological forms has been shown to be useful for machine translation and other tasks.9 Here we describe two sets of experiments: an inflectional morphology task in which models are trained to transduce verbs from one form into another (section 4.2), and a lemmatization task (section 4.3), in which any inflected verb is to be reduced to its root form. 4.1 Training and decoding We train 0 to maximize the regularized10 conditional log-likelihood11 � (x,y*)EC where C is a supervised training corpus. To maximize (2) during training, we apply the gradientbased optimization method L-BFGS (Liu and Nocedal, 1989).12 9E.g., Toutanova et al. (2008) improve MT performance by selecting correct morphological forms from a knowledge source. We instead focus on generalizing from observed forms and generating new forms (but see with rootlist in Table 3). 10The variance a2 of the L2 prior is chosen by optimizing on development data. We are also interested in trying an L1 prior. 11Alternatives would include faster error-driven methods (perceptron, MIRA) and slower max-margin Markov networks. 12This worked a bit better than stochastic gradient descent. log p0(y* |x) + ||0||2/2u2, (2) 1083 To decode a test example</context>
+</contexts>
+<marker>Liu, Nocedal, 1989</marker>
+<rawString>Dong C. Liu and Jorge Nocedal. 1989. On the limited memory BFGS method for large scale optimization. Math. Programming, 45(3, (Ser. B)):503–528.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Takuya Matsuzaki</author>
+<author>Yusuke Miyao</author>
+<author>Jun’ichi Tsujii</author>
+</authors>
+<title>Probabilistic CFG with latent annotations.</title>
+<date>2005</date>
+<booktitle>In Proc. of ACL,</booktitle>
+<location>Ann Arbor, Michigan,</location>
+<contexts>
+<context position="12458" citStr="Matsuzaki et al. (2005)" startWordPosition="2113" endWordPosition="2116">tire form pair. See sections 4.2 and 4.3 for examples of what classes were learned in our experiments. The latent string E2 splits the string pair into numbered regions. In a valid alignment string, the region numbers must increase throughout E2, although numbers may be skipped to permit omitted regions. To guide the model to make a useful division into regions, we also require that identity characters such as (b, b) fall in even regions while change characters such as (e, o) (substitutions, deletions, or inser6The latent class is comparable to the latent variable on the tree root symbol S in Matsuzaki et al. (2005). 1082 tions) fall in odd regions.7 Region numbers must not increase within a sequence of consecutive changes or consecutive identities.8 In Fig. 1, the start of region 1 is triggered by e:o, the start of region 2 by the identity k:k, region 3 by c:e. Allowing region numbers to be skipped makes it possible to consistently assign similar labels to similar regions across different training examples. Table 2, for example, shows pairs that contain a vowel change in the middle, some of which contain an additional insertion of ge in the begining (verbinden / verbunden, reibt / gerieben). We expect t</context>
+</contexts>
+<marker>Matsuzaki, Miyao, Tsujii, 2005</marker>
+<rawString>Takuya Matsuzaki, Yusuke Miyao, and Jun’ichi Tsujii. 2005. Probabilistic CFG with latent annotations. In Proc. of ACL, Ann Arbor, Michigan, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mehryar Mohri</author>
+</authors>
+<title>Finite-state transducers in language and speech processing.</title>
+<date>1997</date>
+<journal>Computational Linguistics,</journal>
+<volume>23</volume>
+<issue>2</issue>
+<contexts>
+<context position="17415" citStr="Mohri, 1997" startWordPosition="2938" endWordPosition="2939">ent. log p0(y* |x) + ||0||2/2u2, (2) 1083 To decode a test example x, we wish to find y� = argmaxyEF,y pe(y x). Constructively, y� is the highest-probability string in the WFSA T [x], where T = Tr�1 x oUB oTry is the trained transducer that maps x nondeterministically to y. Alas, it is NP-hard to find the highest-probability string in a WFSA, even an acyclic one (Casacuberta and Higuera, 2000). The problem is that the probability of each string y is a sum over many paths in T [x] that reflect different alignments of y to x. Although it is straightforward to use a determinization construction (Mohri, 1997)13 to collapse these down to a single path per y (so that y� is easily read off the single best path), determinization can increase the WFSA’s size exponentially. We approximate by pruning T [x] back to its 1000-best paths before we determinize.14 Since the alignments, classes and regions are not observed in C, we do not enjoy the convex objective function of fully-supervised log-linear models. Training equation (2) therefore converges only to some local maximum that depends on the starting point in parameter space. To find a good starting point we employ staged training, a technique in which </context>
+</contexts>
+<marker>Mohri, 1997</marker>
+<rawString>Mehryar Mohri. 1997. Finite-state transducers in language and speech processing. Computational Linguistics, 23(2).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Slav Petrov</author>
+<author>Adam Pauls</author>
+<author>Dan Klein</author>
+</authors>
+<title>Learning structured models for phone recognition.</title>
+<date>2007</date>
+<booktitle>In Proc. of EMNLP-CoNLL.</booktitle>
+<contexts>
+<context position="38100" citStr="Petrov et al. (2007)" startWordPosition="6424" endWordPosition="6427">., assume regular conjugation where irregular would have been correct), and it is able to use even a small number of latent variables (including the latent alignment) to capture useful linguistic properties. In future work, we would like to identify a set of features, latent variables, and training methods that port well across languages and string-transduction tasks. We would like to use features that look at wide context on the input side, which is inexpensive (Jiampojamarn et al., 2007). Latent variables we wish to consider are an increased number of word classes; more flexible regions—see Petrov et al. (2007) on learning a state transition diagram for acoustic regions in phone recognition—and phonological features and syllable boundaries. Indeed, our local log-linear features over several aligned latent strings closely resemble the soft constraints used by phonologists (Eisner, 1997). Finally, rather than define a fixed set of feature templates as in Fig. 2, we would like to refine empirically useful features during training, resulting in language-specific backoff patterns and adaptively sized n-gram windows. Many of these enhancements will increase the computational burden, and we are interested </context>
+</contexts>
+<marker>Petrov, Pauls, Klein, 2007</marker>
+<rawString>Slav Petrov, Adam Pauls, and Dan Klein. 2007. Learning structured models for phone recognition. In Proc. of EMNLP-CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eric Sven Ristad</author>
+<author>Peter N Yianilos</author>
+</authors>
+<title>Learning string-edit distance.</title>
+<date>1998</date>
+<journal>IEEE Transactions on Pattern Analysis and Machine Intelligence,</journal>
+<volume>20</volume>
+<issue>5</issue>
+<contexts>
+<context position="2293" citStr="Ristad and Yianilos, 1998" startWordPosition="333" endWordPosition="337">nology Center of Excellence and by National Science Foundation grant No. 0347822 to the final author. We would also like to thank Richard Wicentowski for providing us with datasets for lemmatization, and the anonymous reviewers for their valuable feedback. • lexical translation (cognates, loanwords, transliterated names): English word H foreign word We present a configurable and robust framework for solving such word transduction problems. Our results in morphology generation show that the presented approach improves upon the state of the art. 2 Model Structure A weighted edit distance model (Ristad and Yianilos, 1998) would consider each character in isolation. To consider more context, we pursue a very natural generalization. Given an input x, we evaluate a candidate output y by moving a sliding window over the aligned (x, y) pair. More precisely, since many alignments are possible, we sum over all these possibilities, evaluating each alignment separately.1 At each window position, we accumulate logprobability based on the material that appears within the current window. The window is a few characters wide, and successive window positions overlap. This stands in contrast to a competing approach (Sherif an</context>
+<context position="18599" citStr="Ristad and Yianilos, 1998" startWordPosition="3126" endWordPosition="3129">loy staged training, a technique in which several models of ascending complexity are trained consecutively. The parameters of each more complex model are initialized with the trained parameters of the previous simpler model. Our training is done in four stages. All weights are initialized to zero.  We first train only features that fire on unigrams of alignment characters, ignoring features that examine the latent strings or backed-off versions of the alignment characters (such as vowel/consonant or target language model features). The resulting model is equivalent to weighted edit distance (Ristad and Yianilos, 1998).  Next,15 we train all n-grams of alignment characters, including higher-order n-grams, but no backedoff features or features that refer to latent strings. 13Weighted determinization is not always possible, but it is in our case because our limit to k consecutive insertions guarantees that T [x] is acyclic. 14This value is high enough; we see no degradations in performance if we use only 100 or even 10 best paths. Below that, performance starts to drop slightly. In both of our tasks, our conditional distributions are usually peaked: the 5 best output candidates amass &gt; 99% of the probability</context>
+</contexts>
+<marker>Ristad, Yianilos, 1998</marker>
+<rawString>Eric Sven Ristad and Peter N. Yianilos. 1998. Learning string-edit distance. IEEE Transactions on Pattern Analysis and Machine Intelligence, 20(5).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Holger Schwenk</author>
+<author>Marta R Costa-jussa</author>
+<author>Jose A R Fonollosa</author>
+</authors>
+<title>Smooth bilingual n-gram translation.</title>
+<date>2007</date>
+<booktitle>In Proc. of EMNLP-CoNLL,</booktitle>
+<pages>430--438</pages>
+<contexts>
+<context position="3750" citStr="Schwenk et al. (2007)" startWordPosition="569" endWordPosition="572">Freitag and Khadivi (2007) use no alignment; each feature takes its own view of how (x, y) relate. 2We feel that this independence is inappropriate. By analogy, it would be a poor idea for a language model to score a string highly if it could be segmented into independently frequent n-grams. Rather, language models use overlapping ngrams (indeed, it is the language model that rescues phrasebased MT from producing disjointed translations). We believe phrase-based MT avoids overlapping phrases in the channel model only because these would complicate the modeling of reordering (though see, e.g., Schwenk et al. (2007) and Casacuberta (2000)). But in the problems of section 1, letter reordering is rare and we may assume it is local to a window. 1080 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 1080–1089, Honolulu, October 2008. c�2008 Association for Computational Linguistics Figure 1: One of many possible alignment strings A for the observed pair breaking/broke, enriched with latent strings `1 and `2. Observed letters are shown in bold. The box marks a trigram to be scored. See Fig. 2 for features that fire on this trigram. Joint n-gram models over the input</context>
+</contexts>
+<marker>Schwenk, Costa-jussa, Fonollosa, 2007</marker>
+<rawString>Holger Schwenk, Marta R. Costa-jussa, and Jose A. R. Fonollosa. 2007. Smooth bilingual n-gram translation. In Proc. of EMNLP-CoNLL, pages 430–438.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tarek Sherif</author>
+<author>Grzegorz Kondrak</author>
+</authors>
+<title>Substringbased transliteration.</title>
+<date>2007</date>
+<booktitle>In Proc. of ACL,</booktitle>
+<location>Prague, Czech Republic,</location>
+<contexts>
+<context position="2908" citStr="Sherif and Kondrak, 2007" startWordPosition="434" endWordPosition="437">os, 1998) would consider each character in isolation. To consider more context, we pursue a very natural generalization. Given an input x, we evaluate a candidate output y by moving a sliding window over the aligned (x, y) pair. More precisely, since many alignments are possible, we sum over all these possibilities, evaluating each alignment separately.1 At each window position, we accumulate logprobability based on the material that appears within the current window. The window is a few characters wide, and successive window positions overlap. This stands in contrast to a competing approach (Sherif and Kondrak, 2007; Zhao et al., 2007) that is inspired by phrase-based machine translation (Koehn et al., 2007), which segments the input string into substrings that are transduced independently, ignoring context.2 1At the other extreme, Freitag and Khadivi (2007) use no alignment; each feature takes its own view of how (x, y) relate. 2We feel that this independence is inappropriate. By analogy, it would be a poor idea for a language model to score a string highly if it could be segmented into independently frequent n-grams. Rather, language models use overlapping ngrams (indeed, it is the language model that </context>
+</contexts>
+<marker>Sherif, Kondrak, 2007</marker>
+<rawString>Tarek Sherif and Grzegorz Kondrak. 2007. Substringbased transliteration. In Proc. of ACL, Prague, Czech Republic, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kristina Toutanova</author>
+<author>Hisami Suzuki</author>
+<author>Achim Ruopp</author>
+</authors>
+<title>Applying morphology generation models to machine translation.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL-08: HLT,</booktitle>
+<location>Columbus, Ohio,</location>
+<contexts>
+<context position="16303" citStr="Toutanova et al. (2008)" startWordPosition="2750" endWordPosition="2753">een shown to be useful for machine translation and other tasks.9 Here we describe two sets of experiments: an inflectional morphology task in which models are trained to transduce verbs from one form into another (section 4.2), and a lemmatization task (section 4.3), in which any inflected verb is to be reduced to its root form. 4.1 Training and decoding We train 0 to maximize the regularized10 conditional log-likelihood11 � (x,y*)EC where C is a supervised training corpus. To maximize (2) during training, we apply the gradientbased optimization method L-BFGS (Liu and Nocedal, 1989).12 9E.g., Toutanova et al. (2008) improve MT performance by selecting correct morphological forms from a knowledge source. We instead focus on generalizing from observed forms and generating new forms (but see with rootlist in Table 3). 10The variance a2 of the L2 prior is chosen by optimizing on development data. We are also interested in trying an L1 prior. 11Alternatives would include faster error-driven methods (perceptron, MIRA) and slower max-margin Markov networks. 12This worked a bit better than stochastic gradient descent. log p0(y* |x) + ||0||2/2u2, (2) 1083 To decode a test example x, we wish to find y� = argmaxyEF</context>
+</contexts>
+<marker>Toutanova, Suzuki, Ruopp, 2008</marker>
+<rawString>Kristina Toutanova, Hisami Suzuki, and Achim Ruopp. 2008. Applying morphology generation models to machine translation. In Proceedings of ACL-08: HLT, Columbus, Ohio, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Richard Wicentowski</author>
+</authors>
+<title>Modeling and Learning Multilingual Inflectional Morphology in a Minimally Supervised Framework.</title>
+<date>2002</date>
+<tech>Ph.D. thesis,</tech>
+<institution>Johns-Hopkins University.</institution>
+<contexts>
+<context position="1075" citStr="Wicentowski (2002)" startWordPosition="152" endWordPosition="153">ing and inflectional morphology. We present a conditional loglinear model for string-to-string transduction, which employs overlapping features over latent alignment sequences, and which learns latent classes and latent string pair regions from incomplete training data. We evaluate our approach on morphological tasks and demonstrate that latent variables can dramatically improve results, even when trained on small data sets. On the task of generating morphological forms, we outperform a baseline method reducing the error rate by up to 48%. On a lemmatization task, we reduce the error rates in Wicentowski (2002) by 38–92%. 1 Introduction A recurring problem in computational linguistics and language processing is transduction of character strings, e.g., words. That is, one wishes to model some systematic mapping from an input string x to an output string y. Applications include: • phonology: underlying representation H surface representation • orthography: pronunciation H spelling • morphology: inflected form H lemma, or differently inflected form • fuzzy name matching (duplicate detection) and spelling correction: spelling H variant spelling *This work was supported by the Human Language Technology C</context>
+<context position="29373" citStr="Wicentowski (2002" startWordPosition="4968" endWordPosition="4970">), (et, en), (t, n) (92.7%). In the 2PKE task, region 0 contains different prefixes (e.g. entgegen in entgegenzutreten), regions 1 and 2 are empty, region 3 contains the zu affix, region 4 the stem, and region 5 contains the suffix. The pruned alignment alphabet excluded a few gold standard outputs so that the model contains paths for 98.9%–99.9% of the test examples. We verified that the insertion limit did not hurt oracle accuracy. 4.3 Lemmatization We apply our models to the task of lemmatization, where the goal is to generate the lemma given an inflected word form. We compare our model to Wicentowski (2002, chapter 3), an alternative supervised approach. Wicentowski’s Base model simply learns how to replace an arbitrarily long suffix string of an input word, choosing some previously observed suffix —* suffix replacement based on the input word’s 1086 Without rootlist (generation) With rootlist (selection) Wicentowski (2002) This paper Wicentowski (2002) This paper Lang. Base Af. WFA. n n+x n+x+l Base Af. WFA. n n+x n+x+l Basque 85.3 81.2 80.1 91.0 (.20) 91.1 (.20) 93.6 (.14) 94.5 94.0 95.0 90.9 (.29) 90.8 (.31) 90.9 (.30) English 91.0 94.7 93.1 92.4 (.09) 93.4 (.08) 96.9 (.05) 98.3 98.6 98.6 98</context>
+<context position="31629" citStr="Wicentowski (2002)" startWordPosition="5337" endWordPosition="5338">acements for a stem vowel cluster and other linguistically significant regions in the form (identified by a deterministic alignment and segmentation of training pairs). This approach is a bit like our change regions combined with Moses’s region-independent phrase pairs. We compare against all three models. Note that Affix and WFAffix have an advantage that our models do not, namely, user-supplied lists of canonical affixes for each language. It is interesting to see how our models with their more non-committal trigram structure compare to this. Table 3 reports results on the data sets used in Wicentowski (2002), for Basque, English, Irish, and Tagalog. Following Wicentowski, 10-fold cross-validation was used. The columns n+x and n+x+l mean ngram+x and ngram+x+latent, respectively. As latent variables, we include 2 word classes but no change regions.22 For completeness, Table 3 also compares with Wicentowski (2002) on a selection (rather than generation) task. Here, at test time, the lemma is selected from a candidate list of known lemmas, namely, all the output forms that appeared in training data.23 These additional results are labeled with rootlist in the right half of Table 3. On the supervised g</context>
+<context position="37336" citStr="Wicentowski (2002)" startWordPosition="6301" endWordPosition="6302">tes, and simply trains the weights. We evaluated on two morphology generation tasks. When inflecting German verbs we, even with the simplest features, outperform the moses3 baseline on 3 out of 4 tasks, which uses the same amount of context as our models. Introducing more sophisticated features that have access to latent classes and regions improves our results dramatically, even on small training data sizes. Using these we outperform moses9 and moses1S, which use long context windows, reducing error rates by up to 48%. On the lemmatization task we were able to improve the results reported in Wicentowski (2002) on three out of four tested languages and reduce the error rates by 38% to 92%. The model’s errors are often reasonable misgeneralizations (e.g., assume regular conjugation where irregular would have been correct), and it is able to use even a small number of latent variables (including the latent alignment) to capture useful linguistic properties. In future work, we would like to identify a set of features, latent variables, and training methods that port well across languages and string-transduction tasks. We would like to use features that look at wide context on the input side, which is i</context>
+</contexts>
+<marker>Wicentowski, 2002</marker>
+<rawString>Richard Wicentowski. 2002. Modeling and Learning Multilingual Inflectional Morphology in a Minimally Supervised Framework. Ph.D. thesis, Johns-Hopkins University.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jun Wu</author>
+<author>Sanjeev Khudanpur</author>
+</authors>
+<title>Efficient training methods for maximum entropy language modeling.</title>
+<date>2000</date>
+<booktitle>In Proc. of ICSLP,</booktitle>
+<volume>3</volume>
+<location>Beijing,</location>
+<contexts>
+<context position="13676" citStr="Wu and Khudanpur, 2000" startWordPosition="2327" endWordPosition="2330">ect the model to learn to label the ge insertion with a 1 and vowel change with a 3, skipping region 1 in the examples where the ge insertion is not present (see section 4.2, Analysis). In the next section we describe features over these enriched alignment strings. 3 Features One of the simplest ways of scoring a string is an ngram model. In our log-linear model (1), we include ngram features fi(A), each of which counts the occurrences in A of a particular n-gram of alignment characters. The log-linear framework lets us include ngram features of different lengths, a form of backoff smoothing (Wu and Khudanpur, 2000). We use additional backoff features on alignment strings to capture phonological, morphological, and orthographic generalizations. Examples are found in features (b)-(h) in Fig. 2. Feature (b) matches vowel and consonant character classes in the input and output dimensions. In the id/subst ngram feature, we have a similar abstraction, where the character classes ins, del, id, and subst are defined over input/output pairs, to match insertions, deletions, identities (matches), and substitutions. In string transduction tasks, it is helpful to include a language model of the target. While this ca</context>
+</contexts>
+<marker>Wu, Khudanpur, 2000</marker>
+<rawString>Jun Wu and Sanjeev Khudanpur. 2000. Efficient training methods for maximum entropy language modeling. In Proc. of ICSLP, volume 3, Beijing, October.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Bing Zhao</author>
+<author>Nguyen Bach</author>
+<author>Ian Lane</author>
+<author>Stephan Vogel</author>
+</authors>
+<title>A log-linear block transliteration model based on bi-stream HMMs.</title>
+<date>2007</date>
+<booktitle>In Proc. of NAACL-HLT,</booktitle>
+<location>Rochester, New York,</location>
+<contexts>
+<context position="2928" citStr="Zhao et al., 2007" startWordPosition="438" endWordPosition="441">ach character in isolation. To consider more context, we pursue a very natural generalization. Given an input x, we evaluate a candidate output y by moving a sliding window over the aligned (x, y) pair. More precisely, since many alignments are possible, we sum over all these possibilities, evaluating each alignment separately.1 At each window position, we accumulate logprobability based on the material that appears within the current window. The window is a few characters wide, and successive window positions overlap. This stands in contrast to a competing approach (Sherif and Kondrak, 2007; Zhao et al., 2007) that is inspired by phrase-based machine translation (Koehn et al., 2007), which segments the input string into substrings that are transduced independently, ignoring context.2 1At the other extreme, Freitag and Khadivi (2007) use no alignment; each feature takes its own view of how (x, y) relate. 2We feel that this independence is inappropriate. By analogy, it would be a poor idea for a language model to score a string highly if it could be segmented into independently frequent n-grams. Rather, language models use overlapping ngrams (indeed, it is the language model that rescues phrasebased </context>
+</contexts>
+<marker>Zhao, Bach, Lane, Vogel, 2007</marker>
+<rawString>Bing Zhao, Nguyen Bach, Ian Lane, and Stephan Vogel. 2007. A log-linear block transliteration model based on bi-stream HMMs. In Proc. of NAACL-HLT, Rochester, New York, April.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

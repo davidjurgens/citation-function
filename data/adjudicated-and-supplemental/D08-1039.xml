@@ -1,0 +1,1257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000011">
+<title confidence="0.982402">
+Triplet Lexicon Models for Statistical Machine Translation
+</title>
+<author confidence="0.896557">
+Saˇsa Hasan, Juri Ganitkevitch, Hermann Ney, Jes´us Andr´es-Ferrer†*
+</author>
+<affiliation confidence="0.659112">
+Human Language Technology and Pattern Recognition, RWTH Aachen University, Germany
+†Universidad Polit´ecnica de Valencia, Dept. Sist. Inform´aticos y Computaci´on
+</affiliation>
+<email confidence="0.989731">
+{hasan,ganitkevitch,ney}@cs.rwth-aachen.de jandres@dsic.upv.es
+</email>
+<sectionHeader confidence="0.995414" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.9996866">
+This paper describes a lexical trigger model
+for statistical machine translation. We present
+various methods using triplets incorporating
+long-distance dependencies that can go be-
+yond the local context of phrases or n-gram
+based language models. We evaluate the pre-
+sented methods on two translation tasks in a
+reranking framework and compare it to the re-
+lated IBM model 1. We show slightly im-
+proved translation quality in terms of BLEU
+and TER and address various constraints to
+speed up the training based on Expectation-
+Maximization and to lower the overall num-
+ber of triplets without loss in translation per-
+formance.
+</bodyText>
+<sectionHeader confidence="0.998993" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.99989425">
+Data-driven methods have been applied very suc-
+cessfully within the machine translation domain
+since the early 90s. Starting from single-word-
+based translation approaches, significant improve-
+ments have been made through advances in mod-
+eling, availability of larger corpora and more pow-
+erful computers. Thus, substantial progress made
+in the past enables today’s MT systems to achieve
+acceptable results in terms of translation quality for
+specific language pairs such as Arabic-English. If
+sufficient amounts of parallel data are available, sta-
+tistical MT systems can be trained on millions of
+</bodyText>
+<footnote confidence="0.783606">
+*The work was carried out while the author was at the Hu-
+man Language Technology and Pattern Recognition group at
+RWTH Aachen University and partly supported by the Valen-
+cian Conselleria d’Empresa, Universitat i CiMcia under grants
+CTBPRA/2005/ and BEFPI/2007/014.
+</footnote>
+<figureCaption confidence="0.95844025">
+Figure 1: Triplet example: a source word f is triggered
+by two target words e and e&apos;, where one of the words is
+within and the other outside the considered phrase pair
+(indicated by the dashed line).
+</figureCaption>
+<bodyText confidence="0.9999115">
+sentence pairs and use an extended level of context
+based on bilingual groups of words which denote
+the building blocks of state-of-the-art phrase-based
+SMT systems.
+Due to data sparseness, statistical models are of-
+ten trained on local context only. Language mod-
+els are derived from n-grams with n &lt; 5 and bilin-
+gual phrase pairs are extracted with lengths up to
+10 words on the target side. This captures the local
+dependencies of the data in detail and is responsi-
+ble for the success of data-driven phrase-based ap-
+proaches.
+In this work, we will introduce a new statistical
+model based on lexicalized triplets (f, e, e&apos;) which
+we will also refer to as cross-lingual triggers of
+the form (e, e&apos; —* f). This can be understood
+as two words in one language triggering one word
+in another language. These triplets, modeled by
+p(f|e, e&apos;), are closely related to lexical translation
+probabilities based on the IBM model 1, i.e. p(f|e).
+Several constraints and setups will be described later
+on in more detail, but as an introduction one can
+</bodyText>
+<figure confidence="0.96816075">
+f
+source
+target
+e e′
+</figure>
+<page confidence="0.977795">
+372
+</page>
+<note confidence="0.961897">
+Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 372–381,
+Honolulu, October 2008.c�2008 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.999859578947368">
+think of the following interpretation which is de-
+picted in Figure 1: Using a phrase-based MT ap-
+proach, a source word f is triggered by its trans-
+lation e which is part of the phrase being consid-
+ered, whereas another target word e&apos; outside this
+phrase serves as an additional trigger in order to al-
+low for more fine-grained distinction of a specific
+word sense. Thus, this cross-lingual trigger model
+can be seen as a combination of a lexicon model (i.e.
+f and e) and a model similar to monolingual long-
+range (i.e. distant bigram) trigger models (i.e. e and
+e&apos;, although these dependencies are reflected indi-
+rectly via e&apos; —* f) which uses both local (in-phrase)
+and global (in-sentence) information for the scoring.
+The motivation behind this approach is to get non-
+local information outside the current context (i.e. the
+currently considered bilingual phrase pair) into the
+translation process. The triplets are trained via the
+EM algorithm, as will be shown later in more detail.
+</bodyText>
+<sectionHeader confidence="0.999748" genericHeader="introduction">
+2 Related Work
+</sectionHeader>
+<bodyText confidence="0.999976535211268">
+In the past, a significant number of methods has
+been presented that try to capture long-distance de-
+pendencies, i.e. use dependencies in the data that
+reach beyond the local context of n-grams or phrase
+pairs. In language modeling, monolingual trigger
+approaches have been presented (Rosenfeld, 1996;
+Tillmann and Ney, 1997) as well as syntactical meth-
+ods that parse the input and model long-range de-
+pendencies on the syntactic level by conditioning on
+the predecessing words and their corresponding par-
+ent nodes (Chelba and Jelinek, 2000; Roark, 2001).
+The latter approach was shown to reduce perplex-
+ities and improve the WER in speech recognition
+systems. One drawback is that the parsing process
+might slow down the system significantly and the
+approach is complicated to be integrated directly in
+the search process. Thus, the effect is often shown
+offline in reranking experiments using n-best lists.
+One of the simplest models that can be seen in
+the context of lexical triggers is the IBM model 1
+(Brown et al., 1993) which captures lexical depen-
+dencies between source and target words. It can be
+seen as a lexicon containing correspondents of trans-
+lations of source and target words in a very broad
+sense since the pairs are trained on the full sentence
+level. The model presented in this work is very close
+to the initial IBM model 1 and can be seen as taking
+another word into the conditioning part, i.e. the trig-
+gering items.1 Furthermore, since the second trig-
+ger can come from any part of the sentence, we also
+have a link to long-range monolingual triggers as
+presented above.
+A long-range trigram model is presented in
+(Della Pietra et al., 1994) where it is shown how to
+derive a probabilistic link grammar in order to cap-
+ture long-range dependencies in English using the
+EM algorithm. Expectation-Maximization is used
+in the presented triplet model as well which is de-
+scribed in more detail in Section 3. Instead of deriv-
+ing a grammar automatically (based on POS tags of
+the words), we rely on a fully lexicalized approach,
+i.e. the training is taking place at the word level.
+Related work in the context of fine-tuning lan-
+guage models by using cross-lingual lexical triggers
+is presented in (Kim and Khudanpur, 2003). The
+authors show how to use cross-lingual triggers on a
+document level in order to extract translation lexi-
+cons and domain-specific language models using a
+mutual information criterion.
+Recently, word-sense disambiguation (WSD)
+methods have been shown to improve translation
+quality (Chan et al., 2007; Carpuat and Wu, 2007).
+Chan et al. (2007) use an SVM based classifier for
+disambiguating word senses which are directly in-
+corporated in the decoder through additional fea-
+tures that are part of the log-linear combination of
+models. They use local collocations based on sur-
+rounding words left and right of an ambiguous word
+including the corresponding parts-of-speech. Al-
+though no long-range dependencies are modeled, the
+approach yields an improvement of +0.6% BLEU on
+the NIST Chinese-English task. In Carpuat and Wu
+(2007), another state-of-the-art WSD engine (a com-
+bination of naive Bayes, maximum entropy, boost-
+ing and Kernel PCA models) is used to dynamically
+determine the score of a phrase pair under consid-
+eration and, thus, let the phrase selection adapt to
+the context of the sentence. Although the baseline is
+significantly lower than in the work of Chan et al.,
+this setup reaches an improvement of 0.5% BLEU
+on the NIST CE task and up to 1.1% BLEU on the
+</bodyText>
+<footnote confidence="0.49728">
+1Thus, instead of p(f|e) we model p(f|e, e&apos;) with different
+additional constraints as explained later on.
+</footnote>
+<page confidence="0.998923">
+373
+</page>
+<bodyText confidence="0.998111166666667">
+IWSLT’06 test sets.
+The work in this paper tries to complement the
+WSD approaches by using long-range dependen-
+cies. If triggers from a local context determine dif-
+ferent lexical choice for the word being triggered,
+the setting is comparable to the mentioned WSD
+approaches (although local dependencies might al-
+ready be reflected sufficiently in the phrase models).
+A distant second trigger, however, might have a ben-
+eficial effect for specific languages, e.g. by captur-
+ing word splits (as it is the case in German for verbs
+with separable prefixes) or, as already mentioned, al-
+lowing for a more fine-grained lexical choice of the
+word being triggered, namely based on another word
+which is not part of the current local, i.e. phrasal,
+context.
+The basic idea of triplets of the form (e, f0 —* f),
+called multi-word extensions, is also mentioned in
+(Tillmann, 2001) but neither evaluated nor investi-
+gated in further detail.
+In the following sections, we will describe the
+model proposed in this work. In Section 3, a de-
+tailed introduction is given, as well as the EM train-
+ing and variations of the model. The different set-
+tings will be evaluated in Section 4, where we show
+experiments on the IWSLT Chinese-English and
+TC-STAR EPPS English-Spanish/Spanish-English
+tracks. A discussion of the results and further ex-
+amples are given in Section 5. Final remarks and
+future work are addressed in Section 6.
+</bodyText>
+<sectionHeader confidence="0.994327" genericHeader="method">
+3 Model
+</sectionHeader>
+<bodyText confidence="0.9898875">
+As an extension to commonly used lexical word
+pair probabilities p(f|e) as introduced in (Brown
+et al., 1993), we define our model to operate on
+word triplets. A triplet (f, e, e0) is assigned a value
+α(f|e, e0) &gt; 0 with the constraint such that
+get sentence eI1 for the triplet model is defined as:
+</bodyText>
+<equation confidence="0.976247">
+EI
+pall(fj|eI1) = 1Z
+i=1
+</equation>
+<bodyText confidence="0.9971125">
+where Z denotes a normalization factor based on the
+corresponding target sentence length, i.e.
+</bodyText>
+<equation confidence="0.681771">
+I(I − 1) . (2)
+Z=
+2
+</equation>
+<bodyText confidence="0.999954285714286">
+The introduction of a second trigger (i.e. ek in
+Eq. 1) enables the model to combine local (i.e. word
+or phrase level) and global (i.e. sentence level) infor-
+mation.
+In the following, we will describe the training pro-
+cedure of the model via maximum likelihood esti-
+mation for the unconstrained case.
+</bodyText>
+<subsectionHeader confidence="0.995675">
+3.1 Training
+</subsectionHeader>
+<bodyText confidence="0.9994695">
+The goal of the training procedure is to maximize the
+log-likelihood Fall of the triplet model for a given
+bilingual training corpus {(fJ1 , eI1)}N 1 consisting of
+N sentence pairs:
+</bodyText>
+<equation confidence="0.9888305">
+log pall(fj|eIn
+1 ),
+</equation>
+<bodyText confidence="0.9999901">
+where Jn and In are the lengths of the nth source
+and target sentences, respectively. As there is no
+closed form solution for the maximum likelihood es-
+timate, we resort to iterative training via the EM al-
+gorithm (Dempster et al., 1977). We define the aux-
+iliary function Q(µ; ¯µ) based on Fall where µ¯ is the
+new estimate within an iteration which is to be de-
+rived from the current estimate µ. Here, µ stands for
+the entire set of model parameters to be estimated,
+i.e. the set of all {α(f|e, e0)}. Thus, we obtain
+</bodyText>
+<equation confidence="0.9741511">
+Q({α(f|e, e0)}; {¯α(f|e, e0)}) =
+EI α(fj|ei, ek), (1)
+k=i+1
+EN
+n=1
+Fall :=
+EJn
+j=1
+Ebe, e0 : α(f|e, e0) = 1. EN EJn EIn EIn rZn 1 α(fj  |ei, ek) (3)
+f n=1 j=1 i=1 k=i+1 L pall (fj  |eI
+</equation>
+<bodyText confidence="0.9994966">
+Throughout this paper, e and e0 will be referred to as
+the first and the second trigger, respectively. In view
+of its triggers f will be termed the effect.
+For a given bilingual sentence pair (fJ1 , eI1), the
+probability of a source word fj given the whole tar-
+</bodyText>
+<equation confidence="0.7916105">
+log (Z−1
+n ¯α(fj|ei, ek))] ,
+</equation>
+<bodyText confidence="0.999839333333333">
+where Zn is defined as in Eq. 2. Using the
+method of Lagrangian multipliers for the normaliza-
+tion constraint, we take the derivative with respect to
+</bodyText>
+<page confidence="0.93301">
+374
+</page>
+<equation confidence="0.913213333333333">
+¯α(f|e, e0) and obtain:
+¯α(f |e, e0) = A(f, e� e0) (4)
+Ef,A(f, ,e,e0)
+</equation>
+<bodyText confidence="0.986167">
+where A(f, e, e0) is a relative weight accumulator
+over the parallel corpus:
+</bodyText>
+<equation confidence="0.864013428571428">
+A(f,e,e0) =
+δ(f, fj)Z−1
+n α(f|e, e0)Cn(e, e0) (5)
+pall(fj|eIn
+1 )
+and
+δ(e, ei)δ(e0, ek).
+</equation>
+<bodyText confidence="0.999928181818182">
+The function δ(·, ·) denotes the Kronecker delta.
+The resulting training procedure is analogous to the
+one presented in (Brown et al., 1993) and (Tillmann
+and Ney, 1997).
+The next section presents variants of the ba-
+sic unconstrained model by putting restrictions on
+the valid regions of triggers (in-phrase vs. out-of-
+phrase) and using alignments obtained from either
+GIZA++ training or forced alignments in order to
+reduce the model size and to incorporate knowledge
+already obtained in previous training steps.
+</bodyText>
+<subsectionHeader confidence="0.999815">
+3.2 Model variations
+</subsectionHeader>
+<bodyText confidence="0.999991421052632">
+Based on the unconstrained triplet model presented
+in Section 3, we introduce additional constraints,
+namely the phrase-bounded and the path-aligned
+triplet model in the following. The former reduces
+the number of possible triplets by posing constraints
+on the position of where valid triggers may originate
+from. In order to obtain phrase boundaries on the
+training data, we use forced alignments, i.e. translate
+the whole training data by constraining the transla-
+tion hypotheses to the target sentences of the training
+corpus.
+Path-aligned triplets use an alignment constraint
+from the word alignments that are trained with
+GIZA++. Here, we restrict the first trigger pair (f, e)
+to the alignment path as based on the alignment ma-
+trix produced by IBM model 4.
+These variants require information in addition to
+the bilingual sentence pair (fJ1 , eI1), namely a corre-
+sponding phrase segmentation Π = {πij} with
+</bodyText>
+<equation confidence="0.842598375">
+r 1 ∃ a phrase pair that covers ei and fj
+πij = Sl
+0 otherwise
+for the phrase-bounded method and, similarly, a
+word alignment A = {aij} where
+� 1 if ei is aligned to fj
+aij = .
+0 otherwise
+</equation>
+<subsectionHeader confidence="0.697672">
+3.2.1 Phrase-bounded triplets
+</subsectionHeader>
+<bodyText confidence="0.9999245">
+The phrase-bounded triplet model (referred to as
+pphr in the following), restricts the first trigger e to
+the same phrase as f, whereas the second trigger e0
+is set outside the phrase, resulting in
+</bodyText>
+<equation confidence="0.997666">
+pphr(fj|eI1, Π) =
+πij(1 − πkj)α(fj|ei, ek). (6)
+</equation>
+<sectionHeader confidence="0.448882" genericHeader="method">
+3.2.2 Path-aligned triplet
+</sectionHeader>
+<bodyText confidence="0.999813666666667">
+The path-aligned triplet model (denoted by palign
+in the following), restricts the scope of e to words
+aligned to f by A, yielding:
+</bodyText>
+<equation confidence="0.9946">
+palign(fj|eI1, A) =
+aijα(fj|ei, ek) (7)
+</equation>
+<bodyText confidence="0.99997375">
+where the Zj are, again, the appropriate normaliza-
+tion terms.
+Also, to account for non-aligned words (analo-
+gously to the IBM models), the empty word e0 is
+considered in all three model variations. We show
+the effect of the empty word in the experiments (Sec-
+tion 4). Furthermore, we can train the presented
+models in the inverse direction, i.e. p(e|f, f0), and
+combine the two directions in the rescoring frame-
+work. The next section presents a set of experiments
+that evaluate the performance of the presented triplet
+model and its variations.
+</bodyText>
+<sectionHeader confidence="0.999806" genericHeader="method">
+4 Experiments
+</sectionHeader>
+<bodyText confidence="0.999731">
+In this section, we describe the system setup used in
+this work, including the translation tasks and the cor-
+responding training corpora. The experiments are
+based on an n-best list reranking framework.
+</bodyText>
+<equation confidence="0.624685666666667">
+Jn
+j=1
+N
+n=1
+Cn(e, e0) = In In
+i=1 k=i+1
+1
+Zj
+I
+i=1
+I
+k=1
+1
+Zj
+I
+i=1
+I
+k=1
+</equation>
+<page confidence="0.987028">
+375
+</page>
+<subsectionHeader confidence="0.931338">
+4.1 System
+</subsectionHeader>
+<bodyText confidence="0.999786363636364">
+The experiments were carried out using a state-of-
+the-art phrase-based SMT system. The dynamic
+programming beam search decoder uses several
+models during decoding by combining them log-
+linearly. We incorporate phrase translation and word
+lexicon models in both directions, a language model,
+as well as phrase and word penalties including a
+distortion model for the reordering. While gener-
+ating the hypotheses, a word graph is created which
+compactly represents the most likely translation hy-
+potheses. Out of this word graph, we generate n-
+best lists and use them to test the different setups as
+described in Section 3.
+In the experiments, we use 10,000-best lists con-
+taining unique translation hypotheses, i.e. duplicates
+generated due to different phrase segmentations are
+reduced to one single entry. The advantage of this
+reranking approach is that we can directly test the
+obtained models since we already have fully gener-
+ated translations. Thus, we can apply the triplet lex-
+icon model based on p(f|e, e&apos;) and its inverse coun-
+terpart p(eIf, f&apos;) directly. During decoding, since e&apos;
+could be from anywhere outside the current phrase,
+i.e. even from a part which lies beyond the current
+context which has not yet been generated, we would
+have to apply additional constraints during training
+(i.e. make further restrictions such as i&apos; &lt; i for a
+trigger pair (ez, ez,)).
+Optimization of the model scaling factors is car-
+ried out using minimum error rate training (MERT)
+on the development sets. The optimization criterion
+is 100-BLEU since we want to maximize the BLEU
+score.
+</bodyText>
+<sectionHeader confidence="0.641858" genericHeader="method">
+4.2 Tasks
+4.2.1 IWSLT
+</sectionHeader>
+<bodyText confidence="0.999981766666667">
+For the first part of the experiments, we use
+the corpora that were released for the IWSLT’07
+evaluation campaign. The training corpus con-
+sists of approximately 43K Chinese-English sen-
+tence pairs, mainly coming from the BTEC cor-
+pus (Basic Travel Expression Corpus). This is a
+multilingual speech corpus which contains tourism-
+related material, such as transcribed conversations
+about making reservations, asking for directions or
+conversations as taking place in restaurants. For the
+experiments, we use the clean data track, i.e. tran-
+scriptions of read speech. As the development set
+which is used for tuning the parameters of the base-
+line system and the reranking framework, we use
+the IWSLT’04 evaluation set (500 sentence pairs).
+The two blind test sets which are used to evaluate
+the final performance of the models are the official
+evaluation sets from IWSLT’05 (506 sentences) and
+IWSLT’07 (489 sentences).
+The average sentence length of the training cor-
+pus is 10 words. Thus, the task is somewhat lim-
+ited and very domain-specific. One of the advan-
+tages of this setting is that preliminary experiments
+can be carried out quickly in order to analyze the ef-
+fects of the different models in detail. This and the
+small vocabulary size (12K entries) makes the cor-
+pus ideal for first “rapid application development”-
+style setups without having to care about possible
+constraints due to memory requirements or CPU
+time restrictions.
+</bodyText>
+<sectionHeader confidence="0.800269" genericHeader="method">
+4.2.2 EPPS
+</sectionHeader>
+<bodyText confidence="0.9999438">
+Furthermore, additional experiments are based on
+the EPPS corpus (European Parliament Plenary Ses-
+sions) as used within the FTE (Final Text Edition)
+track of the TC-STAR evaluations. The corpus con-
+tains speeches held by politicians at plenary sessions
+of the European Parliament that have been tran-
+scribed, “corrected” to make up valid written texts
+and translated into several target languages. The lan-
+guage pairs considered in the experiments here are
+Spanish-English and English-Spanish.
+The training corpus consists of roughly 1.3M sen-
+tence pairs with 35.5M running words on the En-
+glish side. The vocabulary sizes are considerably
+larger than for the IWSLT task, namely around 170K
+on the target side. As development set, we use
+the development data issued for the 2006 evaluation
+(1122 sentences), whereas the two blind test sets are
+the official evaluation data from 2006 (TC-Star’06,
+1117 sentences) and 2007 (TC-Star’07, 1130 sen-
+tences).
+</bodyText>
+<sectionHeader confidence="0.655068" genericHeader="method">
+4.3 Results
+4.3.1 IWSLT experiments
+</sectionHeader>
+<bodyText confidence="0.999938666666667">
+One of the first questions that arises is how many
+EM iterations should be carried out during training
+of the triplet model. Since the IWSLT task is small,
+</bodyText>
+<page confidence="0.994776">
+376
+</page>
+<figure confidence="0.972379058823529">
+35.6
+35.4
+35.2
+TER score
+35
+34.8
+34.6
+57.6
+57.4
+57.2
+56.8
+56.6
+57
+IWSLT’04 BLEU
+IWSLT’04 TER
+0 10 20 30 40 50
+BLEU score
+</figure>
+<table confidence="0.944257">
+IWSLT’05 IWSLT’07
+BLEU TER BLEU TER
+baseline 61.1 30.59 38.9 45.60
+IBM model 1 61.5 30.29 39.4 45.31
+trip fe+ef pall 61.7 30.24 39.7 45.24
+trip fe+ef pphr 61.5 30.32 39.1 45.36
+trip fe+ef palig,, 61.2 30.60 39.7 45.02
+</table>
+<tableCaption confidence="0.975328">
+Table 2: Comparison of triplet variants on IWSLT CE test
+sets, 20 EM iterations, with singletons and empty words.
+</tableCaption>
+<figure confidence="0.866963">
+EM iterations
+</figure>
+<figureCaption confidence="0.993096">
+Figure 2: Effect of EM iterations on IWSLT’04, left axis
+shows BLEU (higher numbers better), right axis (dashed
+graph) shows TER score (lower numbers better).
+</figureCaption>
+<table confidence="0.999206714285714">
+IWSLT’04 IWSLT’05
+BLEU TER BLEU TER
+baseline 56.7 35.49 61.1 30.59
+pall(e|f, f&apos;) 57.1 35.03 61.3 30.55
+w/ singletons 57.3 35.04 61.3 30.61
+w/ empties 57.3 35.00 61.2 30.65
++ pall(f|e, e&apos;) 57.5 34.69 61.7 30.24
+</table>
+<tableCaption confidence="0.797775333333333">
+Table 1: Different setups showing the effect of singletons
+and empty words for IWSLT CE IWSLT’04 (dev) and
+IWSLT’05 (test) sets, pall triplets, 20 EM iterations.
+</tableCaption>
+<bodyText confidence="0.999717418181818">
+we can quickly run the experiments on a full uncon-
+strained triplet model without any cutoff or further
+constraints. Figure 2 shows the rescoring perfor-
+mance for different numbers of EM iterations. The
+first 10 iterations significantly improve the triplet
+model performance for the IWSLT task. After that,
+there are no big changes. The performance even de-
+grades a little bit after 30 iterations. For the IWSLT
+task, we therefore set a fixed number of 20 EM iter-
+ations for the following experiments since it shows a
+good performance in terms of both BLEU and TER
+score. The oracle TER scores of the 10k-best lists
+are 14.18% for IWSLT’04, 11.36% for IWSLT’05
+and 18.85% for IWSLT’07, respectively.
+The next chain of experiments on the IWSLT task
+investigates the impact of changes to the setup of
+training an unconstrained triplet model, such as the
+addition of the empty word and the inclusion of sin-
+gletons (i.e. triplets that were only seen once in the
+training data). This might show the importance of
+rare events in order to derive strategies when mov-
+ing to larger tasks where it is not feasible to train all
+possible triplets, such as e.g. on the EPPS task (as
+shown later) or the Chinese-English NIST task. The
+results for the unconstrained model are shown in Ta-
+ble 1, beginning with a full triplet model in reverse
+direction, pall(e|f, f&apos;), that contains no singletons
+and no empty words for the triggering side. In this
+setting, singletons seem to help on dev but there is no
+clear improvement on one of the test sets, whereas
+empty words do not make a significant difference but
+can be used since they do not harm either. The base-
+line can be improved by +0.6% BLEU and around
+-0.5% in TER on the IWSLT’04 set. For the vari-
+ous setups, there are no big differences in the TER
+score which might be an effect of optimization on
+BLEU. Therefore, for further experiments using the
+constraints from Section 3.2, we use both singletons
+and empty words as the default.
+Adding the other direction p(f|e, e&apos;) results in an-
+other increase, with a total of +0.8% BLEU and
+-0.8% TER, which shows that the combination of
+both directions helps overall translation quality. The
+results on the two test sets are shown in Table 2.
+As can be seen, we arrive at similar improvements,
+namely +0.6% BLEU and -0.3% TER on IWSLT’05
+and +0.8% BLEU and -0.4% TER on IWSLT’07, re-
+spectively. The constrained models, i.e. the phrase-
+bounded (pphr) and path-aligned (palig�e) triplets are
+outperformed by the full unconstrained case, al-
+though on IWSLT’07 both unconstrained and path-
+aligned models are close.
+For a fair comparison, we added a classical IBM
+model 1 in the rescoring framework. It can be seen
+that the presented triplet models slightly outperform
+</bodyText>
+<page confidence="0.993895">
+377
+</page>
+<table confidence="0.9972814">
+TC-Star’06 TC-Star’07
+BLEU TER BLEU TER
+baseline 52.3 34.57 50.4 36.46
+trip fe+ef pall 52.9 34.32 50.6 36.34
++ max dist 10 52.9 34.20 50.8 36.22
+</table>
+<tableCaption confidence="0.997566333333333">
+Table 3: Effect of using maximum distance constraint for
+pall on EPPS Spanish-English test sets, occ3, 4 EM iter-
+ations due to time constraints.
+</tableCaption>
+<bodyText confidence="0.997115">
+the simple IBM model 1. Note that IBM model 1
+is a special case of the triplet lexicon model if the
+second trigger is the empty word.
+</bodyText>
+<subsectionHeader confidence="0.574888">
+4.3.2 EPPS experiments
+</subsectionHeader>
+<bodyText confidence="0.999988035714286">
+Since EPPS is a considerably harder task (larger
+vocabulary and longer sentences), the training of a
+full unconstrained triplet model cannot be done due
+to memory restrictions. One possibility to reduce
+the number of extracted triplets is to apply a max-
+imum distance constraint in the training procedure,
+i.e. only trigger pairs are considered where the dis-
+tance between first and second trigger is below or
+equal to the specified maximum.
+Table 3 shows the effect of a maximum distance
+constraint for the Spanish-English direction. Due
+to the large amount of triplets (we extract roughly
+two billion triplets2 for the EPPS data), we drop all
+triplets that occur less than 3 times which results in
+640 million triplets. Also, due to time restrictions3,
+we only train 4 iterations and compare it to 4 itera-
+tions of the same setting with the maximum distance
+set to 10. The training with the maximum distance
+constraints ends with a total of 380 million triplets.
+As can be seen (Table 3), the performance is compa-
+rable while cutting down the computation time from
+9.2 to 3.1 hours. The experiments were carried out
+on a 2.2GHz Opteron machine with 16 GB of mem-
+ory. The overall gain is +0.4–0.6% BLEU and up to
+-0.4% in TER. We even observe a slight increase in
+BLEU for the TC-Star’07 set which might be a ran-
+dom effect due to optimization on the development
+set where the behavior is the same as for TC-Star’06.
+</bodyText>
+<footnote confidence="0.9194078">
+2Extraction can be easily done in parallel by splitting the
+corpus and merging identical triplets iteratively in a separate
+step for two chunks at a time.
+3One iteration needs more than 12 hours for the uncon-
+strained case.
+</footnote>
+<table confidence="0.9954326">
+TC-Star’06 TC-Star’07
+BLEU TER BLEU TER
+baseline 49.5 37.65 51.0 36.03
+trip fe+ef pahr 50.2 37.01 51.5 35.38
++ occ2 50.2 37.06 51.8 35.32
+</table>
+<tableCaption confidence="0.968964">
+Table 4: Results on EPPS, English-Spanish, pphr com-
+bined, occ3, 10 EM iterations.
+</tableCaption>
+<table confidence="0.999429142857143">
+TC-Star’06 TC-Star’07
+BLEU TER BLEU TER
+baseline 49.5 37.65 51.0 36.03
+using FA 50.0 37.18 51.7 35.52
+using IBM4 50.0 37.12 51.7 35.43
++ occ2 50.2 36.84 52.0 35.10
++ max dist 1 50.0 37.10 51.7 35.51
+</table>
+<tableCaption confidence="0.997612">
+Table 5: Results on EPPS, English-Spanish, maximum
+approximation, palig-n, combined, occ3, 10 EM iterations.
+</tableCaption>
+<bodyText confidence="0.996564357142857">
+Results on EPPS English-Spanish for the phrase-
+bounded triplet model are presented in Table 4.
+Since the number of triplets is less than for the un-
+constrained model, we can lower the cutoff from 3
+to 2 (denoted in the table by occ3 and occ2, respec-
+tively). There is a small additional gain on the TC-
+Star’07 test set by this step, with a total of +0.7%
+BLEU for TC-Star’06 and +0.8% BLEU for TC-
+Star’07.
+Table 5 shows results for a variation of the path-
+aligned triplet model palign that restricts the first trig-
+ger to the best aligned word as estimated in the IBM
+model 1, thus using a maximum-approximation of
+the given word alignment. The model was trained
+on two word alignments, firstly the one contained in
+the forced alignments on the training data, and sec-
+ondly on an IBM-4 word alignment generated using
+GIZA++. For this second model we also demon-
+strate the improvement obtained when increasing the
+triplet lexicon size by using less trimming.
+Another experiment was carried out to investigate
+the effect of immediate neighboring words used as
+triggers within the palign setting. This is equivalent
+to using a “maximum distance of 1” constraint. We
+obtained worse results, namely a 0.2-0.3% drop in
+BLEU and a 0.3-0.4% raise in TER (cf. Table 5,
+last row), although the training is significantly faster
+with this setup, namely roughly 30 minutes per it-
+</bodyText>
+<page confidence="0.994144">
+378
+</page>
+<table confidence="0.997920428571428">
+TC-Star’06 TC-Star’07
+BLEU TER BLEU TER
+baseline 49.5 37.65 51.0 36.03
+IBM model 1 50.0 37.12 51.8 35.51
+pall, occ3 50.0 37.17 51.8 35.43
+pphr, occ2 50.2 37.06 51.8 35.32
+palign, occ2 50.2 36.84 52.0 35.10
+</table>
+<tableCaption confidence="0.963637">
+Table 6: Final results on EPPS English-Spanish, con-
+strained triplet models, 10 EM iterations, compared to
+standard IBM model 1.
+</tableCaption>
+<bodyText confidence="0.999840722222222">
+eration using less than 2 GB of memory. However,
+this shows that triggers outside the immediate con-
+text help overall translation quality. Additionally, it
+supports the claim that the presented methods are a
+complementary alternative to the WSD approaches
+mentioned in Section 2 which only consider the im-
+mediate context of a single word.
+Finally, we compare the constrained models to an
+unconstrained setting and, again, to a standard IBM
+model 1. Table 6 shows that the palign model con-
+strained on using the IBM-4 word alignments yields
++0.7% in BLEU on TC-Star’06 which is +0.2%
+more than with a standard IBM model 1. TER de-
+creases by -0.3% when compared to model 1. For
+the TC-Star’07 set, the observations are similar.
+The oracle TER scores of the development n-best
+list are 25.16% for English-Spanish and 27.0% for
+Spanish-English, respectively.
+</bodyText>
+<sectionHeader confidence="0.99965" genericHeader="method">
+5 Discussion
+</sectionHeader>
+<bodyText confidence="0.999850933333333">
+From the results of our reranking experiments, we
+can conclude that the presented triplet lexicon model
+outperforms the baseline single-best hypotheses of
+the decoder. When comparing to a standard IBM
+model 1, the improvements are significantly smaller
+though measurable. So far, since IBM model 1
+is considered one of the stronger rescoring mod-
+els, these results look promising. An unconstrained
+triplet model has the best performance if training is
+feasible since it also needs the most memory and
+time to be trained, at least for larger tasks.
+In order to cut down computational requirements,
+we can apply phrase-bounded and path-aligned
+training constraints that restrict the possibilities of
+selecting triplet candidates (in addition to simple
+</bodyText>
+<table confidence="0.996451727272727">
+f e e&apos; α(f|e, e&apos;)
+pagar taxpayer bill 0.76
+factura taxpayer bill 0.11
+contribuyente taxpayer bill 0.10
+f e – pibm1 (f|e)
+contribuyente taxpayer 0.40
+contribuyentes taxpayer 0.18
+europeo taxpayer 0.08
+factura bill 0.19
+ley bill 0.18
+proyecto bill 0.11
+</table>
+<tableCaption confidence="0.922772">
+Table 7: Example of triplets and related IBM model 1
+lexical probabilities. The triggers “taxpayer” and “bill”
+have a new effect (“pagar”), previously not seen in the
+top ranks of the lexicon.
+</tableCaption>
+<bodyText confidence="0.999534785714286">
+thresholding). Although no clear effect could be
+observed for adding empty words on the trigger-
+ing side, it does not harm and, thus, we get a sim-
+ilar functionality to IBM model 1 being “integrated”
+in the triplet lexicon model. The phrase-bounded
+training variant uses forced alignments computed
+on the whole training data (i.e. search constrained
+to producing the target sentences of the bilingual
+corpus) but could not outperform the path-aligned
+model which reuses the alignment path information
+obtained in regular GIZA++ training.
+Additionally, we observe a positive impact from
+triggers lying outside the immediate context of one
+predecessor or successor word.
+</bodyText>
+<subsectionHeader confidence="0.944645">
+5.1 Examples
+</subsectionHeader>
+<bodyText confidence="0.999779066666667">
+Table 7 shows an excerpt of the top entries for
+(e, e&apos;) = (taxpayer, bill) and compares it to the top
+entries of a lexicon based on IBM model 1. We ob-
+serve a triggering effect since the Spanish word pa-
+gar (to pay) is triggered at top position by the two
+English words taxpayer and bill. The average dis-
+tance of taxpayer and bill is 5.4 words. The models
+presented in this work try to capture this property
+and apply it in the scoring of hypotheses in order to
+allow for better lexical choice in specific contexts.
+In Table 8, we show an example translation where
+rescoring with the triplet model achieves higher n-
+gram coverage on the reference translation than the
+variant based on IBM model 1 rescoring. The differ-
+ing phrases are highlighted.
+</bodyText>
+<page confidence="0.997397">
+379
+</page>
+<figureCaption confidence="0.980609777777778">
+Source sen- ... respecto de la Posici´on Com´un
+tence del Consejo con vistas a la adopci´on
+del Reglamento del Parlamento Eu-
+ropeo y del Consejo relativo al ...
+IBM-1 ... on the Council common position
+rescoring with a view to the adoption of the
+Rules of Procedure of the European
+Parliament and of the Council ...
+Triplet ... on the common position of the
+rescoring Council with a view to the adop-
+tion of the regulation of the Euro-
+pean Parliament and of the Council
+. . .
+Reference ... as regards the Common Position
+translation of the Council with a view to the
+adoption of a European Parliament
+and Council Regulation as regards
+the ...
+</figureCaption>
+<tableCaption confidence="0.631607666666667">
+Table 8: A translation example on TC-Star’07 Spanish-
+English comparing the effect of the triplet model to a
+standard IBM-1 model.
+</tableCaption>
+<sectionHeader confidence="0.999064" genericHeader="conclusions">
+6 Outlook
+</sectionHeader>
+<bodyText confidence="0.99999">
+We have presented a new lexicon model based on
+triplets extracted on a sentence level and trained it-
+eratively using the EM algorithm. The motivation of
+this approach is to add an additional second trigger
+to a translation lexicon component which can come
+from a more global context (on a sentence level) and
+allow for a more fine-grained lexical choice given a
+specific context. Thus, the method is related to word
+sense disambiguation approaches.
+We showed improvements by rescoring n-best
+lists of the IWSLT Chinese-English and EPPS
+Spanish-English/English-Spanish task. In total, we
+achieve up to +1% BLEU for some of the test sets in
+comparison to the decoder baseline and up to +0.3%
+BLEU compared to IBM model 1.
+Future work will address an integration into the
+decoder since the performance of the current rescor-
+ing framework is limited by the quality of the n-
+best lists. For the inverse model, p(e|f, f&apos;), an in-
+tegration into the search is directly possible. Further
+experiments will be conducted, especially on large
+tasks such as the NIST Chinese-English and Arabic-
+English task. Training on these huge databases will
+only be possible with an appropriate selection of
+promising triplets.
+</bodyText>
+<sectionHeader confidence="0.996558" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.999859375">
+This material is partly based upon work supported
+by the Defense Advanced Research Projects Agency
+(DARPA) under Contract No. HR0011-06-C-0023,
+and was partly realized as part of the Quaero Pro-
+gramme, funded by OSEO, French State agency for
+innovation.
+The authors would like to thank the anonymous
+reviewers for their valuable comments.
+</bodyText>
+<sectionHeader confidence="0.999188" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999893225">
+Peter F. Brown, Stephen A. Della Pietra, Vincent J. Della
+Pietra, and Robert L. Mercer. 1993. The mathemat-
+ics of statistical machine translation: Parameter esti-
+mation. Computational Linguistics, 19(2):263–311,
+June.
+Marine Carpuat and Dekai Wu. 2007. Improving sta-
+tistical machine translation using word sense disam-
+biguation. In Joint Conference on Empirical Methods
+in Natural Language Processing and Computational
+Natural Language Learning (EMNLP-CoNLL 2007),
+Prague, Czech Republic, June.
+Yee Seng Chan, Hwee Tou Ng, and David Chiang. 2007.
+Word sense disambiguation improves statistical ma-
+chine translation. In Proceedings of the 45th Annual
+Meeting of the Association of Computational Linguis-
+tics, pages 33–40, Prague, Czech Republic, June. As-
+sociation for Computational Linguistics.
+Ciprian Chelba and Frederick Jelinek. 2000. Structured
+language modeling. Computer Speech and Language,
+14(4):283–332.
+Stephen A. Della Pietra, Vincent J. Della Pietra, John R.
+Gillett, John D. Lafferty, Harry Printz, and Lubo&amp;quot;s
+Ure&amp;quot;s. 1994. Inference and estimation of a long-range
+trigram model. In J. Oncina and R. C. Carrasco, ed-
+itors, Grammatical Inference and Applications, Sec-
+ond International Colloquium, ICGI-94, volume 862,
+pages 78–92, Alicante, Spain. Springer Verlag.
+A. P. Dempster, N. M. Laird, and D. B. Rubin. 1977.
+Maximum likelihood from incomplete data via the EM
+algorithm. Journal of the Royal Statistical Society, Se-
+ries B, 39(1):1–22.
+Woosung Kim and Sanjeev Khudanpur. 2003. Cross-
+lingual lexical triggers in statistical language model-
+ing. In Proceedings of the 2003 Conference on Empir-
+ical Methods in Natural Language Processing, pages
+17–24, Morristown, NJ, USA. Association for Com-
+putational Linguistics.
+Brian Roark. 2001. Probabilistic top-down parsing
+and language modeling. Computational Linguistics,
+27(2):249–276.
+</reference>
+<page confidence="0.974528">
+380
+</page>
+<reference confidence="0.994773545454545">
+Ronald Rosenfeld. 1996. A maximum entropy approach
+to adaptive statistical language modeling. Computer
+Speech and Language, 10(3):187–228.
+Christoph Tillmann and Hermann Ney. 1997. Word trig-
+gers and the EM algorithm. In Proc. Special Interest
+Group Workshop on Computational Natural Language
+Learning (ACL), pages 117–124, Madrid, Spain, July.
+Christoph Tillmann. 2001. Word Re-Ordering and Dy-
+namic Programming based Search Algorithm for Sta-
+tistical Machine Translation. Ph.D. thesis, RWTH
+Aachen University, Aachen, Germany, May.
+</reference>
+<page confidence="0.998723">
+381
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.466944">
+<title confidence="0.998088">Triplet Lexicon Models for Statistical Machine Translation</title>
+<author confidence="0.932214">Juri Ganitkevitch Hasan</author>
+<author confidence="0.932214">Hermann Ney</author>
+<author confidence="0.932214">Jes´us</author>
+<affiliation confidence="0.861272">Human Language Technology and Pattern Recognition, RWTH Aachen University, Polit´ecnica de Valencia, Dept. Sist. Inform´aticos y</affiliation>
+<email confidence="0.86734">jandres@dsic.upv.es</email>
+<abstract confidence="0.9874556875">This paper describes a lexical trigger model for statistical machine translation. We present various methods using triplets incorporating long-distance dependencies that can go bethe local context of phrases or based language models. We evaluate the presented methods on two translation tasks in a reranking framework and compare it to the related IBM model 1. We show slightly improved translation quality in terms of BLEU and TER and address various constraints to speed up the training based on Expectation- Maximization and to lower the overall number of triplets without loss in translation performance.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Peter F Brown</author>
+<author>Stephen A Della Pietra</author>
+<author>Vincent J Della Pietra</author>
+<author>Robert L Mercer</author>
+</authors>
+<title>The mathematics of statistical machine translation: Parameter estimation.</title>
+<date>1993</date>
+<journal>Computational Linguistics,</journal>
+<volume>19</volume>
+<issue>2</issue>
+<contexts>
+<context position="5306" citStr="Brown et al., 1993" startWordPosition="840" endWordPosition="843">ncies on the syntactic level by conditioning on the predecessing words and their corresponding parent nodes (Chelba and Jelinek, 2000; Roark, 2001). The latter approach was shown to reduce perplexities and improve the WER in speech recognition systems. One drawback is that the parsing process might slow down the system significantly and the approach is complicated to be integrated directly in the search process. Thus, the effect is often shown offline in reranking experiments using n-best lists. One of the simplest models that can be seen in the context of lexical triggers is the IBM model 1 (Brown et al., 1993) which captures lexical dependencies between source and target words. It can be seen as a lexicon containing correspondents of translations of source and target words in a very broad sense since the pairs are trained on the full sentence level. The model presented in this work is very close to the initial IBM model 1 and can be seen as taking another word into the conditioning part, i.e. the triggering items.1 Furthermore, since the second trigger can come from any part of the sentence, we also have a link to long-range monolingual triggers as presented above. A long-range trigram model is pre</context>
+<context position="9416" citStr="Brown et al., 1993" startWordPosition="1525" endWordPosition="1528">ted in further detail. In the following sections, we will describe the model proposed in this work. In Section 3, a detailed introduction is given, as well as the EM training and variations of the model. The different settings will be evaluated in Section 4, where we show experiments on the IWSLT Chinese-English and TC-STAR EPPS English-Spanish/Spanish-English tracks. A discussion of the results and further examples are given in Section 5. Final remarks and future work are addressed in Section 6. 3 Model As an extension to commonly used lexical word pair probabilities p(f|e) as introduced in (Brown et al., 1993), we define our model to operate on word triplets. A triplet (f, e, e0) is assigned a value α(f|e, e0) &gt; 0 with the constraint such that get sentence eI1 for the triplet model is defined as: EI pall(fj|eI1) = 1Z i=1 where Z denotes a normalization factor based on the corresponding target sentence length, i.e. I(I − 1) . (2) Z= 2 The introduction of a second trigger (i.e. ek in Eq. 1) enables the model to combine local (i.e. word or phrase level) and global (i.e. sentence level) information. In the following, we will describe the training procedure of the model via maximum likelihood estimation</context>
+<context position="11777" citStr="Brown et al., 1993" startWordPosition="1962" endWordPosition="1965">eI1), the probability of a source word fj given the whole tarlog (Z−1 n ¯α(fj|ei, ek))] , where Zn is defined as in Eq. 2. Using the method of Lagrangian multipliers for the normalization constraint, we take the derivative with respect to 374 ¯α(f|e, e0) and obtain: ¯α(f |e, e0) = A(f, e� e0) (4) Ef,A(f, ,e,e0) where A(f, e, e0) is a relative weight accumulator over the parallel corpus: A(f,e,e0) = δ(f, fj)Z−1 n α(f|e, e0)Cn(e, e0) (5) pall(fj|eIn 1 ) and δ(e, ei)δ(e0, ek). The function δ(·, ·) denotes the Kronecker delta. The resulting training procedure is analogous to the one presented in (Brown et al., 1993) and (Tillmann and Ney, 1997). The next section presents variants of the basic unconstrained model by putting restrictions on the valid regions of triggers (in-phrase vs. out-ofphrase) and using alignments obtained from either GIZA++ training or forced alignments in order to reduce the model size and to incorporate knowledge already obtained in previous training steps. 3.2 Model variations Based on the unconstrained triplet model presented in Section 3, we introduce additional constraints, namely the phrase-bounded and the path-aligned triplet model in the following. The former reduces the num</context>
+</contexts>
+<marker>Brown, Pietra, Pietra, Mercer, 1993</marker>
+<rawString>Peter F. Brown, Stephen A. Della Pietra, Vincent J. Della Pietra, and Robert L. Mercer. 1993. The mathematics of statistical machine translation: Parameter estimation. Computational Linguistics, 19(2):263–311, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Marine Carpuat</author>
+<author>Dekai Wu</author>
+</authors>
+<title>Improving statistical machine translation using word sense disambiguation.</title>
+<date>2007</date>
+<booktitle>In Joint Conference on Empirical Methods in Natural Language Processing and Computational Natural Language Learning (EMNLP-CoNLL 2007),</booktitle>
+<location>Prague, Czech Republic,</location>
+<contexts>
+<context position="6842" citStr="Carpuat and Wu, 2007" startWordPosition="1097" endWordPosition="1100">ng a grammar automatically (based on POS tags of the words), we rely on a fully lexicalized approach, i.e. the training is taking place at the word level. Related work in the context of fine-tuning language models by using cross-lingual lexical triggers is presented in (Kim and Khudanpur, 2003). The authors show how to use cross-lingual triggers on a document level in order to extract translation lexicons and domain-specific language models using a mutual information criterion. Recently, word-sense disambiguation (WSD) methods have been shown to improve translation quality (Chan et al., 2007; Carpuat and Wu, 2007). Chan et al. (2007) use an SVM based classifier for disambiguating word senses which are directly incorporated in the decoder through additional features that are part of the log-linear combination of models. They use local collocations based on surrounding words left and right of an ambiguous word including the corresponding parts-of-speech. Although no long-range dependencies are modeled, the approach yields an improvement of +0.6% BLEU on the NIST Chinese-English task. In Carpuat and Wu (2007), another state-of-the-art WSD engine (a combination of naive Bayes, maximum entropy, boosting and</context>
+</contexts>
+<marker>Carpuat, Wu, 2007</marker>
+<rawString>Marine Carpuat and Dekai Wu. 2007. Improving statistical machine translation using word sense disambiguation. In Joint Conference on Empirical Methods in Natural Language Processing and Computational Natural Language Learning (EMNLP-CoNLL 2007), Prague, Czech Republic, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yee Seng Chan</author>
+<author>Hwee Tou Ng</author>
+<author>David Chiang</author>
+</authors>
+<title>Word sense disambiguation improves statistical machine translation.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 45th Annual Meeting of the Association of Computational Linguistics,</booktitle>
+<pages>33--40</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Prague, Czech Republic,</location>
+<contexts>
+<context position="6819" citStr="Chan et al., 2007" startWordPosition="1093" endWordPosition="1096">. Instead of deriving a grammar automatically (based on POS tags of the words), we rely on a fully lexicalized approach, i.e. the training is taking place at the word level. Related work in the context of fine-tuning language models by using cross-lingual lexical triggers is presented in (Kim and Khudanpur, 2003). The authors show how to use cross-lingual triggers on a document level in order to extract translation lexicons and domain-specific language models using a mutual information criterion. Recently, word-sense disambiguation (WSD) methods have been shown to improve translation quality (Chan et al., 2007; Carpuat and Wu, 2007). Chan et al. (2007) use an SVM based classifier for disambiguating word senses which are directly incorporated in the decoder through additional features that are part of the log-linear combination of models. They use local collocations based on surrounding words left and right of an ambiguous word including the corresponding parts-of-speech. Although no long-range dependencies are modeled, the approach yields an improvement of +0.6% BLEU on the NIST Chinese-English task. In Carpuat and Wu (2007), another state-of-the-art WSD engine (a combination of naive Bayes, maximu</context>
+</contexts>
+<marker>Chan, Ng, Chiang, 2007</marker>
+<rawString>Yee Seng Chan, Hwee Tou Ng, and David Chiang. 2007. Word sense disambiguation improves statistical machine translation. In Proceedings of the 45th Annual Meeting of the Association of Computational Linguistics, pages 33–40, Prague, Czech Republic, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ciprian Chelba</author>
+<author>Frederick Jelinek</author>
+</authors>
+<title>Structured language modeling.</title>
+<date>2000</date>
+<journal>Computer Speech and Language,</journal>
+<volume>14</volume>
+<issue>4</issue>
+<contexts>
+<context position="4820" citStr="Chelba and Jelinek, 2000" startWordPosition="758" endWordPosition="761">e trained via the EM algorithm, as will be shown later in more detail. 2 Related Work In the past, a significant number of methods has been presented that try to capture long-distance dependencies, i.e. use dependencies in the data that reach beyond the local context of n-grams or phrase pairs. In language modeling, monolingual trigger approaches have been presented (Rosenfeld, 1996; Tillmann and Ney, 1997) as well as syntactical methods that parse the input and model long-range dependencies on the syntactic level by conditioning on the predecessing words and their corresponding parent nodes (Chelba and Jelinek, 2000; Roark, 2001). The latter approach was shown to reduce perplexities and improve the WER in speech recognition systems. One drawback is that the parsing process might slow down the system significantly and the approach is complicated to be integrated directly in the search process. Thus, the effect is often shown offline in reranking experiments using n-best lists. One of the simplest models that can be seen in the context of lexical triggers is the IBM model 1 (Brown et al., 1993) which captures lexical dependencies between source and target words. It can be seen as a lexicon containing corre</context>
+</contexts>
+<marker>Chelba, Jelinek, 2000</marker>
+<rawString>Ciprian Chelba and Frederick Jelinek. 2000. Structured language modeling. Computer Speech and Language, 14(4):283–332.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stephen A Della Pietra</author>
+<author>Vincent J Della Pietra</author>
+<author>John R Gillett</author>
+<author>John D Lafferty</author>
+<author>Harry Printz</author>
+<author>Lubos Ures</author>
+</authors>
+<title>Inference and estimation of a long-range trigram model.</title>
+<date>1994</date>
+<booktitle>Grammatical Inference and Applications, Second International Colloquium, ICGI-94,</booktitle>
+<volume>862</volume>
+<pages>78--92</pages>
+<editor>In J. Oncina and R. C. Carrasco, editors,</editor>
+<publisher>Springer Verlag.</publisher>
+<location>Alicante, Spain.</location>
+<contexts>
+<context position="5943" citStr="Pietra et al., 1994" startWordPosition="952" endWordPosition="955">exical dependencies between source and target words. It can be seen as a lexicon containing correspondents of translations of source and target words in a very broad sense since the pairs are trained on the full sentence level. The model presented in this work is very close to the initial IBM model 1 and can be seen as taking another word into the conditioning part, i.e. the triggering items.1 Furthermore, since the second trigger can come from any part of the sentence, we also have a link to long-range monolingual triggers as presented above. A long-range trigram model is presented in (Della Pietra et al., 1994) where it is shown how to derive a probabilistic link grammar in order to capture long-range dependencies in English using the EM algorithm. Expectation-Maximization is used in the presented triplet model as well which is described in more detail in Section 3. Instead of deriving a grammar automatically (based on POS tags of the words), we rely on a fully lexicalized approach, i.e. the training is taking place at the word level. Related work in the context of fine-tuning language models by using cross-lingual lexical triggers is presented in (Kim and Khudanpur, 2003). The authors show how to u</context>
+</contexts>
+<marker>Pietra, Pietra, Gillett, Lafferty, Printz, Ures, 1994</marker>
+<rawString>Stephen A. Della Pietra, Vincent J. Della Pietra, John R. Gillett, John D. Lafferty, Harry Printz, and Lubo&amp;quot;s Ure&amp;quot;s. 1994. Inference and estimation of a long-range trigram model. In J. Oncina and R. C. Carrasco, editors, Grammatical Inference and Applications, Second International Colloquium, ICGI-94, volume 862, pages 78–92, Alicante, Spain. Springer Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A P Dempster</author>
+<author>N M Laird</author>
+<author>D B Rubin</author>
+</authors>
+<title>Maximum likelihood from incomplete data via the EM algorithm.</title>
+<date>1977</date>
+<journal>Journal of the Royal Statistical Society, Series B,</journal>
+<volume>39</volume>
+<issue>1</issue>
+<contexts>
+<context position="10496" citStr="Dempster et al., 1977" startWordPosition="1718" endWordPosition="1721">al (i.e. sentence level) information. In the following, we will describe the training procedure of the model via maximum likelihood estimation for the unconstrained case. 3.1 Training The goal of the training procedure is to maximize the log-likelihood Fall of the triplet model for a given bilingual training corpus {(fJ1 , eI1)}N 1 consisting of N sentence pairs: log pall(fj|eIn 1 ), where Jn and In are the lengths of the nth source and target sentences, respectively. As there is no closed form solution for the maximum likelihood estimate, we resort to iterative training via the EM algorithm (Dempster et al., 1977). We define the auxiliary function Q(µ; ¯µ) based on Fall where µ¯ is the new estimate within an iteration which is to be derived from the current estimate µ. Here, µ stands for the entire set of model parameters to be estimated, i.e. the set of all {α(f|e, e0)}. Thus, we obtain Q({α(f|e, e0)}; {¯α(f|e, e0)}) = EI α(fj|ei, ek), (1) k=i+1 EN n=1 Fall := EJn j=1 Ebe, e0 : α(f|e, e0) = 1. EN EJn EIn EIn rZn 1 α(fj |ei, ek) (3) f n=1 j=1 i=1 k=i+1 L pall (fj |eI Throughout this paper, e and e0 will be referred to as the first and the second trigger, respectively. In view of its triggers f will be </context>
+</contexts>
+<marker>Dempster, Laird, Rubin, 1977</marker>
+<rawString>A. P. Dempster, N. M. Laird, and D. B. Rubin. 1977. Maximum likelihood from incomplete data via the EM algorithm. Journal of the Royal Statistical Society, Series B, 39(1):1–22.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Woosung Kim</author>
+<author>Sanjeev Khudanpur</author>
+</authors>
+<title>Crosslingual lexical triggers in statistical language modeling.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the 2003 Conference on Empirical Methods in Natural Language Processing,</booktitle>
+<pages>17--24</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Morristown, NJ, USA.</location>
+<contexts>
+<context position="6516" citStr="Kim and Khudanpur, 2003" startWordPosition="1049" endWordPosition="1052">m model is presented in (Della Pietra et al., 1994) where it is shown how to derive a probabilistic link grammar in order to capture long-range dependencies in English using the EM algorithm. Expectation-Maximization is used in the presented triplet model as well which is described in more detail in Section 3. Instead of deriving a grammar automatically (based on POS tags of the words), we rely on a fully lexicalized approach, i.e. the training is taking place at the word level. Related work in the context of fine-tuning language models by using cross-lingual lexical triggers is presented in (Kim and Khudanpur, 2003). The authors show how to use cross-lingual triggers on a document level in order to extract translation lexicons and domain-specific language models using a mutual information criterion. Recently, word-sense disambiguation (WSD) methods have been shown to improve translation quality (Chan et al., 2007; Carpuat and Wu, 2007). Chan et al. (2007) use an SVM based classifier for disambiguating word senses which are directly incorporated in the decoder through additional features that are part of the log-linear combination of models. They use local collocations based on surrounding words left and </context>
+</contexts>
+<marker>Kim, Khudanpur, 2003</marker>
+<rawString>Woosung Kim and Sanjeev Khudanpur. 2003. Crosslingual lexical triggers in statistical language modeling. In Proceedings of the 2003 Conference on Empirical Methods in Natural Language Processing, pages 17–24, Morristown, NJ, USA. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Brian Roark</author>
+</authors>
+<title>Probabilistic top-down parsing and language modeling.</title>
+<date>2001</date>
+<journal>Computational Linguistics,</journal>
+<volume>27</volume>
+<issue>2</issue>
+<contexts>
+<context position="4834" citStr="Roark, 2001" startWordPosition="762" endWordPosition="763">ithm, as will be shown later in more detail. 2 Related Work In the past, a significant number of methods has been presented that try to capture long-distance dependencies, i.e. use dependencies in the data that reach beyond the local context of n-grams or phrase pairs. In language modeling, monolingual trigger approaches have been presented (Rosenfeld, 1996; Tillmann and Ney, 1997) as well as syntactical methods that parse the input and model long-range dependencies on the syntactic level by conditioning on the predecessing words and their corresponding parent nodes (Chelba and Jelinek, 2000; Roark, 2001). The latter approach was shown to reduce perplexities and improve the WER in speech recognition systems. One drawback is that the parsing process might slow down the system significantly and the approach is complicated to be integrated directly in the search process. Thus, the effect is often shown offline in reranking experiments using n-best lists. One of the simplest models that can be seen in the context of lexical triggers is the IBM model 1 (Brown et al., 1993) which captures lexical dependencies between source and target words. It can be seen as a lexicon containing correspondents of t</context>
+</contexts>
+<marker>Roark, 2001</marker>
+<rawString>Brian Roark. 2001. Probabilistic top-down parsing and language modeling. Computational Linguistics, 27(2):249–276.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ronald Rosenfeld</author>
+</authors>
+<title>A maximum entropy approach to adaptive statistical language modeling.</title>
+<date>1996</date>
+<journal>Computer Speech and Language,</journal>
+<volume>10</volume>
+<issue>3</issue>
+<contexts>
+<context position="4581" citStr="Rosenfeld, 1996" startWordPosition="721" endWordPosition="722">tence) information for the scoring. The motivation behind this approach is to get nonlocal information outside the current context (i.e. the currently considered bilingual phrase pair) into the translation process. The triplets are trained via the EM algorithm, as will be shown later in more detail. 2 Related Work In the past, a significant number of methods has been presented that try to capture long-distance dependencies, i.e. use dependencies in the data that reach beyond the local context of n-grams or phrase pairs. In language modeling, monolingual trigger approaches have been presented (Rosenfeld, 1996; Tillmann and Ney, 1997) as well as syntactical methods that parse the input and model long-range dependencies on the syntactic level by conditioning on the predecessing words and their corresponding parent nodes (Chelba and Jelinek, 2000; Roark, 2001). The latter approach was shown to reduce perplexities and improve the WER in speech recognition systems. One drawback is that the parsing process might slow down the system significantly and the approach is complicated to be integrated directly in the search process. Thus, the effect is often shown offline in reranking experiments using n-best </context>
+</contexts>
+<marker>Rosenfeld, 1996</marker>
+<rawString>Ronald Rosenfeld. 1996. A maximum entropy approach to adaptive statistical language modeling. Computer Speech and Language, 10(3):187–228.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Christoph Tillmann</author>
+<author>Hermann Ney</author>
+</authors>
+<title>Word triggers and the EM algorithm.</title>
+<date>1997</date>
+<booktitle>In Proc. Special Interest Group Workshop on Computational Natural Language Learning (ACL),</booktitle>
+<pages>117--124</pages>
+<location>Madrid, Spain,</location>
+<contexts>
+<context position="4606" citStr="Tillmann and Ney, 1997" startWordPosition="723" endWordPosition="726">n for the scoring. The motivation behind this approach is to get nonlocal information outside the current context (i.e. the currently considered bilingual phrase pair) into the translation process. The triplets are trained via the EM algorithm, as will be shown later in more detail. 2 Related Work In the past, a significant number of methods has been presented that try to capture long-distance dependencies, i.e. use dependencies in the data that reach beyond the local context of n-grams or phrase pairs. In language modeling, monolingual trigger approaches have been presented (Rosenfeld, 1996; Tillmann and Ney, 1997) as well as syntactical methods that parse the input and model long-range dependencies on the syntactic level by conditioning on the predecessing words and their corresponding parent nodes (Chelba and Jelinek, 2000; Roark, 2001). The latter approach was shown to reduce perplexities and improve the WER in speech recognition systems. One drawback is that the parsing process might slow down the system significantly and the approach is complicated to be integrated directly in the search process. Thus, the effect is often shown offline in reranking experiments using n-best lists. One of the simples</context>
+<context position="11806" citStr="Tillmann and Ney, 1997" startWordPosition="1967" endWordPosition="1970">a source word fj given the whole tarlog (Z−1 n ¯α(fj|ei, ek))] , where Zn is defined as in Eq. 2. Using the method of Lagrangian multipliers for the normalization constraint, we take the derivative with respect to 374 ¯α(f|e, e0) and obtain: ¯α(f |e, e0) = A(f, e� e0) (4) Ef,A(f, ,e,e0) where A(f, e, e0) is a relative weight accumulator over the parallel corpus: A(f,e,e0) = δ(f, fj)Z−1 n α(f|e, e0)Cn(e, e0) (5) pall(fj|eIn 1 ) and δ(e, ei)δ(e0, ek). The function δ(·, ·) denotes the Kronecker delta. The resulting training procedure is analogous to the one presented in (Brown et al., 1993) and (Tillmann and Ney, 1997). The next section presents variants of the basic unconstrained model by putting restrictions on the valid regions of triggers (in-phrase vs. out-ofphrase) and using alignments obtained from either GIZA++ training or forced alignments in order to reduce the model size and to incorporate knowledge already obtained in previous training steps. 3.2 Model variations Based on the unconstrained triplet model presented in Section 3, we introduce additional constraints, namely the phrase-bounded and the path-aligned triplet model in the following. The former reduces the number of possible triplets by p</context>
+</contexts>
+<marker>Tillmann, Ney, 1997</marker>
+<rawString>Christoph Tillmann and Hermann Ney. 1997. Word triggers and the EM algorithm. In Proc. Special Interest Group Workshop on Computational Natural Language Learning (ACL), pages 117–124, Madrid, Spain, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Christoph Tillmann</author>
+</authors>
+<title>Word Re-Ordering and Dynamic Programming based Search Algorithm for Statistical Machine Translation.</title>
+<date>2001</date>
+<tech>Ph.D. thesis,</tech>
+<institution>RWTH Aachen University,</institution>
+<location>Aachen, Germany,</location>
+<contexts>
+<context position="8761" citStr="Tillmann, 2001" startWordPosition="1417" endWordPosition="1418">entioned WSD approaches (although local dependencies might already be reflected sufficiently in the phrase models). A distant second trigger, however, might have a beneficial effect for specific languages, e.g. by capturing word splits (as it is the case in German for verbs with separable prefixes) or, as already mentioned, allowing for a more fine-grained lexical choice of the word being triggered, namely based on another word which is not part of the current local, i.e. phrasal, context. The basic idea of triplets of the form (e, f0 —* f), called multi-word extensions, is also mentioned in (Tillmann, 2001) but neither evaluated nor investigated in further detail. In the following sections, we will describe the model proposed in this work. In Section 3, a detailed introduction is given, as well as the EM training and variations of the model. The different settings will be evaluated in Section 4, where we show experiments on the IWSLT Chinese-English and TC-STAR EPPS English-Spanish/Spanish-English tracks. A discussion of the results and further examples are given in Section 5. Final remarks and future work are addressed in Section 6. 3 Model As an extension to commonly used lexical word pair pro</context>
+</contexts>
+<marker>Tillmann, 2001</marker>
+<rawString>Christoph Tillmann. 2001. Word Re-Ordering and Dynamic Programming based Search Algorithm for Statistical Machine Translation. Ph.D. thesis, RWTH Aachen University, Aachen, Germany, May.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

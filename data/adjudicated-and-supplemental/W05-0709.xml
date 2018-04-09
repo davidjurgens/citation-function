@@ -1,0 +1,1374 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000017">
+<note confidence="0.512552">
+The Impact of Morphological Stemming on Arabic Mention
+Detection and Coreference Resolution
+Imed Zitouni, Jeff Sorensen, Xiaoqiang Luo, Radu Florian
+{izitouni, sorenj, xiaoluo, raduf}@watson.ibm.com
+IBM T.J. Watson Research Center
+1101 Kitchawan Rd, Yorktown Heights, NY 10598, USA
+</note>
+<sectionHeader confidence="0.96557" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999663095238095">
+Arabic presents an interesting challenge to
+natural language processing, being a highly
+inflected and agglutinative language. In
+particular, this paper presents an in-depth
+investigation of the entity detection and
+recognition (EDR) task for Arabic. We
+start by highlighting why segmentation is
+a necessary prerequisite for EDR, continue
+by presenting a finite-state statistical seg-
+menter, and then examine how the result-
+ing segments can be better included into
+a mention detection system and an entity
+recognition system; both systems are statis-
+tical, build around the maximum entropy
+principle. Experiments on a clearly stated
+partition of the ACE 2004 data show that
+stem-based features can significantly im-
+prove the performance of the EDT system
+by 2 absolute F-measure points. The sys-
+tem presented here had a competitive per-
+formance in the ACE 2004 evaluation.
+</bodyText>
+<sectionHeader confidence="0.999469" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.98109634375">
+Information extraction is a crucial step toward un-
+derstanding and processing language. One goal of
+information extraction tasks is to identify important
+conceptual information in a discourse. These tasks
+have applications in summarization, information re-
+trieval (one can get all hits for Washington/person
+and not the ones for Washington/state or Washing-
+ton/city), data mining, question answering, language
+understanding, etc.
+In this paper we focus on the Entity Detection and
+Recognition task (EDR) for Arabic as described in
+ACE 2004 framework (ACE, 2004). The EDR has
+close ties to the named entity recognition (NER) and
+coreference resolution tasks, which have been the fo-
+cus of several recent investigations (Bikel et al., 1997;
+Miller et al., 1998; Borthwick, 1999; Mikheev et al.,
+1999; Soon et al., 2001; Ng and Cardie, 2002; Florian
+et al., 2004), and have been at the center of evalu-
+ations such as: MUC-6, MUC-7, and the CoNLL&apos;02
+and CoNLL&apos;03 shared tasks. Usually, in computa-
+tional linguistics literature, a named entity is an in-
+stance of a location, a person, or an organization, and
+the NER task consists of identifying each of these
+occurrences. Instead, we will adopt the nomencla-
+ture of the Automatic Content Extraction program
+(NIST, 2004): we will call the instances of textual
+references to objects/abstractions mentions, which
+can be either named (e.g. John Mayor), nominal
+(the president) or pronominal (she, it). An entity is
+the aggregate of all the mentions (of any level) which
+refer to one conceptual entity. For instance, in the
+sentence
+</bodyText>
+<subsectionHeader confidence="0.4156365">
+President John Smith said he has no com-
+ments
+</subsectionHeader>
+<bodyText confidence="0.883133473684211">
+there are two mentions (named and pronomial) but
+only one entity, formed by the set {John Smith, he}.
+We separate the EDR task into two parts: a men-
+tion detection step, which identifies and classifies all
+the mentions in a text – and a coreference resolution
+step, which combinines the detected mentions into
+groups that refer to the same object. In its entirety,
+the EDR task is arguably harder than traditional
+named entity recognition, because of the additional
+complexity involved in extracting non-named men-
+tions (nominal and pronominal) and the requirement
+of grouping mentions into entities. This is particu-
+larly true for Arabic where nominals and pronouns
+are also attached to the word they modify. In fact,
+most Arabic words are morphologically derived from
+a list of base forms or stems, to which prefixes and
+suffixes can be attached to form Arabic surface forms
+(blank-delimited words). In addition to the differ-
+ent forms of the Arabic word that result from the
+</bodyText>
+<page confidence="0.985368">
+63
+</page>
+<note confidence="0.9931145">
+Proceedings of the ACL Workshop on Computational Approaches to Semitic Languages, pages 63–70,
+Ann Arbor, June 2005. c�2005 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.999924931818182">
+derivational and inflectional process, most preposi-
+tions, conjunctions, pronouns, and possessive forms
+are attached to the Arabic surface word. It is these
+orthographic variations and complex morphological
+structure that make Arabic language processing chal-
+lenging (Xu et al., 2001; Xu et al., 2002).
+Both tasks are performed with a statistical frame-
+work: the mention detection system is similar to
+the one presented in (Florian et al., 2004) and
+the coreference resolution system is similar to the
+one described in (Luo et al., 2004). Both systems
+are built around from the maximum-entropy tech-
+nique (Berger et al., 1996). We formulate the men-
+tion detection task as a sequence classification prob-
+lem. While this approach is language independent,
+it must be modified to accomodate the particulars of
+the Arabic language. The Arabic words may be com-
+posed of zero or more prefixes, followed by a stem and
+zero or more suffixes. We begin with a segmentation
+of the written text before starting the classification.
+This segmentation process consists of separating the
+normal whitespace delimited words into (hypothe-
+sized) prefixes, stems, and suffixes, which become the
+subject of analysis (tokens). The resulting granular-
+ity of breaking words into prefixes and suffixes allows
+different mention type labels beyond the stem label
+(for instance, in the case of nominal and pronominal
+mentions). Additionally, because the prefixes and
+suffixes are quite frequent, directly processing unseg-
+mented words results in significant data sparseness.
+We present in Section 2 the relevant particularities
+of the Arabic language for natural language process-
+ing, especially for the EDR task. We then describe
+the segmentation system we employed for this task in
+Section 3. Section 4 briefly describes our mention de-
+tection system, explaining the different feature types
+we use. We focus in particular on the stem n-gram,
+prefix n-gram, and suffix n-gram features that are
+specific to a morphologically rich language such as
+Arabic. We describe in Section 5 our coreference
+resolution system where we also describe the advan-
+tage of using stem based features. Section 6 shows
+and discusses the different experimental results and
+Section 7 concludes the paper.
+</bodyText>
+<sectionHeader confidence="0.925065" genericHeader="introduction">
+2 Why is Arabic Information
+Extraction difficult?
+</sectionHeader>
+<bodyText confidence="0.994724338709678">
+The Arabic language, which is the mother tongue of
+more than 300 million people (Center, 2000), present
+significant challenges to many natural language pro-
+cessing applications. Arabic is a highly inflected and
+derived language. In Arabic morphology, most mor-
+phemes are comprised of a basic word form (the root
+or stem), to which many affixes can be attached to
+form Arabic words. The Arabic alphabet consists
+of 28 letters that can be extended to ninety by ad-
+ditional shapes, marks, and vowels (Tayli and Al-
+Salamah, 1990). Unlike Latin-based alphabets, the
+orientation of writing in Arabic is from right to left.
+In written Arabic, short vowels are often omitted.
+Also, because variety in expression is appreciated
+as part of a good writing style, the synonyms are
+widespread. Arabic nouns encode information about
+gender, number, and grammatical cases. There are
+two genders (masculine and feminine), three num-
+bers (singular, dual, and plural), and three gram-
+matical cases (nominative, genitive, and accusative).
+A noun has a nominative case when it is a subject,
+accusative case when it is the object of a verb, and
+genitive case when it is the object of a preposition.
+The form of an Arabic noun is consequently deter-
+mined by its gender, number, and grammatical case.
+The definitive nouns are formed by attaching the
+
+Arabic article  to the immediate front of the
+nouns, such as in the word  (the company).
+Also, prepositions such as  (by), and  (to) can be
+attached as a prefix as in   (to the company).
+A noun may carry a possessive pronoun as a suffix,
+such as in  (their company). For the EDR task,
+in this previous example, the Arabic blank-delimited
+word should be split into two tokens:  and
+. he first token  is a mention that refers to
+an organization, whereas the second token  is also
+a mention, but one that may refer to a person. Also,
+the prepositions (i.e.,  and ) not be considered a
+part of the mention.
+Arabic has two kinds of plurals: broken plurals and
+sound plurals (Wightwick and Gaafar, 1998; Chen
+and Gey, 2002). The formation of broken plurals is
+common, more complex and often irregular. As an
+example, the plural form of the noun   (man) is
+   (men), which is formed by inserting the infix
+. The plural form of the noun   (book) is  
+(books), which is formed by deleting the infix . The
+plural form and the singular form may also be com-
+pletely different (e.g.  for woman, but   for
+women). The sound plurals are formed by adding
+plural suffixes to singular nouns (e.g.,  meaning
+researcher): the plural suffix is  for feminine nouns
+in grammatical cases (e.g., ),  for masculine
+nouns in the nominative case (e.g., ), and 
+for masculine nouns in the genitive and accusative
+cases (e.g., ). The dual suffix is  for the nom-
+inative case (e.g., ), and  for the genitive or
+accusative (e.g.,).
+Because we consider pronouns and nominals as men-
+tions, it is essential to segment Arabic words into
+these subword tokens. We also believe that the in-
+</bodyText>
+<page confidence="0.998886">
+64
+</page>
+<bodyText confidence="0.989160457142857">
+formation denoted by these affixes can help with the
+coreference resolution task&apos;.
+Arabic verbs have perfect and imperfect tenses (Ab-
+bou and McCarus, 1983). Perfect tense denotes com-
+pleted actions, while imperfect denotes ongoing ac-
+tions. Arabic verbs in the perfect tense consist of a
+stem followed by a subject marker, denoted as a suf-
+fix. The subject marker indicates the person, gender,
+and number of the subject. As an example, the verb
+ (to meet) has a perfect tense  for the third
+
+person feminine singular, and  for the third per-
+
+son masculine plural. We notice also that a verb with
+a subject marker and a pronoun suffix can be by itself
+a complete sentence, such us in the word: it
+
+has a third-person feminine singular subject-marker
+ (she) and a pronoun suffix  (them). It is also
+a complete sentence meaning “she met them.” The
+subject markers are often suffixes, but we may find
+a subject marker as a combination of a prefix and a
+suffix as in i (she meets them). In this example,
+
+the EDR system should be able to separate ,
+
+to create two mentions (  and ). Because the
+two mentions belong to different entities, the EDR
+system should not chain them together. An Arabic
+word can potentially have a large number of vari-
+ants, and some of the variants can be quite complex.
+As an example, consider the word  (and to
+her researchers) which contains two prefixes and one
+suffix (      ).
+
+</bodyText>
+<sectionHeader confidence="0.987494" genericHeader="method">
+3 Arabic Segmentation
+</sectionHeader>
+<bodyText confidence="0.998687961538462">
+Lee et al. (2003) demonstrates a technique for seg-
+menting Arabic text and uses it as a morphological
+processing step in machine translation. A trigram
+language model was used to score and select among
+hypothesized segmentations determined by a set of
+prefix and suffix expansion rules.
+In our latest implementation of this algorithm, we
+have recast this segmentation strategy as the com-
+position of three distinct finite state machines. The
+first machine, illustrated in Figure 1 encodes the pre-
+fix and suffix expansion rules, producing a lattice of
+possible segmentations. The second machine is a dic-
+tionary that accepts characters and produces identi-
+fiers corresponding to dictionary entries. The final
+machine is a trigram language model, specifically a
+Kneser-Ney (Chen and Goodman, 1998) based back-
+off language model. Differing from (Lee et al., 2003),
+we have also introduced an explicit model for un-
+&apos;As an example, we do not chain mentions with dif-
+ferent gender, number, etc.
+known words based upon a character unigram model,
+although this model is dominated by an empirically
+chosen unknown word penalty. Using 0.5M words
+from the combined Arabic Treebanks 1�2, 2V2 and
+3�1, the dictionary based segmenter achieves a exact
+word match 97.8% correct segmentation.
+</bodyText>
+<figureCaption confidence="0.9817805">
+Figure 1: Illustration of dictionary based segmenta-
+tion finite state transducer
+</figureCaption>
+<subsectionHeader confidence="0.99958">
+3.1 Bootstrapping
+</subsectionHeader>
+<bodyText confidence="0.999986885714286">
+In addition to the model based upon a dictionary of
+stems and words, we also experimented with models
+based upon character n-grams, similar to those used
+for Chinese segmentation (Sproat et al., 1996). For
+these models, both arabic characters and spaces, and
+the inserted prefix and suffix markers appear on the
+arcs of the finite state machine. Here, the language
+model is conditioned to insert prefix and suffix mark-
+ers based upon the frequency of their appearance in
+n-gram character contexts that appear in the train-
+ing data. The character based model alone achieves
+a 94.5% exact match segmentation accuracy, consid-
+erably less accurate then the dictionary based model.
+However, an analysis of the errors indicated that the
+character based model is more effective at segment-
+ing words that do not appear in the training data.
+We seeked to exploit this ability to generalize to im-
+prove the dictionary based model. As in (Lee et al.,
+2003), we used unsupervised training data which is
+automatically segmented to discover previously un-
+seen stems. In our case, the character n-gram model
+is used to segment a portion of the Arabic Giga-
+word corpus. From this, we create a vocabulary of
+stems and affixes by requiring that tokens appear
+more than twice in the supervised training data or
+more than ten times in the unsupervised, segmented
+corpus.
+The resulting vocabulary, predominately of word
+stems, is 53K words, or about six times the vo-
+cabulary observed in the supervised training data.
+This represents about only 18% of the total num-
+ber of unique tokens observed in the aggregate
+training data. With the addition of the automat-
+ically acquired vocabulary, the segmentation accu-
+racy achieves 98.1% exact match.
+</bodyText>
+<figure confidence="0.99886715">
+b/epsilon
+c/BC
+e/+E
+epsilon/+
+e/+DE
+c/epsilon d/BCD e/+D+E
+P/epsilon
+a/epsilon
+a/epsilon
+a/A#
+epsilon/#
+b/AB#
+b/A#B#
+b/epsilon
+b/B
+UNK/epsilon
+c/C
+d/epsilon
+d/epsilon
+epsilon/epsilon
+</figure>
+<page confidence="0.987791">
+65
+</page>
+<subsectionHeader confidence="0.999839">
+3.2 Preprocessing of Arabic 1)reebank Data
+</subsectionHeader>
+<bodyText confidence="0.971383714285714">
+Because the Arabic treebank and the gigaword cor-
+pora are based upon news data, we apply some
+small amount of regular expression based preprocess-
+ing. Arabic specific processing include removal of
+the characters tatweel (), and vowels. Also, the fol-
+lowing characters are treated as an equivalence class
+during all lookups and processing: (1)  , and
+
+(2)    . We define a token and introduce whites-
+pace boundaries between every span of one or more
+alphabetic or numeric characters. Each punctuation
+symbol is considered a separate token. Character
+classes, such as punctuation, are defined according
+to the Unicode Standard (Aliprand et al., 2004).
+</bodyText>
+<sectionHeader confidence="0.995749" genericHeader="method">
+4 Mention Detection
+</sectionHeader>
+<bodyText confidence="0.9972735">
+The mention detection task we investigate identifies,
+for each mention, four pieces of information:
+</bodyText>
+<listItem confidence="0.995799363636364">
+1. the mention type: person (PER), organiza-
+tion (ORG), location (LOC), geopolitical en-
+tity (GPE), facility (FAC), vehicle (VEH), and
+weapon (WEA)
+2. the mention level (named, nominal, pronominal,
+or premodifier)
+3. the mention class (generic, specific, negatively
+quantified, etc.)
+4. the mention sub-type, which is a sub-category
+of the mention type (ACE, 2004) (e.g. OrgGov-
+ernmental, FacilityPath, etc.).
+</listItem>
+<subsectionHeader confidence="0.989076">
+4.1 System Description
+</subsectionHeader>
+<bodyText confidence="0.999988205128205">
+We formulate the mention detection problem as a
+classification problem, which takes as input seg-
+mented Arabic text. We assign to each token in the
+text a label indicating whether it starts a specific
+mention, is inside a specific mention, or is outside
+any mentions. We use a maximum entropy Markov
+model (MEMM) classifier. The principle of maxi-
+mum entropy states that when one searches among
+probability distributions that model the observed
+data (evidence), the preferred one is the one that
+maximizes the entropy (a measure of the uncertainty
+of the model) (Berger et al., 1996). One big advan-
+tage of this approach is that it can combine arbitrary
+and diverse types of information in making a classi-
+fication decision.
+Our mention detection system predicts the four la-
+bels types associated with a mention through a cas-
+cade approach. It first predicts the boundary and
+the main entity type for each mention. Then, it uses
+the information regarding the type and boundary in
+different second-stage classifiers to predict the sub-
+type, the mention level, and the mention class. Af-
+ter the first stage, when the boundary (starting, in-
+side, or outside a mention) has been determined, the
+other classifiers can use this information to analyze
+a larger context, capturing the patterns around the
+entire mentions, rather than words. As an example,
+the token sequence that refers to a mention will be-
+come a single recognized unit and, consequently, lex-
+ical and syntactic features occuring inside or outside
+of the entire mention span can be used in prediction.
+In the first stage (entity type detection and classifica-
+tion), Arabic blank-delimited words, after segment-
+ing, become a series of tokens representing prefixes,
+stems, and suffixes (cf. section 2). We allow any
+contiguous sequence of tokens can represent a men-
+tion. Thus, prefixes and suffixes can be, and often
+are, labeled with a different mention type than the
+stem of the word that contains them as constituents.
+</bodyText>
+<subsectionHeader confidence="0.991208">
+4.2 Stem n-gram Features
+</subsectionHeader>
+<bodyText confidence="0.999785318181818">
+We use a large set of features to improve the predic-
+tion of mentions. This set can be partitioned into
+4 categories: lexical, syntactic, gazetteer-based, and
+those obtained by running other named-entity clas-
+sifiers (with different tag sets). We use features such
+as the shallow parsing information associated with
+the tokens in a window of 3 tokens, POS, etc.
+The context of a current token ti is clearly one of
+the most important features in predicting whether ti
+is a mention or not (Florian et al., 2004). We de-
+note these features as backward token tri-grams and
+forward token tri-grams for the previous and next
+context of ti respectively. For a token ti, the back-
+ward token n-gram feature will contains the previous
+n − 1 tokens in the history (ti_n+1.... ti_1) and the
+forward token n-gram feature will contains the next
+n − 1 tokens (ti+1.... ti+n_1).
+Because we are segmenting arabic words into
+multiple tokens, there is some concern that tri-
+gram contexts will no longer convey as much
+contextual information. Consider the following
+sentence extracted from the development set:
+</bodyText>
+<equation confidence="0.8428">
+
+
+      (transla-
+
+</equation>
+<bodyText confidence="0.9993125">
+tion “This represents the location for Political
+Party Office&amp;quot;). The “Political Party Office&amp;quot; is
+tagged as an organization and, as a word-for-word
+translation, is expressed as “to the Office of the
+political to the party”. It is clear in this example
+that the word  (location for) contains crucial
+information in distinguishing between a location
+and an organization when tagging the token  
+</bodyText>
+<page confidence="0.789723">
+66
+</page>
+<bodyText confidence="0.562793">
+(office). After segmentation, the sentence becomes:
+</bodyText>
+<equation confidence="0.870403666666667">
+
+             
+
+
+
+        
+</equation>
+<bodyText confidence="0.9939752">
+When predicting if the token   (office) is the
+beginning of an organization or not, backward and
+
+forward token n-gram features contain only   
+(for the) and    (the political). This is
+most likely not enough context, and addressing the
+problem by increasing the size of the n-gram context
+quickly leads to a data sparseness problem.
+We propose in this paper the stem n-gram features as
+additional features to the lexical set. If the current
+token ti is a stem, the backward stem n-gram feature
+contains the previous n − 1 stems and the forward
+stem n-gram feature will contain the following n − 1
+stems. We proceed similarly for prefixes and suffixes:
+if ti is a prefix (or suffix, respectively) we take the
+previous and following prefixes (or suffixes)2. In the
+sentence shown above, when the system is predict-
+ing if the token   (office) is the beginning of an
+organization or not, the backward and forward stem
+n-gram features contain   (represent location
+of) and   (political office). The stem fea-
+tures contain enough information in this example to
+make a decision that   (office) is the beginning of
+an organization. In our experiments, n is 3, therefore
+we use stem trigram features.
+</bodyText>
+<sectionHeader confidence="0.989861" genericHeader="method">
+5 Coreference Resolution
+</sectionHeader>
+<bodyText confidence="0.976863846153846">
+Coreference resolution (or entity recognition) is de-
+fined as grouping together mentions referring to the
+same object or entity. For example, in the following
+text,
+(I) “John believes Mary to be the best student”
+three mentions “John”, “Mary”, “student” are un-
+derlined. “Mary” and “student” are in the same en-
+tity since both refer to the same person.
+The coreference system system is similar to the Bell
+tree algorithm as described by (Luo et al., 2004).
+In our implementation, the link model between a
+candidate entity e and the current mention m is com-
+puted as
+</bodyText>
+<equation confidence="0.930782">
+�PL(L = 1|e, mk, m), (1)
+</equation>
+<bodyText confidence="0.999189666666667">
+2Thus, the difference to token n-grams is that the to-
+kens of different type are removed from the streams, be-
+fore the features are created.
+where mk is one mention in entity e, and the basic
+model building block PL(L = 1|e, mk, m) is an ex-
+ponential or maximum entropy model (Berger et al.,
+1996).
+For the start model, we use the following approxima-
+tion:
+</bodyText>
+<equation confidence="0.9986255">
+PS(S = 1|e1, e2, ··· ,et, m) 
+PL(L = 1|ei, m) (2)
+</equation>
+<bodyText confidence="0.999313076923077">
+The start model (cf. equation 2) says that the prob-
+ability of starting a new entity, given the current
+mention m and the previous entities e1, e2, · · · , et, is
+simply 1 minus the maximum link probability be-
+tween the current mention and one of the previous
+entities.
+The maximum-entropy model provides us with a
+flexible framework to encode features into the the
+system. Our Arabic entity recognition system uses
+many language-indepedent features such as strict
+and partial string match, and distance features (Luo
+et al., 2004). In this paper, however, we focus on the
+addition of Arabic stem-based features.
+</bodyText>
+<subsectionHeader confidence="0.997807">
+5.1 Arabic Stem Match Feature
+</subsectionHeader>
+<bodyText confidence="0.967451464285714">
+Features using the word context (left and right to-
+kens) have been shown to be very helpful in corefer-
+ence resolution (Luo et al., 2004). For Arabic, since
+words are morphologically derived from a list of roots
+(stems), we expected that a feature based on the
+right and left stems would lead to improvement in
+system accuracy.
+Let m1 and m2 be two candidate mentions where
+a mention is a string of tokens (prefixes, stems,
+and suffixes) extracted from the segmented text.
+In order to make a decision in either linking the
+two mentions or not we use additional features
+such as: do the stems in m1 and m2 match, do
+stems in m1 match all stems in m2, do stems
+in m1 partially match stems in m2. We proceed
+similarly for prefixes and suffixes. Since prefixes and
+suffixes can belong to different mention types, we
+build a parse tree on the segmented text and we can
+explore features dealing with the gender and number
+of the token. In the following example, between
+parentheses we make a word-for-word translations in
+order to better explain our stemming feature. Let us
+take the two mentions      
+
+(to-the-office the-politic to-the-party) and
+
+  (office the-party’s) segmented as
+ 
+</bodyText>
+<equation confidence="0.515989857142857">
+
+                
+and         respectively. In our
+PL(L = 1|e, m)  max
+MkEe
+1 − max
+1&lt;i&lt;t
+</equation>
+<page confidence="0.994131">
+67
+</page>
+<bodyText confidence="0.999497">
+development corpus, these two mentions are chained
+to the same entity. The stemming match feature
+in this case will contain information such us all
+stems of m2 match, which is a strong indicator
+that these mentions should be chained together.
+Features based on the words alone would not help
+this specific example, because the two strings m1
+and m2 do not match.
+</bodyText>
+<sectionHeader confidence="0.998103" genericHeader="evaluation">
+6 Experiments
+</sectionHeader>
+<subsectionHeader confidence="0.996665">
+6.1 Data
+</subsectionHeader>
+<bodyText confidence="0.999989571428571">
+The system is trained on the Arabic ACE 2003 and
+part of the 2004 data. We introduce here a clearly
+defined and replicable split of the ACE 2004 data,
+so that future investigations can accurately and cor-
+rectly compare against the results presented here.
+There are 689 Arabic documents in LDC&apos;s 2004 re-
+lease (version 1.4) of ACE data from three sources:
+the Arabic Treebank, a subset of the broadcast
+(bnews) and newswire (nwire) TDT-4 documents.
+The 178-document devtest is created by taking
+the last (in chronological order) 25% of docu-
+ments in each of three sources: 38 Arabic tree-
+bank documents dating from “20000715” (i.e., July
+15, 2000) to “20000815,” 76 bnews documents from
+“20001205.1100.0489” (i.e., Dec. 05 of 2000 from
+11:00pm to 04:89am) to “20001230.1100.1216,” and
+64 nwire documents from “20001206.1000.0050” to
+“20001230.0700.0061.” The time span of the test
+set is intentionally non-overlapping with that of the
+training set within each data source, as this models
+how the system will perform in the real world.
+</bodyText>
+<subsectionHeader confidence="0.999883">
+6.2 Mention Detection
+</subsectionHeader>
+<bodyText confidence="0.9684861">
+We want to investigate the usefulness of stem n-
+gram features in the mention detection system. As
+stated before, the experiments are run in the ACE&apos;04
+framework (NIST, 2004) where the system will iden-
+tify mentions and will label them (cf. Section 4)
+with a type (person, organization, etc), a sub-type
+(OrgCommercial, OrgGovernmental, etc), a mention
+level (named, nominal, etc), and a class (specific,
+generic, etc). Detecting the mention boundaries (set
+of consecutive tokens) and their main type is one of
+the important steps of our mention detection sys-
+tem. The score that the ACE community uses (ACE
+value) attributes a higher importance (outlined by
+its weight) to the main type compared to other sub-
+tasks, such as the mention level and the class. Hence,
+to build our mention detection system we spent a lot
+of effort in improving the first step: detecting the
+mention boundary and their main type. In this pa-
+per, we report the results in terms of precision, recall,
+and F-measure3.
+</bodyText>
+<table confidence="0.999807818181818">
+Lexical features
+Precision Recall F-measure
+M M M
+Total 73.3 58.0 64.7
+FAC 76.0 24.0 36.5
+GPE 79.4 65.6 71.8
+LOC 57.7 29.9 39.4
+ORG 63.1 46.6 53.6
+PER 73.2 63.5 68.0
+VEH 83.5 29.7 43.8
+WEA 77.3 25.4 38.2
+Lexical features + Stem
+Precision Recall F-measure
+M M M
+Total 73.6 59.4 65.8
+FAC 72.7 29.0 41.4
+GPE 79.9 67.2 73.0
+LOC 58.6 31.9 41.4
+ORG 62.6 47.2 53.8
+PER 73.8 64.6 68.9
+VEH 81.7 35.9 49.9
+WEA 78.4 29.9 43.2
+</table>
+<tableCaption confidence="0.999466">
+Table 1: Performance of the mention detection sys-
+</tableCaption>
+<bodyText confidence="0.997442">
+tem using lexical features only.
+To assess the impact of stemming n-gram features
+on the system under different conditions, we consider
+two cases: one where the system only has access to
+lexical features (the tokens and direct derivatives in-
+cluding standard n-gram features), and one where
+the system has access to a richer set of information,
+including lexical features, POS tags, text chunks,
+parse tree, and gazetteer information. The former
+framework has the advantage of being fast (making
+it more appropriate for deployment in commercial
+systems). The number of parameters to optimize in
+the MaxEnt framework we use when only lexical fea-
+tures are explored is around 280K parameters. This
+number increases to 443K approximately when all in-
+formation is used except the stemming feature. The
+number of parameters introduced by the use of stem-
+ming is around 130K parameters. Table 1 reports
+experimental results using lexical features only; we
+observe that the stemming n-gram features boost the
+performance by one point (64.7 vs. 65.8). It is im-
+portant to notice the stemming n-gram features im-
+proved the performance of each category of the main
+type.
+In the second case, the systems have access to a large
+amount of feature types, including lexical, syntac-
+tic, gazetteer, and those obtained by running other
+</bodyText>
+<footnote confidence="0.93079225">
+3The ACE value is an important factor for us, but its
+relative complexity, due to different weights associated
+with the subparts, makes for a hard comparison, while
+the F-measure is relatively easy to interpret.
+</footnote>
+<page confidence="0.995199">
+68
+</page>
+<table confidence="0.999779772727273">
+AllFeatures
+Precision Recall F-measure
+M M M
+Total 74.3 64.0 68.8
+FAC 72.3 36.8 48.8
+GPE 80.5 70.8 75.4
+LOC 61.1 35.4 44.8
+ORG 61.4 50.3 55.3
+PER 75.3 70.2 72.7
+VEH 83.2 38.1 52.3
+WEA 69.0 36.6 47.8
+All-Features + Stem
+Precision Recall F-measure
+M M M
+Total 74.4 64.6 69.2
+FAC 68.8 38.5 49.4
+GPE 80.8 71.9 76.1
+LOC 60.2 36.8 45.7
+ORG 62.2 51.0 56.1
+PER 75.3 70.2 72.7
+VEH 81.4 41.8 55.2
+WEA 70.3 38.8 50.0
+</table>
+<tableCaption confidence="0.995752">
+Table 2: Performance of the mention detection sys-
+</tableCaption>
+<bodyText confidence="0.986598233333333">
+tem using lexical, syntactic, gazetteer features as well
+as features obtained by running other named-entity
+classifiers
+named-entity classifiers (with different semantic tag
+sets). Features are also extracted from the shal-
+low parsing information associated with the tokens
+in window of 3, POS, etc. The All-features system
+incorporates all the features except for the stem n-
+grams. Table 2 shows the experimental results with
+and without the stem n-grams features. Again, Ta-
+ble 2 shows that using stem n-grams features gave
+a small boost to the whole main-type classification
+system4. This is true for all types. It is interesting to
+note that the increase in performance in both cases
+(Tables 1 and 2) is obtained from increased recall,
+with little change in precision. When the prefix and
+suffix n-gram features are removed from the feature
+set, we notice in both cases (Tables 1 and 2) a in-
+significant decrease of the overall performance, which
+is expected: what should a feature of preceeding (or
+following) prepositions or finite articles captures?
+As stated in Section 4.1, the mention detection sys-
+tem uses a cascade approach. However, we were curi-
+ous to see if the gain we obtained at the first level was
+successfully transfered into the overall performance
+of the mention detection system. Table 3 presents
+the performance in terms of precision, recall, and F-
+measure of the whole system. Despite the fact that
+the improvement was small in terms of F-measure
+(59.4 vs. 59.7), the stemming n-gram features gave
+</bodyText>
+<footnote confidence="0.8624135">
+4The difference in performance is not statistically sig-
+nificant
+</footnote>
+<table confidence="0.980168">
+interesting improvement in terms of ACE value to
+the hole EDR system as showed in section 6.3.
+Precision Recall F-measure
+M M M
+All-Features 64.2 55.3 59.4
+All-Features+Stem 64.4 55.7 59.7
+Lexical 64.4 50.8 56.8
+Lexical+Stem 64.6 52.0 57.6
+</table>
+<tableCaption confidence="0.9856395">
+Table 3: Performance of the mention detection sys-
+tem including all ACE&apos;04 subtasks
+</tableCaption>
+<subsectionHeader confidence="0.998844">
+6.3 Coreference Resolution
+</subsectionHeader>
+<bodyText confidence="0.999985464285714">
+In this section, we present the coreference results on
+the devtest defined earlier. First, to see the effect of
+stem matching features, we compare two coreference
+systems: one with the stem features, the other with-
+out. We test the two systems on both “true” and
+system mentions of the devtest set. “True” men-
+tions mean that input to the coreference system are
+mentions marked by human, while system mentions
+are output from the mention detection system. We
+report results with two metrics: ECM-F and ACE-
+Value. ECM-F is an entity-constrained mention F-
+measure (cf. (Luo et al., 2004) for how ECM-F is
+computed), and ACE-Value is the official ACE eval-
+uation metric. The result is shown in Table 4: the
+baseline numbers without stem features are listed un-
+der “Base,” and the results of the coreference system
+with stem features are listed under “Base+Stem.&amp;quot;
+On true mention, the stem matching features im-
+prove ECM-F from 77.7% to 80.0%, and ACE-value
+from 86.9% to 88.2%. The similar improvement is
+also observed on system mentions.The overall ECM-
+F improves from 62.3% to 64.2% and the ACE value
+improves from 61.9 to 63.1%. Note that the increase
+on the ACE value is smaller than ECM-F. This is
+because ACE-value is a weighted metric which em-
+phasizes on NAME mentions and heavily discounts
+PRONOUN mentions. Overall the stem features give
+rise to consistent gain to the coreference system.
+</bodyText>
+<sectionHeader confidence="0.999287" genericHeader="conclusions">
+7 Conclusion
+</sectionHeader>
+<bodyText confidence="0.999622333333333">
+In this paper, we present a fully fledged Entity Detec-
+tion and Tracking system for Arabic. At its base, the
+system fundamentally depends on a finite state seg-
+menter and makes good use of the relationships that
+occur between word stems, by introducing features
+which take into account the type of each segment.
+In mention detection, the features are represented as
+stem n-grams, while in coreference resolution they
+are captured through stem-tailored match features.
+</bodyText>
+<page confidence="0.998393">
+69
+</page>
+<table confidence="0.996865">
+Base Base+Stem
+ECM-F ACEVal ECM-F ACEVal
+Truth 77.7 86.9 80.0 88.2
+System 62.3 61.9 64.2 63.1
+</table>
+<tableCaption confidence="0.982022">
+Table 4: Effect of Arabic stemming features on coref-
+</tableCaption>
+<bodyText confidence="0.991362352941177">
+erence resolution. The row marked with “Truth”
+represents the results with “true” mentions while the
+row marked with “System” represents that mentions
+are detected by the system. Numbers under “ECM-
+F&amp;quot; are Entity-Constrained-Mention F-measure and
+numbers under “ACE-Val” are ACE-values.
+These types of features result in an improvement in
+both the mention detection and coreference resolu-
+tion performance, as shown through experiments on
+the ACE 2004 Arabic data. The experiments are per-
+formed on a clearly specified partition of the data, so
+comparisons against the presented work can be cor-
+rectly and accurately made in the future. In addi-
+tion, we also report results on the official test data.
+The presented system has obtained competitive re-
+sults in the ACE 2004 evaluation, being ranked
+amongst the top competitors.
+</bodyText>
+<sectionHeader confidence="0.999064" genericHeader="acknowledgments">
+8 Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.999876285714286">
+This work was partially supported by the Defense
+Advanced Research Projects Agency and monitored
+by SPAWAR under contract No. N66001-99-2-8916.
+The views and findings contained in this material are
+those of the authors and do not necessarily reflect
+the position of policy of the U.S. government and no
+official endorsement should be inferred.
+</bodyText>
+<sectionHeader confidence="0.999508" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999278753623189">
+Peter F. Abbou and Ernest N. McCarus, editors. 1983.
+Elementary modern standard Arabic. Cambridge Univer-
+sity Press.
+ACE. 2004. Automatic content extraction.
+http://www.ldc.upenn.edu/Projects/ACE/.
+Joan Aliprand, Julie Allen, Joe Becker, Mark Davis,
+Michael Everson, Asmus Freytag, John Jenkins, Mike
+Ksar, Rick McGowan, Eric Muller, Lisa Moore, Michel
+Suignard, and Ken Whistler. 2004. The unicode stan-
+dard. http://www.unicode.org/.
+A. Berger, S. Della Pietra, and V. Della Pietra. 1996. A
+maximum entropy approach to natural language process-
+ing. Computational Linguistics, 22(1):39–71.
+D. M. Bikel, S. Miller, R. Schwartz, and R. Weischedel.
+1997. Nymble: a high-performance learning name-finder.
+In Proceedings of ANLP-97, pages 194–201.
+A. Borthwick. 1999. A Maximum Entropy Approach to
+Named Entity Recognition. Ph.D. thesis, New York Uni-
+versity.
+Egyptian Demographic Center. 2000.
+http://www.frcu.eun.eg/www/homepage/cdc/cdc.htm.
+Aitao Chen and Fredic Gey. 2002. Building an arabic
+stemmer for information retrieval. In Proceedings of the
+Eleventh Text REtrieval Conference (TREC 2002), Na-
+tional Institute of Standards and Technology, November.
+S. F. Chen and J. Goodman. 1998. An empirical study
+of smoothing techinques for language modeling. Techni-
+cal Report TR-10-98, Center for Research in Comput-
+ing Technology, Harvard University, Cambridge, Mas-
+sachusettes, August.
+R. Florian, H. Hassan, A. Ittycheriah, H. Jing, N. Kamb-
+hatla, X. Luo, N Nicolov, and S Roukos. 2004. A statisti-
+cal model for multilingual entity detection and tracking.
+In Proceedings of HLT-NAACL 2004, pages 1–8.
+Y.-S. Lee, K. Papineni, S. Roukos, O. Emam, and H. Has-
+san. 2003. Language model based Arabic word segmen-
+tation. In Proceedings of the ACL&apos;03, pages 399–406.
+Xiaoqiang Luo, Abe Ittycheriah, Hongyan Jing, Nanda
+Kambhatla, and Salim Roukos. 2004. A mention-
+synchronous coreference resolution algorithm based on
+the bell tree. In Proc. of ACL&apos;04.
+A. Mikheev, M. Moens, and C. Grover. 1999. Named
+entity recognition without gazetteers. In Proceedings of
+EACL&apos;99.
+S. Miller, M. Crystal, H. Fox, L. Ramshaw, R. Schwarz,
+R. Stone, and R. Weischedel. 1998. Bbn: Description of
+the SIFT system as used for MUC-7. In MUC-7.
+V. Ng and C. Cardie. 2002. Improving machine learning
+approaches to coreference resolution. In Proceedings of
+the ACL&apos;02, pages 104–111.
+NIST. 2004. Proceedings of ace evaluation and pi meet-
+ing 2004 workshop. Alexandria, VA, September. NIST.
+W. M. Soon, H. T. Ng, and C. Y. Lim. 2001. A ma-
+chine learning approach to coreference resolution of noun
+phrases. Computational Linguistics, 27(4):521–544.
+R. Sproat, C. Shih, W. Gale, and N. Chang. 1996. A
+stochastic finite-state word-segmentation algorithm for
+Chinese. Computational Linguistics, 22(3).
+M. Tayli and A. Al-Salamah. 1990. Building bilingual
+microcomputer systems. Communications of the ACM,
+33(5):495–505.
+J. Wightwick and M. Gaafar. 1998. Arabic Verbs and
+Essentials of Grammar. Passport Books.
+J. Xu, A. Fraser, and R. Weischedel. 2001. Trec2001
+cross-lingual retrieval at bbn. In TREC 2001, Gaithers-
+burg: NIST.
+J. Xu, A. Fraser, and R. Weischedel. 2002. Empirical
+studies in strategies for arabic information retrieval. In
+SIGIR 2002, Tampere, Finland.
+</reference>
+<page confidence="0.99848">
+70
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.732911">
+<title confidence="0.9987575">The Impact of Morphological Stemming on Arabic Detection and Coreference Resolution</title>
+<author confidence="0.932906">Imed Zitouni</author>
+<author confidence="0.932906">Jeff Sorensen</author>
+<author confidence="0.932906">Xiaoqiang Luo</author>
+<author confidence="0.932906">Radu</author>
+<email confidence="0.876066">sorenj,xiaoluo,</email>
+<affiliation confidence="0.983548">IBM T.J. Watson Research</affiliation>
+<address confidence="0.99716">1101 Kitchawan Rd, Yorktown Heights, NY 10598, USA</address>
+<abstract confidence="0.994623590909091">Arabic presents an interesting challenge to natural language processing, being a highly inflected and agglutinative language. In particular, this paper presents an in-depth investigation of the entity detection and recognition (EDR) task for Arabic. We start by highlighting why segmentation is a necessary prerequisite for EDR, continue by presenting a finite-state statistical segmenter, and then examine how the resulting segments can be better included into a mention detection system and an entity recognition system; both systems are statistical, build around the maximum entropy principle. Experiments on a clearly stated partition of the ACE 2004 data show that stem-based features can significantly improve the performance of the EDT system by 2 absolute F-measure points. The system presented here had a competitive performance in the ACE 2004 evaluation.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>F Peter</author>
+</authors>
+<title>Abbou and Ernest</title>
+<date>1983</date>
+<editor>N. McCarus, editors.</editor>
+<publisher>Cambridge University Press.</publisher>
+<marker>Peter, 1983</marker>
+<rawString>Peter F. Abbou and Ernest N. McCarus, editors. 1983. Elementary modern standard Arabic. Cambridge University Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>ACE</author>
+</authors>
+<title>Automatic content extraction.</title>
+<date>2004</date>
+<note>http://www.ldc.upenn.edu/Projects/ACE/.</note>
+<contexts>
+<context position="945" citStr="ACE 2004" startWordPosition="133" endWordPosition="134">tural language processing, being a highly inflected and agglutinative language. In particular, this paper presents an in-depth investigation of the entity detection and recognition (EDR) task for Arabic. We start by highlighting why segmentation is a necessary prerequisite for EDR, continue by presenting a finite-state statistical segmenter, and then examine how the resulting segments can be better included into a mention detection system and an entity recognition system; both systems are statistical, build around the maximum entropy principle. Experiments on a clearly stated partition of the ACE 2004 data show that stem-based features can significantly improve the performance of the EDT system by 2 absolute F-measure points. The system presented here had a competitive performance in the ACE 2004 evaluation. 1 Introduction Information extraction is a crucial step toward understanding and processing language. One goal of information extraction tasks is to identify important conceptual information in a discourse. These tasks have applications in summarization, information retrieval (one can get all hits for Washington/person and not the ones for Washington/state or Washington/city), data min</context>
+<context position="15323" citStr="ACE, 2004" startWordPosition="2475" endWordPosition="2476"> separate token. Character classes, such as punctuation, are defined according to the Unicode Standard (Aliprand et al., 2004). 4 Mention Detection The mention detection task we investigate identifies, for each mention, four pieces of information: 1. the mention type: person (PER), organization (ORG), location (LOC), geopolitical entity (GPE), facility (FAC), vehicle (VEH), and weapon (WEA) 2. the mention level (named, nominal, pronominal, or premodifier) 3. the mention class (generic, specific, negatively quantified, etc.) 4. the mention sub-type, which is a sub-category of the mention type (ACE, 2004) (e.g. OrgGovernmental, FacilityPath, etc.). 4.1 System Description We formulate the mention detection problem as a classification problem, which takes as input segmented Arabic text. We assign to each token in the text a label indicating whether it starts a specific mention, is inside a specific mention, or is outside any mentions. We use a maximum entropy Markov model (MEMM) classifier. The principle of maximum entropy states that when one searches among probability distributions that model the observed data (evidence), the preferred one is the one that maximizes the entropy (a measure of th</context>
+<context position="23901" citStr="ACE 2004" startWordPosition="3957" endWordPosition="3958">    respectively. In our PL(L = 1|e, m)  max MkEe 1 − max 1&lt;i&lt;t 67 development corpus, these two mentions are chained to the same entity. The stemming match feature in this case will contain information such us all stems of m2 match, which is a strong indicator that these mentions should be chained together. Features based on the words alone would not help this specific example, because the two strings m1 and m2 do not match. 6 Experiments 6.1 Data The system is trained on the Arabic ACE 2003 and part of the 2004 data. We introduce here a clearly defined and replicable split of the ACE 2004 data, so that future investigations can accurately and correctly compare against the results presented here. There are 689 Arabic documents in LDC&apos;s 2004 release (version 1.4) of ACE data from three sources: the Arabic Treebank, a subset of the broadcast (bnews) and newswire (nwire) TDT-4 documents. The 178-document devtest is created by taking the last (in chronological order) 25% of documents in each of three sources: 38 Arabic treebank documents dating from “20000715” (i.e., July 15, 2000) to “20000815,” 76 bnews documents from “20001205.1100.0489” (i.e., Dec. 05 of 2000 from 11:00pm to 04</context>
+<context position="32637" citStr="ACE 2004" startWordPosition="5402" endWordPosition="5403"> features. 69 Base Base+Stem ECM-F ACEVal ECM-F ACEVal Truth 77.7 86.9 80.0 88.2 System 62.3 61.9 64.2 63.1 Table 4: Effect of Arabic stemming features on coreference resolution. The row marked with “Truth” represents the results with “true” mentions while the row marked with “System” represents that mentions are detected by the system. Numbers under “ECMF&amp;quot; are Entity-Constrained-Mention F-measure and numbers under “ACE-Val” are ACE-values. These types of features result in an improvement in both the mention detection and coreference resolution performance, as shown through experiments on the ACE 2004 Arabic data. The experiments are performed on a clearly specified partition of the data, so comparisons against the presented work can be correctly and accurately made in the future. In addition, we also report results on the official test data. The presented system has obtained competitive results in the ACE 2004 evaluation, being ranked amongst the top competitors. 8 Acknowledgements This work was partially supported by the Defense Advanced Research Projects Agency and monitored by SPAWAR under contract No. N66001-99-2-8916. The views and findings contained in this material are those of the</context>
+</contexts>
+<marker>ACE, 2004</marker>
+<rawString>ACE. 2004. Automatic content extraction. http://www.ldc.upenn.edu/Projects/ACE/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Joan Aliprand</author>
+<author>Julie Allen</author>
+<author>Joe Becker</author>
+<author>Mark Davis</author>
+<author>Michael Everson</author>
+</authors>
+<title>The unicode standard.</title>
+<date>2004</date>
+<location>Asmus Freytag, John Jenkins, Mike Ksar, Rick McGowan, Eric Muller, Lisa</location>
+<note>http://www.unicode.org/.</note>
+<contexts>
+<context position="14839" citStr="Aliprand et al., 2004" startWordPosition="2402" endWordPosition="2405">word corpora are based upon news data, we apply some small amount of regular expression based preprocessing. Arabic specific processing include removal of the characters tatweel (), and vowels. Also, the following characters are treated as an equivalence class during all lookups and processing: (1)  , and  (2)    . We define a token and introduce whitespace boundaries between every span of one or more alphabetic or numeric characters. Each punctuation symbol is considered a separate token. Character classes, such as punctuation, are defined according to the Unicode Standard (Aliprand et al., 2004). 4 Mention Detection The mention detection task we investigate identifies, for each mention, four pieces of information: 1. the mention type: person (PER), organization (ORG), location (LOC), geopolitical entity (GPE), facility (FAC), vehicle (VEH), and weapon (WEA) 2. the mention level (named, nominal, pronominal, or premodifier) 3. the mention class (generic, specific, negatively quantified, etc.) 4. the mention sub-type, which is a sub-category of the mention type (ACE, 2004) (e.g. OrgGovernmental, FacilityPath, etc.). 4.1 System Description We formulate the mention detection problem as a </context>
+</contexts>
+<marker>Aliprand, Allen, Becker, Davis, Everson, 2004</marker>
+<rawString>Joan Aliprand, Julie Allen, Joe Becker, Mark Davis, Michael Everson, Asmus Freytag, John Jenkins, Mike Ksar, Rick McGowan, Eric Muller, Lisa Moore, Michel Suignard, and Ken Whistler. 2004. The unicode standard. http://www.unicode.org/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Berger</author>
+<author>S Della Pietra</author>
+<author>V Della Pietra</author>
+</authors>
+<title>A maximum entropy approach to natural language processing.</title>
+<date>1996</date>
+<journal>Computational Linguistics,</journal>
+<volume>22</volume>
+<issue>1</issue>
+<contexts>
+<context position="4548" citStr="Berger et al., 1996" startWordPosition="707" endWordPosition="710">rivational and inflectional process, most prepositions, conjunctions, pronouns, and possessive forms are attached to the Arabic surface word. It is these orthographic variations and complex morphological structure that make Arabic language processing challenging (Xu et al., 2001; Xu et al., 2002). Both tasks are performed with a statistical framework: the mention detection system is similar to the one presented in (Florian et al., 2004) and the coreference resolution system is similar to the one described in (Luo et al., 2004). Both systems are built around from the maximum-entropy technique (Berger et al., 1996). We formulate the mention detection task as a sequence classification problem. While this approach is language independent, it must be modified to accomodate the particulars of the Arabic language. The Arabic words may be composed of zero or more prefixes, followed by a stem and zero or more suffixes. We begin with a segmentation of the written text before starting the classification. This segmentation process consists of separating the normal whitespace delimited words into (hypothesized) prefixes, stems, and suffixes, which become the subject of analysis (tokens). The resulting granularity </context>
+<context position="15972" citStr="Berger et al., 1996" startWordPosition="2577" endWordPosition="2580">ityPath, etc.). 4.1 System Description We formulate the mention detection problem as a classification problem, which takes as input segmented Arabic text. We assign to each token in the text a label indicating whether it starts a specific mention, is inside a specific mention, or is outside any mentions. We use a maximum entropy Markov model (MEMM) classifier. The principle of maximum entropy states that when one searches among probability distributions that model the observed data (evidence), the preferred one is the one that maximizes the entropy (a measure of the uncertainty of the model) (Berger et al., 1996). One big advantage of this approach is that it can combine arbitrary and diverse types of information in making a classification decision. Our mention detection system predicts the four labels types associated with a mention through a cascade approach. It first predicts the boundary and the main entity type for each mention. Then, it uses the information regarding the type and boundary in different second-stage classifiers to predict the subtype, the mention level, and the mention class. After the first stage, when the boundary (starting, inside, or outside a mention) has been determined, the</context>
+<context position="21242" citStr="Berger et al., 1996" startWordPosition="3475" endWordPosition="3478">rlined. “Mary” and “student” are in the same entity since both refer to the same person. The coreference system system is similar to the Bell tree algorithm as described by (Luo et al., 2004). In our implementation, the link model between a candidate entity e and the current mention m is computed as �PL(L = 1|e, mk, m), (1) 2Thus, the difference to token n-grams is that the tokens of different type are removed from the streams, before the features are created. where mk is one mention in entity e, and the basic model building block PL(L = 1|e, mk, m) is an exponential or maximum entropy model (Berger et al., 1996). For the start model, we use the following approximation: PS(S = 1|e1, e2, ··· ,et, m)  PL(L = 1|ei, m) (2) The start model (cf. equation 2) says that the probability of starting a new entity, given the current mention m and the previous entities e1, e2, · · · , et, is simply 1 minus the maximum link probability between the current mention and one of the previous entities. The maximum-entropy model provides us with a flexible framework to encode features into the the system. Our Arabic entity recognition system uses many language-indepedent features such as strict and partial string match, a</context>
+</contexts>
+<marker>Berger, Pietra, Pietra, 1996</marker>
+<rawString>A. Berger, S. Della Pietra, and V. Della Pietra. 1996. A maximum entropy approach to natural language processing. Computational Linguistics, 22(1):39–71.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D M Bikel</author>
+<author>S Miller</author>
+<author>R Schwartz</author>
+<author>R Weischedel</author>
+</authors>
+<title>Nymble: a high-performance learning name-finder.</title>
+<date>1997</date>
+<booktitle>In Proceedings of ANLP-97,</booktitle>
+<pages>194--201</pages>
+<contexts>
+<context position="1905" citStr="Bikel et al., 1997" startWordPosition="279" endWordPosition="282">action tasks is to identify important conceptual information in a discourse. These tasks have applications in summarization, information retrieval (one can get all hits for Washington/person and not the ones for Washington/state or Washington/city), data mining, question answering, language understanding, etc. In this paper we focus on the Entity Detection and Recognition task (EDR) for Arabic as described in ACE 2004 framework (ACE, 2004). The EDR has close ties to the named entity recognition (NER) and coreference resolution tasks, which have been the focus of several recent investigations (Bikel et al., 1997; Miller et al., 1998; Borthwick, 1999; Mikheev et al., 1999; Soon et al., 2001; Ng and Cardie, 2002; Florian et al., 2004), and have been at the center of evaluations such as: MUC-6, MUC-7, and the CoNLL&apos;02 and CoNLL&apos;03 shared tasks. Usually, in computational linguistics literature, a named entity is an instance of a location, a person, or an organization, and the NER task consists of identifying each of these occurrences. Instead, we will adopt the nomenclature of the Automatic Content Extraction program (NIST, 2004): we will call the instances of textual references to objects/abstractions m</context>
+</contexts>
+<marker>Bikel, Miller, Schwartz, Weischedel, 1997</marker>
+<rawString>D. M. Bikel, S. Miller, R. Schwartz, and R. Weischedel. 1997. Nymble: a high-performance learning name-finder. In Proceedings of ANLP-97, pages 194–201.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Borthwick</author>
+</authors>
+<title>A Maximum Entropy Approach to Named Entity Recognition.</title>
+<date>1999</date>
+<tech>Ph.D. thesis,</tech>
+<institution>New York University.</institution>
+<contexts>
+<context position="1943" citStr="Borthwick, 1999" startWordPosition="287" endWordPosition="288">ceptual information in a discourse. These tasks have applications in summarization, information retrieval (one can get all hits for Washington/person and not the ones for Washington/state or Washington/city), data mining, question answering, language understanding, etc. In this paper we focus on the Entity Detection and Recognition task (EDR) for Arabic as described in ACE 2004 framework (ACE, 2004). The EDR has close ties to the named entity recognition (NER) and coreference resolution tasks, which have been the focus of several recent investigations (Bikel et al., 1997; Miller et al., 1998; Borthwick, 1999; Mikheev et al., 1999; Soon et al., 2001; Ng and Cardie, 2002; Florian et al., 2004), and have been at the center of evaluations such as: MUC-6, MUC-7, and the CoNLL&apos;02 and CoNLL&apos;03 shared tasks. Usually, in computational linguistics literature, a named entity is an instance of a location, a person, or an organization, and the NER task consists of identifying each of these occurrences. Instead, we will adopt the nomenclature of the Automatic Content Extraction program (NIST, 2004): we will call the instances of textual references to objects/abstractions mentions, which can be either named (e.</context>
+</contexts>
+<marker>Borthwick, 1999</marker>
+<rawString>A. Borthwick. 1999. A Maximum Entropy Approach to Named Entity Recognition. Ph.D. thesis, New York University.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Egyptian Demographic Center</author>
+</authors>
+<date>2000</date>
+<note>http://www.frcu.eun.eg/www/homepage/cdc/cdc.htm.</note>
+<contexts>
+<context position="6310" citStr="Center, 2000" startWordPosition="984" endWordPosition="985">y describes our mention detection system, explaining the different feature types we use. We focus in particular on the stem n-gram, prefix n-gram, and suffix n-gram features that are specific to a morphologically rich language such as Arabic. We describe in Section 5 our coreference resolution system where we also describe the advantage of using stem based features. Section 6 shows and discusses the different experimental results and Section 7 concludes the paper. 2 Why is Arabic Information Extraction difficult? The Arabic language, which is the mother tongue of more than 300 million people (Center, 2000), present significant challenges to many natural language processing applications. Arabic is a highly inflected and derived language. In Arabic morphology, most morphemes are comprised of a basic word form (the root or stem), to which many affixes can be attached to form Arabic words. The Arabic alphabet consists of 28 letters that can be extended to ninety by additional shapes, marks, and vowels (Tayli and AlSalamah, 1990). Unlike Latin-based alphabets, the orientation of writing in Arabic is from right to left. In written Arabic, short vowels are often omitted. Also, because variety in expre</context>
+</contexts>
+<marker>Center, 2000</marker>
+<rawString>Egyptian Demographic Center. 2000. http://www.frcu.eun.eg/www/homepage/cdc/cdc.htm.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Aitao Chen</author>
+<author>Fredic Gey</author>
+</authors>
+<title>Building an arabic stemmer for information retrieval.</title>
+<date>2002</date>
+<booktitle>In Proceedings of the Eleventh Text REtrieval Conference (TREC 2002), National Institute of Standards and Technology,</booktitle>
+<contexts>
+<context position="8308" citStr="Chen and Gey, 2002" startWordPosition="1324" endWordPosition="1327">be attached as a prefix as in   (to the company). A noun may carry a possessive pronoun as a suffix, such as in  (their company). For the EDR task, in this previous example, the Arabic blank-delimited word should be split into two tokens:  and . he first token  is a mention that refers to an organization, whereas the second token  is also a mention, but one that may refer to a person. Also, the prepositions (i.e.,  and ) not be considered a part of the mention. Arabic has two kinds of plurals: broken plurals and sound plurals (Wightwick and Gaafar, 1998; Chen and Gey, 2002). The formation of broken plurals is common, more complex and often irregular. As an example, the plural form of the noun   (man) is    (men), which is formed by inserting the infix . The plural form of the noun   (book) is   (books), which is formed by deleting the infix . The plural form and the singular form may also be completely different (e.g.  for woman, but   for women). The sound plurals are formed by adding plural suffixes to singular nouns (e.g.,  meaning researcher): the plural suffix is  for feminine nouns in grammatical cases (e.g., </context>
+</contexts>
+<marker>Chen, Gey, 2002</marker>
+<rawString>Aitao Chen and Fredic Gey. 2002. Building an arabic stemmer for information retrieval. In Proceedings of the Eleventh Text REtrieval Conference (TREC 2002), National Institute of Standards and Technology, November.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S F Chen</author>
+<author>J Goodman</author>
+</authors>
+<title>An empirical study of smoothing techinques for language modeling.</title>
+<date>1998</date>
+<tech>Technical Report TR-10-98,</tech>
+<institution>Center for Research in Computing Technology, Harvard University,</institution>
+<location>Cambridge, Massachusettes,</location>
+<contexts>
+<context position="11660" citStr="Chen and Goodman, 1998" startWordPosition="1892" endWordPosition="1895">s used to score and select among hypothesized segmentations determined by a set of prefix and suffix expansion rules. In our latest implementation of this algorithm, we have recast this segmentation strategy as the composition of three distinct finite state machines. The first machine, illustrated in Figure 1 encodes the prefix and suffix expansion rules, producing a lattice of possible segmentations. The second machine is a dictionary that accepts characters and produces identifiers corresponding to dictionary entries. The final machine is a trigram language model, specifically a Kneser-Ney (Chen and Goodman, 1998) based backoff language model. Differing from (Lee et al., 2003), we have also introduced an explicit model for un&apos;As an example, we do not chain mentions with different gender, number, etc. known words based upon a character unigram model, although this model is dominated by an empirically chosen unknown word penalty. Using 0.5M words from the combined Arabic Treebanks 1�2, 2V2 and 3�1, the dictionary based segmenter achieves a exact word match 97.8% correct segmentation. Figure 1: Illustration of dictionary based segmentation finite state transducer 3.1 Bootstrapping In addition to the model</context>
+</contexts>
+<marker>Chen, Goodman, 1998</marker>
+<rawString>S. F. Chen and J. Goodman. 1998. An empirical study of smoothing techinques for language modeling. Technical Report TR-10-98, Center for Research in Computing Technology, Harvard University, Cambridge, Massachusettes, August.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Florian</author>
+<author>H Hassan</author>
+<author>A Ittycheriah</author>
+<author>H Jing</author>
+<author>N Kambhatla</author>
+<author>X Luo</author>
+<author>N Nicolov</author>
+<author>S Roukos</author>
+</authors>
+<title>A statistical model for multilingual entity detection and tracking.</title>
+<date>2004</date>
+<booktitle>In Proceedings of HLT-NAACL</booktitle>
+<pages>1--8</pages>
+<contexts>
+<context position="2028" citStr="Florian et al., 2004" startWordPosition="301" endWordPosition="304">ion, information retrieval (one can get all hits for Washington/person and not the ones for Washington/state or Washington/city), data mining, question answering, language understanding, etc. In this paper we focus on the Entity Detection and Recognition task (EDR) for Arabic as described in ACE 2004 framework (ACE, 2004). The EDR has close ties to the named entity recognition (NER) and coreference resolution tasks, which have been the focus of several recent investigations (Bikel et al., 1997; Miller et al., 1998; Borthwick, 1999; Mikheev et al., 1999; Soon et al., 2001; Ng and Cardie, 2002; Florian et al., 2004), and have been at the center of evaluations such as: MUC-6, MUC-7, and the CoNLL&apos;02 and CoNLL&apos;03 shared tasks. Usually, in computational linguistics literature, a named entity is an instance of a location, a person, or an organization, and the NER task consists of identifying each of these occurrences. Instead, we will adopt the nomenclature of the Automatic Content Extraction program (NIST, 2004): we will call the instances of textual references to objects/abstractions mentions, which can be either named (e.g. John Mayor), nominal (the president) or pronominal (she, it). An entity is the agg</context>
+<context position="4368" citStr="Florian et al., 2004" startWordPosition="677" endWordPosition="680"> from the 63 Proceedings of the ACL Workshop on Computational Approaches to Semitic Languages, pages 63–70, Ann Arbor, June 2005. c�2005 Association for Computational Linguistics derivational and inflectional process, most prepositions, conjunctions, pronouns, and possessive forms are attached to the Arabic surface word. It is these orthographic variations and complex morphological structure that make Arabic language processing challenging (Xu et al., 2001; Xu et al., 2002). Both tasks are performed with a statistical framework: the mention detection system is similar to the one presented in (Florian et al., 2004) and the coreference resolution system is similar to the one described in (Luo et al., 2004). Both systems are built around from the maximum-entropy technique (Berger et al., 1996). We formulate the mention detection task as a sequence classification problem. While this approach is language independent, it must be modified to accomodate the particulars of the Arabic language. The Arabic words may be composed of zero or more prefixes, followed by a stem and zero or more suffixes. We begin with a segmentation of the written text before starting the classification. This segmentation process consi</context>
+<context position="17890" citStr="Florian et al., 2004" startWordPosition="2896" endWordPosition="2899">h a different mention type than the stem of the word that contains them as constituents. 4.2 Stem n-gram Features We use a large set of features to improve the prediction of mentions. This set can be partitioned into 4 categories: lexical, syntactic, gazetteer-based, and those obtained by running other named-entity classifiers (with different tag sets). We use features such as the shallow parsing information associated with the tokens in a window of 3 tokens, POS, etc. The context of a current token ti is clearly one of the most important features in predicting whether ti is a mention or not (Florian et al., 2004). We denote these features as backward token tri-grams and forward token tri-grams for the previous and next context of ti respectively. For a token ti, the backward token n-gram feature will contains the previous n − 1 tokens in the history (ti_n+1.... ti_1) and the forward token n-gram feature will contains the next n − 1 tokens (ti+1.... ti+n_1). Because we are segmenting arabic words into multiple tokens, there is some concern that trigram contexts will no longer convey as much contextual information. Consider the following sentence extracted from the development set:     </context>
+</contexts>
+<marker>Florian, Hassan, Ittycheriah, Jing, Kambhatla, Luo, Nicolov, Roukos, 2004</marker>
+<rawString>R. Florian, H. Hassan, A. Ittycheriah, H. Jing, N. Kambhatla, X. Luo, N Nicolov, and S Roukos. 2004. A statistical model for multilingual entity detection and tracking. In Proceedings of HLT-NAACL 2004, pages 1–8.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y-S Lee</author>
+<author>K Papineni</author>
+<author>S Roukos</author>
+<author>O Emam</author>
+<author>H Hassan</author>
+</authors>
+<title>Language model based Arabic word segmentation.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the ACL&apos;03,</booktitle>
+<pages>399--406</pages>
+<contexts>
+<context position="10886" citStr="Lee et al. (2003)" startWordPosition="1773" endWordPosition="1776">s, but we may find a subject marker as a combination of a prefix and a suffix as in i (she meets them). In this example,  the EDR system should be able to separate ,  to create two mentions (  and ). Because the two mentions belong to different entities, the EDR system should not chain them together. An Arabic word can potentially have a large number of variants, and some of the variants can be quite complex. As an example, consider the word  (and to her researchers) which contains two prefixes and one suffix (      ).  3 Arabic Segmentation Lee et al. (2003) demonstrates a technique for segmenting Arabic text and uses it as a morphological processing step in machine translation. A trigram language model was used to score and select among hypothesized segmentations determined by a set of prefix and suffix expansion rules. In our latest implementation of this algorithm, we have recast this segmentation strategy as the composition of three distinct finite state machines. The first machine, illustrated in Figure 1 encodes the prefix and suffix expansion rules, producing a lattice of possible segmentations. The second machine is a dictionary that acce</context>
+<context position="13176" citStr="Lee et al., 2003" startWordPosition="2140" endWordPosition="2143"> finite state machine. Here, the language model is conditioned to insert prefix and suffix markers based upon the frequency of their appearance in n-gram character contexts that appear in the training data. The character based model alone achieves a 94.5% exact match segmentation accuracy, considerably less accurate then the dictionary based model. However, an analysis of the errors indicated that the character based model is more effective at segmenting words that do not appear in the training data. We seeked to exploit this ability to generalize to improve the dictionary based model. As in (Lee et al., 2003), we used unsupervised training data which is automatically segmented to discover previously unseen stems. In our case, the character n-gram model is used to segment a portion of the Arabic Gigaword corpus. From this, we create a vocabulary of stems and affixes by requiring that tokens appear more than twice in the supervised training data or more than ten times in the unsupervised, segmented corpus. The resulting vocabulary, predominately of word stems, is 53K words, or about six times the vocabulary observed in the supervised training data. This represents about only 18% of the total number </context>
+</contexts>
+<marker>Lee, Papineni, Roukos, Emam, Hassan, 2003</marker>
+<rawString>Y.-S. Lee, K. Papineni, S. Roukos, O. Emam, and H. Hassan. 2003. Language model based Arabic word segmentation. In Proceedings of the ACL&apos;03, pages 399–406.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Xiaoqiang Luo</author>
+<author>Abe Ittycheriah</author>
+<author>Hongyan Jing</author>
+<author>Nanda Kambhatla</author>
+<author>Salim Roukos</author>
+</authors>
+<title>A mentionsynchronous coreference resolution algorithm based on the bell tree.</title>
+<date>2004</date>
+<booktitle>In Proc. of ACL&apos;04.</booktitle>
+<contexts>
+<context position="4460" citStr="Luo et al., 2004" startWordPosition="693" endWordPosition="696">ages 63–70, Ann Arbor, June 2005. c�2005 Association for Computational Linguistics derivational and inflectional process, most prepositions, conjunctions, pronouns, and possessive forms are attached to the Arabic surface word. It is these orthographic variations and complex morphological structure that make Arabic language processing challenging (Xu et al., 2001; Xu et al., 2002). Both tasks are performed with a statistical framework: the mention detection system is similar to the one presented in (Florian et al., 2004) and the coreference resolution system is similar to the one described in (Luo et al., 2004). Both systems are built around from the maximum-entropy technique (Berger et al., 1996). We formulate the mention detection task as a sequence classification problem. While this approach is language independent, it must be modified to accomodate the particulars of the Arabic language. The Arabic words may be composed of zero or more prefixes, followed by a stem and zero or more suffixes. We begin with a segmentation of the written text before starting the classification. This segmentation process consists of separating the normal whitespace delimited words into (hypothesized) prefixes, stems,</context>
+<context position="20813" citStr="Luo et al., 2004" startWordPosition="3393" endWordPosition="3396"> a decision that   (office) is the beginning of an organization. In our experiments, n is 3, therefore we use stem trigram features. 5 Coreference Resolution Coreference resolution (or entity recognition) is defined as grouping together mentions referring to the same object or entity. For example, in the following text, (I) “John believes Mary to be the best student” three mentions “John”, “Mary”, “student” are underlined. “Mary” and “student” are in the same entity since both refer to the same person. The coreference system system is similar to the Bell tree algorithm as described by (Luo et al., 2004). In our implementation, the link model between a candidate entity e and the current mention m is computed as �PL(L = 1|e, mk, m), (1) 2Thus, the difference to token n-grams is that the tokens of different type are removed from the streams, before the features are created. where mk is one mention in entity e, and the basic model building block PL(L = 1|e, mk, m) is an exponential or maximum entropy model (Berger et al., 1996). For the start model, we use the following approximation: PS(S = 1|e1, e2, ··· ,et, m)  PL(L = 1|ei, m) (2) The start model (cf. equation 2) says that the probability of</context>
+<context position="22128" citStr="Luo et al., 2004" startWordPosition="3631" endWordPosition="3634">is simply 1 minus the maximum link probability between the current mention and one of the previous entities. The maximum-entropy model provides us with a flexible framework to encode features into the the system. Our Arabic entity recognition system uses many language-indepedent features such as strict and partial string match, and distance features (Luo et al., 2004). In this paper, however, we focus on the addition of Arabic stem-based features. 5.1 Arabic Stem Match Feature Features using the word context (left and right tokens) have been shown to be very helpful in coreference resolution (Luo et al., 2004). For Arabic, since words are morphologically derived from a list of roots (stems), we expected that a feature based on the right and left stems would lead to improvement in system accuracy. Let m1 and m2 be two candidate mentions where a mention is a string of tokens (prefixes, stems, and suffixes) extracted from the segmented text. In order to make a decision in either linking the two mentions or not we use additional features such as: do the stems in m1 and m2 match, do stems in m1 match all stems in m2, do stems in m1 partially match stems in m2. We proceed similarly for prefixes and suffi</context>
+<context position="30755" citStr="Luo et al., 2004" startWordPosition="5096" endWordPosition="5099">subtasks 6.3 Coreference Resolution In this section, we present the coreference results on the devtest defined earlier. First, to see the effect of stem matching features, we compare two coreference systems: one with the stem features, the other without. We test the two systems on both “true” and system mentions of the devtest set. “True” mentions mean that input to the coreference system are mentions marked by human, while system mentions are output from the mention detection system. We report results with two metrics: ECM-F and ACEValue. ECM-F is an entity-constrained mention Fmeasure (cf. (Luo et al., 2004) for how ECM-F is computed), and ACE-Value is the official ACE evaluation metric. The result is shown in Table 4: the baseline numbers without stem features are listed under “Base,” and the results of the coreference system with stem features are listed under “Base+Stem.&amp;quot; On true mention, the stem matching features improve ECM-F from 77.7% to 80.0%, and ACE-value from 86.9% to 88.2%. The similar improvement is also observed on system mentions.The overall ECMF improves from 62.3% to 64.2% and the ACE value improves from 61.9 to 63.1%. Note that the increase on the ACE value is smaller than ECM-</context>
+</contexts>
+<marker>Luo, Ittycheriah, Jing, Kambhatla, Roukos, 2004</marker>
+<rawString>Xiaoqiang Luo, Abe Ittycheriah, Hongyan Jing, Nanda Kambhatla, and Salim Roukos. 2004. A mentionsynchronous coreference resolution algorithm based on the bell tree. In Proc. of ACL&apos;04.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Mikheev</author>
+<author>M Moens</author>
+<author>C Grover</author>
+</authors>
+<title>Named entity recognition without gazetteers.</title>
+<date>1999</date>
+<booktitle>In Proceedings of EACL&apos;99.</booktitle>
+<contexts>
+<context position="1965" citStr="Mikheev et al., 1999" startWordPosition="289" endWordPosition="292">on in a discourse. These tasks have applications in summarization, information retrieval (one can get all hits for Washington/person and not the ones for Washington/state or Washington/city), data mining, question answering, language understanding, etc. In this paper we focus on the Entity Detection and Recognition task (EDR) for Arabic as described in ACE 2004 framework (ACE, 2004). The EDR has close ties to the named entity recognition (NER) and coreference resolution tasks, which have been the focus of several recent investigations (Bikel et al., 1997; Miller et al., 1998; Borthwick, 1999; Mikheev et al., 1999; Soon et al., 2001; Ng and Cardie, 2002; Florian et al., 2004), and have been at the center of evaluations such as: MUC-6, MUC-7, and the CoNLL&apos;02 and CoNLL&apos;03 shared tasks. Usually, in computational linguistics literature, a named entity is an instance of a location, a person, or an organization, and the NER task consists of identifying each of these occurrences. Instead, we will adopt the nomenclature of the Automatic Content Extraction program (NIST, 2004): we will call the instances of textual references to objects/abstractions mentions, which can be either named (e.g. John Mayor), nomina</context>
+</contexts>
+<marker>Mikheev, Moens, Grover, 1999</marker>
+<rawString>A. Mikheev, M. Moens, and C. Grover. 1999. Named entity recognition without gazetteers. In Proceedings of EACL&apos;99.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Miller</author>
+<author>M Crystal</author>
+<author>H Fox</author>
+<author>L Ramshaw</author>
+<author>R Schwarz</author>
+<author>R Stone</author>
+<author>R Weischedel</author>
+</authors>
+<title>Bbn: Description of the SIFT system as used for MUC-7.</title>
+<date>1998</date>
+<booktitle>In MUC-7.</booktitle>
+<contexts>
+<context position="1926" citStr="Miller et al., 1998" startWordPosition="283" endWordPosition="286">dentify important conceptual information in a discourse. These tasks have applications in summarization, information retrieval (one can get all hits for Washington/person and not the ones for Washington/state or Washington/city), data mining, question answering, language understanding, etc. In this paper we focus on the Entity Detection and Recognition task (EDR) for Arabic as described in ACE 2004 framework (ACE, 2004). The EDR has close ties to the named entity recognition (NER) and coreference resolution tasks, which have been the focus of several recent investigations (Bikel et al., 1997; Miller et al., 1998; Borthwick, 1999; Mikheev et al., 1999; Soon et al., 2001; Ng and Cardie, 2002; Florian et al., 2004), and have been at the center of evaluations such as: MUC-6, MUC-7, and the CoNLL&apos;02 and CoNLL&apos;03 shared tasks. Usually, in computational linguistics literature, a named entity is an instance of a location, a person, or an organization, and the NER task consists of identifying each of these occurrences. Instead, we will adopt the nomenclature of the Automatic Content Extraction program (NIST, 2004): we will call the instances of textual references to objects/abstractions mentions, which can be</context>
+</contexts>
+<marker>Miller, Crystal, Fox, Ramshaw, Schwarz, Stone, Weischedel, 1998</marker>
+<rawString>S. Miller, M. Crystal, H. Fox, L. Ramshaw, R. Schwarz, R. Stone, and R. Weischedel. 1998. Bbn: Description of the SIFT system as used for MUC-7. In MUC-7.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>V Ng</author>
+<author>C Cardie</author>
+</authors>
+<title>Improving machine learning approaches to coreference resolution.</title>
+<date>2002</date>
+<booktitle>In Proceedings of the ACL&apos;02,</booktitle>
+<pages>104--111</pages>
+<contexts>
+<context position="2005" citStr="Ng and Cardie, 2002" startWordPosition="297" endWordPosition="300">cations in summarization, information retrieval (one can get all hits for Washington/person and not the ones for Washington/state or Washington/city), data mining, question answering, language understanding, etc. In this paper we focus on the Entity Detection and Recognition task (EDR) for Arabic as described in ACE 2004 framework (ACE, 2004). The EDR has close ties to the named entity recognition (NER) and coreference resolution tasks, which have been the focus of several recent investigations (Bikel et al., 1997; Miller et al., 1998; Borthwick, 1999; Mikheev et al., 1999; Soon et al., 2001; Ng and Cardie, 2002; Florian et al., 2004), and have been at the center of evaluations such as: MUC-6, MUC-7, and the CoNLL&apos;02 and CoNLL&apos;03 shared tasks. Usually, in computational linguistics literature, a named entity is an instance of a location, a person, or an organization, and the NER task consists of identifying each of these occurrences. Instead, we will adopt the nomenclature of the Automatic Content Extraction program (NIST, 2004): we will call the instances of textual references to objects/abstractions mentions, which can be either named (e.g. John Mayor), nominal (the president) or pronominal (she, it</context>
+</contexts>
+<marker>Ng, Cardie, 2002</marker>
+<rawString>V. Ng and C. Cardie. 2002. Improving machine learning approaches to coreference resolution. In Proceedings of the ACL&apos;02, pages 104–111.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>NIST</author>
+</authors>
+<title>Proceedings of ace evaluation and pi meeting</title>
+<date>2004</date>
+<publisher>NIST.</publisher>
+<location>Alexandria, VA,</location>
+<contexts>
+<context position="2429" citStr="NIST, 2004" startWordPosition="370" endWordPosition="371">n tasks, which have been the focus of several recent investigations (Bikel et al., 1997; Miller et al., 1998; Borthwick, 1999; Mikheev et al., 1999; Soon et al., 2001; Ng and Cardie, 2002; Florian et al., 2004), and have been at the center of evaluations such as: MUC-6, MUC-7, and the CoNLL&apos;02 and CoNLL&apos;03 shared tasks. Usually, in computational linguistics literature, a named entity is an instance of a location, a person, or an organization, and the NER task consists of identifying each of these occurrences. Instead, we will adopt the nomenclature of the Automatic Content Extraction program (NIST, 2004): we will call the instances of textual references to objects/abstractions mentions, which can be either named (e.g. John Mayor), nominal (the president) or pronominal (she, it). An entity is the aggregate of all the mentions (of any level) which refer to one conceptual entity. For instance, in the sentence President John Smith said he has no comments there are two mentions (named and pronomial) but only one entity, formed by the set {John Smith, he}. We separate the EDR task into two parts: a mention detection step, which identifies and classifies all the mentions in a text – and a coreferenc</context>
+<context position="24981" citStr="NIST, 2004" startWordPosition="4128" endWordPosition="4129">000715” (i.e., July 15, 2000) to “20000815,” 76 bnews documents from “20001205.1100.0489” (i.e., Dec. 05 of 2000 from 11:00pm to 04:89am) to “20001230.1100.1216,” and 64 nwire documents from “20001206.1000.0050” to “20001230.0700.0061.” The time span of the test set is intentionally non-overlapping with that of the training set within each data source, as this models how the system will perform in the real world. 6.2 Mention Detection We want to investigate the usefulness of stem ngram features in the mention detection system. As stated before, the experiments are run in the ACE&apos;04 framework (NIST, 2004) where the system will identify mentions and will label them (cf. Section 4) with a type (person, organization, etc), a sub-type (OrgCommercial, OrgGovernmental, etc), a mention level (named, nominal, etc), and a class (specific, generic, etc). Detecting the mention boundaries (set of consecutive tokens) and their main type is one of the important steps of our mention detection system. The score that the ACE community uses (ACE value) attributes a higher importance (outlined by its weight) to the main type compared to other subtasks, such as the mention level and the class. Hence, to build our</context>
+</contexts>
+<marker>NIST, 2004</marker>
+<rawString>NIST. 2004. Proceedings of ace evaluation and pi meeting 2004 workshop. Alexandria, VA, September. NIST.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W M Soon</author>
+<author>H T Ng</author>
+<author>C Y Lim</author>
+</authors>
+<title>A machine learning approach to coreference resolution of noun phrases.</title>
+<date>2001</date>
+<journal>Computational Linguistics,</journal>
+<volume>27</volume>
+<issue>4</issue>
+<contexts>
+<context position="1984" citStr="Soon et al., 2001" startWordPosition="293" endWordPosition="296">se tasks have applications in summarization, information retrieval (one can get all hits for Washington/person and not the ones for Washington/state or Washington/city), data mining, question answering, language understanding, etc. In this paper we focus on the Entity Detection and Recognition task (EDR) for Arabic as described in ACE 2004 framework (ACE, 2004). The EDR has close ties to the named entity recognition (NER) and coreference resolution tasks, which have been the focus of several recent investigations (Bikel et al., 1997; Miller et al., 1998; Borthwick, 1999; Mikheev et al., 1999; Soon et al., 2001; Ng and Cardie, 2002; Florian et al., 2004), and have been at the center of evaluations such as: MUC-6, MUC-7, and the CoNLL&apos;02 and CoNLL&apos;03 shared tasks. Usually, in computational linguistics literature, a named entity is an instance of a location, a person, or an organization, and the NER task consists of identifying each of these occurrences. Instead, we will adopt the nomenclature of the Automatic Content Extraction program (NIST, 2004): we will call the instances of textual references to objects/abstractions mentions, which can be either named (e.g. John Mayor), nominal (the president) o</context>
+</contexts>
+<marker>Soon, Ng, Lim, 2001</marker>
+<rawString>W. M. Soon, H. T. Ng, and C. Y. Lim. 2001. A machine learning approach to coreference resolution of noun phrases. Computational Linguistics, 27(4):521–544.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Sproat</author>
+<author>C Shih</author>
+<author>W Gale</author>
+<author>N Chang</author>
+</authors>
+<title>A stochastic finite-state word-segmentation algorithm for Chinese.</title>
+<date>1996</date>
+<journal>Computational Linguistics,</journal>
+<volume>22</volume>
+<issue>3</issue>
+<contexts>
+<context position="12436" citStr="Sproat et al., 1996" startWordPosition="2016" endWordPosition="2019">ith different gender, number, etc. known words based upon a character unigram model, although this model is dominated by an empirically chosen unknown word penalty. Using 0.5M words from the combined Arabic Treebanks 1�2, 2V2 and 3�1, the dictionary based segmenter achieves a exact word match 97.8% correct segmentation. Figure 1: Illustration of dictionary based segmentation finite state transducer 3.1 Bootstrapping In addition to the model based upon a dictionary of stems and words, we also experimented with models based upon character n-grams, similar to those used for Chinese segmentation (Sproat et al., 1996). For these models, both arabic characters and spaces, and the inserted prefix and suffix markers appear on the arcs of the finite state machine. Here, the language model is conditioned to insert prefix and suffix markers based upon the frequency of their appearance in n-gram character contexts that appear in the training data. The character based model alone achieves a 94.5% exact match segmentation accuracy, considerably less accurate then the dictionary based model. However, an analysis of the errors indicated that the character based model is more effective at segmenting words that do not </context>
+</contexts>
+<marker>Sproat, Shih, Gale, Chang, 1996</marker>
+<rawString>R. Sproat, C. Shih, W. Gale, and N. Chang. 1996. A stochastic finite-state word-segmentation algorithm for Chinese. Computational Linguistics, 22(3).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Tayli</author>
+<author>A Al-Salamah</author>
+</authors>
+<title>Building bilingual microcomputer systems.</title>
+<date>1990</date>
+<journal>Communications of the ACM,</journal>
+<volume>33</volume>
+<issue>5</issue>
+<marker>Tayli, Al-Salamah, 1990</marker>
+<rawString>M. Tayli and A. Al-Salamah. 1990. Building bilingual microcomputer systems. Communications of the ACM, 33(5):495–505.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Wightwick</author>
+<author>M Gaafar</author>
+</authors>
+<title>Arabic Verbs and Essentials of Grammar.</title>
+<date>1998</date>
+<publisher>Passport Books.</publisher>
+<contexts>
+<context position="8287" citStr="Wightwick and Gaafar, 1998" startWordPosition="1320" endWordPosition="1323"> as  (by), and  (to) can be attached as a prefix as in   (to the company). A noun may carry a possessive pronoun as a suffix, such as in  (their company). For the EDR task, in this previous example, the Arabic blank-delimited word should be split into two tokens:  and . he first token  is a mention that refers to an organization, whereas the second token  is also a mention, but one that may refer to a person. Also, the prepositions (i.e.,  and ) not be considered a part of the mention. Arabic has two kinds of plurals: broken plurals and sound plurals (Wightwick and Gaafar, 1998; Chen and Gey, 2002). The formation of broken plurals is common, more complex and often irregular. As an example, the plural form of the noun   (man) is    (men), which is formed by inserting the infix . The plural form of the noun   (book) is   (books), which is formed by deleting the infix . The plural form and the singular form may also be completely different (e.g.  for woman, but   for women). The sound plurals are formed by adding plural suffixes to singular nouns (e.g.,  meaning researcher): the plural suffix is  for feminine nouns in gramm</context>
+</contexts>
+<marker>Wightwick, Gaafar, 1998</marker>
+<rawString>J. Wightwick and M. Gaafar. 1998. Arabic Verbs and Essentials of Grammar. Passport Books.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Xu</author>
+<author>A Fraser</author>
+<author>R Weischedel</author>
+</authors>
+<title>Trec2001 cross-lingual retrieval at bbn.</title>
+<date>2001</date>
+<booktitle>In TREC 2001,</booktitle>
+<location>Gaithersburg: NIST.</location>
+<contexts>
+<context position="4207" citStr="Xu et al., 2001" startWordPosition="649" endWordPosition="652">efixes and suffixes can be attached to form Arabic surface forms (blank-delimited words). In addition to the different forms of the Arabic word that result from the 63 Proceedings of the ACL Workshop on Computational Approaches to Semitic Languages, pages 63–70, Ann Arbor, June 2005. c�2005 Association for Computational Linguistics derivational and inflectional process, most prepositions, conjunctions, pronouns, and possessive forms are attached to the Arabic surface word. It is these orthographic variations and complex morphological structure that make Arabic language processing challenging (Xu et al., 2001; Xu et al., 2002). Both tasks are performed with a statistical framework: the mention detection system is similar to the one presented in (Florian et al., 2004) and the coreference resolution system is similar to the one described in (Luo et al., 2004). Both systems are built around from the maximum-entropy technique (Berger et al., 1996). We formulate the mention detection task as a sequence classification problem. While this approach is language independent, it must be modified to accomodate the particulars of the Arabic language. The Arabic words may be composed of zero or more prefixes, f</context>
+</contexts>
+<marker>Xu, Fraser, Weischedel, 2001</marker>
+<rawString>J. Xu, A. Fraser, and R. Weischedel. 2001. Trec2001 cross-lingual retrieval at bbn. In TREC 2001, Gaithersburg: NIST.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Xu</author>
+<author>A Fraser</author>
+<author>R Weischedel</author>
+</authors>
+<title>Empirical studies in strategies for arabic information retrieval.</title>
+<date>2002</date>
+<booktitle>In SIGIR 2002,</booktitle>
+<location>Tampere, Finland.</location>
+<contexts>
+<context position="4225" citStr="Xu et al., 2002" startWordPosition="653" endWordPosition="656">es can be attached to form Arabic surface forms (blank-delimited words). In addition to the different forms of the Arabic word that result from the 63 Proceedings of the ACL Workshop on Computational Approaches to Semitic Languages, pages 63–70, Ann Arbor, June 2005. c�2005 Association for Computational Linguistics derivational and inflectional process, most prepositions, conjunctions, pronouns, and possessive forms are attached to the Arabic surface word. It is these orthographic variations and complex morphological structure that make Arabic language processing challenging (Xu et al., 2001; Xu et al., 2002). Both tasks are performed with a statistical framework: the mention detection system is similar to the one presented in (Florian et al., 2004) and the coreference resolution system is similar to the one described in (Luo et al., 2004). Both systems are built around from the maximum-entropy technique (Berger et al., 1996). We formulate the mention detection task as a sequence classification problem. While this approach is language independent, it must be modified to accomodate the particulars of the Arabic language. The Arabic words may be composed of zero or more prefixes, followed by a stem </context>
+</contexts>
+<marker>Xu, Fraser, Weischedel, 2002</marker>
+<rawString>J. Xu, A. Fraser, and R. Weischedel. 2002. Empirical studies in strategies for arabic information retrieval. In SIGIR 2002, Tampere, Finland.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

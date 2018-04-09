@@ -1,0 +1,1684 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000002">
+<title confidence="0.985535">
+Discriminative Word Alignment with a Function Word Reordering Model
+</title>
+<author confidence="0.83179">
+Hendra Setiawan
+</author>
+<affiliation confidence="0.836598">
+UMIACS
+University of Maryland
+</affiliation>
+<email confidence="0.991987">
+hendra@umiacs.umd.edu
+</email>
+<author confidence="0.975308">
+Chris Dyer
+</author>
+<affiliation confidence="0.9860775">
+Language Technologies Institute
+Carnegie Mellon University
+</affiliation>
+<email confidence="0.992139">
+cdyer@cs.cmu.edu
+</email>
+<author confidence="0.927484">
+Philip Resnik
+</author>
+<affiliation confidence="0.928593">
+Linguistics and UMIACS
+University of Maryland
+</affiliation>
+<email confidence="0.996802">
+resnik@umd.edu
+</email>
+<sectionHeader confidence="0.997373" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999604523809524">
+We address the modeling, parameter estima-
+tion and search challenges that arise from the
+introduction of reordering models that capture
+non-local reordering in alignment modeling.
+In particular, we introduce several reordering
+models that utilize (pairs of) function words
+as contexts for alignment reordering. To ad-
+dress the parameter estimation challenge, we
+propose to estimate these reordering models
+from a relatively small amount of manually-
+aligned corpora. To address the search chal-
+lenge, we devise an iterative local search al-
+gorithm that stochastically explores reorder-
+ing possibilities. By capturing non-local re-
+ordering phenomena, our proposed alignment
+model bears a closer resemblance to state-
+of-the-art translation model. Empirical re-
+sults show significant improvements in align-
+ment quality as well as in translation perfor-
+mance over baselines in a large-scale Chinese-
+English translation task.
+</bodyText>
+<sectionHeader confidence="0.999474" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999963425531915">
+In many Statistical Machine Translation (SMT) sys-
+tems, alignment represents an important piece of in-
+formation, from which translation rules are learnt.
+However, while translation models have evolved
+from word-based to syntax-based modeling, the de
+facto alignment model remains word-based (Brown
+et al., 1993; Vogel et al., 1996). This gap be-
+tween alignment modeling and translation modeling
+is clearly undesirable as it often generates tensions
+that would prevent the extraction of many useful
+translation rules (DeNero and Klein, 2007). Recent
+work, e.g. by Blunsom et al. (2009) and Haghihi et
+al. (2009) just to name a few, show that alignment
+models that bear closer resemblance to state-of-the-
+art translation model consistently yields not only a
+better alignment quality but also an improved trans-
+lation quality.
+In this paper, we follow this recent effort to nar-
+row the gap between alignment model and trans-
+lation model to improve translation quality. More
+concretely, we focus on the reordering component
+since we observe that the treatment of reordering re-
+mains significantly different when comparing align-
+ment versus translation: the reordering component
+in state-of-the-art translation models has focused
+on long-distance reordering, but its counterpart in
+alignment models has remained focused on local
+reordering, typically modeling distortion based en-
+tirely on positional information. This leaves most
+alignment decisions to association-based scores.
+Why is employing stronger reordering models
+more challenging in alignment than in translation?
+One answer can be attributed to the fact that align-
+ment points are unobserved in parallel text, thus so
+are their reorderings. As such, introducing stronger
+reordering often further exacerbates the computa-
+tional complexity to do inference over the model.
+Some recent alignment models appeal to external
+linguistic knowledge, mostly by using monolingual
+syntactic parses (Cherry and Lin, 2006; Pauls et al.,
+2010), which at the same time, provides an approx-
+imation of the bilingual syntactic divergences that
+drive the reordering. To our knowledge, however,
+this approach has been used mainly to constrain re-
+ordering possibilities, or to add to the generalization
+ability of association-based scores, not to directly
+model reordering in the context of alignment.
+</bodyText>
+<page confidence="0.971574">
+534
+</page>
+<note confidence="0.817558">
+Proceedings of the 2010 Conference on Empirical Methods in Natural Language Processing, pages 534–544,
+MIT, Massachusetts, USA, 9-11 October 2010. c�2010 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.9999138125">
+In this paper, we introduce a new approach to im-
+proving the modeling of reordering in alignment. In-
+stead of relying on monolingual parses, we condi-
+tion our reordering model on the behavior of func-
+tion words and the phrases that surround them.
+Function words are the “syntactic glue” of sen-
+tences, and in fact many syntacticians believe that
+functional categories, as opposed to substantive cat-
+egories like noun and verb, are primarily responsi-
+ble for cross-language syntactic variation (Ouhalla,
+1991). Our reordering model can be seen as offering
+a reasonable approximation to more fully elaborated
+bilingual syntactic modeling, and this approxima-
+tion is also highly practical, as it demands no exter-
+nal knowledge (other than a list of function words)
+and avoids the practical issues associated with the
+use of monolingual parses, e.g. whether the mono-
+lingual parser is robust enough to produce reliable
+output for every sentence in training data.
+At a glance, our reordering model enumerates
+the function words on both source and target sides,
+modeling their reordering relative to their neighbor-
+ing phrases, their neighboring function words, and
+the sentence boundaries. Because the frequency of
+function words is high, we find that by predicting the
+reordering of function words accurately, the reorder-
+ing of the remaining words improves in accuracy as
+well. In total, we introduce six sub-models involving
+function words, and these serve as features in a log
+linear model. We train model weights discrimina-
+tively using Minimum Error Rate Training (MERT)
+(Och, 2003), optimizing F-measure.
+The parameters of our sub-models are estimated
+from manually-aligned corpora, leading the reorder-
+ing model more directly toward reproducing human
+alignments, rather than maximizing the likelihood
+of unaligned training data. This use of manual data
+for parameter estimation is a reasonable choice be-
+cause these models depend on a small, fixed number
+of lexical items that occur frequently in language,
+hence only small training corpora are required. In
+addition, the availability of manually-aligned cor-
+pora has been growing steadily.
+The remainder of the paper proceeds as follows.
+In Section 2, we provide empirical motivation for
+our approach. In Section 3, we discuss six sub-
+models based on function word relationships and
+how their parameters are estimated; these are com-
+</bodyText>
+<figure confidence="0.964597">
+Ϣ ࣫೑
+䶽᳝䙺ⱘᇥ
+x ᭄ ᆊ П ϔ
+1 2 3 4 5 6 7 8 9 10 11
+Australia
+is
+one
+of
+the
+few
+countries
+that
+have
+dipl. rels.
+with
+North Korea
+</figure>
+<figureCaption confidence="0.99991">
+Figure 1: An aligned Chinese-English sentence pair.
+</figureCaption>
+<bodyText confidence="0.999977444444444">
+bined with additional features in Section 4 to pro-
+duce a single discriminative alignment model. Sec-
+tion 5 describes a simple decoding algorithm to find
+the most probable alignment under the combined
+model, Section 6 describes the training of our dis-
+criminative model and Section 7 presents experi-
+mental results for the model using this algorithm.
+We wrap up in Sections 8 and 9 with a discussion
+of related work and a summary of our conclusions.
+</bodyText>
+<sectionHeader confidence="0.992853" genericHeader="introduction">
+2 Empirical Motivation
+</sectionHeader>
+<bodyText confidence="0.999909047619048">
+Fig. 1 shows an example of a Chinese-English sen-
+tence pair together with correct alignment points.
+Predicting the alignment for this particular Chinese-
+English sentence pair is challenging, since the sig-
+nificantly different syntactic structures of these two
+languages lead to non-monotone reordering. For ex-
+ample, an accurate alignment model should account
+for the fact that prepositional phrases in Chinese ap-
+pear in a different order than in English, as illus-
+trated by the movement of the phrase “与北韩/with
+North Korea” from the beginning of the Chinese
+noun phrase to the end of the corresponding English.
+The central question that concerns us here is how
+to define and infer regularities that can be useful
+to predict alignment reorderings. The approach we
+take here is supported by empirical results from a
+pilot study, conducted as an inquiry into the idea of
+focusing on function words to model alignment re-
+ordering, which we briefly describe.
+We took a Chinese-English manually-aligned cor-
+pus of approximately 21 thousand sentence pairs,
+</bodyText>
+<figure confidence="0.98490825">
+▇
+⌆ ᰃ
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+535
+1 2 3 4 5 6 7 8 9 10 11
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+▇
+⌆
+࣫ ᇥ ೑
+䶽 ᳝䙺 Ѹ ᭄ ᆊ ϔ
+Australia
+is
+one
+of
+the
+few
+countries
+that
+have
+dipl. rels.
+with
+North Korea
+</figure>
+<figureCaption confidence="0.999994666666667">
+Figure 2: The all-monotone phrase pairs, indicated as
+rectangular areas in bold, that can be extracted from the
+Fig. 1 example.
+</figureCaption>
+<bodyText confidence="0.999433971428571">
+and divided each sentence pair into all-monotone
+phrase pairs. Visually, an all-monotone phrase pair
+corresponds to a maximal block in the alignment
+matrix for which internal alignment points appear
+in monotone order from the top-left corner to the
+bottom-right corner. Fig. 2 illustrates seven such
+pairs that can be extracted from the example in
+Fig. 1. In total, there are 154,517 such phrase pairs
+in our manually-aligned corpus.
+The alignment configuration internal to all-
+monotone phrase pair blocks is, obviously, mono-
+tonic, which is a configuration that is effectively
+modeled by traditional alignments models. On the
+other hand, the reordering between two adjacent
+blocks is the focus of our efforts since existing mod-
+els are less effective at modeling non-monotonic
+alignment configurations. To measure the function
+words’ potential to predict non-monotone reorder-
+ings, we examined the border words where two ad-
+jacent blocks meet. In particular, we are interested
+in how many adjacent blocks whose border words
+are function words.
+The results of this pilot study were quite encour-
+aging. If we consider only the Chinese side of the
+phrase pairs, 88.35% adjacent blocks have function
+words as their boundary words. If we consider only
+the English side, function words appear at the bor-
+ders of 93.91% adjacent blocks. If we consider
+both the Chinese and English sides, the percentage
+increases to 95.53%. Notice that in Fig. 2, func-
+tion words appear at the borders of all adjacent all-
+monotone phrase pairs, if both Chinese and English
+sides are considered. Clearly with such high cov-
+erage, function words are central in predicting non-
+monotone reordering in alignment.
+</bodyText>
+<sectionHeader confidence="0.840586" genericHeader="method">
+3 Reordering with Function Words
+</sectionHeader>
+<bodyText confidence="0.999683289473684">
+The reordering models we describe follow our previ-
+ous work using function word models for translation
+(Setiawan et al., 2007; Setiawan et al., 2009). The
+core hypothesis in this work is that function words
+provide robust clues to the reordering patterns of the
+phrases surrounding them. To make this insight use-
+ful for alignment, we develop features that score the
+alignment configuration of the neighboring phrases
+of a function word (which functions as an anchor)
+using two kinds of information: 1) the relative order-
+ing of the phrases with respect to the function word
+anchor; and 2) the span of the phrases. This sec-
+tion provides a high level overview of our reordering
+model, which attempts to leverage this information.
+To facilitate subsequent discussions, we introduce
+the notion of monolingual function word phrase
+FWi, which consists of the tuple (Yi, Li, Ri), where
+Yi is the i-th function word and Li,Ri are its left and
+right neighboring phrases, respectively. Note that
+this notion of “phrase” is defined only for reorder-
+ing purposes in our model, and does not necessar-
+ily correspond to a linguistic phrase. We define
+such phrases on both sides to cover as many non-
+monotone reorderings as possible, as suggested by
+the pilot study. To denote the side, we append a sub-
+script: FWi,S = (Yi,S, Li,S, Ri,S) refers to a func-
+tion word phrase on the source side, and FWi,T =
+(Yi,T, Li,T, Ri,T) to one on the target side. In our
+subsequent discussion, we will mainly use FWi,S,
+and we will omit subscripts S or T if they are clear
+from context.
+The primary objective of our reordering model
+is to predict the projection of monolingual func-
+tion word phrases from one language to the
+other, inferring bilingual function word phrase pairs
+FWi,S,T = (Yi,S,T, Li,S,T, Ri,S,T), which en-
+code the two aforementioned pieces of informa-
+tion.1 To infer these phrases, we take a probabilis-
+</bodyText>
+<footnote confidence="0.969273">
+1The subscript S --+ T denotes the projection direction from
+source to target. The subscript for the other direction is T --+ S.
+</footnote>
+<page confidence="0.997081">
+536
+</page>
+<bodyText confidence="0.999980307692308">
+tic approach. For instance, to estimate the spans of
+Li,S→T, Ri,S→T, our reordering model assumes that
+any span to the left of Yi,S is a possible Li,S and
+any span to the right of Yi,S is a possible Ri,S, de-
+ciding which is most probable via features, rather
+than committing to particular spans (e.g. as defined
+by a monolingual text chunker or parser). We only
+enforce one criterion on Li,S→T and Ri,S→T: they
+have to be the maximal alignment blocks satisfying
+the consistent heuristic (Och and Ney, 2004) that end
+or start with Yi,S→T on the source S side respec-
+tively.2
+To infer these phrases, we decompose Li,S→T
+into (o(Li,S→T), d(FWi−1,S→T), b((s))); sim-
+ilarly, Ri,S→T into (o(Ri,S→T),d(FWi+1,S→T),
+b((/s)) )). Taking the decomposition of Li,S→T as
+a case in point, here o(Li,S→T) describes the re-
+ordering of the left neighbor Li,S→T with respect
+to the function word Yi,S→T, while d(FWi−1,S→T)
+and b((s))) probe the span of Li,S→T, i.e. whether
+it goes beyond the preceding function word phrase
+pairs FWi−1,S→T and up to the beginning-of-
+sentence marker (s) respectively. The same defini-
+tion applies to the decomposition of Ri,S→T, where
+FWi+1,S→T is the succeeding function word phrase
+pair and (/s) is the end-of-sentence marker.
+</bodyText>
+<subsectionHeader confidence="0.99797">
+3.1 Six (Sub-)Models
+</subsectionHeader>
+<bodyText confidence="0.999939882352941">
+To model o(Li,S→T), o(Ri,S→T), i.e. the re-
+ordering of the neighboring phrases of a func-
+tion word, we employ the orientation model in-
+troduced by Setiawan et al. (2007). Formally,
+this model takes the form of probability distribution
+Pori(o(Li,S→T),o(Ri,S→T)|Yi,S→T), which condi-
+tions the reordering on the lexical identity of the
+function word alignment (but independent of the lex-
+ical identity of its neighboring phrases). In particu-
+lar, o maps the reordering into one of the following
+four orientation values (borrowed from Nagata et al.
+(2006)) with respect to the function word: Mono-
+tone Adjacent (MA), Monotone Gap (MG), Reverse
+Adjacent (RA) and Reverse Gap (RG). The Mono-
+tone/Reverse distinction indicates whether the pro-
+jected order follows the original order, while the
+Adjacent/Gap distinction indicates whether the pro-
+</bodyText>
+<footnote confidence="0.712597333333333">
+2This heuristic is commonly used in learning phrase pairs
+from parallel text. The maximality ensures the uniqueness of L
+and R.
+</footnote>
+<bodyText confidence="0.999781357142857">
+jections of the function word and the neighboring
+phrase are adjacent or separated by an intervening
+phrase.
+To model d(FWi−1,S→T), d(FWi+1,S→T), i.e.
+whether Li,S→T and Ri,S→T extend beyond the
+neighboring function word phrase pairs, we uti-
+lize the pairwise dominance model of Setiawan
+et al. (2009). Taking d(FWi−1,S→T) as
+a case in point, this model takes the form
+Pdom(d(FWi−1,S→T)|Yi−1,S→T,Yi,S→T), where d
+takes one of the following four dominance val-
+ues: leftFirst, rightFirst, dontCare, or neither.
+We will detail the exact formulation of these val-
+ues in the next subsection. However, to provide
+intuition, the value of either leftFirst or neither
+for d(FWi−1,S→T) would suggest that the span of
+Li,S→T doesn’t extend to Yi−1,S→T; the further dis-
+tinction between leftFirst and neither concerns with
+whether the span of Ri−1,S→T extends to FWi,S→T .
+To model b((s)), b((/s)), i.e. whether the span of
+Li,S→T and Ri,S→T extends up to sentence mark-
+ers, we introduce the borderwise dominance model.
+Formally, this model is similar to the pairwise domi-
+nance model, except that we use the sentence bound-
+aries as the anchors instead of the neighboring
+phrase pairs. This model captures longer distance
+dependencies compared to the previous two mod-
+els; in the Chinese-English case, in particular, it is
+useful to discourage word alignments from crossing
+clause or sentence boundaries. The sentence bound-
+ary issue is especially important in machine trans-
+lation (MT) experimentation, since the Chinese side
+of English-Chinese parallel text often includes long
+sentences that are composed of several independent
+clauses joined together; in such cases, words from
+one clause should be discouraged from aligning to
+words from other clauses. In Fig. 1, this model is
+potentially useful to discourage words from cross-
+ing the copula “是/is”.
+We define each model for all (pairs of) function
+word phrase pairs, forming features over a set of
+word alignments (A) between source (S) and target
+</bodyText>
+<page confidence="0.920308">
+537
+</page>
+<equation confidence="0.8868136">
+(T) sentence pair, as follows:
+Pori(o(Li),o(Ri)|Yi) (1)
+Pdom(d(FWi−1)|Yi−1,Yi) (2)
+Pbdom(b((s))|(s), Yi) ·
+Pbdom(b ((/s))|Yi, (/s)) (3)
+</equation>
+<bodyText confidence="0.9999475">
+where N is the number of function words (of the
+source side, in the S —* T case). As the bilingual
+function word phrase pairs are uni-directional, we
+employ these three models in both directions, i.e.
+T —* S as well as S —* T. As a result, there are
+six reordering models based on function words.
+</bodyText>
+<subsectionHeader confidence="0.998322">
+3.2 Prediction and Parameter Estimation
+</subsectionHeader>
+<bodyText confidence="0.999739066666667">
+Given FWi−1,S→T (and all other FW∀i′/i,S→T),
+our reordering model has to decompose Li,S→T into
+(o(Li,S→T), d(FWi−1,S→T), b((s))); and Ri,S→T
+into (o(Ri,S→T),d(FWi+1,S→T), b((/s)) )) during
+prediction and parameter estimation. In prediction
+mode (described in Section 5), it has to make the de-
+composition on the current state of alignment, while
+during parameter estimation, it has to make the
+same decomposition on the manually-aligned cor-
+pora. Since the process is identical, we proceed with
+the discussion in the context of parameter estima-
+tion, where the decomposition is performed to col-
+lect counts to estimate the parameters of our models.
+Orientation model. Using Li,S→T as a case in
+point and given (Yi,S→T=sll/tmm, Li,S→T=sl2
+</bodyText>
+<equation confidence="0.94872475">
+l1/tm2
+m1,
+Ri,S→T=sl4
+l3/tm4
+</equation>
+<bodyText confidence="0.788208">
+m3)3, the value of o(Li,S→T) in terms
+of Monotone/Reverse is:
+</bodyText>
+<figure confidence="0.5964115">
+(
+M, m2 &lt; m,
+Monotone/Reverse = (4)
+R, m &lt; m1.
+while its value in terms of Adjacent/Gap values is:
+(
+A, |m − m1 |V |m − m2 |= 1,
+Adjacent/Gap =
+G, otherwise.
+(5)
+</figure>
+<footnote confidence="0.8177285">
+3We use subscripts to indicate the starting index, and super-
+scripts the ending index.
+</footnote>
+<bodyText confidence="0.998967428571429">
+By adjusting the indices, the computation of
+o(Ri,S→T) follows similarly to the procedure above.
+Suppose we want to estimate the probability of
+Li,S→T=MA for a particular Yi. Note that here, we
+are interested in the lexical identity of Yi, thus the
+index i is irrelevant. We first gather the counts of the
+orientation value for all Li,S→T of Yi in the corpus:
+</bodyText>
+<equation confidence="0.9304562">
+c(o(Li,S→T) E {MA, RA, MG, RG}, Yi). Then
+Pori(MA|Yi) is estimated as follows:
+c(MA, Yi)
+Pori(MA|Yi) = (6)
+c(Yi)
+</equation>
+<bodyText confidence="0.9550685">
+where c(Yi) is the frequency of Yi in the corpus. The
+estimation of other orientation values as well as the
+T —* S version of the model, follows the same pro-
+cedure.
+Pairwise and Borderwise dominance models.
+Given Ri,S→T = sl2
+</bodyText>
+<equation confidence="0.96317775">
+l1/tm2
+m1 and Li+1,S→T =
+sl4
+l3/tm4
+</equation>
+<bodyText confidence="0.95081">
+m3, i.e. the spans of the neighbors of a
+pair of neighboring function word phrase pairs
+</bodyText>
+<equation confidence="0.783710555555555">
+(Yi = sl5l5/tm5
+m5, Yi+1 = sl6
+l6/tm6
+m6), the value of
+d(FWi+1,S→T) is:
+ leftFirst, l2 &gt; l6Vl3 &gt; l5 (7)
+ rightFirst, l2 &lt; l6Vl3 :5 l5
+ dontCare, l2 &gt; l6Vl3 :5 l5
+neither, l2 &lt; l6 V l3 &gt; l5
+</equation>
+<bodyText confidence="0.996575">
+Note that the neighbors of the sentence markers for
+the borderwise models span the whole sentence, thus
+value of neither is impossible for these models.
+Suppose we want to estimate the probability of Yi
+and Yi+1 having a dontCare dominance value. Note
+that here we are interested in the lexical identity of
+Yi and Yi+1, thus the models are insensitive to the in-
+dices. We first gather the counts of the Yi and Yi+1
+having the dontCare value c(dontCare, Yi, Yi+1);
+then Pdom(dontCare|Yi, Yi+1) is estimated as fol-
+lows:
+</bodyText>
+<equation confidence="0.964805">
+Pdom(dontCare|Yi, Yi+1) =
+c(Yi, Yi+1)
+</equation>
+<bodyText confidence="0.9199405">
+(8)
+where c(Yi,Yi+1) is the count of Yi appears after
+Yi+1 in the training corpus without any other func-
+tion word comes in between.
+</bodyText>
+<equation confidence="0.995725090909091">
+YN
+i=1
+fori =
+N
+Y
+i=2
+fdom =
+YN
+i=1
+fbdom =
+c(dontCare, Yi, Yi+1)
+</equation>
+<page confidence="0.995855">
+538
+</page>
+<sectionHeader confidence="0.999036" genericHeader="method">
+4 Alignment Model
+</sectionHeader>
+<bodyText confidence="0.948247307692308">
+To use the function word alignment features de-
+scribed in the previous section to predict alignments,
+we use a linear model of the following form:
+A= arg max 9 · f(A, 5, T) (9)
+A∈A(S,T)
+where A(5, T) is the set of all possible alignments
+of a source sentence 5 and target sentence T, and
+f(A, 5, T) is a vector of feature functions on A, 5,
+and T, and 9 is a parameter vector.
+In addition to the six reordering models, our
+model employs several association-based scores that
+look at alignments in isolation. These features in-
+clude:
+</bodyText>
+<listItem confidence="0.860870909090909">
+1. Normalized log-likelihood ratio (LLR). This
+feature represents an association score, derived from
+statistical testing statistics. LLR (Dunning, 1993)
+has been widely used especially to measure lexical
+association. Since the values of LLR are unnormal-
+ized, we normalize them on a per-sentence basis, so
+that the normalized LLRs of, say, a particular source
+word to the target words in a particular sentence sum
+up to one.
+2. Translation table from IBM model 4. This
+feature represents another association score, derived
+from a generative model, in particular the word-
+based IBM model 4. The use of this feature is
+widespread in recent alignment models, since it pro-
+vides a relatively accurate initial prediction.
+3. Translation table from manually-aligned
+corpora. This feature represents a gold-standard as-
+sociation score, based on human annotation. While
+attractive, this feature suffers from data sparse-
+ness issues since the lexical coverage of manually-
+aligned corpora, especially over content words, is
+very low. To overcome this issue, we design this
+</listItem>
+<bodyText confidence="0.675439666666667">
+feature to have two levels of granularity; as such, a
+fine-grained one is applied for function words and
+the coarse-grained one for content words.
+</bodyText>
+<listItem confidence="0.772063444444444">
+4. Grow-diag-final alignments bonus. This fea-
+ture encourages our alignment model to reuse align-
+ment points that are part of the alignments created
+by the grow-diag-final heuristic, which we used as
+the baseline of our machine translation experiments.
+5. Fertility model from IBM model 4. This fea-
+ture, which is another by-product of IBM model 4,
+measures the probability of a certain word aligning
+to zero, one, or two or more words.
+6. Null-alignment probability. This bino-
+mial feature models preference towards not aligning
+words, i.e. aligning to the NULL token. The intu-
+ition is to penalize NULL alignments depending on
+word class, by assigning lower probability mass to
+unaligned content words than to unaligned function
+words. In our experiment, we assign feature value
+10−3 for a function word aligning to NULL, and
+10−5 for a content word aligning to NULL.
+</listItem>
+<bodyText confidence="0.999626">
+Note that with the exception of the alignment
+bonus feature (4), all features are uni-directional,
+and therefore we employ these features in both di-
+rections just as was done for the reordering models.
+</bodyText>
+<sectionHeader confidence="0.996486" genericHeader="method">
+5 Search
+</sectionHeader>
+<bodyText confidence="0.999952764705882">
+To find A� using the model in Eq. 9, it is neces-
+sary to search 2|S|×|T |different alignment config-
+urations, and, because of the non-local dependen-
+cies in some of our features, it is not possible to use
+dynamic programming to perform this search effi-
+ciently. We therefore employ an approximate search
+for the best alignment. We use a local search pro-
+cedure which starts from some alignment (in our
+case, a symmetrized Model 4 alignment) and make
+local changes to it. Rather than taking a pure hill-
+climbing approach which greedily moves to locally
+better configurations (Brown et al., 1993), we use
+a stochastic search procedure which can move into
+lower-scoring states with some probability, similar
+to the Monte Carlo techniques used to draw sam-
+ples from analytically intractable probability distri-
+butions.
+</bodyText>
+<subsectionHeader confidence="0.973661">
+5.1 Algorithm
+</subsectionHeader>
+<bodyText confidence="0.999930857142857">
+To find A, our search algorithm starts with an initial
+alignment A(1) and iteratively draws a new set by
+making a few small changes to the current set. For
+each step i = [1, n], with alignment A(�), a set of
+neighboring alignments N(A(Z)) is induced by ap-
+plying small transformations (discussed below) to
+the current alignment. The next alignment A(&apos;+1)
+</bodyText>
+<page confidence="0.979696">
+539
+</page>
+<bodyText confidence="0.583255">
+is sampled from the following distribution:
+</bodyText>
+<equation confidence="0.998765">
+p(A(i+1)|S, T, A(i)) = exp 0 · f(A(i+1), S, T)
+Z(A(i), S, T)
+</equation>
+<bodyText confidence="0.904">
+where Z(A(i), S, T) = � exp 0 · f(A′, S, T)
+A′EN(AM)
+In addition to the current ‘active’ alignment configu-
+ration A(i), the algorithm keeps track of the highest
+scoring alignment observed so far, Amax. After n
+steps, the algorithm returns Amax as its approxima-
+tion of A. In the experiments reported below, we
+initialized A(1) with the Model 4 alignments sym-
+metrized by using the grow-diag-final-and heuristic
+(Koehn et al., 2003).
+</bodyText>
+<subsectionHeader confidence="0.994092">
+5.2 Alignment Neighborhoods
+</subsectionHeader>
+<bodyText confidence="0.999929678571429">
+We now turn to a discussion of how the alignment
+neighborhoods used by our stochastic search algo-
+rithm are generated. We define three local transfor-
+mation operations that apply to single columns of
+the alignment grid (which represent all of the align-
+ments to the lth source word), rows, or existing align-
+ment points (l, m). Our three neighborhood gener-
+ating operators are ALIGN, ALIGNEXCLUSIVE, and
+SWAP. The ALIGN operator applies to the lth col-
+umn of A and can either add an alignment point
+(l, m′) or move an existing one (including to null,
+thus deleting it). ALIGNEXCLUSIVE adds an align-
+ment point (l, m) and deletes all other points from
+row m. Finally, the SWAP operator swaps (l, m) and
+(l′, m′), resulting in new alignment points (l, m′)
+and (l′, m). We increase the decoder’s mobility
+by traversing the target side and applying the same
+steps above for each target word. Fig. 3 illustrates
+the three operators. By iterating over all columns l
+and rows m, the full alignment space A(S, T) can
+be explored.4
+To further reduce the search space, an alignment
+point (l, m) is only admitted into a neighborhood if
+it is found in the high-recall alignment set R(S, T),
+which we define to be the model 4 union alignments
+(bidirectional model 4 symmetrized via union) plus
+the 5 best alignments according to the log-likelihood
+ratio.
+</bodyText>
+<footnote confidence="0.980577333333333">
+4Using only the ALIGN operator, it is possible to explore
+the full alignment space; however, using all three operators in-
+creases mobility.
+</footnote>
+<figureCaption confidence="0.992236666666667">
+Figure 3: Illustrations for (a) ALIGN, (b) ALIGNEXCLU-
+SIVE, and (c) SWAP operators, as applied to align the dot-
+ted, smaller circle (l, m) to (l, m′). The left hand side rep-
+resents A(i), while the right hand side represents a can-
+didate for A(i+1). The solid circles represent the new
+alignment points added to A(i+1).
+</figureCaption>
+<sectionHeader confidence="0.988499" genericHeader="method">
+6 Discriminative Training
+</sectionHeader>
+<bodyText confidence="0.999887518518519">
+To set the model parameters 0, we used the min-
+imum error rate training (MERT) algorithm (Och,
+2003) to maximize the F-measure of the 1-best
+alignment of the model on a development set con-
+sisting of sentence pairs with manually generated
+alignments. The candidate set used by MERT to ap-
+proximate the model is simply the set of alignments
+{A(1), A(2), ... , A(n)} encountered in the stochastic
+search.
+While MERT does not scale to large numbers of
+features, the scarcity of manually aligned training
+data also means that models with large numbers of
+sparse features would be difficult to learn discrimi-
+natively, so this limitation is somewhat inherent in
+the problem space. Additionally, MERT has sev-
+eral advantages that make it particularly useful for
+our task. First, we can optimize F-measure of the
+alignments directly, which has been shown to corre-
+late with translation quality in a downstream system
+(Fraser and Marcu, 2007b). Second, we are opti-
+mizing the quality of the 1-best alignments under the
+model. Since translation pipelines typically use only
+a single word alignment, this criterion is appropri-
+ate. Finally, and very importantly for us, MERT re-
+quires only an approximation of the model’s hypoth-
+esis space to carry out optimization. Since we are
+using a stochastic search, this is crucial, since sub-
+</bodyText>
+<equation confidence="0.525709571428571">
+l l&apos; l l&apos;
+M
+M&apos;
+M
+M&apos;
+M
+M&apos;
+</equation>
+<page confidence="0.985622">
+540
+</page>
+<bodyText confidence="0.999948230769231">
+sequent evaluations of the same sentence pair (even
+with the same weights) may result in a different can-
+didate set.
+Although MERT is a non-probabilistic optimizer,
+we explore the alignment space stochastically. This
+is necessary to make sure that the weights we use
+correspond to a probability distribution that is not
+overly peaked (which would result in a greedy hill-
+climbing search) or flat (which would explore the
+model space without information from the model).
+We found that normalizing the weights by the Eu-
+clidean norm resulted in a distribution that was well-
+balanced between the two extremes.
+</bodyText>
+<sectionHeader confidence="0.999155" genericHeader="evaluation">
+7 Experiments
+</sectionHeader>
+<bodyText confidence="0.999990766666667">
+We evaluated our proposed alignment model intrin-
+sically on an alignment task and extrinsically on a
+large-scale translation task, focusing on Chinese-
+English as the language pair. Our training data
+consists of manually aligned corpora available from
+LDC (LDC2006E93 and LDC2008E57) and un-
+aligned corpora, which include FBIS, ISI, HKNews
+and Xinhua. In total, the manually aligned corpora
+consist of more than 21 thousand sentence pairs,
+while the unaligned corpora consist of more than
+710 thousand sentence pairs. The manually-aligned
+corpora are primarily used for training the reorder-
+ing models and for discriminative training purposes.
+For translation experiments, we used cdec (Dyer
+et al., 2010), a fast implementation of hierarchi-
+cal phrase-based translation models (Chiang, 2005),
+which represents a state-of-the-art translation sys-
+tem.
+We constructed the list of function words in En-
+glish manually and in Chinese from (Howard, 2002).
+Punctuation marks were added to the list, result-
+ing in 883 and 359 tokens in the Chinese and En-
+glish lists, respectively. For the alignment experi-
+ments, we took the first 500 sentence pairs from the
+newswire genre of the manually-aligned corpora and
+used the first 250 sentences as the development set,
+with the remaining 250 as the test set. To ensure
+blind experimentation, we excluded these sentence
+pairs from the training of the features, including the
+reordering models.
+</bodyText>
+<subsectionHeader confidence="0.999663">
+7.1 Alignment Quality
+</subsectionHeader>
+<bodyText confidence="0.999993107142857">
+We used GIZA++, the implementation of the de-
+facto standard IBM alignment model, as our base-
+line alignment model. In particular, we used
+GIZA++ to align the concatenation of the develop-
+ment set, the test set, and the unaligned corpora, with
+5, 5, 3 and 3 iterations of model 1, HMM, model
+3, and model 4 respectively. Since the IBM model
+is asymmetric, we followed the standard practice of
+running GIZA++ twice, once in each direction, and
+combining the resulting outputs heuristically. We
+chose to use the grow-diag-final-and heuristic as it
+worked well for hierarchical phrase-based transla-
+tion in our early experiments. We recorded the align-
+ment quality of the test set as our baseline perfor-
+mance.
+For our alignment model, we used the same set of
+training data. To align the test set, we first tuned
+the weights of the features in our discriminative
+alignment model using minimum error rate training
+(MERT) (Och, 2003) with Fα=0.1 as the optimiza-
+tion criterion. At each iteration, our aligner outputs
+k-best alignments under current set of weights, from
+which MERT proceeds to compute the next set of
+weights. MERT terminates once the improvement
+over the previous iteration is lower than a predefined
+value. Once tuned, we ran our aligner on the test set
+and measured the quality of the resulting alignment
+as the performance of our model.
+</bodyText>
+<table confidence="0.999818333333333">
+Model P R F0.5 F0.1
+gdfa 70.97 63.83 67.21 64.48
+association 73.70 76.85 75.24 76.52
++ori 74.09 78.29 76.13 77.85
++dom 75.06 78.98 76.97 78.57
++bdom 75.41 80.53 77.89 79.99
+</table>
+<tableCaption confidence="0.635506166666667">
+Table 1: Alignment quality results (F0.1) for our discrim-
+inative reordering models with various features (lines 2-
+5) versus the baseline IBM word-based Model 4 sym-
+metrized using the grow-diag-final-and heuristic. The
+balanced F0.5 measure is reported for reference. The best
+scores are bolded.
+</tableCaption>
+<bodyText confidence="0.967561">
+Table 1 reports the results of our experiments,
+which are conducted in an incremental fashion pri-
+marily to highlight the role of reordering model-
+ing. The first line (gdfa) reports the baseline perfor-
+</bodyText>
+<page confidence="0.991761">
+541
+</page>
+<bodyText confidence="0.999968">
+mance. In the first experiment (association), we em-
+ployed only the association-based features described
+in Section 4. As shown, we obtain a significant im-
+provement over baseline. This result is consistent
+with recent literature (Fraser and Marcu, 2007a) that
+shows that a discriminatively trained model outper-
+forms baseline unsupervised models like GIZA++.
+In the second set of experiments, we added the re-
+ordering models into our discriminative model one
+by one, starting with the orientation models, then
+the pairwise dominance model and finally the bor-
+derwise dominance model, reported in lines +ori,
++dom and +bdom respectively. As shown, each ad-
+ditional reordering model provides a significant ad-
+ditional improvement. The best result is obtained by
+employing all reordering models. These results em-
+pirically confirm our hypothesis that we can improve
+alignment quality by employing reordering models
+that capture non-local reordering phenomena.
+</bodyText>
+<subsectionHeader confidence="0.996361">
+7.2 Translation Quality
+</subsectionHeader>
+<bodyText confidence="0.999794785714286">
+For translation experiments, we used the products
+from our intrinsic experiments to learn translation
+rules for the hierarchical phrase-based decoder, i.e.
+the features weights of the +bdom experiment to
+align the MT training data using our discriminative
+model. For our translation model, we used the stan-
+dard features based on the relative frequency counts,
+including a 5-gram language model feature trained
+on the English portion of the whole training data
+plus portions of the Gigaword v2 corpus. Specif-
+ically, we tuned the weights of these features via
+MERT on the NIST MT06 set and we report the re-
+sult on the NIST MT02, MT03, MT04 and MT05
+sets.
+</bodyText>
+<table confidence="0.989089333333333">
+MT02 MT03 MT04 MT05
+gdfa 25.61 32.05 31.80 29.34
+this work 26.56 33.79 32.61 30.47
+</table>
+<tableCaption confidence="0.928814333333333">
+Table 2: The translation performance (BLEU) of hierar-
+chical phrase-based translation trained on training data
+aligned by IBM model 4 symmetrized with the grow-
+</tableCaption>
+<bodyText confidence="0.870721333333333">
+diag-final-and heuristic, versus being trained on align-
+ments by our discriminative alignment model. Bolded
+scores indicate that the improvement is statistically sig-
+nificant.
+Table 2 shows the result of our translation exper-
+iments. In our alignment model, we employed the
+whole set of reordering models, i.e. the one reported
+in the +bdom line in Table 1. As shown, our dis-
+criminative alignment model produces a consistent
+and significant improvement over the baseline IBM
+model 4 (p &lt; 0.01), ranging between 0.81 and 1.71
+BLEU points.
+</bodyText>
+<sectionHeader confidence="0.999963" genericHeader="related work">
+8 Related Work
+</sectionHeader>
+<bodyText confidence="0.999970305555555">
+The focus of our work is to strengthen the reordering
+component of alignment modeling. Although the de
+facto standard, the IBM models do not generalize
+well in practice: the IBM approach employs a series
+of reordering models based on the word’s position,
+but reordering depends on syntactic context rather
+than absolute position in the sentence. Over the
+years, there have been many proposals to improve
+these reordering models, most notably Vogel et al.
+(1996), which adds a first-order dependency. Never-
+theless, the use of these distortion-based models re-
+mains widespread (Marcu and Wong, 2002; Moore,
+2004).
+Alignment modeling is challenging because it
+often has to consider a prohibitively large align-
+ment space. Efforts to constrain the space gen-
+erally comes from the use of Inversion Transduc-
+tion Grammar (ITG) (Wu, 1997). Recent propos-
+als that use ITG constraints include (Haghighi et
+al., 2009; Blunsom et al., 2009) just to name a few.
+More recent models have begun to use linguistically-
+motivated constraints, often in combination with
+ITG, primarily exploiting monolingual syntactic in-
+formation (Burkett et al., 2010; Pauls et al., 2010).
+Our reordering model is closely related to the
+model proposed by Zhang and Gildea (2005; 2006;
+2007a), with respect to conditioning the reordering
+predictions on lexical items. These related models
+treat their lexical items as latent variables to be es-
+timated from training data, while our model uses
+a fixed set of lexical items that correspond to the
+class of function words. With respect to the focus
+on function words, our reordering model is closely
+related to the UALIGN system (Hermjakob, 2009).
+However, UALIGN uses deep syntactic analysis and
+hand-crafted heuristics in its model.
+</bodyText>
+<page confidence="0.99479">
+542
+</page>
+<sectionHeader confidence="0.998672" genericHeader="conclusions">
+9 Conclusions
+</sectionHeader>
+<bodyText confidence="0.999973">
+Languages exhibit regularities of word order that
+are preserved when projected to another language.
+We use the notion of function words to infer such
+regularities, resulting in several reordering models
+that are employed as features in a discriminative
+alignment model. In particular, our models pre-
+dict the reordering of function words by looking
+at their dependencies with respect to their neigh-
+boring phrases, their neighboring function words,
+and the sentence boundaries. By capturing such
+long-distance dependencies, our proposed align-
+ment model contributes to the effort to unify align-
+ment and translation. Our experiments demonstrate
+that our alignment approach achieves both its intrin-
+sic and extrinsic goals.
+</bodyText>
+<sectionHeader confidence="0.999024" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.999889333333334">
+This research was supported in part by the GALE
+program of the Defense Advanced Research Projects
+Agency, Contract No. HR0011-06-2-001. Any
+opinions, findings, conclusions or recommendations
+expressed in this paper are those of the authors and
+do not necessarily reflect the view of the sponsors.
+</bodyText>
+<sectionHeader confidence="0.999457" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999964333333333">
+Phil Blunsom, Trevor Cohn, Chris Dyer, and Miles Os-
+borne. 2009. A gibbs sampler for phrasal synchronous
+grammar induction. In ACL, pages 782–790, Sun-
+tec, Singapore, August. Association for Computational
+Linguistics.
+Peter F. Brown, Stephen A. Della Pietra, Vincent J. Della
+Pietra, and Robert L. Mercer. 1993. The mathemat-
+ics of statistical machine translation: Parameter esti-
+mation. Computational Linguistics, 19(2):263–311,
+June.
+David Burkett, John Blitzer, and Dan Klein. 2010.
+Joint parsing and alignment with weakly synchronized
+grammars. In HLT-NAACL, pages 127–135, Los An-
+geles, California, June. Association for Computational
+Linguistics.
+Colin Cherry and Dekang Lin. 2006. Soft syntactic
+constraints for word alignment through discriminative
+training. In COLING/ACL, pages 105–112, Sydney,
+Australia, July. Association for Computational Lin-
+guistics.
+David Chiang. 2005. A hierarchical phrase-based model
+for statistical machine translation. In ACL, pages
+263–270, Ann Arbor, Michigan, June. Association for
+Computational Linguistics.
+John DeNero and Dan Klein. 2007. Tailoring word
+alignments to syntactic machine translation. In ACL,
+pages 17–24, Prague, Czech Republic, June. Associa-
+tion for Computational Linguistics.
+Ted Dunning. 1993. Accurate methods for the statistics
+of surprise and coincidence. Computational Linguis-
+tics, 19(1):61–74, March.
+Chris Dyer, Adam Lopez, Juri Ganitkevitch, Johnathan
+Weese, Ferhan Ture, Phil Blunsom, Hendra Setiawan,
+Vladimir Eidelman, and Philip Resnik. 2010. cdec: A
+decoder, alignment, and learning framework for finite-
+state and context-free translation models. In ACL, Up-
+psala, Sweden.
+Alexander Fraser and Daniel Marcu. 2007a. Getting
+the structure right for word alignment: LEAF. In
+EMNLP-CoNLL, pages 51–60, Prague, Czech Repub-
+lic, June. Association for Computational Linguistics.
+Alexander Fraser and Daniel Marcu. 2007b. Measuring
+word alignment quality for statistical machine transla-
+tion. Computational Linguistics, 33(3):293–303.
+Aria Haghighi, John Blitzer, John DeNero, and Dan
+Klein. 2009. Better word alignments with supervised
+itg models. In ACL, pages 923–931, Suntec, Singa-
+pore, August. Association for Computational Linguis-
+tics.
+Ulf Hermjakob. 2009. Improved word alignment with
+statistics and linguistic heuristics. In EMNLP, pages
+229–237, Singapore, August. Association for Compu-
+tational Linguistics.
+Jiaying Howard. 2002. A Student Handbookfor Chinese
+Function Words. The Chinese University Press.
+Philipp Koehn, Franz J. Och, and Daniel Marcu. 2003.
+Statistical phrase-based translation. In HTL-NAACL,
+pages 127–133, Edmonton, Alberta, Canada, May. As-
+sociation for Computational Linguistics.
+Daniel Marcu and William Wong. 2002. A phrase-based,
+joint probability model for statistical machine transla-
+tion. In EMNLP, July 23.
+Robert C. Moore. 2004. Improving ibm word alignment
+model 1. In ACL, pages 518–525, Barcelona, Spain,
+July.
+Masaaki Nagata, Kuniko Saito, Kazuhide Yamamoto,
+and Kazuteru Ohashi. 2006. A clustered global phrase
+reordering model for statistical machine translation. In
+ACL, pages 713–720, Sydney, Australia, July. Associ-
+ation for Computational Linguistics.
+Franz Josef Och and Hermann Ney. 2004. The align-
+ment template approach to statistical machine transla-
+tion. Computational Linguistics, 30(4):417–449.
+Franz Josef Och. 2003. Minimum error rate training
+in statistical machine translation. In ACL, pages 160–
+167.
+Jamal Ouhalla. 1991. Functional Categories and Para-
+metric Variation. Routledge.
+</reference>
+<page confidence="0.986445">
+543
+</page>
+<reference confidence="0.996254769230769">
+Adam Pauls, Dan Klein, David Chiang, and Kevin
+Knight. 2010. Unsupervised syntactic alignment with
+inversion transduction grammars. In HLT-NAACL,
+pages 118–126, Los Angeles, California, June. Asso-
+ciation for Computational Linguistics.
+Hendra Setiawan, Min-Yen Kan, and Haizhou Li. 2007.
+Ordering phrases with function words. In ACL, pages
+712–719, Prague, Czech Republic, June. Association
+for Computational Linguistics.
+Hendra Setiawan, Min Yen Kan, Haizhou Li, and Philip
+Resnik. 2009. Topological ordering of function
+words in hierarchical phrase-based translation. In
+ACL, pages 324–332, Suntec, Singapore, August. As-
+sociation for Computational Linguistics.
+Stephan Vogel, Hermann Ney, and Christoph Tillmann.
+1996. HMM-based word alignment in statistical trans-
+lation. In COLING, pages 836–841, Copenhagen.
+Dekai Wu. 1997. Stochastic inversion transduction
+grammars and bilingual parsing of parallel corpora.
+Computational Linguistics, 23(3):377–404, Sep.
+Hao Zhang and Daniel Gildea. 2005. Stochastic lexical-
+ized inversion transduction grammar for alignment. In
+ACL. The Association for Computer Linguistics.
+Hao Zhang and Daniel Gildea. 2006. Inducing word
+alignments with bilexical synchronous trees. In ACL.
+The Association for Computer Linguistics.
+</reference>
+<page confidence="0.998242">
+544
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.161766">
+<title confidence="0.997271">Discriminative Word Alignment with a Function Word Reordering Model</title>
+<author confidence="0.889545">Hendra</author>
+<affiliation confidence="0.998753">University of</affiliation>
+<email confidence="0.993368">hendra@umiacs.umd.edu</email>
+<author confidence="0.612484">Chris</author>
+<affiliation confidence="0.550872">Language Technologies Carnegie Mellon</affiliation>
+<email confidence="0.998692">cdyer@cs.cmu.edu</email>
+<author confidence="0.938081">Philip</author>
+<affiliation confidence="0.9805815">Linguistics and University of</affiliation>
+<email confidence="0.998963">resnik@umd.edu</email>
+<abstract confidence="0.999418">We address the modeling, parameter estima-</abstract>
+<intro confidence="0.565893">tion and search challenges that arise from the</intro>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Phil Blunsom</author>
+<author>Trevor Cohn</author>
+<author>Chris Dyer</author>
+<author>Miles Osborne</author>
+</authors>
+<title>A gibbs sampler for phrasal synchronous grammar induction.</title>
+<date>2009</date>
+<booktitle>In ACL,</booktitle>
+<pages>782--790</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Suntec, Singapore,</location>
+<contexts>
+<context position="1811" citStr="Blunsom et al. (2009)" startWordPosition="251" endWordPosition="254">nglish translation task. 1 Introduction In many Statistical Machine Translation (SMT) systems, alignment represents an important piece of information, from which translation rules are learnt. However, while translation models have evolved from word-based to syntax-based modeling, the de facto alignment model remains word-based (Brown et al., 1993; Vogel et al., 1996). This gap between alignment modeling and translation modeling is clearly undesirable as it often generates tensions that would prevent the extraction of many useful translation rules (DeNero and Klein, 2007). Recent work, e.g. by Blunsom et al. (2009) and Haghihi et al. (2009) just to name a few, show that alignment models that bear closer resemblance to state-of-theart translation model consistently yields not only a better alignment quality but also an improved translation quality. In this paper, we follow this recent effort to narrow the gap between alignment model and translation model to improve translation quality. More concretely, we focus on the reordering component since we observe that the treatment of reordering remains significantly different when comparing alignment versus translation: the reordering component in state-of-the-</context>
+<context position="34515" citStr="Blunsom et al., 2009" startWordPosition="5610" endWordPosition="5613">er than absolute position in the sentence. Over the years, there have been many proposals to improve these reordering models, most notably Vogel et al. (1996), which adds a first-order dependency. Nevertheless, the use of these distortion-based models remains widespread (Marcu and Wong, 2002; Moore, 2004). Alignment modeling is challenging because it often has to consider a prohibitively large alignment space. Efforts to constrain the space generally comes from the use of Inversion Transduction Grammar (ITG) (Wu, 1997). Recent proposals that use ITG constraints include (Haghighi et al., 2009; Blunsom et al., 2009) just to name a few. More recent models have begun to use linguisticallymotivated constraints, often in combination with ITG, primarily exploiting monolingual syntactic information (Burkett et al., 2010; Pauls et al., 2010). Our reordering model is closely related to the model proposed by Zhang and Gildea (2005; 2006; 2007a), with respect to conditioning the reordering predictions on lexical items. These related models treat their lexical items as latent variables to be estimated from training data, while our model uses a fixed set of lexical items that correspond to the class of function word</context>
+</contexts>
+<marker>Blunsom, Cohn, Dyer, Osborne, 2009</marker>
+<rawString>Phil Blunsom, Trevor Cohn, Chris Dyer, and Miles Osborne. 2009. A gibbs sampler for phrasal synchronous grammar induction. In ACL, pages 782–790, Suntec, Singapore, August. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Peter F Brown</author>
+<author>Stephen A Della Pietra</author>
+<author>Vincent J Della Pietra</author>
+<author>Robert L Mercer</author>
+</authors>
+<title>The mathematics of statistical machine translation: Parameter estimation.</title>
+<date>1993</date>
+<journal>Computational Linguistics,</journal>
+<volume>19</volume>
+<issue>2</issue>
+<contexts>
+<context position="1538" citStr="Brown et al., 1993" startWordPosition="208" endWordPosition="211">-local reordering phenomena, our proposed alignment model bears a closer resemblance to stateof-the-art translation model. Empirical results show significant improvements in alignment quality as well as in translation performance over baselines in a large-scale ChineseEnglish translation task. 1 Introduction In many Statistical Machine Translation (SMT) systems, alignment represents an important piece of information, from which translation rules are learnt. However, while translation models have evolved from word-based to syntax-based modeling, the de facto alignment model remains word-based (Brown et al., 1993; Vogel et al., 1996). This gap between alignment modeling and translation modeling is clearly undesirable as it often generates tensions that would prevent the extraction of many useful translation rules (DeNero and Klein, 2007). Recent work, e.g. by Blunsom et al. (2009) and Haghihi et al. (2009) just to name a few, show that alignment models that bear closer resemblance to state-of-theart translation model consistently yields not only a better alignment quality but also an improved translation quality. In this paper, we follow this recent effort to narrow the gap between alignment model and</context>
+<context position="22788" citStr="Brown et al., 1993" startWordPosition="3697" endWordPosition="3700">he reordering models. 5 Search To find A� using the model in Eq. 9, it is necessary to search 2|S|×|T |different alignment configurations, and, because of the non-local dependencies in some of our features, it is not possible to use dynamic programming to perform this search efficiently. We therefore employ an approximate search for the best alignment. We use a local search procedure which starts from some alignment (in our case, a symmetrized Model 4 alignment) and make local changes to it. Rather than taking a pure hillclimbing approach which greedily moves to locally better configurations (Brown et al., 1993), we use a stochastic search procedure which can move into lower-scoring states with some probability, similar to the Monte Carlo techniques used to draw samples from analytically intractable probability distributions. 5.1 Algorithm To find A, our search algorithm starts with an initial alignment A(1) and iteratively draws a new set by making a few small changes to the current set. For each step i = [1, n], with alignment A(�), a set of neighboring alignments N(A(Z)) is induced by applying small transformations (discussed below) to the current alignment. The next alignment A(&apos;+1) 539 is sample</context>
+</contexts>
+<marker>Brown, Pietra, Pietra, Mercer, 1993</marker>
+<rawString>Peter F. Brown, Stephen A. Della Pietra, Vincent J. Della Pietra, and Robert L. Mercer. 1993. The mathematics of statistical machine translation: Parameter estimation. Computational Linguistics, 19(2):263–311, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Burkett</author>
+<author>John Blitzer</author>
+<author>Dan Klein</author>
+</authors>
+<title>Joint parsing and alignment with weakly synchronized grammars.</title>
+<date>2010</date>
+<booktitle>In HLT-NAACL,</booktitle>
+<pages>127--135</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Los Angeles, California,</location>
+<contexts>
+<context position="34717" citStr="Burkett et al., 2010" startWordPosition="5640" endWordPosition="5643">heless, the use of these distortion-based models remains widespread (Marcu and Wong, 2002; Moore, 2004). Alignment modeling is challenging because it often has to consider a prohibitively large alignment space. Efforts to constrain the space generally comes from the use of Inversion Transduction Grammar (ITG) (Wu, 1997). Recent proposals that use ITG constraints include (Haghighi et al., 2009; Blunsom et al., 2009) just to name a few. More recent models have begun to use linguisticallymotivated constraints, often in combination with ITG, primarily exploiting monolingual syntactic information (Burkett et al., 2010; Pauls et al., 2010). Our reordering model is closely related to the model proposed by Zhang and Gildea (2005; 2006; 2007a), with respect to conditioning the reordering predictions on lexical items. These related models treat their lexical items as latent variables to be estimated from training data, while our model uses a fixed set of lexical items that correspond to the class of function words. With respect to the focus on function words, our reordering model is closely related to the UALIGN system (Hermjakob, 2009). However, UALIGN uses deep syntactic analysis and hand-crafted heuristics i</context>
+</contexts>
+<marker>Burkett, Blitzer, Klein, 2010</marker>
+<rawString>David Burkett, John Blitzer, and Dan Klein. 2010. Joint parsing and alignment with weakly synchronized grammars. In HLT-NAACL, pages 127–135, Los Angeles, California, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Colin Cherry</author>
+<author>Dekang Lin</author>
+</authors>
+<title>Soft syntactic constraints for word alignment through discriminative training.</title>
+<date>2006</date>
+<booktitle>In COLING/ACL,</booktitle>
+<pages>105--112</pages>
+<location>Sydney, Australia,</location>
+<contexts>
+<context position="3181" citStr="Cherry and Lin, 2006" startWordPosition="452" endWordPosition="455">cally modeling distortion based entirely on positional information. This leaves most alignment decisions to association-based scores. Why is employing stronger reordering models more challenging in alignment than in translation? One answer can be attributed to the fact that alignment points are unobserved in parallel text, thus so are their reorderings. As such, introducing stronger reordering often further exacerbates the computational complexity to do inference over the model. Some recent alignment models appeal to external linguistic knowledge, mostly by using monolingual syntactic parses (Cherry and Lin, 2006; Pauls et al., 2010), which at the same time, provides an approximation of the bilingual syntactic divergences that drive the reordering. To our knowledge, however, this approach has been used mainly to constrain reordering possibilities, or to add to the generalization ability of association-based scores, not to directly model reordering in the context of alignment. 534 Proceedings of the 2010 Conference on Empirical Methods in Natural Language Processing, pages 534–544, MIT, Massachusetts, USA, 9-11 October 2010. c�2010 Association for Computational Linguistics In this paper, we introduce a</context>
+</contexts>
+<marker>Cherry, Lin, 2006</marker>
+<rawString>Colin Cherry and Dekang Lin. 2006. Soft syntactic constraints for word alignment through discriminative training. In COLING/ACL, pages 105–112, Sydney, Australia, July. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Chiang</author>
+</authors>
+<title>A hierarchical phrase-based model for statistical machine translation. In</title>
+<date>2005</date>
+<booktitle>ACL,</booktitle>
+<pages>263--270</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Ann Arbor, Michigan,</location>
+<contexts>
+<context position="28503" citStr="Chiang, 2005" startWordPosition="4647" endWordPosition="4648">pair. Our training data consists of manually aligned corpora available from LDC (LDC2006E93 and LDC2008E57) and unaligned corpora, which include FBIS, ISI, HKNews and Xinhua. In total, the manually aligned corpora consist of more than 21 thousand sentence pairs, while the unaligned corpora consist of more than 710 thousand sentence pairs. The manually-aligned corpora are primarily used for training the reordering models and for discriminative training purposes. For translation experiments, we used cdec (Dyer et al., 2010), a fast implementation of hierarchical phrase-based translation models (Chiang, 2005), which represents a state-of-the-art translation system. We constructed the list of function words in English manually and in Chinese from (Howard, 2002). Punctuation marks were added to the list, resulting in 883 and 359 tokens in the Chinese and English lists, respectively. For the alignment experiments, we took the first 500 sentence pairs from the newswire genre of the manually-aligned corpora and used the first 250 sentences as the development set, with the remaining 250 as the test set. To ensure blind experimentation, we excluded these sentence pairs from the training of the features, </context>
+</contexts>
+<marker>Chiang, 2005</marker>
+<rawString>David Chiang. 2005. A hierarchical phrase-based model for statistical machine translation. In ACL, pages 263–270, Ann Arbor, Michigan, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>John DeNero</author>
+<author>Dan Klein</author>
+</authors>
+<title>Tailoring word alignments to syntactic machine translation.</title>
+<date>2007</date>
+<booktitle>In ACL,</booktitle>
+<pages>17--24</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Prague, Czech Republic,</location>
+<contexts>
+<context position="1767" citStr="DeNero and Klein, 2007" startWordPosition="243" endWordPosition="246">mance over baselines in a large-scale ChineseEnglish translation task. 1 Introduction In many Statistical Machine Translation (SMT) systems, alignment represents an important piece of information, from which translation rules are learnt. However, while translation models have evolved from word-based to syntax-based modeling, the de facto alignment model remains word-based (Brown et al., 1993; Vogel et al., 1996). This gap between alignment modeling and translation modeling is clearly undesirable as it often generates tensions that would prevent the extraction of many useful translation rules (DeNero and Klein, 2007). Recent work, e.g. by Blunsom et al. (2009) and Haghihi et al. (2009) just to name a few, show that alignment models that bear closer resemblance to state-of-theart translation model consistently yields not only a better alignment quality but also an improved translation quality. In this paper, we follow this recent effort to narrow the gap between alignment model and translation model to improve translation quality. More concretely, we focus on the reordering component since we observe that the treatment of reordering remains significantly different when comparing alignment versus translatio</context>
+</contexts>
+<marker>DeNero, Klein, 2007</marker>
+<rawString>John DeNero and Dan Klein. 2007. Tailoring word alignments to syntactic machine translation. In ACL, pages 17–24, Prague, Czech Republic, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ted Dunning</author>
+</authors>
+<title>Accurate methods for the statistics of surprise and coincidence.</title>
+<date>1993</date>
+<journal>Computational Linguistics,</journal>
+<volume>19</volume>
+<issue>1</issue>
+<contexts>
+<context position="20073" citStr="Dunning, 1993" startWordPosition="3255" endWordPosition="3256"> section to predict alignments, we use a linear model of the following form: A= arg max 9 · f(A, 5, T) (9) A∈A(S,T) where A(5, T) is the set of all possible alignments of a source sentence 5 and target sentence T, and f(A, 5, T) is a vector of feature functions on A, 5, and T, and 9 is a parameter vector. In addition to the six reordering models, our model employs several association-based scores that look at alignments in isolation. These features include: 1. Normalized log-likelihood ratio (LLR). This feature represents an association score, derived from statistical testing statistics. LLR (Dunning, 1993) has been widely used especially to measure lexical association. Since the values of LLR are unnormalized, we normalize them on a per-sentence basis, so that the normalized LLRs of, say, a particular source word to the target words in a particular sentence sum up to one. 2. Translation table from IBM model 4. This feature represents another association score, derived from a generative model, in particular the wordbased IBM model 4. The use of this feature is widespread in recent alignment models, since it provides a relatively accurate initial prediction. 3. Translation table from manually-ali</context>
+</contexts>
+<marker>Dunning, 1993</marker>
+<rawString>Ted Dunning. 1993. Accurate methods for the statistics of surprise and coincidence. Computational Linguistics, 19(1):61–74, March.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chris Dyer</author>
+<author>Adam Lopez</author>
+<author>Juri Ganitkevitch</author>
+<author>Johnathan Weese</author>
+<author>Ferhan Ture</author>
+<author>Phil Blunsom</author>
+<author>Hendra Setiawan</author>
+<author>Vladimir Eidelman</author>
+<author>Philip Resnik</author>
+</authors>
+<title>cdec: A decoder, alignment, and learning framework for finitestate and context-free translation models.</title>
+<date>2010</date>
+<booktitle>In ACL,</booktitle>
+<location>Uppsala,</location>
+<contexts>
+<context position="28417" citStr="Dyer et al., 2010" startWordPosition="4634" endWordPosition="4637">xtrinsically on a large-scale translation task, focusing on ChineseEnglish as the language pair. Our training data consists of manually aligned corpora available from LDC (LDC2006E93 and LDC2008E57) and unaligned corpora, which include FBIS, ISI, HKNews and Xinhua. In total, the manually aligned corpora consist of more than 21 thousand sentence pairs, while the unaligned corpora consist of more than 710 thousand sentence pairs. The manually-aligned corpora are primarily used for training the reordering models and for discriminative training purposes. For translation experiments, we used cdec (Dyer et al., 2010), a fast implementation of hierarchical phrase-based translation models (Chiang, 2005), which represents a state-of-the-art translation system. We constructed the list of function words in English manually and in Chinese from (Howard, 2002). Punctuation marks were added to the list, resulting in 883 and 359 tokens in the Chinese and English lists, respectively. For the alignment experiments, we took the first 500 sentence pairs from the newswire genre of the manually-aligned corpora and used the first 250 sentences as the development set, with the remaining 250 as the test set. To ensure blind</context>
+</contexts>
+<marker>Dyer, Lopez, Ganitkevitch, Weese, Ture, Blunsom, Setiawan, Eidelman, Resnik, 2010</marker>
+<rawString>Chris Dyer, Adam Lopez, Juri Ganitkevitch, Johnathan Weese, Ferhan Ture, Phil Blunsom, Hendra Setiawan, Vladimir Eidelman, and Philip Resnik. 2010. cdec: A decoder, alignment, and learning framework for finitestate and context-free translation models. In ACL, Uppsala, Sweden.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alexander Fraser</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>Getting the structure right for word alignment: LEAF.</title>
+<date>2007</date>
+<booktitle>In EMNLP-CoNLL,</booktitle>
+<pages>51--60</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Prague, Czech Republic,</location>
+<contexts>
+<context position="26685" citStr="Fraser and Marcu, 2007" startWordPosition="4355" endWordPosition="4358">is simply the set of alignments {A(1), A(2), ... , A(n)} encountered in the stochastic search. While MERT does not scale to large numbers of features, the scarcity of manually aligned training data also means that models with large numbers of sparse features would be difficult to learn discriminatively, so this limitation is somewhat inherent in the problem space. Additionally, MERT has several advantages that make it particularly useful for our task. First, we can optimize F-measure of the alignments directly, which has been shown to correlate with translation quality in a downstream system (Fraser and Marcu, 2007b). Second, we are optimizing the quality of the 1-best alignments under the model. Since translation pipelines typically use only a single word alignment, this criterion is appropriate. Finally, and very importantly for us, MERT requires only an approximation of the model’s hypothesis space to carry out optimization. Since we are using a stochastic search, this is crucial, since subl l&apos; l l&apos; M M&apos; M M&apos; M M&apos; 540 sequent evaluations of the same sentence pair (even with the same weights) may result in a different candidate set. Although MERT is a non-probabilistic optimizer, we explore the alignm</context>
+<context position="31424" citStr="Fraser and Marcu, 2007" startWordPosition="5122" endWordPosition="5125">e baseline IBM word-based Model 4 symmetrized using the grow-diag-final-and heuristic. The balanced F0.5 measure is reported for reference. The best scores are bolded. Table 1 reports the results of our experiments, which are conducted in an incremental fashion primarily to highlight the role of reordering modeling. The first line (gdfa) reports the baseline perfor541 mance. In the first experiment (association), we employed only the association-based features described in Section 4. As shown, we obtain a significant improvement over baseline. This result is consistent with recent literature (Fraser and Marcu, 2007a) that shows that a discriminatively trained model outperforms baseline unsupervised models like GIZA++. In the second set of experiments, we added the reordering models into our discriminative model one by one, starting with the orientation models, then the pairwise dominance model and finally the borderwise dominance model, reported in lines +ori, +dom and +bdom respectively. As shown, each additional reordering model provides a significant additional improvement. The best result is obtained by employing all reordering models. These results empirically confirm our hypothesis that we can imp</context>
+</contexts>
+<marker>Fraser, Marcu, 2007</marker>
+<rawString>Alexander Fraser and Daniel Marcu. 2007a. Getting the structure right for word alignment: LEAF. In EMNLP-CoNLL, pages 51–60, Prague, Czech Republic, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alexander Fraser</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>Measuring word alignment quality for statistical machine translation.</title>
+<date>2007</date>
+<journal>Computational Linguistics,</journal>
+<volume>33</volume>
+<issue>3</issue>
+<contexts>
+<context position="26685" citStr="Fraser and Marcu, 2007" startWordPosition="4355" endWordPosition="4358">is simply the set of alignments {A(1), A(2), ... , A(n)} encountered in the stochastic search. While MERT does not scale to large numbers of features, the scarcity of manually aligned training data also means that models with large numbers of sparse features would be difficult to learn discriminatively, so this limitation is somewhat inherent in the problem space. Additionally, MERT has several advantages that make it particularly useful for our task. First, we can optimize F-measure of the alignments directly, which has been shown to correlate with translation quality in a downstream system (Fraser and Marcu, 2007b). Second, we are optimizing the quality of the 1-best alignments under the model. Since translation pipelines typically use only a single word alignment, this criterion is appropriate. Finally, and very importantly for us, MERT requires only an approximation of the model’s hypothesis space to carry out optimization. Since we are using a stochastic search, this is crucial, since subl l&apos; l l&apos; M M&apos; M M&apos; M M&apos; 540 sequent evaluations of the same sentence pair (even with the same weights) may result in a different candidate set. Although MERT is a non-probabilistic optimizer, we explore the alignm</context>
+<context position="31424" citStr="Fraser and Marcu, 2007" startWordPosition="5122" endWordPosition="5125">e baseline IBM word-based Model 4 symmetrized using the grow-diag-final-and heuristic. The balanced F0.5 measure is reported for reference. The best scores are bolded. Table 1 reports the results of our experiments, which are conducted in an incremental fashion primarily to highlight the role of reordering modeling. The first line (gdfa) reports the baseline perfor541 mance. In the first experiment (association), we employed only the association-based features described in Section 4. As shown, we obtain a significant improvement over baseline. This result is consistent with recent literature (Fraser and Marcu, 2007a) that shows that a discriminatively trained model outperforms baseline unsupervised models like GIZA++. In the second set of experiments, we added the reordering models into our discriminative model one by one, starting with the orientation models, then the pairwise dominance model and finally the borderwise dominance model, reported in lines +ori, +dom and +bdom respectively. As shown, each additional reordering model provides a significant additional improvement. The best result is obtained by employing all reordering models. These results empirically confirm our hypothesis that we can imp</context>
+</contexts>
+<marker>Fraser, Marcu, 2007</marker>
+<rawString>Alexander Fraser and Daniel Marcu. 2007b. Measuring word alignment quality for statistical machine translation. Computational Linguistics, 33(3):293–303.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Aria Haghighi</author>
+<author>John Blitzer</author>
+<author>John DeNero</author>
+<author>Dan Klein</author>
+</authors>
+<title>Better word alignments with supervised itg models.</title>
+<date>2009</date>
+<booktitle>In ACL,</booktitle>
+<pages>923--931</pages>
+<location>Suntec, Singapore,</location>
+<contexts>
+<context position="34492" citStr="Haghighi et al., 2009" startWordPosition="5606" endWordPosition="5609"> syntactic context rather than absolute position in the sentence. Over the years, there have been many proposals to improve these reordering models, most notably Vogel et al. (1996), which adds a first-order dependency. Nevertheless, the use of these distortion-based models remains widespread (Marcu and Wong, 2002; Moore, 2004). Alignment modeling is challenging because it often has to consider a prohibitively large alignment space. Efforts to constrain the space generally comes from the use of Inversion Transduction Grammar (ITG) (Wu, 1997). Recent proposals that use ITG constraints include (Haghighi et al., 2009; Blunsom et al., 2009) just to name a few. More recent models have begun to use linguisticallymotivated constraints, often in combination with ITG, primarily exploiting monolingual syntactic information (Burkett et al., 2010; Pauls et al., 2010). Our reordering model is closely related to the model proposed by Zhang and Gildea (2005; 2006; 2007a), with respect to conditioning the reordering predictions on lexical items. These related models treat their lexical items as latent variables to be estimated from training data, while our model uses a fixed set of lexical items that correspond to the</context>
+</contexts>
+<marker>Haghighi, Blitzer, DeNero, Klein, 2009</marker>
+<rawString>Aria Haghighi, John Blitzer, John DeNero, and Dan Klein. 2009. Better word alignments with supervised itg models. In ACL, pages 923–931, Suntec, Singapore, August. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ulf Hermjakob</author>
+</authors>
+<title>Improved word alignment with statistics and linguistic heuristics.</title>
+<date>2009</date>
+<booktitle>In EMNLP,</booktitle>
+<pages>229--237</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="35241" citStr="Hermjakob, 2009" startWordPosition="5728" endWordPosition="5729">ation with ITG, primarily exploiting monolingual syntactic information (Burkett et al., 2010; Pauls et al., 2010). Our reordering model is closely related to the model proposed by Zhang and Gildea (2005; 2006; 2007a), with respect to conditioning the reordering predictions on lexical items. These related models treat their lexical items as latent variables to be estimated from training data, while our model uses a fixed set of lexical items that correspond to the class of function words. With respect to the focus on function words, our reordering model is closely related to the UALIGN system (Hermjakob, 2009). However, UALIGN uses deep syntactic analysis and hand-crafted heuristics in its model. 542 9 Conclusions Languages exhibit regularities of word order that are preserved when projected to another language. We use the notion of function words to infer such regularities, resulting in several reordering models that are employed as features in a discriminative alignment model. In particular, our models predict the reordering of function words by looking at their dependencies with respect to their neighboring phrases, their neighboring function words, and the sentence boundaries. By capturing such</context>
+</contexts>
+<marker>Hermjakob, 2009</marker>
+<rawString>Ulf Hermjakob. 2009. Improved word alignment with statistics and linguistic heuristics. In EMNLP, pages 229–237, Singapore, August. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jiaying Howard</author>
+</authors>
+<title>A Student Handbookfor Chinese Function Words. The Chinese</title>
+<date>2002</date>
+<publisher>University Press.</publisher>
+<contexts>
+<context position="28657" citStr="Howard, 2002" startWordPosition="4671" endWordPosition="4672">, HKNews and Xinhua. In total, the manually aligned corpora consist of more than 21 thousand sentence pairs, while the unaligned corpora consist of more than 710 thousand sentence pairs. The manually-aligned corpora are primarily used for training the reordering models and for discriminative training purposes. For translation experiments, we used cdec (Dyer et al., 2010), a fast implementation of hierarchical phrase-based translation models (Chiang, 2005), which represents a state-of-the-art translation system. We constructed the list of function words in English manually and in Chinese from (Howard, 2002). Punctuation marks were added to the list, resulting in 883 and 359 tokens in the Chinese and English lists, respectively. For the alignment experiments, we took the first 500 sentence pairs from the newswire genre of the manually-aligned corpora and used the first 250 sentences as the development set, with the remaining 250 as the test set. To ensure blind experimentation, we excluded these sentence pairs from the training of the features, including the reordering models. 7.1 Alignment Quality We used GIZA++, the implementation of the defacto standard IBM alignment model, as our baseline ali</context>
+</contexts>
+<marker>Howard, 2002</marker>
+<rawString>Jiaying Howard. 2002. A Student Handbookfor Chinese Function Words. The Chinese University Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Philipp Koehn</author>
+<author>Franz J Och</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>Statistical phrase-based translation.</title>
+<date>2003</date>
+<booktitle>In HTL-NAACL,</booktitle>
+<pages>127--133</pages>
+<location>Edmonton, Alberta, Canada,</location>
+<contexts>
+<context position="23912" citStr="Koehn et al., 2003" startWordPosition="3885" endWordPosition="3888">sformations (discussed below) to the current alignment. The next alignment A(&apos;+1) 539 is sampled from the following distribution: p(A(i+1)|S, T, A(i)) = exp 0 · f(A(i+1), S, T) Z(A(i), S, T) where Z(A(i), S, T) = � exp 0 · f(A′, S, T) A′EN(AM) In addition to the current ‘active’ alignment configuration A(i), the algorithm keeps track of the highest scoring alignment observed so far, Amax. After n steps, the algorithm returns Amax as its approximation of A. In the experiments reported below, we initialized A(1) with the Model 4 alignments symmetrized by using the grow-diag-final-and heuristic (Koehn et al., 2003). 5.2 Alignment Neighborhoods We now turn to a discussion of how the alignment neighborhoods used by our stochastic search algorithm are generated. We define three local transformation operations that apply to single columns of the alignment grid (which represent all of the alignments to the lth source word), rows, or existing alignment points (l, m). Our three neighborhood generating operators are ALIGN, ALIGNEXCLUSIVE, and SWAP. The ALIGN operator applies to the lth column of A and can either add an alignment point (l, m′) or move an existing one (including to null, thus deleting it). ALIGNE</context>
+</contexts>
+<marker>Koehn, Och, Marcu, 2003</marker>
+<rawString>Philipp Koehn, Franz J. Och, and Daniel Marcu. 2003. Statistical phrase-based translation. In HTL-NAACL, pages 127–133, Edmonton, Alberta, Canada, May. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Daniel Marcu</author>
+<author>William Wong</author>
+</authors>
+<title>A phrase-based, joint probability model for statistical machine translation.</title>
+<date>2002</date>
+<booktitle>In EMNLP,</booktitle>
+<contexts>
+<context position="34186" citStr="Marcu and Wong, 2002" startWordPosition="5557" endWordPosition="5560">U points. 8 Related Work The focus of our work is to strengthen the reordering component of alignment modeling. Although the de facto standard, the IBM models do not generalize well in practice: the IBM approach employs a series of reordering models based on the word’s position, but reordering depends on syntactic context rather than absolute position in the sentence. Over the years, there have been many proposals to improve these reordering models, most notably Vogel et al. (1996), which adds a first-order dependency. Nevertheless, the use of these distortion-based models remains widespread (Marcu and Wong, 2002; Moore, 2004). Alignment modeling is challenging because it often has to consider a prohibitively large alignment space. Efforts to constrain the space generally comes from the use of Inversion Transduction Grammar (ITG) (Wu, 1997). Recent proposals that use ITG constraints include (Haghighi et al., 2009; Blunsom et al., 2009) just to name a few. More recent models have begun to use linguisticallymotivated constraints, often in combination with ITG, primarily exploiting monolingual syntactic information (Burkett et al., 2010; Pauls et al., 2010). Our reordering model is closely related to the</context>
+</contexts>
+<marker>Marcu, Wong, 2002</marker>
+<rawString>Daniel Marcu and William Wong. 2002. A phrase-based, joint probability model for statistical machine translation. In EMNLP, July 23.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Robert C Moore</author>
+</authors>
+<title>Improving ibm word alignment model 1. In</title>
+<date>2004</date>
+<booktitle>ACL,</booktitle>
+<pages>518--525</pages>
+<location>Barcelona, Spain,</location>
+<contexts>
+<context position="34200" citStr="Moore, 2004" startWordPosition="5561" endWordPosition="5562">rk The focus of our work is to strengthen the reordering component of alignment modeling. Although the de facto standard, the IBM models do not generalize well in practice: the IBM approach employs a series of reordering models based on the word’s position, but reordering depends on syntactic context rather than absolute position in the sentence. Over the years, there have been many proposals to improve these reordering models, most notably Vogel et al. (1996), which adds a first-order dependency. Nevertheless, the use of these distortion-based models remains widespread (Marcu and Wong, 2002; Moore, 2004). Alignment modeling is challenging because it often has to consider a prohibitively large alignment space. Efforts to constrain the space generally comes from the use of Inversion Transduction Grammar (ITG) (Wu, 1997). Recent proposals that use ITG constraints include (Haghighi et al., 2009; Blunsom et al., 2009) just to name a few. More recent models have begun to use linguisticallymotivated constraints, often in combination with ITG, primarily exploiting monolingual syntactic information (Burkett et al., 2010; Pauls et al., 2010). Our reordering model is closely related to the model propose</context>
+</contexts>
+<marker>Moore, 2004</marker>
+<rawString>Robert C. Moore. 2004. Improving ibm word alignment model 1. In ACL, pages 518–525, Barcelona, Spain, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Masaaki Nagata</author>
+<author>Kuniko Saito</author>
+<author>Kazuhide Yamamoto</author>
+<author>Kazuteru Ohashi</author>
+</authors>
+<title>A clustered global phrase reordering model for statistical machine translation.</title>
+<date>2006</date>
+<booktitle>In ACL,</booktitle>
+<pages>713--720</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Sydney, Australia,</location>
+<contexts>
+<context position="13648" citStr="Nagata et al. (2006)" startWordPosition="2181" endWordPosition="2184">d phrase pair and (/s) is the end-of-sentence marker. 3.1 Six (Sub-)Models To model o(Li,S→T), o(Ri,S→T), i.e. the reordering of the neighboring phrases of a function word, we employ the orientation model introduced by Setiawan et al. (2007). Formally, this model takes the form of probability distribution Pori(o(Li,S→T),o(Ri,S→T)|Yi,S→T), which conditions the reordering on the lexical identity of the function word alignment (but independent of the lexical identity of its neighboring phrases). In particular, o maps the reordering into one of the following four orientation values (borrowed from Nagata et al. (2006)) with respect to the function word: Monotone Adjacent (MA), Monotone Gap (MG), Reverse Adjacent (RA) and Reverse Gap (RG). The Monotone/Reverse distinction indicates whether the projected order follows the original order, while the Adjacent/Gap distinction indicates whether the pro2This heuristic is commonly used in learning phrase pairs from parallel text. The maximality ensures the uniqueness of L and R. jections of the function word and the neighboring phrase are adjacent or separated by an intervening phrase. To model d(FWi−1,S→T), d(FWi+1,S→T), i.e. whether Li,S→T and Ri,S→T extend beyon</context>
+</contexts>
+<marker>Nagata, Saito, Yamamoto, Ohashi, 2006</marker>
+<rawString>Masaaki Nagata, Kuniko Saito, Kazuhide Yamamoto, and Kazuteru Ohashi. 2006. A clustered global phrase reordering model for statistical machine translation. In ACL, pages 713–720, Sydney, Australia, July. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Josef Och</author>
+<author>Hermann Ney</author>
+</authors>
+<title>The alignment template approach to statistical machine translation.</title>
+<date>2004</date>
+<journal>Computational Linguistics,</journal>
+<volume>30</volume>
+<issue>4</issue>
+<contexts>
+<context position="12350" citStr="Och and Ney, 2004" startWordPosition="1979" endWordPosition="1982"> T denotes the projection direction from source to target. The subscript for the other direction is T --+ S. 536 tic approach. For instance, to estimate the spans of Li,S→T, Ri,S→T, our reordering model assumes that any span to the left of Yi,S is a possible Li,S and any span to the right of Yi,S is a possible Ri,S, deciding which is most probable via features, rather than committing to particular spans (e.g. as defined by a monolingual text chunker or parser). We only enforce one criterion on Li,S→T and Ri,S→T: they have to be the maximal alignment blocks satisfying the consistent heuristic (Och and Ney, 2004) that end or start with Yi,S→T on the source S side respectively.2 To infer these phrases, we decompose Li,S→T into (o(Li,S→T), d(FWi−1,S→T), b((s))); similarly, Ri,S→T into (o(Ri,S→T),d(FWi+1,S→T), b((/s)) )). Taking the decomposition of Li,S→T as a case in point, here o(Li,S→T) describes the reordering of the left neighbor Li,S→T with respect to the function word Yi,S→T, while d(FWi−1,S→T) and b((s))) probe the span of Li,S→T, i.e. whether it goes beyond the preceding function word phrase pairs FWi−1,S→T and up to the beginning-ofsentence marker (s) respectively. The same definition applies </context>
+</contexts>
+<marker>Och, Ney, 2004</marker>
+<rawString>Franz Josef Och and Hermann Ney. 2004. The alignment template approach to statistical machine translation. Computational Linguistics, 30(4):417–449.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Josef Och</author>
+</authors>
+<title>Minimum error rate training in statistical machine translation.</title>
+<date>2003</date>
+<booktitle>In ACL,</booktitle>
+<pages>160--167</pages>
+<contexts>
+<context position="5322" citStr="Och, 2003" startWordPosition="786" endWordPosition="787">, our reordering model enumerates the function words on both source and target sides, modeling their reordering relative to their neighboring phrases, their neighboring function words, and the sentence boundaries. Because the frequency of function words is high, we find that by predicting the reordering of function words accurately, the reordering of the remaining words improves in accuracy as well. In total, we introduce six sub-models involving function words, and these serve as features in a log linear model. We train model weights discriminatively using Minimum Error Rate Training (MERT) (Och, 2003), optimizing F-measure. The parameters of our sub-models are estimated from manually-aligned corpora, leading the reordering model more directly toward reproducing human alignments, rather than maximizing the likelihood of unaligned training data. This use of manual data for parameter estimation is a reasonable choice because these models depend on a small, fixed number of lexical items that occur frequently in language, hence only small training corpora are required. In addition, the availability of manually-aligned corpora has been growing steadily. The remainder of the paper proceeds as fol</context>
+<context position="25857" citStr="Och, 2003" startWordPosition="4221" endWordPosition="4222"> to the log-likelihood ratio. 4Using only the ALIGN operator, it is possible to explore the full alignment space; however, using all three operators increases mobility. Figure 3: Illustrations for (a) ALIGN, (b) ALIGNEXCLUSIVE, and (c) SWAP operators, as applied to align the dotted, smaller circle (l, m) to (l, m′). The left hand side represents A(i), while the right hand side represents a candidate for A(i+1). The solid circles represent the new alignment points added to A(i+1). 6 Discriminative Training To set the model parameters 0, we used the minimum error rate training (MERT) algorithm (Och, 2003) to maximize the F-measure of the 1-best alignment of the model on a development set consisting of sentence pairs with manually generated alignments. The candidate set used by MERT to approximate the model is simply the set of alignments {A(1), A(2), ... , A(n)} encountered in the stochastic search. While MERT does not scale to large numbers of features, the scarcity of manually aligned training data also means that models with large numbers of sparse features would be difficult to learn discriminatively, so this limitation is somewhat inherent in the problem space. Additionally, MERT has seve</context>
+<context position="30079" citStr="Och, 2003" startWordPosition="4908" endWordPosition="4909">vely. Since the IBM model is asymmetric, we followed the standard practice of running GIZA++ twice, once in each direction, and combining the resulting outputs heuristically. We chose to use the grow-diag-final-and heuristic as it worked well for hierarchical phrase-based translation in our early experiments. We recorded the alignment quality of the test set as our baseline performance. For our alignment model, we used the same set of training data. To align the test set, we first tuned the weights of the features in our discriminative alignment model using minimum error rate training (MERT) (Och, 2003) with Fα=0.1 as the optimization criterion. At each iteration, our aligner outputs k-best alignments under current set of weights, from which MERT proceeds to compute the next set of weights. MERT terminates once the improvement over the previous iteration is lower than a predefined value. Once tuned, we ran our aligner on the test set and measured the quality of the resulting alignment as the performance of our model. Model P R F0.5 F0.1 gdfa 70.97 63.83 67.21 64.48 association 73.70 76.85 75.24 76.52 +ori 74.09 78.29 76.13 77.85 +dom 75.06 78.98 76.97 78.57 +bdom 75.41 80.53 77.89 79.99 Tabl</context>
+</contexts>
+<marker>Och, 2003</marker>
+<rawString>Franz Josef Och. 2003. Minimum error rate training in statistical machine translation. In ACL, pages 160– 167.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jamal Ouhalla</author>
+</authors>
+<title>Functional Categories and Parametric Variation.</title>
+<date>1991</date>
+<publisher>Routledge.</publisher>
+<contexts>
+<context position="4253" citStr="Ouhalla, 1991" startWordPosition="618" endWordPosition="619">ing, pages 534–544, MIT, Massachusetts, USA, 9-11 October 2010. c�2010 Association for Computational Linguistics In this paper, we introduce a new approach to improving the modeling of reordering in alignment. Instead of relying on monolingual parses, we condition our reordering model on the behavior of function words and the phrases that surround them. Function words are the “syntactic glue” of sentences, and in fact many syntacticians believe that functional categories, as opposed to substantive categories like noun and verb, are primarily responsible for cross-language syntactic variation (Ouhalla, 1991). Our reordering model can be seen as offering a reasonable approximation to more fully elaborated bilingual syntactic modeling, and this approximation is also highly practical, as it demands no external knowledge (other than a list of function words) and avoids the practical issues associated with the use of monolingual parses, e.g. whether the monolingual parser is robust enough to produce reliable output for every sentence in training data. At a glance, our reordering model enumerates the function words on both source and target sides, modeling their reordering relative to their neighboring</context>
+</contexts>
+<marker>Ouhalla, 1991</marker>
+<rawString>Jamal Ouhalla. 1991. Functional Categories and Parametric Variation. Routledge.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adam Pauls</author>
+<author>Dan Klein</author>
+<author>David Chiang</author>
+<author>Kevin Knight</author>
+</authors>
+<title>Unsupervised syntactic alignment with inversion transduction grammars.</title>
+<date>2010</date>
+<booktitle>In HLT-NAACL,</booktitle>
+<pages>118--126</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Los Angeles, California,</location>
+<contexts>
+<context position="3202" citStr="Pauls et al., 2010" startWordPosition="456" endWordPosition="459">ion based entirely on positional information. This leaves most alignment decisions to association-based scores. Why is employing stronger reordering models more challenging in alignment than in translation? One answer can be attributed to the fact that alignment points are unobserved in parallel text, thus so are their reorderings. As such, introducing stronger reordering often further exacerbates the computational complexity to do inference over the model. Some recent alignment models appeal to external linguistic knowledge, mostly by using monolingual syntactic parses (Cherry and Lin, 2006; Pauls et al., 2010), which at the same time, provides an approximation of the bilingual syntactic divergences that drive the reordering. To our knowledge, however, this approach has been used mainly to constrain reordering possibilities, or to add to the generalization ability of association-based scores, not to directly model reordering in the context of alignment. 534 Proceedings of the 2010 Conference on Empirical Methods in Natural Language Processing, pages 534–544, MIT, Massachusetts, USA, 9-11 October 2010. c�2010 Association for Computational Linguistics In this paper, we introduce a new approach to impr</context>
+<context position="34738" citStr="Pauls et al., 2010" startWordPosition="5644" endWordPosition="5647">se distortion-based models remains widespread (Marcu and Wong, 2002; Moore, 2004). Alignment modeling is challenging because it often has to consider a prohibitively large alignment space. Efforts to constrain the space generally comes from the use of Inversion Transduction Grammar (ITG) (Wu, 1997). Recent proposals that use ITG constraints include (Haghighi et al., 2009; Blunsom et al., 2009) just to name a few. More recent models have begun to use linguisticallymotivated constraints, often in combination with ITG, primarily exploiting monolingual syntactic information (Burkett et al., 2010; Pauls et al., 2010). Our reordering model is closely related to the model proposed by Zhang and Gildea (2005; 2006; 2007a), with respect to conditioning the reordering predictions on lexical items. These related models treat their lexical items as latent variables to be estimated from training data, while our model uses a fixed set of lexical items that correspond to the class of function words. With respect to the focus on function words, our reordering model is closely related to the UALIGN system (Hermjakob, 2009). However, UALIGN uses deep syntactic analysis and hand-crafted heuristics in its model. 542 9 Co</context>
+</contexts>
+<marker>Pauls, Klein, Chiang, Knight, 2010</marker>
+<rawString>Adam Pauls, Dan Klein, David Chiang, and Kevin Knight. 2010. Unsupervised syntactic alignment with inversion transduction grammars. In HLT-NAACL, pages 118–126, Los Angeles, California, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hendra Setiawan</author>
+<author>Min-Yen Kan</author>
+<author>Haizhou Li</author>
+</authors>
+<title>Ordering phrases with function words.</title>
+<date>2007</date>
+<booktitle>In ACL,</booktitle>
+<pages>712--719</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Prague, Czech Republic,</location>
+<contexts>
+<context position="9955" citStr="Setiawan et al., 2007" startWordPosition="1567" endWordPosition="1570">dary words. If we consider only the English side, function words appear at the borders of 93.91% adjacent blocks. If we consider both the Chinese and English sides, the percentage increases to 95.53%. Notice that in Fig. 2, function words appear at the borders of all adjacent allmonotone phrase pairs, if both Chinese and English sides are considered. Clearly with such high coverage, function words are central in predicting nonmonotone reordering in alignment. 3 Reordering with Function Words The reordering models we describe follow our previous work using function word models for translation (Setiawan et al., 2007; Setiawan et al., 2009). The core hypothesis in this work is that function words provide robust clues to the reordering patterns of the phrases surrounding them. To make this insight useful for alignment, we develop features that score the alignment configuration of the neighboring phrases of a function word (which functions as an anchor) using two kinds of information: 1) the relative ordering of the phrases with respect to the function word anchor; and 2) the span of the phrases. This section provides a high level overview of our reordering model, which attempts to leverage this information</context>
+<context position="13269" citStr="Setiawan et al. (2007)" startWordPosition="2125" endWordPosition="2128">ordering of the left neighbor Li,S→T with respect to the function word Yi,S→T, while d(FWi−1,S→T) and b((s))) probe the span of Li,S→T, i.e. whether it goes beyond the preceding function word phrase pairs FWi−1,S→T and up to the beginning-ofsentence marker (s) respectively. The same definition applies to the decomposition of Ri,S→T, where FWi+1,S→T is the succeeding function word phrase pair and (/s) is the end-of-sentence marker. 3.1 Six (Sub-)Models To model o(Li,S→T), o(Ri,S→T), i.e. the reordering of the neighboring phrases of a function word, we employ the orientation model introduced by Setiawan et al. (2007). Formally, this model takes the form of probability distribution Pori(o(Li,S→T),o(Ri,S→T)|Yi,S→T), which conditions the reordering on the lexical identity of the function word alignment (but independent of the lexical identity of its neighboring phrases). In particular, o maps the reordering into one of the following four orientation values (borrowed from Nagata et al. (2006)) with respect to the function word: Monotone Adjacent (MA), Monotone Gap (MG), Reverse Adjacent (RA) and Reverse Gap (RG). The Monotone/Reverse distinction indicates whether the projected order follows the original order</context>
+</contexts>
+<marker>Setiawan, Kan, Li, 2007</marker>
+<rawString>Hendra Setiawan, Min-Yen Kan, and Haizhou Li. 2007. Ordering phrases with function words. In ACL, pages 712–719, Prague, Czech Republic, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hendra Setiawan</author>
+<author>Min Yen Kan</author>
+<author>Haizhou Li</author>
+<author>Philip Resnik</author>
+</authors>
+<title>Topological ordering of function words in hierarchical phrase-based translation.</title>
+<date>2009</date>
+<booktitle>In ACL,</booktitle>
+<pages>324--332</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Suntec, Singapore,</location>
+<contexts>
+<context position="9979" citStr="Setiawan et al., 2009" startWordPosition="1571" endWordPosition="1574">der only the English side, function words appear at the borders of 93.91% adjacent blocks. If we consider both the Chinese and English sides, the percentage increases to 95.53%. Notice that in Fig. 2, function words appear at the borders of all adjacent allmonotone phrase pairs, if both Chinese and English sides are considered. Clearly with such high coverage, function words are central in predicting nonmonotone reordering in alignment. 3 Reordering with Function Words The reordering models we describe follow our previous work using function word models for translation (Setiawan et al., 2007; Setiawan et al., 2009). The core hypothesis in this work is that function words provide robust clues to the reordering patterns of the phrases surrounding them. To make this insight useful for alignment, we develop features that score the alignment configuration of the neighboring phrases of a function word (which functions as an anchor) using two kinds of information: 1) the relative ordering of the phrases with respect to the function word anchor; and 2) the span of the phrases. This section provides a high level overview of our reordering model, which attempts to leverage this information. To facilitate subseque</context>
+<context position="14359" citStr="Setiawan et al. (2009)" startWordPosition="2290" endWordPosition="2293">djacent (RA) and Reverse Gap (RG). The Monotone/Reverse distinction indicates whether the projected order follows the original order, while the Adjacent/Gap distinction indicates whether the pro2This heuristic is commonly used in learning phrase pairs from parallel text. The maximality ensures the uniqueness of L and R. jections of the function word and the neighboring phrase are adjacent or separated by an intervening phrase. To model d(FWi−1,S→T), d(FWi+1,S→T), i.e. whether Li,S→T and Ri,S→T extend beyond the neighboring function word phrase pairs, we utilize the pairwise dominance model of Setiawan et al. (2009). Taking d(FWi−1,S→T) as a case in point, this model takes the form Pdom(d(FWi−1,S→T)|Yi−1,S→T,Yi,S→T), where d takes one of the following four dominance values: leftFirst, rightFirst, dontCare, or neither. We will detail the exact formulation of these values in the next subsection. However, to provide intuition, the value of either leftFirst or neither for d(FWi−1,S→T) would suggest that the span of Li,S→T doesn’t extend to Yi−1,S→T; the further distinction between leftFirst and neither concerns with whether the span of Ri−1,S→T extends to FWi,S→T . To model b((s)), b((/s)), i.e. whether the </context>
+</contexts>
+<marker>Setiawan, Kan, Li, Resnik, 2009</marker>
+<rawString>Hendra Setiawan, Min Yen Kan, Haizhou Li, and Philip Resnik. 2009. Topological ordering of function words in hierarchical phrase-based translation. In ACL, pages 324–332, Suntec, Singapore, August. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stephan Vogel</author>
+<author>Hermann Ney</author>
+<author>Christoph Tillmann</author>
+</authors>
+<title>HMM-based word alignment in statistical translation.</title>
+<date>1996</date>
+<booktitle>In COLING,</booktitle>
+<pages>836--841</pages>
+<location>Copenhagen.</location>
+<contexts>
+<context position="1559" citStr="Vogel et al., 1996" startWordPosition="212" endWordPosition="215">enomena, our proposed alignment model bears a closer resemblance to stateof-the-art translation model. Empirical results show significant improvements in alignment quality as well as in translation performance over baselines in a large-scale ChineseEnglish translation task. 1 Introduction In many Statistical Machine Translation (SMT) systems, alignment represents an important piece of information, from which translation rules are learnt. However, while translation models have evolved from word-based to syntax-based modeling, the de facto alignment model remains word-based (Brown et al., 1993; Vogel et al., 1996). This gap between alignment modeling and translation modeling is clearly undesirable as it often generates tensions that would prevent the extraction of many useful translation rules (DeNero and Klein, 2007). Recent work, e.g. by Blunsom et al. (2009) and Haghihi et al. (2009) just to name a few, show that alignment models that bear closer resemblance to state-of-theart translation model consistently yields not only a better alignment quality but also an improved translation quality. In this paper, we follow this recent effort to narrow the gap between alignment model and translation model to</context>
+<context position="34052" citStr="Vogel et al. (1996)" startWordPosition="5537" endWordPosition="5540">t model produces a consistent and significant improvement over the baseline IBM model 4 (p &lt; 0.01), ranging between 0.81 and 1.71 BLEU points. 8 Related Work The focus of our work is to strengthen the reordering component of alignment modeling. Although the de facto standard, the IBM models do not generalize well in practice: the IBM approach employs a series of reordering models based on the word’s position, but reordering depends on syntactic context rather than absolute position in the sentence. Over the years, there have been many proposals to improve these reordering models, most notably Vogel et al. (1996), which adds a first-order dependency. Nevertheless, the use of these distortion-based models remains widespread (Marcu and Wong, 2002; Moore, 2004). Alignment modeling is challenging because it often has to consider a prohibitively large alignment space. Efforts to constrain the space generally comes from the use of Inversion Transduction Grammar (ITG) (Wu, 1997). Recent proposals that use ITG constraints include (Haghighi et al., 2009; Blunsom et al., 2009) just to name a few. More recent models have begun to use linguisticallymotivated constraints, often in combination with ITG, primarily e</context>
+</contexts>
+<marker>Vogel, Ney, Tillmann, 1996</marker>
+<rawString>Stephan Vogel, Hermann Ney, and Christoph Tillmann. 1996. HMM-based word alignment in statistical translation. In COLING, pages 836–841, Copenhagen.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dekai Wu</author>
+</authors>
+<title>Stochastic inversion transduction grammars and bilingual parsing of parallel corpora.</title>
+<date>1997</date>
+<journal>Computational Linguistics,</journal>
+<volume>23</volume>
+<issue>3</issue>
+<contexts>
+<context position="34418" citStr="Wu, 1997" startWordPosition="5596" endWordPosition="5597">models based on the word’s position, but reordering depends on syntactic context rather than absolute position in the sentence. Over the years, there have been many proposals to improve these reordering models, most notably Vogel et al. (1996), which adds a first-order dependency. Nevertheless, the use of these distortion-based models remains widespread (Marcu and Wong, 2002; Moore, 2004). Alignment modeling is challenging because it often has to consider a prohibitively large alignment space. Efforts to constrain the space generally comes from the use of Inversion Transduction Grammar (ITG) (Wu, 1997). Recent proposals that use ITG constraints include (Haghighi et al., 2009; Blunsom et al., 2009) just to name a few. More recent models have begun to use linguisticallymotivated constraints, often in combination with ITG, primarily exploiting monolingual syntactic information (Burkett et al., 2010; Pauls et al., 2010). Our reordering model is closely related to the model proposed by Zhang and Gildea (2005; 2006; 2007a), with respect to conditioning the reordering predictions on lexical items. These related models treat their lexical items as latent variables to be estimated from training data</context>
+</contexts>
+<marker>Wu, 1997</marker>
+<rawString>Dekai Wu. 1997. Stochastic inversion transduction grammars and bilingual parsing of parallel corpora. Computational Linguistics, 23(3):377–404, Sep.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hao Zhang</author>
+<author>Daniel Gildea</author>
+</authors>
+<title>Stochastic lexicalized inversion transduction grammar for alignment.</title>
+<date>2005</date>
+<booktitle>In ACL. The Association</booktitle>
+<institution>for Computer Linguistics.</institution>
+<contexts>
+<context position="34827" citStr="Zhang and Gildea (2005" startWordPosition="5659" endWordPosition="5662">gnment modeling is challenging because it often has to consider a prohibitively large alignment space. Efforts to constrain the space generally comes from the use of Inversion Transduction Grammar (ITG) (Wu, 1997). Recent proposals that use ITG constraints include (Haghighi et al., 2009; Blunsom et al., 2009) just to name a few. More recent models have begun to use linguisticallymotivated constraints, often in combination with ITG, primarily exploiting monolingual syntactic information (Burkett et al., 2010; Pauls et al., 2010). Our reordering model is closely related to the model proposed by Zhang and Gildea (2005; 2006; 2007a), with respect to conditioning the reordering predictions on lexical items. These related models treat their lexical items as latent variables to be estimated from training data, while our model uses a fixed set of lexical items that correspond to the class of function words. With respect to the focus on function words, our reordering model is closely related to the UALIGN system (Hermjakob, 2009). However, UALIGN uses deep syntactic analysis and hand-crafted heuristics in its model. 542 9 Conclusions Languages exhibit regularities of word order that are preserved when projected </context>
+</contexts>
+<marker>Zhang, Gildea, 2005</marker>
+<rawString>Hao Zhang and Daniel Gildea. 2005. Stochastic lexicalized inversion transduction grammar for alignment. In ACL. The Association for Computer Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hao Zhang</author>
+<author>Daniel Gildea</author>
+</authors>
+<title>Inducing word alignments with bilexical synchronous trees.</title>
+<date>2006</date>
+<booktitle>In ACL. The Association</booktitle>
+<institution>for Computer Linguistics.</institution>
+<marker>Zhang, Gildea, 2006</marker>
+<rawString>Hao Zhang and Daniel Gildea. 2006. Inducing word alignments with bilexical synchronous trees. In ACL. The Association for Computer Linguistics.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

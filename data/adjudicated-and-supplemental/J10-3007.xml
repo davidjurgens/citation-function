@@ -1,0 +1,2212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.9987995">
+Learning Tractable Word Alignment Models
+with Complex Constraints
+</title>
+<author confidence="0.8605">
+Jo˜ao V. Grac¸a*
+</author>
+<affiliation confidence="0.313607">
+L2F INESC-ID
+</affiliation>
+<author confidence="0.977541">
+Kuzman Ganchev**
+</author>
+<affiliation confidence="0.993627">
+University of Pennsylvania
+</affiliation>
+<author confidence="0.994741">
+Ben Taskar†
+</author>
+<affiliation confidence="0.992759">
+University of Pennsylvania
+</affiliation>
+<bodyText confidence="0.9810125">
+Word-level alignment of bilingual text is a critical resource for a growing variety of tasks. Proba-
+bilistic models for word alignment present a fundamental trade-off between richness of captured
+constraints and correlations versus efficiency and tractability of inference. In this article, we
+use the Posterior Regularization framework (Gra¸ca, Ganchev, and Taskar 2007) to incorporate
+complex constraints into probabilistic models during learning without changing the efficiency
+of the underlying model. We focus on the simple and tractable hidden Markov model, and
+present an efficient learning algorithm for incorporating approximate bijectivity and symmetry
+constraints. Models estimated with these constraints produce a significant boost in performance
+as measured by both precision and recall of manually annotated alignments for six language
+pairs. We also report experiments on two different tasks where word alignments are required:
+phrase-based machine translation and syntax transfer, and show promising improvements over
+standard methods.
+</bodyText>
+<sectionHeader confidence="0.996127" genericHeader="abstract">
+1. Introduction
+</sectionHeader>
+<bodyText confidence="0.999024625">
+The seminal work of Brown et al. (1993b) introduced a series of probabilistic models
+(IBM Models 1–5) for statistical machine translation and the concept of “word-by-
+word” alignment, the correspondence between words in source and target languages.
+Although no longer competitive as end-to-end translation models, the IBM Models,
+as well as the hidden Markov model (HMM) of Vogel, Ney, and Tillmann (1996),
+are still widely used for word alignment. Word alignments are used primarily for
+extracting minimal translation units for machine translation (MT) (e.g., phrases [Koehn,
+Och, and Marcu 2003] and rules [Galley et al. 2004; Chiang et al. 2005]) as well as for
+</bodyText>
+<note confidence="0.768213">
+* INESC-ID Lisboa, Spoken Language Systems Lab, R. Alves Redol 9, 1000-029 LISBOA, Portugal.
+</note>
+<email confidence="0.957489">
+E-mail: joao.graca@l2f.inesc-id.pt.
+</email>
+<affiliation confidence="0.797668">
+** University of Pennsylvania, Department of Computer and Information Science, Levine Hall, 3330 Walnut
+Street, Philadelphia, PA 19104-6309. E-mail: kuzman@cis.upenn.edu.
+† University of Pennsylvania, Department of Computer and Information Science, 3330 Walnut Street,
+Philadelphia, PA 19104-6389. E-mail: taskar@cis.upenn.edu.
+</affiliation>
+<note confidence="0.90711">
+Submission received:1 August 2009; revised submission received: 24 December 2009; accepted for
+publication: 10 March 2010.
+© 2010 Association for Computational Linguistics
+Computational Linguistics Volume 36, Number 3
+</note>
+<bodyText confidence="0.997250595744681">
+MT system combination (Matusov, Ueffing, and Ney 2006). But their importance has
+grown far beyond machine translation: for instance, transferring annotations between
+languages (Yarowsky and Ngai 2001; Hwa et al. 2005; Ganchev, Gillenwater, and
+Taskar 2009); discovery of paraphrases (Bannard and Callison-Burch 2005); and joint
+unsupervised POS and parser induction across languages (Snyder and Barzilay 2008).
+IBM Models 1 and 2 and the HMM are simple and tractable probabilistic models,
+which produce the target sentence one target word at a time by choosing a source word
+and generating its translation. IBM Models 3, 4, and 5 attempt to capture fertility (the
+tendency of each source word to generate several target words), resulting in probabilis-
+tically deficient, intractable models that require local heuristic search and are difficult to
+implement and extend. Many researchers use the GIZA++ software package (Och and
+Ney 2003) as a black box, selecting IBM Model 4 as a compromise between alignment
+quality and efficiency. All of the models are asymmetric (switching target and source
+languages produces drastically different results) and the simpler models (IBM Models 1,
+2, and HMM) do not enforce bijectivity (the majority of words translating as a single
+word). Although there are systematic translation phenomena where one cannot hope to
+obtain 1-to-1 alignments, we observe that in over 6 different European language pairs
+the majority of alignments are in fact 1-to-1 (86–98%). This leads to the common practice
+of post-processing heuristics for intersecting directional alignments to produce nearly
+bijective and symmetric results (Koehn, Och, and Marcu 2003).
+In this article we focus on the HMM word alignment model (Vogel, Ney, and
+Tillmann 1996), using a novel unsupervised learning framework that significantly
+boosts its performance. The new training framework, called Posterior Regulariza-
+tion (Grac¸a, Ganchev, and Taskar 2007), incorporates prior knowledge in the form of
+constraints on the model’s posteriors. The constraints are expressed as inequalities on
+the expected value under the posterior distribution of user-defined features. Although
+the base model remains unchanged, learning guides the model to satisfy these con-
+straints. We propose two such constraints: (i) bijectivity: one word should not translate
+to many words; and (ii) symmetry: directional alignments should agree. Both of these
+constraints significantly improve the performance of the model both in precision and
+recall, with the symmetry constraint generally producing more accurate alignments.
+Section 3 presents the Posterior Regularization (PR) framework and describes how to
+encode such constraints in an efficient manner, requiring only repeated inference in the
+original model to enforce the constraints. Section 4 presents a detailed evaluation of
+the alignments produced. The constraints over posteriors consistently and significantly
+outperform the unconstrained HMM model, evaluated against manual annotations.
+Moreover, this training procedure outperforms the more complex IBM Model 4 nine
+times out of 12. We examine the influence of constraints on the resulting posterior dis-
+tributions and find that they are especially effective for increasing alignment accuracy
+for rare words. We also demonstrate a new methodology to avoid overfitting using a
+small development corpus. Section 5 evaluates the new framework on two different
+tasks that depend on word alignments. Section 5.1 focuses on MT and shows that the
+better alignments also lead to better translation systems, adding to similar evidence
+presented in Ganchev, Grac¸a, and Taskar (2008). Section 5.2 shows that the alignments
+we produce are better suited for transfer of syntactic dependency parse annotations.
+An implementation of this work (Grac¸a, Ganchev, and Taskar 2009) is available under a
+GPL license.1
+</bodyText>
+<footnote confidence="0.905654">
+1 www.seas.upenn.edu/∼strctlrn/CAT/.
+</footnote>
+<page confidence="0.985222">
+482
+</page>
+<note confidence="0.845248">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+</note>
+<sectionHeader confidence="0.979705" genericHeader="keywords">
+2. Background
+</sectionHeader>
+<bodyText confidence="0.999261411764706">
+A word alignment for a parallel sentence pair represents the correspondence between
+words in a source language and their translations in a target language (Brown et al.
+1993b). There are many reasons why a simple word-to-word (1-to-1) correspondence
+is not possible for every sentence pair: for instance, auxiliary verbs used in one lan-
+guage but not the other (e.g., English He walked and French Il est all´e), articles required
+in one language but optional in the other (e.g., English Cars use gas and Portuguese
+Os carros usam gasolina), cases where the content is expressed using multiple words
+in one language and a single word in the other language (e.g., agglutination such as
+English weapons of mass destruction and German Massenvernichtungswaffen), and expres-
+sions translated indirectly. Due to this inherent ambiguity, manual annotations usually
+distinguish between sure correspondences for unambiguous translations, and possible,
+for ambiguous translations (Och and Ney 2003). The top row of Figure 1 shows two
+word alignments between an English–French sentence pair. We use the following nota-
+tion: the alignment on the left (right) will be referenced as source–target (target–source)
+and contains source (target) words as rows and target (source) words as columns. Each
+entry in the matrix corresponds to a source–target word pair, and is the candidate for an
+alignment link. Sure links are represented as squares with borders, and possible links
+</bodyText>
+<figureCaption confidence="0.666322">
+Figure 1
+</figureCaption>
+<footnote confidence="0.851093666666667">
+Posterior marginal distributions for different models for an English to French sentence
+translation. Left: EN→FR model. Right: FR→ EN model. Top: Regular HMM posteriors.
+Middle: After applying bijective constraint. Bottom: After applying symmetric constraint. Sure
+alignments are squares with borders; possible alignments are squares without borders. Circle
+size indicates probability value. Circle color in the middle and bottom rows indicates differences
+in posterior from the top row: green = higher probability; red = lower probability.
+</footnote>
+<page confidence="0.996809">
+483
+</page>
+<note confidence="0.774344">
+Computational Linguistics Volume 36, Number 3
+</note>
+<tableCaption confidence="0.994668">
+Table 1
+</tableCaption>
+<note confidence="0.653942">
+Test corpora statistics: English–French, English–Spanish, English–Portuguese,
+Portuguese–Spanish, Portuguese–French, and Spanish–French.
+</note>
+<table confidence="0.993861571428571">
+Corpus Sentence Pairs Ave Length Max Length % Sure % 1-1
+En/Fr 447 16/17 30/30 21 98
+En/Es 400 29/31 90/99 67 86
+En/Pt 60 11/11 20/20 54 91
+Pt/Es 60 11/11 20/20 69 92
+Pt/Fr 60 11/12 20/20 77 88
+Es/Fr 60 11/12 20/20 79 87
+</table>
+<tableCaption confidence="0.6616706">
+are represented as squares without borders. Circles indicate the posterior probability
+associated with a given link and will be explained latter.
+We use six manually annotated corpora whose characteristics are summarized in
+Table 1. The corpora are: the Hansard corpus (Och and Ney 2000) of English/French
+Canadian Parliamentary proceedings (En-Fr), and the English/Spanish portion of the
+</tableCaption>
+<bodyText confidence="0.977443416666667">
+Europarl corpus (Koehn 2005) where the annotation is from EPPS (Lambert et al. 2005)
+(En-Es) using standard test and development set split. We also used the English/
+Portuguese (En-Pt), Portuguese/Spanish (Pt-Es), Portuguese/French (Pt-Fr), and
+Spanish/French (Es-Fr) portions of the Europarl corpus using annotations described
+by Grac¸a et al. (2008), where we split the gold alignments into a dev/test set in a ratio of
+40%/60%. Table 1 shows some of the variety of challenges presented by each corpus.
+For example, En-Es has longer sentences and hence more ambiguity for alignment.
+Furthermore, it has a smaller percentage of bijective (1-to-1) alignments, which makes
+word fertility more important. Overall, the great majority of links are bijective across
+the corpora (86–98%). This characteristic will be explored by the constraints described
+in this article. For the evaluations in Section 4, the percentage of sure links (out of all
+links) will correlate with difficulty because only sure links are considered for recall.
+</bodyText>
+<subsectionHeader confidence="0.834647">
+2.1 HMM Word Alignment Model
+</subsectionHeader>
+<bodyText confidence="0.999810333333333">
+In this article we focus on the HMM for word alignment proposed by Vogel, Ney, and
+Tillmann (1996). This model generalizes IBM Models 1 and 2 (Brown et al. 1993b),
+by introducing a first-order Markov dependence between consecutive alignment link
+decisions. The model is an (input–output) HMM with I positions whose hidden state
+sequence z = (z1, ... , zI) with zi E {null, 1, ... , J} corresponds to a sequence of source
+word positions, where J is the source sentence length, and with null representing un-
+aligned target words. Each observation corresponds to a word in the target language xi.
+The probability of an alignment z and target sentence x given a source sentence y can
+be expressed as:
+</bodyText>
+<equation confidence="0.808197">
+pθ(x, z  |y) = 77177 pd(zi  |zi−1)pt(xi  |yzi) (1)
+</equation>
+<page confidence="0.9972015">
+11
+i=1
+</page>
+<bodyText confidence="0.9989855">
+where pt(xi  |yzi) is the probability of a target word at position i being a translation of the
+source word at position zi (translation probability), and pd(zi  |zi−1) is the probability
+</bodyText>
+<page confidence="0.99356">
+484
+</page>
+<bodyText confidence="0.967487941176471">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+of translating a word at position zi, given that the previous translated word was at
+position zi−1 (distortion probability). Note that this model is directional: Each target
+word (observation) can be aligned to at most one source word (hidden state), whereas a
+source word could be used multiple times.
+We refer to translation parameters pt and distortions parameters pd jointly as 0.
+There are several important standard details of the parametrization: The distortion
+probability pd(zi  |zi−1) depends only on the distance (zi − zi−1) between the source po-
+sitions the states represent. Only distances in the range 15 are modeled explicitly, with
+larger distances assigned equal probabilities. The probability of the initial hidden state,
+pd(z1  |z0) is modeled separately from the other distortion probabilities. To incorporate
+null links, we add a translation probability given null: pt(xi  |ynull). Following standard
+practice, null links also maintain position information and do not allow distortion. To
+implement this, we create position-specific null hidden states for each source position,
+and set pd(nulli|yi�) = 0 and pd(nulli|nulli�) = 0 for all i =� i&apos;. The model is simple, with
+complexity of inference O(I x J2). There are several problems with the model that arise
+from its directionality, however.
+</bodyText>
+<listItem confidence="0.998188125">
+• Non-bijective: Multiple target words can be linked to a single source
+word. This is rarely desirable. For instance, the model produces
+non-bijective links 22% of the time for En-Fr instead of 2%.
+• Asymmetric: By switching the (arbitrary) choice of which language is
+source and which is target, the HMM produces very different results. For
+example, intersecting the sets of alignments produced by the two possible
+choices for source preserves less than half of their union for both En-Fr
+and En-Pt.2
+</listItem>
+<subsectionHeader confidence="0.993082">
+2.2 Training
+</subsectionHeader>
+<bodyText confidence="0.982441">
+Standard HMM training seeks model parameters 0 that maximize the log-likelihood of
+the parallel corpus:
+</bodyText>
+<equation confidence="0.717734">
+Log-Likelihood: G(0) = �E[log pθ(x  |y)] = �E[log ~ pθ(x, z  |y)] (2)
+z
+</equation>
+<bodyText confidence="0.988710571428571">
+where E [ f (x, y)] = N ~n 1 f (xn, yn) denotes the empirical average of a function f (xn, yn )
+over the N pairs of sentences {(x1,y1) � � �,(xN,yN)} in the training corpus. Because
+of the latent alignment variables z, the log-likelihood function for the HMM model
+is not concave, and the model is fit using the Expectation Maximization (EM) algo-
+rithm (Dempster, Laird, and Rubin 1977). EM maximizes G(0) via block-coordinate
+ascent on a lower bound F(q, 0) using an auxiliary distribution over the latent variables
+q(z  |x, y) (Neal and Hinton 1998):
+</bodyText>
+<equation confidence="0.9803116">
+~~ �
+�E q(z  |x,y)log pθ(x,z  |y)
+z
+EM Lower Bound: G(0) &gt; F(q, 0) =
+q(z (3)
+</equation>
+<page confidence="0.623597">
+2 For both of these points, see the experimental setup in Section 4.1.
+485
+</page>
+<note confidence="0.260243">
+Computational Linguistics Volume 36, Number 3
+</note>
+<equation confidence="0.823667869565217">
+To simplify notation, we will drop the dependence on y and will write pθ(x, z  |y) as
+pθ(x, z), pθ(z  |x, y) as pθ(z  |x) and q(z  |x, y) as q(z  |x). The alternating E and M steps
+at iteration t + 1 are given by:
+E: qt+1(z  |x) = arg max F(q,θt) = arg min KL(q(z  |x)  ||pθt(z  |x)) = pθt(z  |x) (4)
+q(z|x) q(z|x)
+�E �
+�E qt+1(z  |x) log pθ(x, z) (5)
+z
+M: θt+1 = arg max
+θ
+F(qt+1,θ) = arg max
+θ
+where
+=
+is the Kullback-Leibler divergence. The EM algorithm is
+guaranteed to converge to a local maximum of
+under mild conditions (Neal and
+Hinton 1998). The E step computes the posteriors qt+1(z
+x)
+x) over the latent
+variables (alignments) given the observed variables (sentence pair) and current param-
+eters
+which is accomplished by the forward-backward algorithm for HMMs. The M
+</equation>
+<bodyText confidence="0.959580653846154">
+step uses qt+1 to
+fill
+the values of alignments z and estimate parameters
+This step is particularly easy for HMMs, where
+simply involves normalizing (ex-
+pected) counts. This modular split into two intuitive and straightforward steps accounts
+for the vast popularity of EM.
+In Figure 1, each entry in the alignment matrix contains a circle indicating the align-
+ment link posterior for that particular word pair after training an HMM model with the
+EM algorithm (see the experimental set up in Section 4.1). Note that the link posteriors
+are concentrated around particular source words (rare words occurring less than five
+times in the corpus) in both directions, instead of being spread across different words.
+This is a well-known problem when training using EM called the
+collector
+(Brown et al. 1993a). A rare word in the source language links to many words in the
+target language that we would ideally like to see unaligned, or aligned to other words
+in the sentence. The reason this happens is that the generative model has to distribute
+translation probability for each source word among different candidate target words.
+If one translation is much more common than another, but the rare translation is used
+in the sentence, the model might have a very low translation probability for the correct
+alignment. On the other hand, because the rare source word occurs only in a few sen-
+tences it needs to spread its probability mass over fewer competing translations. In this
+case, choosing to align the rare word to all of these words leads to a higher likelihood
+than correctly linking them or
+them to the special null word, because it increases
+the likelihood of this sentence without lowering the likeli
+</bodyText>
+<equation confidence="0.9400556">
+KL(q||p)
+Eq[log q(·)
+p(·)]
+G(θ)
+|
+= pθt(z|
+θt,
+“softly
+in”
+θt+1.
+θt+1
+“garbage
+ef-
+fect”
+linking
+</equation>
+<bodyText confidence="0.743068">
+hood of many other sentences.
+</bodyText>
+<subsectionHeader confidence="0.997698">
+2.3 Decoding
+</subsectionHeader>
+<bodyText confidence="0.901053615384615">
+lattice).
+Another possibility that often works better is to use Minimum Bayes-Risk (MBR)
+decoding (Kumar and Byrne 2002; Liang, Taskar, and Klein 2006;
+Ganchev, and
+Taskar 2007). Using this decoding we include an alignment link i
+j if the posterior
+probability that word i aligns to word j is above some threshold. This allows the
+accumulation of probability from several low-scoring alignments that agree on one
+alignment link. The threshold is tuned on some small amount of labeled data—in
+our case the development set—to
+some loss. Kumar and Byrne (2002) study
+different loss functions that incorporate linguisti
+HMM’s
+</bodyText>
+<equation confidence="0.794697666666667">
+Grac¸a,
+−
+minimize
+</equation>
+<bodyText confidence="0.990118333333333">
+c knowledge, and show significant
+Alignments are normally predicted using the Viterbi algorithm (which selects the single
+most probable path through the
+</bodyText>
+<page confidence="0.994058">
+486
+</page>
+<bodyText confidence="0.945344">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+improvement over likelihood decoding. Note that this could potentially result in an
+alignment having zero probability under the model, as many-to-many alignments can
+be produced in this way. MBR decoding has several advantages over Viterbi decoding.
+First, independently of the particular choice of the loss function, by picking a specific
+threshold we can trade off precision and recall of the predicted word alignments. In
+fact, in this work when comparing different alignment sets we do not commit to any
+loss function but instead compare precision vs recall curves, by generating alignments
+for different thresholds (0..1). Second, with this method we can ignore the null word
+probabilities, which tend to be poorly estimated.
+</bodyText>
+<sectionHeader confidence="0.918722" genericHeader="introduction">
+3. Posterior Regularization
+</sectionHeader>
+<bodyText confidence="0.999932076923077">
+Word alignment models in general and the HMM in particular are very gross over-
+simplifications of the translation process and the optimal likelihood parameters learned
+often do not correspond to sensible alignments. One solution to this problem is to
+add more complexity to the model to better reflect the translation process. This is the
+approach taken by IBM Models 4+ (Brown et al. 1993b; Och and Ney 2003), and more
+recently by the LEAF model (Fraser and Marcu 2007). Unfortunately, these changes
+make the models probabilistically deficient and intractable, requiring approximations
+and heuristic learning and inference prone to search errors. Instead, we propose to
+use a learning framework called Posterior Regularization (Grac¸a, Ganchev, and Taskar
+2007) that incorporates side information into unsupervised estimation in the form of
+constraints on the model’s posteriors. The constraints are expressed as inequalities on
+the expected values under the posterior distribution of user-defined constraint features
+(not necessarily the same features used by the model). Because in most applications
+what we are interested in are the latent variables (in this case the alignments), con-
+straining the posteriors allows a more direct way to achieve the desired behavior.
+On the other hand, constraining the expected value of the features instead of adding
+them to the model allows us to express features that would otherwise make the model
+intractable. For example, enforcing that each hidden state of an HMM model should be
+used at most once per sentence would break the Markov property and make the model
+intractable. In contrast, we will show how to enforce the constraint that each hidden
+state is used at most once in expectation. The underlying model remains unchanged,
+but the learning method changes. During learning, our method is similar to the EM
+algorithm with the addition of solving an optimization problem similar to a maximum
+entropy problem inside the E Step. The following subsections present the Posterior
+Regularization framework, followed by a description of how to encode two pieces of
+prior information aimed at solving the problems described at the end of Section 2.
+</bodyText>
+<subsectionHeader confidence="0.997726">
+3.1 Posterior Regularization Framework
+</subsectionHeader>
+<bodyText confidence="0.999914">
+The goal of the Posterior Regularization (PR) framework is to guide a model during
+learning towards satisfying some prior knowledge about the desired latent variables
+(in this case word alignments), encoded as constraints over their expectations. The
+key advantage of using regularization on posterior expectations is that the base model
+remains unchanged, but during learning, it is driven to obey the constraints by setting
+appropriate parameters θ. Moreover, experiments show that enforcing constraints in ex-
+pectation results in predicted alignments that also satisfy the constraints. More formally,
+posterior information in PR is specified with sets 2x of allowed distributions over the
+</bodyText>
+<page confidence="0.977828">
+487
+</page>
+<note confidence="0.274633">
+Computational Linguistics Volume 36, Number 3
+</note>
+<bodyText confidence="0.992256153846154">
+hidden variables z which satisfy inequality constraints on some user-defined feature
+expectations, with violations bounded by e ≥ 0:
+Constrained Posterior Set: Qx = {q(z  |x) : ∃&amp;,Eq[f(x,z)] − bx ≤ &amp;; ||&amp;||22 ≤ e2} (6)
+Qx denotes the set of valid distributions where some feature expectations are bounded
+by bx and e ≥ 0 is an allowable violation slack. Setting e = 0 enforces inequality
+constraints strictly. In order to introduce equality constraints, we use two inequality
+constraints with opposite signs. We assume that Qx is non-empty for each example x.
+Furthermore, the set Qx needs to be convex. In this work we restrict ourselves to
+linear inequalities because, as will be shown, subsequently this simplifies the learning
+algorithm. Note that Qx, f(x, z), and bx also depend on y, the corresponding source
+sentence, but we suppress the dependence for brevity. In PR, the log-likelihood of a
+model is penalized with the KL-divergence between the desired distribution space Qx
+and the model posteriors, KL(Qx 11 pθ(z|x)) = min
+</bodyText>
+<equation confidence="0.7086035">
+q(z|x)∈Qx
+Posterior Regularized Likelihood: L(A) − E[KL(Qx II pθ(z|x))]. (7)
+</equation>
+<bodyText confidence="0.999961857142857">
+The objective trades off likelihood and distance to the desired posterior subspace (mod-
+ulo getting stuck in local maxima) and provides an effective method of controlling the
+posteriors.
+Another way of interpreting the objective is to express the marginal log-likelihood
+L(A) as a KL distance: KL(b(xn) II pθ(x)) where b(xn) is a delta function at xn. Hence the
+objective is a sum of two average KL terms, one in the space of distributions over x and
+one in the space of distributions over z:
+</bodyText>
+<equation confidence="0.982501333333333">
+N
+−L(A) + �E[KL(Qx 11 pθ(z|x))] = 1N E KL(b(xn) II pθ(x)) + KL(Qxn 11 pθ(z|xn)) (8)
+n=1
+</equation>
+<bodyText confidence="0.762999">
+This view of the PR objective is illustrated in Figure 2.
+</bodyText>
+<figureCaption confidence="0.697508">
+Figure 2
+</figureCaption>
+<bodyText confidence="0.9708045">
+Maximizing the PR objective is equivalent to minimizing the empirical average of two
+KL divergences: The negative log-likelihood −L(A) = N �n 1 KL(b(xn) I pθ (x)) plus posterior
+regularization N En 1 KL(Qxn II pθ (z|xn)), where b(xn) is a delta function at xn. The diagram
+illustrates the effect of the likelihood term and the regularization term operating over the two
+spaces of distributions: the observed variables x and the latent variables z. (The effect of the prior
+on A is not shown.)
+</bodyText>
+<equation confidence="0.968703">
+KL(q(z  |x) 11 pθ(z|x)). The regu-
+larized objective is:
+</equation>
+<page confidence="0.990092">
+488
+</page>
+<table confidence="0.696561666666667">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+Computing the PR objective involves solving the optimization problem for each x:
+Primal Projection: KL(Qx 11 pθ(z|x)) = min KL(q(z  |x) II pθ(z|x)) (9)
+q(z|x)EQx
+Directly minimizing this objective is hard because there is an exponential number of
+alignments z; however, the problem becomes easy to solve in its dual formulation (see
+Appendix A for derivation):
+Dual Projection: argmin bTx λ + log Z(λ) + E ||λ||2 (10)
+λ≥0
+</table>
+<bodyText confidence="0.999894636363636">
+where Z(λ) = Ez pθ(z|x) exp(−λ · f(x,z)) is the normalization constant and the primal
+solution is q(z|x) = pθ(z|x)exp{−λTf(x,z)}/Z(λ). There is one dual variable per ex-
+pectation constraint, and the dual gradient at λ =~ 0 is ∇(λ) = bx − Eq[f(x,z)] + e ||λi
+Note that this primal–dual relationship is very similar to the one between maximum
+likelihood and maximum entropy. If bx corresponds to empirical expectations and
+pθ(z|x) is uniform, then Equation (10) would be a log-likelihood and Equation (14) (fol-
+lowing) would be a maximum entropy problem. As with maximum entropy, gradient
+computation involves computing an expectation under q(z  |x), which can be performed
+efficiently if the features f(x, z) factor in the same way as the model pθ(x, z), and the
+constraints are linear. The conditional distribution over z represented by a graphical
+model such as HMM can be written as a product of factors over cliques C:
+</bodyText>
+<equation confidence="0.839388333333333">
+Factored Posterior: p(z  |x) = 1 φ(x,zc) (11)
+Z ri
+cEC
+</equation>
+<bodyText confidence="0.999403">
+In an HMM, the cliques C are simply the nodes zi and the edges (zi, zi+1) and the factors
+correspond to the distortion and translation probabilities. We will assume f is factorized
+as a sum over the same cliques (we will show below how symmetry and bijectivity
+constraints can be expressed in this way):
+</bodyText>
+<equation confidence="0.9951758">
+�Factored Features: f(x,z) = f(x, zc) (12)
+cEC
+Then q(z  |x) has the same form as pθ(z  |x):
+q(z  |x) = Zp(z  |x)exp(−λTf(x,z)) = Z1 ri φ(x,zc) exp−λ7f(x,zc) (13)
+cEC
+</equation>
+<bodyText confidence="0.960195666666667">
+Hence the projection step uses the same inference algorithm (forward–backward for
+HMMs) to compute the gradient, only modifying the local factors using the current
+setting of λ.
+</bodyText>
+<equation confidence="0.661155625">
+1 λi ← 0;
+2 while ||∇(λ)||2 &gt; η do
+3 φ&apos;(x,zc) ← φ(x,zc)exp−λ7f(x,zc);
+4 q(z  |x) ← forwardBackward(φ&apos;(x,zc));
+5 λ ← λ + αβ∇(λ);
+6 end
+Algorithm 1: Computing KL(Qx 11 pθ(z|x)) = minKL(q(z|x) 11 pθ(z|x))
+qEQx
+</equation>
+<page confidence="0.986551">
+489
+</page>
+<note confidence="0.282584">
+Computational Linguistics Volume 36, Number 3
+</note>
+<bodyText confidence="0.999957411764706">
+We optimize the dual objective using the gradient based methods shown in
+Algorithm 1. Here 11 is an optimization precision, oc is a step size chosen with the strong
+Wolfe’s rule (Nocedal and Wright 1999). Here, PV(A) represents an ascent direction
+chosen as follows: For inequality constraints, it is the projected gradient (Bertsekas
+1999); for equality constraints with slack, we use conjugate gradient (Nocedal and
+Wright 1999), noting that when A = 0, the objective is not differentiable. In practice
+this only happens at the start of optimization and we use a sub-gradient for the first
+direction.
+Computing the projection requires an algorithm for inference in the original model,
+and uses that inference as a subroutine. For HMM word alignments, we need to make
+several calls to forward–backward in order to choose A. Setting the optimization pre-
+cision 11 more loosely allows the optimization to terminate more quickly but at a less
+accurate value. We found that aggressive optimization significantly improves alignment
+quality for both constraints we used and consequently choose 11 so that tighter values
+do not significantly improve performance. This explains why we report better results
+here in this paper than in Ganchev, Grac¸a, and Taskar (2008), which uses a more naive
+optimization (see Section 4.1).
+</bodyText>
+<subsectionHeader confidence="0.999132">
+3.2 Posterior Regularization via Expectation Maximization
+</subsectionHeader>
+<bodyText confidence="0.99998">
+We can optimize the PR objective using a procedure very similar to the expectation
+maximization (EM) algorithm. Recall from Equation (4) that in the E step, q(z  |x) is
+set to the posterior over hidden variables given the current 0. To converge to the PR
+objective, we must modify the E step so that q(z  |x) is a projection of the posteriors onto
+the constraint set Qx for each example x (Grac¸a, Ganchev, and Taskar 2007).
+</bodyText>
+<equation confidence="0.729208">
+E&apos;: arg min KL(q(z|x) 11 pθt(z|x)) s.t. Eq[f(x,z)] − bx &lt; &amp;; ||&amp;||22 &lt; C2 (14)
+q,ξ
+</equation>
+<bodyText confidence="0.995005333333333">
+The new posteriors q(z|x) are used to compute sufficient statistics for this instance and
+hence to update the model’s parameters in the M step (Equation (5)), which remains
+unchanged. This scheme is illustrated in Figure 3 and in Algorithm 2. The only imple-
+mentation difference is that we must now perform the KL projection before collecting
+sufficient statistics. We found it can help to also perform this projection at test time,
+using q(z  |x) = arg min KL(q(z  |x)|pθ(z  |x)) instead of pθ(z  |x) to decode.
+</bodyText>
+<equation confidence="0.5070322">
+q(z|x)EQx
+1 for t = 1..T do
+2 for each training sentence x do
+E’-Step: qt+1(z  |x) = arg minKL(q(z  |x)||pθt(z  |x))
+3 q(z|x)EQx
+</equation>
+<sectionHeader confidence="0.538184" genericHeader="method">
+4 end
+</sectionHeader>
+<bodyText confidence="0.473397">
+M-Step: 0t+1 = arg maxθ �E [Ez qt+1(z  |x) log pθ(z, x)]
+</bodyText>
+<sectionHeader confidence="0.4726785" genericHeader="method">
+5
+6 end
+</sectionHeader>
+<construct confidence="0.686561">
+Algorithm 2: PR optimization via modified EM. E’-Step is computed using
+Algorithm 1.
+</construct>
+<page confidence="0.985975">
+490
+</page>
+<note confidence="0.788527">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+</note>
+<figureCaption confidence="0.813959">
+Figure 3
+</figureCaption>
+<bodyText confidence="0.560503">
+Modified EM for optimizing PR objective L(θ) − �E[KL(Qx 11 pθ(z|x))].
+</bodyText>
+<subsectionHeader confidence="0.995644">
+3.3 Bijectivity Constraints
+</subsectionHeader>
+<bodyText confidence="0.9998045">
+We observed in Table 1 that most alignments are 1-to-1 and we would like to introduce
+this prior information into the model. Unfortunately including such a constraint in the
+model directly breaks the Markov property in a fairly fundamental way. In particular
+computing the normalization would require the summation of 1-to-1 or near 1-to-1
+weighted matchings, which is a classic #P-complete problem. Introducing alignment
+degree constraints in expectation using the PR framework is easy and tractable. We
+encode them as the constraint E[f(x, z)] &lt; 1 where we have one feature f for each source
+word j that counts how many times it is aligned to a target word in the alignment z:
+</bodyText>
+<equation confidence="0.8264345">
+�Bijective Features: fj(x, z) = 1(zi = j).
+i
+</equation>
+<bodyText confidence="0.9995414">
+The second row of Figure 1 shows an example of the posteriors after applying bijectivity
+constraints; the first row is before the projection. Green (respectively, red) circles indicate
+that the probability mass for that particular link increased (respectively, decreased)
+when compared with the EM-trained HMM. For example, in the top left panel, the
+word schism is used more than once, causing erroneous alignments. Projecting to the
+bijectivity constraint set prevents this and most of the mass is (for this example) moved
+to the correct word pairs. Enforcing the constraint at training and decoding increases
+the fraction of 1-to-1 alignment links from 78% to 97.3% for En-Fr (manual annotations
+have 98.1%); for En-Pt the increase is from 84.7% to 95.8% (manual annotations have
+90.8%) (see Section 4.1).
+</bodyText>
+<subsectionHeader confidence="0.944543">
+3.4 Symmetry Constraints
+</subsectionHeader>
+<bodyText confidence="0.999869222222222">
+The directional nature of the generative models used to recover word alignments con-
+flicts with their interpretation as translations. In practice, we see that the choice of which
+language is source versus target matters and changes the mistakes made by the model
+(the first row of panels in Figure 1). The standard approach is to train two models
+independently and then intersect their predictions (Och and Ney 2003). However, we
+show that it is much better to train two directional models concurrently, coupling
+their posterior distributions over alignments to approximately agree. Let the directional
+models be defined as: −� p (−� z ) (source–target) and �− p (�− z ) (target–source). We suppress
+dependence on x and y for brevity. Define z to range over the union of all possible
+</bodyText>
+<page confidence="0.98894">
+491
+</page>
+<figure confidence="0.302438">
+Computational Linguistics Volume 36, Number 3
+−→ Z ∪
+</figure>
+<bodyText confidence="0.977278333333333">
+where ←−p (−→z ) = 0 and vice versa (i.e., the alignment of one directional model has prob-
+ability zero according to the other model). We then define the following feature for each
+target–source position pair i, j:
+</bodyText>
+<figure confidence="0.780377333333333">
+directional alignments
+←− Z. We define a mixture model p(z) = 12−→p(z) + 12←−p (z)
+Symmetric Features: fij(x, z) =
++1 z ∈
+−1 z ∈
+−→ Z and −→z i = j
+←− Z and ←−z j = i .
+{
+0 otherwise
+</figure>
+<bodyText confidence="0.9941685">
+If the feature fij has an expected value of zero, then both models predict the i, j link
+with equal probability. We therefore impose the constraint Eq[ fij(x, z)] = 0 (possibly with
+some small slack). Note that satisfying this implies satisfying the bijectivity constraint
+presented earlier. To compute expectations of these features under the model q we only
+need to be able to compute them under each directional HMM. To see this, we have by
+the definition of qλ and pθ,
+</bodyText>
+<equation confidence="0.853391">
+qλ(z|x) = →− p (z  |x) + ←− p (z  |x) exp{−λTf(x,z)} →− q (z|x) p (x) + q (z|x) p (x)
+= (15)
+2Zλ
+2 Zλ
+</equation>
+<bodyText confidence="0.940273">
+where we have defined:
+</bodyText>
+<figure confidence="0.9680175">
+−→ q (z|x) = 1 � →−p (z, x) exp{−λTf(x,z)}
+Z�� q −→p (z,x)exp{−λTf(x,z)} with Zq =
+z
+←− q (z|x) = 1 � ←−p (z, x) exp{−λTf(x,z)}
+Z�� q ←− p (z,x)exp{−λTf(x,z)} with Zq =
+z
+</figure>
+<bodyText confidence="0.9997117">
+All these quantities can be computed separately in each model using forward–backward
+and, furthermore, Zλ = 12 (y (x) + y () ). The effect of this constraint is illustrated in
+the bottom panels of Figure 1. The projected link posteriors are equal for the two
+models, and in most cases the probability mass was moved to the correct alignment
+links. The exception is the word pair internal/le. In this case, the model chose to incor-
+rectly have a high posterior for the alignment link rather than generating internal from
+null in one direction and le from null in the other.
+We can measure symmetry of predicted alignments as the ratio of the size of the
+intersection to the size of the union. Symmetry constraints increase symmetry from 48%
+to 89.9% for En-Fr and from 48% to 94.2% for En-Pt (see Section 4.1).
+</bodyText>
+<sectionHeader confidence="0.932904" genericHeader="method">
+4. Alignment Quality Evaluation
+</sectionHeader>
+<bodyText confidence="0.999933">
+We begin with a comparison of word alignment quality evaluated against manually
+annotated alignments as measured by precision and recall. We use the six parallel
+corpora with gold annotations described in the beginning of Section 2.
+</bodyText>
+<subsectionHeader confidence="0.950152">
+4.1 Experimental Setup
+</subsectionHeader>
+<bodyText confidence="0.9999692">
+We discarded all training data sentence pairs where one of the sentences contained
+more than 40 words. Following common practice, we added the unlabeled development
+and test data sets to the pool of unlabeled sentences. We initialized the IBM Model 1
+translation table with uniform probabilities over word pairs that occur together in the
+same sentence and trained the IBM Model 1 for 5 iterations. All HMM alignment models
+</bodyText>
+<page confidence="0.979828">
+492
+</page>
+<note confidence="0.552611">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+</note>
+<bodyText confidence="0.991663">
+were initialized with the translation table from IBM Model 1 and uniform distortion
+probabilities. We run each training procedure until the area under the precision/recall
+curve measured on a development corpus stops increasing (see Figure 4 for an example
+of such a curve). Using the precision/recall curve gives a broader sense of the model’s
+performance than using a single point (by tuning a threshold for a particular metric). In
+most cases this meant four iterations for normal EM training and two iterations using
+posterior regularization. We suspect that the constraints make the space easier to search.
+The convergence criterion for the projection algorithm was the normalized 12 norm
+of the gradient (gradient norm divided by number of constraints) being smaller than
+η (see Algorithm 1). For bijective constraints, we set η to 0.005 and used zero slack.
+For symmetric constraints, η and slack were set to 0.001. We chose η aggressively
+and lower values did not significantly increase performance. Less aggressive settings
+cause degradation of performance: For example, for En-Fr using 10k sentences, and
+running four iterations of constrained EM, the area under the precision/recall curve for
+the symmetric model changed from 70% with η = 0.1 to 85% using η = 0.001. On the
+other hand, the number of iterations required to project the constraints increases for
+smaller values of η. The number of forward–backward calls for normal HMM is 40k
+(one for each sentence and EM iteration), for the symmetric model using η = 0.1 was
+around 41k and using η = 0.001 was around 26M (14 minutes to 4 hours 14 minutes
+of training time, 17 times slower, for the different settings of η). We note that better
+optimization methods, such as L-BFGS, or using a warm start for the parameters at each
+EM iteration (parameters from the previous iteration), or training the models online,
+would potentially decrease the running time of our method.
+The intent of this experimental section is to evaluate the gains from using con-
+straints during learning, hence the main comparison is between HMM trained with
+normal EM vs. trained with PR plus constraints. We also report results for IBM Model 4,
+because it is often used as the default word alignment model, and can be used as a
+reference. However, we would like to note that IBM Model 4 is a more complex model,
+able to capture more structure, albeit at the cost of intractable inference. Because our
+approach is orthogonal to the base model used, the constraints described here could
+be applied in principle to IBM Model 4 if exact inference was efficient, hopefully
+yielding similar improvements. We used a standard implementation of IBM Model
+4 (Och and Ney 2003) and because changing the existing code is not trivial, we could
+not use the same stopping criterion to avoid overfitting and we are not able to produce
+precision/recall curves. We trained IBM Model 4 using the default configuration of the
+</bodyText>
+<figureCaption confidence="0.753988">
+Figure 4
+</figureCaption>
+<tableCaption confidence="0.354902">
+Precision/Recall curves for different models using 1,000k sentences. Precision on the horizontal
+axis. Left: Hansard EN-FR direction. Right: EN-PT Portuguese-English direction.
+</tableCaption>
+<page confidence="0.99617">
+493
+</page>
+<figure confidence="0.832152">
+Computational Linguistics Volume 36, Number 3
+</figure>
+<figureCaption confidence="0.950201">
+Figure 5
+</figureCaption>
+<bodyText confidence="0.889189">
+Word alignment precision when the threshold is chosen to achieve IBM Model 4 recall with a
+difference of ± 0.005. The average relative increase in precision (against the HMM model) is
+10% for IBM Model 4, 11% for B-HMM, and 14% for S-HMM.
+MOSES training script.3 This performs five iterations of IBM Model 1, five iterations of
+HMM, and five iterations of IBM Model 4.
+</bodyText>
+<subsectionHeader confidence="0.997125">
+4.2 Alignment Results
+</subsectionHeader>
+<bodyText confidence="0.9999749375">
+In this section we present results on alignment quality. All comparisons are made using
+MBR decoding because this decoding method always outperforms Viterbi decoding.4
+For the models with constraints we project the posteriors at decode time (i.e., we use
+q(z  |x) to decode). This gives a small but consistent improvement. Figure 4 shows
+precision/recall curves for the different models on the En-Fr corpus using English as
+the source language (left), and on the En-Pt corpus using Portuguese as the source.
+Precision/recall curves are obtained by varying the posterior threshold from 0 to 1 and
+then plotting the different precision and recall values obtained.
+We observe several trends from Figure 4. First, both types of constraints improve
+over the HMM in terms of both precision and recall (their precision/recall curve is
+always above). Second, S-HMM performs slightly better than B-HMM. IBM Model 4
+is comparable with both constraints (after symmetrization). The results for all language
+pairs are in Figure 5. For ease of comparison, we choose a decoding threshold for HMM
+models to achieve the recall of the corresponding IBM Model 4 and report precision.
+Our methods always improve over the HMM by 10% to 15%, and improve over IBM
+Model 4 nine times out of 12. Comparing the constraints with each other we see that
+</bodyText>
+<footnote confidence="0.841838">
+3 www.statmt.org/moses/?n=FactoredTraining.HomePage.
+4 IBM Model 4 uses Viterbi decoding as Giza++ does not support MBR decoding.
+</footnote>
+<page confidence="0.997421">
+494
+</page>
+<note confidence="0.828262">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+</note>
+<figureCaption confidence="0.965192">
+Figure 6
+</figureCaption>
+<bodyText confidence="0.951188272727273">
+Word alignment precision as a function of training data size (number of sentence pairs).
+Posterior decoding threshold chosen to achieve IBM Model 4 recall in the Hansard corpus. Right:
+English as source. Left: French as source.
+S-HMM performs better than B-HMM in 10 out of 12 cases. Because S-HMM indirectly
+enforces bijectivity and models sequential correlations on both sides, this is perhaps not
+surprising.
+Figure 6 shows performance as a function of training data size. As before, we decode
+to achieve the recall of IBM Model 4. For small training corpora adding the constraints
+provides larger improvements (20–30%) but we still achieve significant gains even with
+a million parallel sentences (15%). Greater improvements for small data sizes indicate
+that our approach can be especially effective for resource-poor language pairs.
+</bodyText>
+<subsectionHeader confidence="0.997237">
+4.3 Rare vs. Common Words
+</subsectionHeader>
+<bodyText confidence="0.999998611111111">
+One of the main benefits of using the posterior regularization constraints described is
+an alleviation of the garbage collector effect (Brown et al. 1993a). Figure 7 breaks down
+performance improvements by common versus rare words. As before, we use posterior
+decoding, tuning the threshold to match IBM Model 4 recall. For common words, this
+tuning maintains recall very close for all models so we do not show this in the figure. In
+the top left panel of Figure 7, we see that precision of common words follows the pattern
+we saw for the corpus overall: Symmetric and bijective outperform both IBM Model 4
+and the baseline HMM, with symmetric slightly better than bijective. The results for
+common words vary more slowly as we increase the quantity of training data than they
+did for the full corpus. In the top right panel of Figure 7 we show the precision for rare
+words. For the baseline HMM as well as for IBM Model 4, this is very low precisely
+because of the garbage collector problem: Rare words become erroneously aligned to
+untranslated words, leading to low precision. In fact the constrained models achieve
+absolute precision improvements of up to 50% over the baseline. By removing these
+erroneous alignments the translation table becomes more accurate, allowing higher re-
+call on the full corpus. In the bottom panel of Figure 7, we observe a slightly diminished
+recall for rare words. This slight drop in recall is due to moving the mass corresponding
+to rare words to null.
+</bodyText>
+<subsectionHeader confidence="0.991525">
+4.4 Symmetrization
+</subsectionHeader>
+<bodyText confidence="0.999569666666667">
+As discussed earlier, the word alignment models are asymmetric, whereas most appli-
+cations require a single alignment for each sentence pair. Typically this is achieved by
+a symmetrization heuristic that takes two directional alignments and produces a single
+</bodyText>
+<page confidence="0.9972">
+495
+</page>
+<figure confidence="0.834739">
+Computational Linguistics Volume 36, Number 3
+</figure>
+<figureCaption confidence="0.614102666666667">
+Figure 7
+Precision and Recall as a function of training data size for En-Fr by common and rare words.
+Top Left: Common Precision, Top Right: Rare Precision, Bottom: Rare Recall.
+</figureCaption>
+<bodyText confidence="0.999335454545455">
+alignment. For MT the most commonly used heuristic is called grow diagonal final
+(Och and Ney 2003). This starts with the intersection of the sets of aligned points and
+adds points around the diagonal that are in the union of the two sets of aligned points.
+The alignment produced has high recall relative to the intersection and only slightly
+lower recall than the union. In syntax transfer the intersection heuristic is normally
+used, because one wants to have high precision links to transfer knowledge between
+languages. One pitfall of these symmetrization heuristics is that they can obfuscate the
+link between the original alignment and the ones used for a specific task, making errors
+more difficult to analyze. Because they are heuristics tuned for a particular phrase-
+based translation system, it is not clear when they will help and when they will hinder
+system performance. In this work we followed a more principled approach that uses
+</bodyText>
+<figureCaption confidence="0.661825">
+Figure 8
+</figureCaption>
+<footnote confidence="0.6697115">
+Precision/recall curves for the different models after soft union symmetrization. Precision is on
+the horizontal axis. Left EN-FR, Right PT-ES.
+</footnote>
+<page confidence="0.996384">
+496
+</page>
+<note confidence="0.515097">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+</note>
+<bodyText confidence="0.999964333333333">
+the knowledge about the posterior distributions of each directional model. We include a
+point in the final alignment if the average of the posteriors under the two models for that
+point is above a threshold. This heuristic is called soft union (DeNero and Klein 2007).
+Figure 8 shows the Precision/Recall curves after symmetrization for the En-Fr corpus.
+The posterior regularization–trained models still performed better, but the differences
+get smaller after doing the symmetrization. This should not be very surprising, because
+the soft union symmetrization can be viewed as an approximation of our symmetry
+constraint applied only at decode time. Applying the symmetrization to the model with
+symmetry constraints does not affect performance.
+</bodyText>
+<subsectionHeader confidence="0.992163">
+4.5 Analysis
+</subsectionHeader>
+<bodyText confidence="0.999388625">
+In this section we discuss some scenarios in which the constraints make the alignments
+better, and some scenarios where they fail. We have already discussed the garbage
+collector effect and how both models address it. Both of the constraints also bias the
+model to have at most probability one in any row or column of the posterior matrix,
+encouraging 1-to-1 alignments. Obviously whenever alignments are systematically not
+1-to-1 , this can lead to errors (for instance the examples described in Section 2).
+An example presented in Figure 9 shows the posterior marginal distributions for an
+English/French sentence pair using the same notation as in Figure 1. In the top panel of
+</bodyText>
+<figureCaption confidence="0.559666285714286">
+Figure 9
+Posterior distributions for different models for an English to French sentence translation. Left:
+EN→FR model. Right: FR→ EN model. Top: Regular HMM posteriors. Middle: After applying
+the bijective constraint. Bottom: After applying the symmetric constraint. Sure alignments are
+squares with borders; possible alignments are squares without borders. Circle size indicates
+probability value. Circle color in the middle and bottom rows indicates differences in posterior
+from the top row; green = higher probability; red = lower probability.
+</figureCaption>
+<page confidence="0.963815">
+497
+</page>
+<figure confidence="0.614145">
+Computational Linguistics Volume 36, Number 3
+</figure>
+<figureCaption confidence="0.659884">
+Figure 9, we see the baseline models, where the English word met is incorrectly being
+</figureCaption>
+<bodyText confidence="0.979146666666667">
+aligned to s´eance est ouverte. This makes it impossible to recover the correct alignment
+house/s´eance. Either constraint corrects this problem. On the other hand, by enforcing
+a 1-to-1 mapping the correct alignment met / est ouverte is lost. Going back to the first
+row (regular HMM) this alignment is correct in one direction and absent in the other
+(due to the many-to-1 model restriction) but we can recover that information using the
+symmetrization heuristics, since the point is present at least in one direction with high
+probability mass. This is not the case for the constraint-based models that reduce the
+mass of that alignment in both directions. Going back to the right panel of Figure 8, we
+can see that for low values of precision the HMM model actually achieves better recall
+than the constraint-based methods. There are two possible solutions to alleviate this
+type of problem, both with their caveats. One solution is to model the fertility of each
+word in a way similar to IBM Model 4, or more generally to model alignments of multi-
+ple words. This can lead to significant computational burden, and is not guaranteed to
+improve results. A more complicated model may require approximations that destroy
+its performance gain, or require larger corpora to estimate its parameters. Another
+option is to perform some linguistically motivated pre-processing of the language pair
+to conjoin words. This of course has the disadvantage that it needs to be specific to a
+language pair in order to include information such as “English simple past is written
+using a single word, so join together French pass´e compos´e.” An additional problem
+with joining words to alleviate inter-language divergences is that it can increase data
+sparsity.
+</bodyText>
+<sectionHeader confidence="0.97201" genericHeader="method">
+5. Task-Specific Alignment Evaluation
+</sectionHeader>
+<bodyText confidence="0.9999675">
+In this section we evaluate the alignments resulting from using the proposed constraints
+in two different tasks: Statistical machine translation where alignments are used to
+restrict the number of possible minimal translation units; and syntax transfer, where
+alignments are used to decide how to transfer dependency links.
+</bodyText>
+<subsectionHeader confidence="0.986209">
+5.1 Phrase-Based Machine Translation
+</subsectionHeader>
+<bodyText confidence="0.999403538461539">
+We now investigate whether our alignments produce improvements in an end-to-end
+phrase-based machine translation system. We use a state-of-the-art machine translation
+system,5 and follow the experimental setup used for the 2008 shared task on machine
+translation (ACL 2008 Third Workshop on Statistical Machine Translation). The full
+pipeline consists of the following steps: (1) prepare the data (lowercase, tokenize, and
+filter long sentences); (2) build language models; (3) create word alignments in each
+direction; (4) symmetrize directional word alignments; (5) build phrase table; (6) tune
+weights for the phrase table. For more details consult the shared task description.6 To
+evaluate the quality of the produced alignments, we keep the pipeline unchanged, and
+use the models described earlier to generate the word alignments in Step 3. For Step 4,
+we use the soft union symmetrization heuristic. Symmetrization has almost no effect on
+alignments produced by S-HMM, but we use it for uniformity in the experiments. We
+tested three values of the threshold (0.2, 0.4, 0.6) which try to capture different tradeoffs
+</bodyText>
+<footnote confidence="0.979459">
+5 The open source Moses (Hoang et al. 2007) toolkit from www.statmt.org/moses/.
+6 www.statmt.org/wmt08/baseline.html.
+</footnote>
+<page confidence="0.993255">
+498
+</page>
+<note confidence="0.870654">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+</note>
+<tableCaption confidence="0.795257666666667">
+Table 2
+BLEU scores for all language pairs. The best threshold was selected according to the
+development set after the last MERT iteration. Bold denotes the best score.
+</tableCaption>
+<table confidence="0.9994974">
+Fr → En En → Fr Es → En En → Es Pt → En En → Pt
+IBM M4 GDF 35.7 31.2 32.4 31.6 31.4 28.9
+HMM SU 35.9 28.9 32.3 31.6 30.9 31.6
+B-HMM SU 36.0 31.5 32.6 31.7 31.0 32.2
+S-HMM SU 35.5 31.2 31.9 32.5 31.4 32.3
+</table>
+<bodyText confidence="0.99983775">
+of precision vs. recall, and pick the best according to the translation performance on
+development data. Table 2 summarizes the results for the different corpora. For refer-
+ence we include IBM Model 4 as suggested in the task description. PR training always
+outperforms EM training and outperforms IBM Model 4 in all but one experiment.
+Differences in BLEU range from 0.2 to 0.9. The two constraints help to a different extent
+for different corpora and translation directions, in a somewhat unpredictable manner.
+In general our impression is that the connection between alignment quality and BLEU
+scores is complicated, and changes are difficult to explain and justify. The number of
+iterations for MERT optimization to converge varied from 2 to 28; and the best choice of
+threshold on the development set did not always correspond to the best on the test set.
+Contrary to conventional wisdom in the MT community, bigger phrase tables did not
+always perform better. In 14 out of 18 cases, the threshold picked was 0.4 (medium size
+phrase tables) and the other four times 0.2 was picked (smaller phrase tables). When
+we include only high confidence alignments, more phrases are extracted but many of
+these are erroneous. Potentially this leads to a poor estimate of the phrase probabilities.
+See Lopez and Resnik (2006) for further discussion.
+</bodyText>
+<subsectionHeader confidence="0.999858">
+5.2 Syntax Transfer
+</subsectionHeader>
+<bodyText confidence="0.999895888888889">
+In this section, we compare the different alignments produced with and without PR
+based on how well they can be used for transfer of linguistic resources across languages.
+We used the system proposed by Ganchev, Gillenwater, and Taskar (2009). This system
+uses a word-aligned corpus and a parser for a resource-rich language (source language)
+in order to create a parser for a resource-poor language (target language). We consider
+a parse tree on the source language as a set of dependency edges to be transferred. For
+each such edge, if both end points are aligned to words in the target language, then
+the edge is transferred. These edges are then used as weak supervision when training
+a generative or discriminative dependency parser. In order to evaluate the alignments
+we computed the fraction of correctly transferred edges as a function of the average
+number of edges transferred by using supervised parse trees on the target side. By
+changing the threshold in MBR decoding of alignments, we can trade off accuracy of the
+transferred edges vs. transferring more edges. We generated supervised parses using
+the first-order model from the MST parser (McDonald, Crammer, and Pereira 2005)
+trained on the Penn Treebank for English and the CoNLL X parses for Bulgarian and
+Spanish. Following Ganchev, Gillenwater, and Taskar (2009), we filter alignment links
+between words with incompatible POS tags. Figure 10 shows our results for transferring
+from English to Bulgarian (En→Bg) and from English to Spanish (En→Es). The En→Bg
+</bodyText>
+<page confidence="0.997251">
+499
+</page>
+<figure confidence="0.666394">
+Computational Linguistics Volume 36, Number 3
+</figure>
+<figureCaption confidence="0.864672">
+Figure 10
+</figureCaption>
+<bodyText confidence="0.921912714285714">
+Edge conservation for cross-lingual grammar induction. Left: En→Bg subtitle corpus; Right:
+En→Es parliamentary proceedings. Vertical axis: percentage of transferred edges that are correct.
+Horizontal axis: average number of transferred edges per sentence.
+results are based on a corpus of movie subtitles (Tiedemann 2007), and are consequently
+shorter sentences, whereas the En→Es results are based on a corpus of parliamentary
+proceedings (Koehn 2005). We see in Figure 10 that for both domains, the models trained
+using posterior regularization perform better than the baseline model trained using EM.
+</bodyText>
+<sectionHeader confidence="0.999666" genericHeader="method">
+6. Related Work
+</sectionHeader>
+<bodyText confidence="0.999025222222222">
+The idea of introducing constraints over a model to better guide the learning process
+has appeared before. In the context of word alignment, Deng and Byrne (2005) use a
+state-duration HMM in order to model word-to-phrase translations. The fertility of each
+source word is implicitly encoded in the durations of the HMM states. Without any
+restrictions, likelihood prefers to always use longer phrases and the authors try to con-
+trol this behavior by multiplying every transition probability by a constant ri &gt; 1. This
+encourages more transitions and hence shorter phrases. For the task of unsupervised
+dependency parsing, Smith and Eisner (2006) add a constraint of the form “the average
+length of dependencies should be X” to capture the locality of syntax (at least half
+of the dependencies are between adjacent words), using a scheme they call structural
+annealing. They modify the model’s distribution over trees pe(y) by a penalty term
+�
+as: pe(y) ∝ pe(y)e(δ Ee∈y length(e)), where length(e) is the surface length of edge e. The
+factor b changes from a high value to a lower one so that the preference for short edges
+(hence a smaller sum) is stronger at the start of training.
+These two approaches also have the goal of controlling unsupervised learning, and
+the form of the modified distributions is reminiscent of the form that the projected
+posteriors take. However, the approaches differ substantially from PR. Smith and Eisner
+(2006) make a statement of the form “scale the total length of edges”, which depending
+on the value of b will prefer to have more shorter/longer edges. Such statements are
+not data dependent. Depending on the value of b, for instance if b ≤ 0, even if the data
+is such that the model already uses too many short edges on average, this value of
+b will push for more short edges. By contrast the statements we can make in PR are
+of the form “there should be more short edges than long edges”. Such a statement is
+data-dependent in the sense that if the model satisfies the constraints then we do not
+need to change it; if it is far from satisfying it we might need to make very dramatic
+changes.
+</bodyText>
+<page confidence="0.946749">
+500
+</page>
+<note confidence="0.606228">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+</note>
+<bodyText confidence="0.999786285714286">
+PR is closely related to the work of Mann and McCallum (2007, 2008), who concur-
+rently developed the idea of using penalties based on posterior expectations of features
+to guide semi-supervised learning. They call their method generalized expectation (GE)
+constraints or alternatively expectation regularization. In the original GE framework,
+the posteriors of the model on unlabeled data are regularized directly. They train a
+discriminative model, using conditional likelihood on labeled data and an “expectation
+regularization” penalty term on the unlabeled data:
+</bodyText>
+<equation confidence="0.9866865">
+argmax Llabeled(0) − λ�E[||Epθ[f(x,z) − b||2 2]. (16)
+0
+</equation>
+<bodyText confidence="0.996304454545455">
+Notice that there is no intermediate distribution q. For some kinds of constraints this
+objective is difficult to optimize in 0 and in order to improve efficiency, Bellare, Druck,
+and McCallum (2009) propose interpreting the PR framework as an approximation
+to the GE objective in Equation (16). They compare the two frameworks on several
+data sets and find that performance is similar. Liang, Jordan, and Klein (2009) cast
+the problem of incorporating partial information about latent variables into a Bayesian
+framework using “measurements,” and after several approximation steps, they arrive
+at the objective we optimize.
+The idea of jointly training two directional models has been explored by Liang,
+Taskar, and Klein (2006), fffalthough under a very different formalization. They de-
+fine a joint objective max E I log p θ1 (x) + log p θ 2 (x) + log p θ1(z  |x) p θ 2 (z  |x) I. However, the
+</bodyText>
+<equation confidence="0.578379">
+θ1,θ2 z
+</equation>
+<bodyText confidence="0.999915">
+product distribution →−p 01(z  |x)←−p 02(z  |x) ranges over all one-to-one alignments and
+computing it is #P-complete (Liang, Taskar, and Klein 2006). They approximate this
+distribution as a product of marginals: q(z) = l li,j −→p 01(zi,j  |x)←−p 02(zi,j  |x), but it is not
+clear what objective the approximate procedure actually optimizes.
+</bodyText>
+<sectionHeader confidence="0.826442" genericHeader="method">
+7. Conclusion
+</sectionHeader>
+<bodyText confidence="0.999899684210526">
+In this article we explored a novel learning framework, Posterior Regularization, for
+incorporating rich constraints over the posterior distributions of word alignments. We
+focused on the HMM word alignment model, and showed how we could incorpo-
+rate complex constraints like bijectivity and symmetry while keeping the inference
+in the model tractable. Using these constraints we showed consistent and significant
+improvements in six different language pairs even when compared to a more complex
+model such as IBM Model 4. In addition to alleviating the “garbage collector” effect, we
+show that the obtained posterior distributions better reflect the desired alignments. Both
+constraints are biasing the models towards 1-to-1 alignments, which may be inappro-
+priate in some situations, and we show some systematic mistakes that the constraints
+introduce and suggest possible fixes.
+We experimented with two different tasks that rely on word alignments, phrase-
+based MT and syntax transfer. For phrase-based MT, the improved alignments lead
+to a modest increase in BLEU performance. For syntax transfer, we have shown that
+the number of edges of a dependency tree that can be accurately transferred from one
+language to another increases as a result of improved alignments.
+Our framework opens up the possibility of efficiently adding many other con-
+straints that are directly applicable to word alignments, such as preferring alignments
+that respect dependency tree structure, part of speech tags, or syntactic boundaries.
+</bodyText>
+<page confidence="0.991329">
+501
+</page>
+<note confidence="0.458905">
+Computational Linguistics Volume 36, Number 3
+</note>
+<sectionHeader confidence="0.657611" genericHeader="conclusions">
+Appendix A: Modified E-Step Dual Derivation
+</sectionHeader>
+<bodyText confidence="0.626704833333333">
+The modified E step involves a projection step that minimizes the Kullback-Leibler
+divergence:
+E&apos;: arg min KL( q(z|x) II pθ(z|x)) s.t. Eq[f(x,z)] − bx ≤ ξ; ||ξ||2 2 ≤ e2.
+q(z|x),ξ
+Assuming the set Qx = {q(z|x) : ∃ξ,Eq[f(x,z)] − bx ≤ ξ; ||ξ||2 2 ≤ e2} is non-empty, the
+corresponding Lagrangian is max
+</bodyText>
+<equation confidence="0.63041725">
+λ,α,γ
+L( q(z|x), ξ, λ, α,γ) = KL( q(z|x) 11 pθ(z|x)) + λT(Eq[f(x,z)] − bx − ξ)
++ α(||ξ||2 2 − ~2) + γ( � q(z|x) − 1)
+z
+</equation>
+<bodyText confidence="0.607765666666667">
+where
+min L( q(z|x),ξ,λ,α,γ) with λ ≥ 0 and α ≥ 0,
+q(z|x),ξ
+</bodyText>
+<equation confidence="0.983575222222222">
+∂L( q(z|x), ξ,λ, α,γ)
+∂ q(z|x)
+∂L( q(z|x), ξ,λ, α,γ)
+∂ξi
+= log( q(z|x)) + 1 − log( pθ(z|x)) + λTf(x,z) + γ = 0
+=⇒ q(z|x) = pθ(z|x)exp(−λTf(x,z))
+e exp(γ)
+λi
+= 2αξi − λi = 0 =⇒ ξi = 2α
+</equation>
+<bodyText confidence="0.977221625">
+Plugging q(z|x) and ξ in L( q(z|x), ξ, λ, α,γ) and taking the derivative with respect to γ:
+� pθ(z|x) exp(−λTf(x,z)) E z− 1 = 0 =⇒ γ = log( pθ(z|x) exp (eλTf(x,z)) )
+∂L(λ, α,γ) = eexp(γ)
+∂γ
+z
+Simplifying q(z|x) = pθ(z|x)ep(λ TTf(x,z)) where Zλ = Ez pθ(z|x)exp(−λTf(x,z)) en-
+sures that q(z|x) is properly normalized. Plugging γ into L(λ,α,γ) and taking the
+derivative with respect to α, we get:
+</bodyText>
+<equation confidence="0.728596857142857">
+L(λ, α) = − log(Zλ) − bTx λ − |λ  22 +  ||λ ||i − αe2 (A.1)
+2α 4α
+∂L(λ, α) = ||λ||22 − ||λ||22 − e2 = 0 =⇒ α = ||λ||2 (A.2)
+∂α 2α2 4α2 2~
+Replacing back into L(λ, α) we get the dual objective:
+Dual E&apos;: arg max
+λ&gt;0
+</equation>
+<sectionHeader confidence="0.999015" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<reference confidence="0.865158111111111">
+J. V. Grac¸a was supported by a fellowship
+from Fundac¸˜ao para a Ciˆencia e Tecnologia
+(SFRH/ BD/ 27528/ 2006) and by FCT
+project CMU-PT/HuMach/0039/2008.
+K. Ganchev was partially supported by
+NSF ITR EIA 0205448. Ben Taskar was
+partially supported by DARPA CSSG
+2009 grant.
+−bTx λ − log(Zλ) − ||λ||2 e (A.3)
+</reference>
+<sectionHeader confidence="0.983091" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.995192">
+Bannard, Colin and Chris Callison-Burch.
+2005. Paraphrasing with bilingual parallel
+corpora. In ACL ’05: Proceedings of the
+43rd Annual Meeting of the Association for
+Computational Linguistics, pages 597–604,
+Morristown, NJ.
+Bellare, Kedar, Gregory Druck, and Andrew
+McCallum. 2009. Alternating projections
+</reference>
+<page confidence="0.992922">
+502
+</page>
+<note confidence="0.804687">
+Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints
+</note>
+<reference confidence="0.996996677966102">
+for learning with expectation constraints.
+In Proceedings of the Twenty-Fifth Conference
+Annual Conference on Uncertainty in
+Artificial Intelligence, pages 43–50,
+Corvallis, OR.
+Bertsekas, Dimitri P. 1999. Nonlinear
+Programming: 2nd Edition. Athena
+Scientific, Nashua, NH.
+Brown, Peter F., Stephen A. Della Pietra,
+Vincent J. Della Pietra, Meredith J.
+Goldsmith, Jan Hajic, Robert L. Mercer,
+and Surya Mohanty. 1993a. But
+dictionaries are data too. In HLT ’93:
+Proceedings of the Workshop on Human
+Language Technology, pages 202–205,
+Morristown, NJ.
+Brown, Peter F., Stephen A. Della Pietra,
+Vincent J. Della Pietra, and Robert L.
+Mercer. 1993b. The mathematics of
+statistical machine translation: Parameter
+estimation. Computational Linguistics,
+19(2):263–311.
+Chiang, David, Adam Lopez, Nitin
+Madnani, Christof Monz, Philip Resnik,
+and Michael Subotin. 2005. The Hiero
+machine translation system: Extensions,
+evaluation, and analysis. In Proceedings
+of the Human Language Technology
+Conference and Conference on Empirical
+Methods in Natural Language Processing,
+pages 779–786, Vancouver.
+Dempster, Arthur P., Nan M. Laird, and
+Donald B. Rubin. 1977. Maximum
+likelihood from incomplete data via the
+em algorithm. Royal Statistical Society,
+Series B, 39(1):1–38.
+DeNero, John and Dan Klein. 2007. Tailoring
+word alignments to syntactic machine
+translation. In Proceedings of the 45th
+Annual Meeting of the Association of
+Computational Linguistics, pages 17–24,
+Prague.
+Deng, Yonggang and William Byrne. 2005.
+HMM word and phrase alignment for
+statistical machine translation. In HLT ’05:
+Proceedings of the Conference on Human
+Language Technology and Empirical
+Methods in Natural Language Processing,
+pages 169–176, Morristown, NJ.
+Association for Computational Linguistics.
+Fraser, Alexander and Daniel Marcu. 2007.
+Getting the structure right for word
+alignment: Leaf. In Proceedings of the Joint
+Conference on Empirical Methods in Natural
+Language Processing and Computational
+Natural Language Learning
+(EMNLP-CoNLL), pages 51–60, Prague.
+Galley, Michel, Mark Hopkins, Kevin Knight,
+and Daniel Marcu. 2004. What’s in a
+translation rule? In HLT-NAACL 2004:
+Main Proceedings, pages 273–280,
+Boston, MA.
+Ganchev, Kuzman, Jennifer Gillenwater, and
+Ben Taskar. 2009. Dependency grammar
+induction via bitext projection constraints.
+In ACL-IJCNLP ’09: Proceedings of the Joint
+Conference of the 47th Annual Meeting
+of the ACL and the 4th International Joint
+Conference on Natural Language Processing
+of the AFNLP: Volume 1, pages 369–377,
+Morristown, NJ.
+Ganchev, Kuzman, Jo˜ao V. Grac¸a, and Ben
+Taskar. 2008. Better alignments = better
+translations? In Proceedings of ACL-08: HLT,
+pages 986–993, Columbus, OH.
+Grac¸a, Jo˜ao V., Kuzman Ganchev, and Ben
+Taskar. 2007. Expectation maximization
+and posterior constraints. In J. C. Platt,
+D. Koller, Y. Singer, and S. Roweis, editors,
+Advances in Neural Information Processing
+Systems 20. MIT Press, Cambridge, MA,
+pages 569–576.
+Grac¸a, Jo˜ao V., Kuzman Ganchev, and
+Ben Taskar. 2009. Postcat - posterior
+constrained alignment toolkit. The Prague
+Bulletin Of Mathematical Linguistics - Special
+Issue: Open Source Tools for Machine
+Translation, 91:27–37.
+Grac¸a, Jo˜ao V., Joana P. Pardal, Luisa Coheur,
+and Diamantino Caseiro. 2008. Building
+a golden collection of parallel
+multi-language word alignment. In
+Proceedings of the Sixth International
+Language Resources and Evaluation
+(LREC’08), Marrakech.
+Hoang, Hieu, Alexandra Birch, Chris
+Callison-Burch, Richard Zens, Rwth
+Aachen, Alexandra Constantin, Marcello
+Federico, Nicola Bertoldi, Chris Dyer,
+Brooke Cowan, Wade Shen, Christine
+Moran, and Ondrej Bojar. 2007. Moses:
+Open source toolkit for statistical machine
+translation. In Proceedings of the 45th
+Annual Meeting of the Association for
+Computational Linguistics Companion
+Volume Proceedings of the Demo and Poster
+Sessions, pages 177–180, Prague.
+Hwa, Rebecca, Philip Resnik, Amy
+Weinberg, Clara Cabezas, and Okan Kolak.
+2005. Bootstrapping parsers via syntactic
+projection across parallel texts. Natural
+Language Engineering, 11:11–311.
+Koehn, Philipp. 2005. Europarl: A parallel
+corpus for statistical machine translation.
+In Machine Translation Summit,
+12–15 September, Phuket.
+Koehn, Philipp, Franz Josef Och, and Daniel
+Marcu. 2003. Statistical phrase-based
+</reference>
+<page confidence="0.965915">
+503
+</page>
+<reference confidence="0.994388378378379">
+Computational Linguistics Volume 36, Number 3
+translation. In Proceedings of the 2003
+Conference of the North American Chapter of
+the Association for Computational Linguistics
+on Human Language Technology (NAACL),
+pages 48–54, Morristown, NJ.
+Kumar, Shankar and William Byrne. 2002.
+Minimum Bayes-Risk word alignments of
+bilingual texts. In Proceedings of the ACL-02
+Conference on Empirical Methods in Natural
+Language Processing, pages 140–147,
+Philadelphia, PA.
+Lambert, Patrik, Adri`a De Gispert, Rafael
+Banchs, and Jos´e B. Marino. 2005.
+Guidelines for word alignment evaluation
+and manual alignment. Language Resources
+and Evaluation, 39(4):267–285.
+Liang, Percy, Michael I. Jordan, and Dan
+Klein. 2009. Learning from measurements
+in exponential families. In ICML ’09:
+Proceedings of the 26th Annual International
+Conference on Machine Learning,
+pages 641–648, New York, NY.
+Liang, Percy, Ben Taskar, and Dan Klein.
+2006. Alignment by agreement. In
+Proceedings of the Human Language
+Technology Conference of the NAACL, Main
+Conference, pages 104–111, New York, NY.
+Lopez, Adam and Philip Resnik. 2006.
+Word-based alignment, phrase-based
+translation: Whats the link? In Proceedings
+of the 7th Conference of the Association for
+Machine Translation in the Americas
+(AMTA): Visions for the Future of Machine
+Translation, pages 90–99, Boston, MA.
+Mann, G. and A. McCallum. 2007. Simple,
+robust, scalable semi-supervised learning
+via expectation regularization. In
+Proceedings of the 24th International
+Conference on Machine Learning, page 600,
+Corvallis, OR.
+Mann, Gideon S. and Andrew McCallum.
+2008. Generalized expectation criteria
+for semi-supervised learning of
+conditional random fields. In Proceedings
+of ACL-08: HLT, pages 870–878,
+Columbus, OH.
+Matusov, Evgeny, Nicola Ueffing, and
+Hermann Ney. 2006. Computing
+consensus translation from multiple
+machine translation systems using
+enhanced hypotheses alignment. In
+Proceedings of the EACL, pages 33–40,
+Cambridge.
+McDonald, Ryan, Koby Crammer, and
+Fernando Pereira. 2005. Online
+large-margin training of dependency
+parsers. In ACL ’05: Proceedings of the
+43rd Annual Meeting of the Association for
+Computational Linguistics, pages 91–98,
+Morristown, NJ.
+Neal, Radford M. and Geoffrey E. Hinton.
+1998. A new view of the EM algorithm that
+justifies incremental, sparse and other
+variants. In M. I. Jordan, editor, Learning in
+Graphical Models. Kluwer, Amsterdam,
+pages 355–368.
+Nocedal, Jorge and Stephen J. Wright.
+1999. Numerical Optimization. Springer,
+Berlin.
+Och, Franz Josef and Hermann Ney. 2000.
+Improved statistical alignment models.
+In ACL ’00: Proceedings of the 38th
+Annual Meeting on Association for
+Computational Linguistics, pages 440–447,
+Morristown, NJ.
+Och, Franz Josef and Hermann Ney. 2003.
+A systematic comparison of various
+statistical alignment models. Computational
+Linguistics, 29(1):19–51.
+Smith, Noah A. and Jason Eisner. 2006.
+Annealing structural bias in multilingual
+weighted grammar induction. In ACL-44:
+Proceedings of the 21st International
+Conference on Computational Linguistics and
+the 44th Annual Meeting of the Association for
+Computational Linguistics, pages 569–576,
+Morristown, NJ.
+Snyder, Benjamin and Regina Barzilay.
+2008. Unsupervised multilingual learning
+for morphological segmentation. In
+Proceedings of ACL-08: HLT, pages 737–745,
+Columbus, OH.
+Tiedemann, J¨org. 2007. Building a
+multilingual parallel subtitle corpus. In
+Proceedings of the 17th Conference on
+Computational Linguistics in the Netherlands
+(CLIN 17), Leuven.
+Vogel, Stephan, Hermann Ney, and
+Christoph Tillmann.1996. Hmm-based
+word alignment in statistical translation.
+In Proceedings of the 16th Conference on
+Computational Linguistics, pages 836–841,
+Morristown, NJ.
+Yarowsky, David and Grace Ngai. 2001.
+Inducing multilingual POS taggers and NP
+bracketers via robust projection across
+aligned corpora. In Proceedings of the North
+American Chapter Of The Association For
+Computational Linguistics, pages 1–8,
+Morristown, NJ.
+</reference>
+<page confidence="0.998334">
+504
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.647529">
+<title confidence="0.9977695">Learning Tractable Word Alignment Models with Complex Constraints</title>
+<author confidence="0.685686">V</author>
+<affiliation confidence="0.986496333333333">INESC-ID University of Pennsylvania University of Pennsylvania</affiliation>
+<abstract confidence="0.997346166666667">Word-level alignment of bilingual text is a critical resource for a growing variety of tasks. Probabilistic models for word alignment present a fundamental trade-off between richness of captured constraints and correlations versus efficiency and tractability of inference. In this article, we the Posterior Regularization framework Ganchev, and Taskar 2007) to incorporate complex constraints into probabilistic models during learning without changing the efficiency of the underlying model. We focus on the simple and tractable hidden Markov model, and present an efficient learning algorithm for incorporating approximate bijectivity and symmetry constraints. Models estimated with these constraints produce a significant boost in performance as measured by both precision and recall of manually annotated alignments for six language pairs. We also report experiments on two different tasks where word alignments are required: phrase-based machine translation and syntax transfer, and show promising improvements over standard methods.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>J V</author>
+</authors>
+<title>Grac¸a was supported by a fellowship from Fundac¸˜ao para a Ciˆencia e Tecnologia</title>
+<date>2006</date>
+<journal>SFRH/ BD/</journal>
+<volume>27528</volume>
+<marker>V, 2006</marker>
+<rawString>J. V. Grac¸a was supported by a fellowship from Fundac¸˜ao para a Ciˆencia e Tecnologia (SFRH/ BD/ 27528/ 2006) and by FCT project CMU-PT/HuMach/0039/2008.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>K</author>
+</authors>
+<title>Ganchev was partially supported by NSF ITR EIA 0205448. Ben Taskar was partially supported by</title>
+<booktitle>DARPA CSSG 2009 grant. −bTx λ − log(Zλ) − ||λ||2 e (A.3)</booktitle>
+<marker>K, </marker>
+<rawString>K. Ganchev was partially supported by NSF ITR EIA 0205448. Ben Taskar was partially supported by DARPA CSSG 2009 grant. −bTx λ − log(Zλ) − ||λ||2 e (A.3)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Colin Bannard</author>
+<author>Chris Callison-Burch</author>
+</authors>
+<title>Paraphrasing with bilingual parallel corpora.</title>
+<date>2005</date>
+<booktitle>In ACL ’05: Proceedings of the 43rd Annual Meeting of the Association for Computational Linguistics,</booktitle>
+<pages>597--604</pages>
+<location>Morristown, NJ.</location>
+<contexts>
+<context position="2900" citStr="Bannard and Callison-Burch 2005" startWordPosition="394" endWordPosition="397">formation Science, 3330 Walnut Street, Philadelphia, PA 19104-6389. E-mail: taskar@cis.upenn.edu. Submission received:1 August 2009; revised submission received: 24 December 2009; accepted for publication: 10 March 2010. © 2010 Association for Computational Linguistics Computational Linguistics Volume 36, Number 3 MT system combination (Matusov, Ueffing, and Ney 2006). But their importance has grown far beyond machine translation: for instance, transferring annotations between languages (Yarowsky and Ngai 2001; Hwa et al. 2005; Ganchev, Gillenwater, and Taskar 2009); discovery of paraphrases (Bannard and Callison-Burch 2005); and joint unsupervised POS and parser induction across languages (Snyder and Barzilay 2008). IBM Models 1 and 2 and the HMM are simple and tractable probabilistic models, which produce the target sentence one target word at a time by choosing a source word and generating its translation. IBM Models 3, 4, and 5 attempt to capture fertility (the tendency of each source word to generate several target words), resulting in probabilistically deficient, intractable models that require local heuristic search and are difficult to implement and extend. Many researchers use the GIZA++ software package</context>
+</contexts>
+<marker>Bannard, Callison-Burch, 2005</marker>
+<rawString>Bannard, Colin and Chris Callison-Burch. 2005. Paraphrasing with bilingual parallel corpora. In ACL ’05: Proceedings of the 43rd Annual Meeting of the Association for Computational Linguistics, pages 597–604, Morristown, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kedar Bellare</author>
+<author>Gregory Druck</author>
+<author>Andrew McCallum</author>
+</authors>
+<title>Alternating projections for learning with expectation constraints.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the Twenty-Fifth Conference Annual Conference on Uncertainty in Artificial Intelligence,</booktitle>
+<pages>43--50</pages>
+<location>Corvallis, OR.</location>
+<marker>Bellare, Druck, McCallum, 2009</marker>
+<rawString>Bellare, Kedar, Gregory Druck, and Andrew McCallum. 2009. Alternating projections for learning with expectation constraints. In Proceedings of the Twenty-Fifth Conference Annual Conference on Uncertainty in Artificial Intelligence, pages 43–50, Corvallis, OR.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dimitri P Bertsekas</author>
+</authors>
+<title>Nonlinear Programming: 2nd Edition. Athena Scientific,</title>
+<date>1999</date>
+<location>Nashua, NH.</location>
+<contexts>
+<context position="26477" citStr="Bertsekas 1999" startWordPosition="4152" endWordPosition="4153">rent setting of λ. 1 λi ← 0; 2 while ||∇(λ)||2 &gt; η do 3 φ&apos;(x,zc) ← φ(x,zc)exp−λ7f(x,zc); 4 q(z |x) ← forwardBackward(φ&apos;(x,zc)); 5 λ ← λ + αβ∇(λ); 6 end Algorithm 1: Computing KL(Qx 11 pθ(z|x)) = minKL(q(z|x) 11 pθ(z|x)) qEQx 489 Computational Linguistics Volume 36, Number 3 We optimize the dual objective using the gradient based methods shown in Algorithm 1. Here 11 is an optimization precision, oc is a step size chosen with the strong Wolfe’s rule (Nocedal and Wright 1999). Here, PV(A) represents an ascent direction chosen as follows: For inequality constraints, it is the projected gradient (Bertsekas 1999); for equality constraints with slack, we use conjugate gradient (Nocedal and Wright 1999), noting that when A = 0, the objective is not differentiable. In practice this only happens at the start of optimization and we use a sub-gradient for the first direction. Computing the projection requires an algorithm for inference in the original model, and uses that inference as a subroutine. For HMM word alignments, we need to make several calls to forward–backward in order to choose A. Setting the optimization precision 11 more loosely allows the optimization to terminate more quickly but at a less </context>
+</contexts>
+<marker>Bertsekas, 1999</marker>
+<rawString>Bertsekas, Dimitri P. 1999. Nonlinear Programming: 2nd Edition. Athena Scientific, Nashua, NH.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Peter F Brown</author>
+<author>Stephen A Della Pietra</author>
+<author>Vincent J Della Pietra</author>
+<author>Meredith J Goldsmith</author>
+<author>Jan Hajic</author>
+<author>Robert L Mercer</author>
+<author>Surya Mohanty</author>
+</authors>
+<title>But dictionaries are data too.</title>
+<date>1993</date>
+<booktitle>In HLT ’93: Proceedings of the Workshop on Human Language Technology,</booktitle>
+<pages>202--205</pages>
+<location>Morristown, NJ.</location>
+<contexts>
+<context position="1284" citStr="Brown et al. (1993" startWordPosition="173" endWordPosition="176">underlying model. We focus on the simple and tractable hidden Markov model, and present an efficient learning algorithm for incorporating approximate bijectivity and symmetry constraints. Models estimated with these constraints produce a significant boost in performance as measured by both precision and recall of manually annotated alignments for six language pairs. We also report experiments on two different tasks where word alignments are required: phrase-based machine translation and syntax transfer, and show promising improvements over standard methods. 1. Introduction The seminal work of Brown et al. (1993b) introduced a series of probabilistic models (IBM Models 1–5) for statistical machine translation and the concept of “word-byword” alignment, the correspondence between words in source and target languages. Although no longer competitive as end-to-end translation models, the IBM Models, as well as the hidden Markov model (HMM) of Vogel, Ney, and Tillmann (1996), are still widely used for word alignment. Word alignments are used primarily for extracting minimal translation units for machine translation (MT) (e.g., phrases [Koehn, Och, and Marcu 2003] and rules [Galley et al. 2004; Chiang et a</context>
+<context position="6774" citStr="Brown et al. 1993" startWordPosition="968" endWordPosition="971"> systems, adding to similar evidence presented in Ganchev, Grac¸a, and Taskar (2008). Section 5.2 shows that the alignments we produce are better suited for transfer of syntactic dependency parse annotations. An implementation of this work (Grac¸a, Ganchev, and Taskar 2009) is available under a GPL license.1 1 www.seas.upenn.edu/∼strctlrn/CAT/. 482 Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints 2. Background A word alignment for a parallel sentence pair represents the correspondence between words in a source language and their translations in a target language (Brown et al. 1993b). There are many reasons why a simple word-to-word (1-to-1) correspondence is not possible for every sentence pair: for instance, auxiliary verbs used in one language but not the other (e.g., English He walked and French Il est all´e), articles required in one language but optional in the other (e.g., English Cars use gas and Portuguese Os carros usam gasolina), cases where the content is expressed using multiple words in one language and a single word in the other language (e.g., agglutination such as English weapons of mass destruction and German Massenvernichtungswaffen), and expressions </context>
+<context position="10633" citStr="Brown et al. 1993" startWordPosition="1555" endWordPosition="1558">as a smaller percentage of bijective (1-to-1) alignments, which makes word fertility more important. Overall, the great majority of links are bijective across the corpora (86–98%). This characteristic will be explored by the constraints described in this article. For the evaluations in Section 4, the percentage of sure links (out of all links) will correlate with difficulty because only sure links are considered for recall. 2.1 HMM Word Alignment Model In this article we focus on the HMM for word alignment proposed by Vogel, Ney, and Tillmann (1996). This model generalizes IBM Models 1 and 2 (Brown et al. 1993b), by introducing a first-order Markov dependence between consecutive alignment link decisions. The model is an (input–output) HMM with I positions whose hidden state sequence z = (z1, ... , zI) with zi E {null, 1, ... , J} corresponds to a sequence of source word positions, where J is the source sentence length, and with null representing unaligned target words. Each observation corresponds to a word in the target language xi. The probability of an alignment z and target sentence x given a source sentence y can be expressed as: pθ(x, z |y) = 77177 pd(zi |zi−1)pt(xi |yzi) (1) 11 i=1 where pt(</context>
+<context position="15805" citStr="Brown et al. 1993" startWordPosition="2428" endWordPosition="2431">plit into two intuitive and straightforward steps accounts for the vast popularity of EM. In Figure 1, each entry in the alignment matrix contains a circle indicating the alignment link posterior for that particular word pair after training an HMM model with the EM algorithm (see the experimental set up in Section 4.1). Note that the link posteriors are concentrated around particular source words (rare words occurring less than five times in the corpus) in both directions, instead of being spread across different words. This is a well-known problem when training using EM called the collector (Brown et al. 1993a). A rare word in the source language links to many words in the target language that we would ideally like to see unaligned, or aligned to other words in the sentence. The reason this happens is that the generative model has to distribute translation probability for each source word among different candidate target words. If one translation is much more common than another, but the rare translation is used in the sentence, the model might have a very low translation probability for the correct alignment. On the other hand, because the rare source word occurs only in a few sentences it needs </context>
+<context position="18873" citStr="Brown et al. 1993" startWordPosition="2919" endWordPosition="2922">ead compare precision vs recall curves, by generating alignments for different thresholds (0..1). Second, with this method we can ignore the null word probabilities, which tend to be poorly estimated. 3. Posterior Regularization Word alignment models in general and the HMM in particular are very gross oversimplifications of the translation process and the optimal likelihood parameters learned often do not correspond to sensible alignments. One solution to this problem is to add more complexity to the model to better reflect the translation process. This is the approach taken by IBM Models 4+ (Brown et al. 1993b; Och and Ney 2003), and more recently by the LEAF model (Fraser and Marcu 2007). Unfortunately, these changes make the models probabilistically deficient and intractable, requiring approximations and heuristic learning and inference prone to search errors. Instead, we propose to use a learning framework called Posterior Regularization (Grac¸a, Ganchev, and Taskar 2007) that incorporates side information into unsupervised estimation in the form of constraints on the model’s posteriors. The constraints are expressed as inequalities on the expected values under the posterior distribution of use</context>
+<context position="40309" citStr="Brown et al. 1993" startWordPosition="6450" endWordPosition="6453">urprising. Figure 6 shows performance as a function of training data size. As before, we decode to achieve the recall of IBM Model 4. For small training corpora adding the constraints provides larger improvements (20–30%) but we still achieve significant gains even with a million parallel sentences (15%). Greater improvements for small data sizes indicate that our approach can be especially effective for resource-poor language pairs. 4.3 Rare vs. Common Words One of the main benefits of using the posterior regularization constraints described is an alleviation of the garbage collector effect (Brown et al. 1993a). Figure 7 breaks down performance improvements by common versus rare words. As before, we use posterior decoding, tuning the threshold to match IBM Model 4 recall. For common words, this tuning maintains recall very close for all models so we do not show this in the figure. In the top left panel of Figure 7, we see that precision of common words follows the pattern we saw for the corpus overall: Symmetric and bijective outperform both IBM Model 4 and the baseline HMM, with symmetric slightly better than bijective. The results for common words vary more slowly as we increase the quantity of </context>
+</contexts>
+<marker>Brown, Pietra, Pietra, Goldsmith, Hajic, Mercer, Mohanty, 1993</marker>
+<rawString>Brown, Peter F., Stephen A. Della Pietra, Vincent J. Della Pietra, Meredith J. Goldsmith, Jan Hajic, Robert L. Mercer, and Surya Mohanty. 1993a. But dictionaries are data too. In HLT ’93: Proceedings of the Workshop on Human Language Technology, pages 202–205, Morristown, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Peter F Brown</author>
+<author>Stephen A Della Pietra</author>
+<author>Vincent J Della Pietra</author>
+<author>Robert L Mercer</author>
+</authors>
+<title>The mathematics of statistical machine translation: Parameter estimation.</title>
+<date>1993</date>
+<journal>Computational Linguistics,</journal>
+<volume>19</volume>
+<issue>2</issue>
+<contexts>
+<context position="1284" citStr="Brown et al. (1993" startWordPosition="173" endWordPosition="176">underlying model. We focus on the simple and tractable hidden Markov model, and present an efficient learning algorithm for incorporating approximate bijectivity and symmetry constraints. Models estimated with these constraints produce a significant boost in performance as measured by both precision and recall of manually annotated alignments for six language pairs. We also report experiments on two different tasks where word alignments are required: phrase-based machine translation and syntax transfer, and show promising improvements over standard methods. 1. Introduction The seminal work of Brown et al. (1993b) introduced a series of probabilistic models (IBM Models 1–5) for statistical machine translation and the concept of “word-byword” alignment, the correspondence between words in source and target languages. Although no longer competitive as end-to-end translation models, the IBM Models, as well as the hidden Markov model (HMM) of Vogel, Ney, and Tillmann (1996), are still widely used for word alignment. Word alignments are used primarily for extracting minimal translation units for machine translation (MT) (e.g., phrases [Koehn, Och, and Marcu 2003] and rules [Galley et al. 2004; Chiang et a</context>
+<context position="6774" citStr="Brown et al. 1993" startWordPosition="968" endWordPosition="971"> systems, adding to similar evidence presented in Ganchev, Grac¸a, and Taskar (2008). Section 5.2 shows that the alignments we produce are better suited for transfer of syntactic dependency parse annotations. An implementation of this work (Grac¸a, Ganchev, and Taskar 2009) is available under a GPL license.1 1 www.seas.upenn.edu/∼strctlrn/CAT/. 482 Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints 2. Background A word alignment for a parallel sentence pair represents the correspondence between words in a source language and their translations in a target language (Brown et al. 1993b). There are many reasons why a simple word-to-word (1-to-1) correspondence is not possible for every sentence pair: for instance, auxiliary verbs used in one language but not the other (e.g., English He walked and French Il est all´e), articles required in one language but optional in the other (e.g., English Cars use gas and Portuguese Os carros usam gasolina), cases where the content is expressed using multiple words in one language and a single word in the other language (e.g., agglutination such as English weapons of mass destruction and German Massenvernichtungswaffen), and expressions </context>
+<context position="10633" citStr="Brown et al. 1993" startWordPosition="1555" endWordPosition="1558">as a smaller percentage of bijective (1-to-1) alignments, which makes word fertility more important. Overall, the great majority of links are bijective across the corpora (86–98%). This characteristic will be explored by the constraints described in this article. For the evaluations in Section 4, the percentage of sure links (out of all links) will correlate with difficulty because only sure links are considered for recall. 2.1 HMM Word Alignment Model In this article we focus on the HMM for word alignment proposed by Vogel, Ney, and Tillmann (1996). This model generalizes IBM Models 1 and 2 (Brown et al. 1993b), by introducing a first-order Markov dependence between consecutive alignment link decisions. The model is an (input–output) HMM with I positions whose hidden state sequence z = (z1, ... , zI) with zi E {null, 1, ... , J} corresponds to a sequence of source word positions, where J is the source sentence length, and with null representing unaligned target words. Each observation corresponds to a word in the target language xi. The probability of an alignment z and target sentence x given a source sentence y can be expressed as: pθ(x, z |y) = 77177 pd(zi |zi−1)pt(xi |yzi) (1) 11 i=1 where pt(</context>
+<context position="15805" citStr="Brown et al. 1993" startWordPosition="2428" endWordPosition="2431">plit into two intuitive and straightforward steps accounts for the vast popularity of EM. In Figure 1, each entry in the alignment matrix contains a circle indicating the alignment link posterior for that particular word pair after training an HMM model with the EM algorithm (see the experimental set up in Section 4.1). Note that the link posteriors are concentrated around particular source words (rare words occurring less than five times in the corpus) in both directions, instead of being spread across different words. This is a well-known problem when training using EM called the collector (Brown et al. 1993a). A rare word in the source language links to many words in the target language that we would ideally like to see unaligned, or aligned to other words in the sentence. The reason this happens is that the generative model has to distribute translation probability for each source word among different candidate target words. If one translation is much more common than another, but the rare translation is used in the sentence, the model might have a very low translation probability for the correct alignment. On the other hand, because the rare source word occurs only in a few sentences it needs </context>
+<context position="18873" citStr="Brown et al. 1993" startWordPosition="2919" endWordPosition="2922">ead compare precision vs recall curves, by generating alignments for different thresholds (0..1). Second, with this method we can ignore the null word probabilities, which tend to be poorly estimated. 3. Posterior Regularization Word alignment models in general and the HMM in particular are very gross oversimplifications of the translation process and the optimal likelihood parameters learned often do not correspond to sensible alignments. One solution to this problem is to add more complexity to the model to better reflect the translation process. This is the approach taken by IBM Models 4+ (Brown et al. 1993b; Och and Ney 2003), and more recently by the LEAF model (Fraser and Marcu 2007). Unfortunately, these changes make the models probabilistically deficient and intractable, requiring approximations and heuristic learning and inference prone to search errors. Instead, we propose to use a learning framework called Posterior Regularization (Grac¸a, Ganchev, and Taskar 2007) that incorporates side information into unsupervised estimation in the form of constraints on the model’s posteriors. The constraints are expressed as inequalities on the expected values under the posterior distribution of use</context>
+<context position="40309" citStr="Brown et al. 1993" startWordPosition="6450" endWordPosition="6453">urprising. Figure 6 shows performance as a function of training data size. As before, we decode to achieve the recall of IBM Model 4. For small training corpora adding the constraints provides larger improvements (20–30%) but we still achieve significant gains even with a million parallel sentences (15%). Greater improvements for small data sizes indicate that our approach can be especially effective for resource-poor language pairs. 4.3 Rare vs. Common Words One of the main benefits of using the posterior regularization constraints described is an alleviation of the garbage collector effect (Brown et al. 1993a). Figure 7 breaks down performance improvements by common versus rare words. As before, we use posterior decoding, tuning the threshold to match IBM Model 4 recall. For common words, this tuning maintains recall very close for all models so we do not show this in the figure. In the top left panel of Figure 7, we see that precision of common words follows the pattern we saw for the corpus overall: Symmetric and bijective outperform both IBM Model 4 and the baseline HMM, with symmetric slightly better than bijective. The results for common words vary more slowly as we increase the quantity of </context>
+</contexts>
+<marker>Brown, Pietra, Pietra, Mercer, 1993</marker>
+<rawString>Brown, Peter F., Stephen A. Della Pietra, Vincent J. Della Pietra, and Robert L. Mercer. 1993b. The mathematics of statistical machine translation: Parameter estimation. Computational Linguistics, 19(2):263–311.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Chiang</author>
+<author>Adam Lopez</author>
+<author>Nitin Madnani</author>
+<author>Christof Monz</author>
+<author>Philip Resnik</author>
+<author>Michael Subotin</author>
+</authors>
+<title>The Hiero machine translation system: Extensions, evaluation, and analysis.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the Human Language Technology Conference and Conference on Empirical Methods in Natural Language Processing,</booktitle>
+<pages>779--786</pages>
+<location>Vancouver.</location>
+<contexts>
+<context position="1891" citStr="Chiang et al. 2005" startWordPosition="265" endWordPosition="268">t al. (1993b) introduced a series of probabilistic models (IBM Models 1–5) for statistical machine translation and the concept of “word-byword” alignment, the correspondence between words in source and target languages. Although no longer competitive as end-to-end translation models, the IBM Models, as well as the hidden Markov model (HMM) of Vogel, Ney, and Tillmann (1996), are still widely used for word alignment. Word alignments are used primarily for extracting minimal translation units for machine translation (MT) (e.g., phrases [Koehn, Och, and Marcu 2003] and rules [Galley et al. 2004; Chiang et al. 2005]) as well as for * INESC-ID Lisboa, Spoken Language Systems Lab, R. Alves Redol 9, 1000-029 LISBOA, Portugal. E-mail: joao.graca@l2f.inesc-id.pt. ** University of Pennsylvania, Department of Computer and Information Science, Levine Hall, 3330 Walnut Street, Philadelphia, PA 19104-6309. E-mail: kuzman@cis.upenn.edu. † University of Pennsylvania, Department of Computer and Information Science, 3330 Walnut Street, Philadelphia, PA 19104-6389. E-mail: taskar@cis.upenn.edu. Submission received:1 August 2009; revised submission received: 24 December 2009; accepted for publication: 10 March 2010. © </context>
+</contexts>
+<marker>Chiang, Lopez, Madnani, Monz, Resnik, Subotin, 2005</marker>
+<rawString>Chiang, David, Adam Lopez, Nitin Madnani, Christof Monz, Philip Resnik, and Michael Subotin. 2005. The Hiero machine translation system: Extensions, evaluation, and analysis. In Proceedings of the Human Language Technology Conference and Conference on Empirical Methods in Natural Language Processing, pages 779–786, Vancouver.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Arthur P Dempster</author>
+<author>Nan M Laird</author>
+<author>Donald B Rubin</author>
+</authors>
+<title>Maximum likelihood from incomplete data via the em algorithm.</title>
+<date>1977</date>
+<journal>Royal Statistical Society, Series B,</journal>
+<volume>39</volume>
+<issue>1</issue>
+<marker>Dempster, Laird, Rubin, 1977</marker>
+<rawString>Dempster, Arthur P., Nan M. Laird, and Donald B. Rubin. 1977. Maximum likelihood from incomplete data via the em algorithm. Royal Statistical Society, Series B, 39(1):1–38.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>John DeNero</author>
+<author>Dan Klein</author>
+</authors>
+<title>Tailoring word alignments to syntactic machine translation.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 45th Annual Meeting of the Association of Computational Linguistics,</booktitle>
+<pages>17--24</pages>
+<location>Prague.</location>
+<contexts>
+<context position="43599" citStr="DeNero and Klein 2007" startWordPosition="6989" endWordPosition="6992"> will help and when they will hinder system performance. In this work we followed a more principled approach that uses Figure 8 Precision/recall curves for the different models after soft union symmetrization. Precision is on the horizontal axis. Left EN-FR, Right PT-ES. 496 Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints the knowledge about the posterior distributions of each directional model. We include a point in the final alignment if the average of the posteriors under the two models for that point is above a threshold. This heuristic is called soft union (DeNero and Klein 2007). Figure 8 shows the Precision/Recall curves after symmetrization for the En-Fr corpus. The posterior regularization–trained models still performed better, but the differences get smaller after doing the symmetrization. This should not be very surprising, because the soft union symmetrization can be viewed as an approximation of our symmetry constraint applied only at decode time. Applying the symmetrization to the model with symmetry constraints does not affect performance. 4.5 Analysis In this section we discuss some scenarios in which the constraints make the alignments better, and some sce</context>
+</contexts>
+<marker>DeNero, Klein, 2007</marker>
+<rawString>DeNero, John and Dan Klein. 2007. Tailoring word alignments to syntactic machine translation. In Proceedings of the 45th Annual Meeting of the Association of Computational Linguistics, pages 17–24, Prague.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yonggang Deng</author>
+<author>William Byrne</author>
+</authors>
+<title>HMM word and phrase alignment for statistical machine translation.</title>
+<date>2005</date>
+<booktitle>In HLT ’05: Proceedings of the Conference on Human Language Technology and Empirical Methods in Natural Language Processing,</booktitle>
+<pages>169--176</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Morristown, NJ.</location>
+<contexts>
+<context position="53035" citStr="Deng and Byrne (2005)" startWordPosition="8473" endWordPosition="8476">red edges that are correct. Horizontal axis: average number of transferred edges per sentence. results are based on a corpus of movie subtitles (Tiedemann 2007), and are consequently shorter sentences, whereas the En→Es results are based on a corpus of parliamentary proceedings (Koehn 2005). We see in Figure 10 that for both domains, the models trained using posterior regularization perform better than the baseline model trained using EM. 6. Related Work The idea of introducing constraints over a model to better guide the learning process has appeared before. In the context of word alignment, Deng and Byrne (2005) use a state-duration HMM in order to model word-to-phrase translations. The fertility of each source word is implicitly encoded in the durations of the HMM states. Without any restrictions, likelihood prefers to always use longer phrases and the authors try to control this behavior by multiplying every transition probability by a constant ri &gt; 1. This encourages more transitions and hence shorter phrases. For the task of unsupervised dependency parsing, Smith and Eisner (2006) add a constraint of the form “the average length of dependencies should be X” to capture the locality of syntax (at l</context>
+</contexts>
+<marker>Deng, Byrne, 2005</marker>
+<rawString>Deng, Yonggang and William Byrne. 2005. HMM word and phrase alignment for statistical machine translation. In HLT ’05: Proceedings of the Conference on Human Language Technology and Empirical Methods in Natural Language Processing, pages 169–176, Morristown, NJ. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alexander Fraser</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>Getting the structure right for word alignment: Leaf.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the Joint Conference on Empirical Methods in Natural Language Processing and Computational Natural Language Learning (EMNLP-CoNLL),</booktitle>
+<pages>51--60</pages>
+<location>Prague.</location>
+<contexts>
+<context position="18954" citStr="Fraser and Marcu 2007" startWordPosition="2934" endWordPosition="2937">nt thresholds (0..1). Second, with this method we can ignore the null word probabilities, which tend to be poorly estimated. 3. Posterior Regularization Word alignment models in general and the HMM in particular are very gross oversimplifications of the translation process and the optimal likelihood parameters learned often do not correspond to sensible alignments. One solution to this problem is to add more complexity to the model to better reflect the translation process. This is the approach taken by IBM Models 4+ (Brown et al. 1993b; Och and Ney 2003), and more recently by the LEAF model (Fraser and Marcu 2007). Unfortunately, these changes make the models probabilistically deficient and intractable, requiring approximations and heuristic learning and inference prone to search errors. Instead, we propose to use a learning framework called Posterior Regularization (Grac¸a, Ganchev, and Taskar 2007) that incorporates side information into unsupervised estimation in the form of constraints on the model’s posteriors. The constraints are expressed as inequalities on the expected values under the posterior distribution of user-defined constraint features (not necessarily the same features used by the mode</context>
+</contexts>
+<marker>Fraser, Marcu, 2007</marker>
+<rawString>Fraser, Alexander and Daniel Marcu. 2007. Getting the structure right for word alignment: Leaf. In Proceedings of the Joint Conference on Empirical Methods in Natural Language Processing and Computational Natural Language Learning (EMNLP-CoNLL), pages 51–60, Prague.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michel Galley</author>
+<author>Mark Hopkins</author>
+<author>Kevin Knight</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>What’s in a translation rule?</title>
+<date>2004</date>
+<booktitle>In HLT-NAACL 2004: Main Proceedings,</booktitle>
+<pages>273--280</pages>
+<contexts>
+<context position="1871" citStr="Galley et al. 2004" startWordPosition="261" endWordPosition="264">inal work of Brown et al. (1993b) introduced a series of probabilistic models (IBM Models 1–5) for statistical machine translation and the concept of “word-byword” alignment, the correspondence between words in source and target languages. Although no longer competitive as end-to-end translation models, the IBM Models, as well as the hidden Markov model (HMM) of Vogel, Ney, and Tillmann (1996), are still widely used for word alignment. Word alignments are used primarily for extracting minimal translation units for machine translation (MT) (e.g., phrases [Koehn, Och, and Marcu 2003] and rules [Galley et al. 2004; Chiang et al. 2005]) as well as for * INESC-ID Lisboa, Spoken Language Systems Lab, R. Alves Redol 9, 1000-029 LISBOA, Portugal. E-mail: joao.graca@l2f.inesc-id.pt. ** University of Pennsylvania, Department of Computer and Information Science, Levine Hall, 3330 Walnut Street, Philadelphia, PA 19104-6309. E-mail: kuzman@cis.upenn.edu. † University of Pennsylvania, Department of Computer and Information Science, 3330 Walnut Street, Philadelphia, PA 19104-6389. E-mail: taskar@cis.upenn.edu. Submission received:1 August 2009; revised submission received: 24 December 2009; accepted for publicatio</context>
+</contexts>
+<marker>Galley, Hopkins, Knight, Marcu, 2004</marker>
+<rawString>Galley, Michel, Mark Hopkins, Kevin Knight, and Daniel Marcu. 2004. What’s in a translation rule? In HLT-NAACL 2004: Main Proceedings, pages 273–280,</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kuzman Ganchev</author>
+<author>Jennifer Gillenwater</author>
+<author>Ben Taskar</author>
+</authors>
+<title>Dependency grammar induction via bitext projection constraints.</title>
+<date>2009</date>
+<booktitle>In ACL-IJCNLP ’09: Proceedings of the Joint Conference of the 47th Annual Meeting of the ACL and the 4th International Joint Conference on Natural Language Processing of the AFNLP:</booktitle>
+<volume>1</volume>
+<pages>369--377</pages>
+<location>Morristown, NJ.</location>
+<marker>Ganchev, Gillenwater, Taskar, 2009</marker>
+<rawString>Boston, MA. Ganchev, Kuzman, Jennifer Gillenwater, and Ben Taskar. 2009. Dependency grammar induction via bitext projection constraints. In ACL-IJCNLP ’09: Proceedings of the Joint Conference of the 47th Annual Meeting of the ACL and the 4th International Joint Conference on Natural Language Processing of the AFNLP: Volume 1, pages 369–377, Morristown, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kuzman Ganchev</author>
+<author>Jo˜ao V Grac¸a</author>
+<author>Ben Taskar</author>
+</authors>
+<title>Better alignments = better translations?</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL-08: HLT,</booktitle>
+<pages>986--993</pages>
+<location>Columbus, OH.</location>
+<marker>Ganchev, Grac¸a, Taskar, 2008</marker>
+<rawString>Ganchev, Kuzman, Jo˜ao V. Grac¸a, and Ben Taskar. 2008. Better alignments = better translations? In Proceedings of ACL-08: HLT, pages 986–993, Columbus, OH.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jo˜ao V Grac¸a</author>
+<author>Kuzman Ganchev</author>
+<author>Ben Taskar</author>
+</authors>
+<title>Expectation maximization and posterior constraints. In</title>
+<date>2007</date>
+<booktitle>Advances in Neural Information Processing Systems 20.</booktitle>
+<pages>569--576</pages>
+<editor>J. C. Platt, D. Koller, Y. Singer, and S. Roweis, editors,</editor>
+<publisher>MIT Press,</publisher>
+<location>Cambridge, MA,</location>
+<marker>Grac¸a, Ganchev, Taskar, 2007</marker>
+<rawString>Grac¸a, Jo˜ao V., Kuzman Ganchev, and Ben Taskar. 2007. Expectation maximization and posterior constraints. In J. C. Platt, D. Koller, Y. Singer, and S. Roweis, editors, Advances in Neural Information Processing Systems 20. MIT Press, Cambridge, MA, pages 569–576.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jo˜ao V Grac¸a</author>
+<author>Kuzman Ganchev</author>
+<author>Ben Taskar</author>
+</authors>
+<title>Postcat - posterior constrained alignment toolkit. The Prague Bulletin Of Mathematical Linguistics - Special Issue: Open Source Tools for Machine Translation,</title>
+<date>2009</date>
+<pages>91--27</pages>
+<marker>Grac¸a, Ganchev, Taskar, 2009</marker>
+<rawString>Grac¸a, Jo˜ao V., Kuzman Ganchev, and Ben Taskar. 2009. Postcat - posterior constrained alignment toolkit. The Prague Bulletin Of Mathematical Linguistics - Special Issue: Open Source Tools for Machine Translation, 91:27–37.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jo˜ao V Grac¸a</author>
+<author>Joana P Pardal</author>
+<author>Luisa Coheur</author>
+<author>Diamantino Caseiro</author>
+</authors>
+<title>Building a golden collection of parallel multi-language word alignment.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the Sixth International Language Resources and Evaluation (LREC’08),</booktitle>
+<location>Marrakech.</location>
+<marker>Grac¸a, Pardal, Coheur, Caseiro, 2008</marker>
+<rawString>Grac¸a, Jo˜ao V., Joana P. Pardal, Luisa Coheur, and Diamantino Caseiro. 2008. Building a golden collection of parallel multi-language word alignment. In Proceedings of the Sixth International Language Resources and Evaluation (LREC’08), Marrakech.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>Hieu Hoang</author>
+<author>Alexandra Birch</author>
+<author>Chris Callison-Burch</author>
+<author>Richard Zens</author>
+<author>Rwth Aachen</author>
+<author>Alexandra Constantin</author>
+<author>Marcello Federico</author>
+<author>Nicola Bertoldi</author>
+<author>Chris Dyer</author>
+<author>Brooke Cowan</author>
+<author>Wade Shen</author>
+<author>Christine Moran</author>
+<author>Ondrej Bojar</author>
+</authors>
+<title>Moses: Open source toolkit for statistical machine translation.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 45th Annual Meeting of the Association for Computational Linguistics Companion Volume Proceedings of the Demo and Poster Sessions,</booktitle>
+<pages>177--180</pages>
+<location>Prague.</location>
+<contexts>
+<context position="48770" citStr="Hoang et al. 2007" startWordPosition="7786" endWordPosition="7789"> word alignments; (5) build phrase table; (6) tune weights for the phrase table. For more details consult the shared task description.6 To evaluate the quality of the produced alignments, we keep the pipeline unchanged, and use the models described earlier to generate the word alignments in Step 3. For Step 4, we use the soft union symmetrization heuristic. Symmetrization has almost no effect on alignments produced by S-HMM, but we use it for uniformity in the experiments. We tested three values of the threshold (0.2, 0.4, 0.6) which try to capture different tradeoffs 5 The open source Moses (Hoang et al. 2007) toolkit from www.statmt.org/moses/. 6 www.statmt.org/wmt08/baseline.html. 498 Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints Table 2 BLEU scores for all language pairs. The best threshold was selected according to the development set after the last MERT iteration. Bold denotes the best score. Fr → En En → Fr Es → En En → Es Pt → En En → Pt IBM M4 GDF 35.7 31.2 32.4 31.6 31.4 28.9 HMM SU 35.9 28.9 32.3 31.6 30.9 31.6 B-HMM SU 36.0 31.5 32.6 31.7 31.0 32.2 S-HMM SU 35.5 31.2 31.9 32.5 31.4 32.3 of precision vs. recall, and pick the best according to the translati</context>
+</contexts>
+<marker>Hoang, Birch, Callison-Burch, Zens, Aachen, Constantin, Federico, Bertoldi, Dyer, Cowan, Shen, Moran, Bojar, 2007</marker>
+<rawString>Hoang, Hieu, Alexandra Birch, Chris Callison-Burch, Richard Zens, Rwth Aachen, Alexandra Constantin, Marcello Federico, Nicola Bertoldi, Chris Dyer, Brooke Cowan, Wade Shen, Christine Moran, and Ondrej Bojar. 2007. Moses: Open source toolkit for statistical machine translation. In Proceedings of the 45th Annual Meeting of the Association for Computational Linguistics Companion Volume Proceedings of the Demo and Poster Sessions, pages 177–180, Prague.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Rebecca Hwa</author>
+<author>Philip Resnik</author>
+<author>Amy Weinberg</author>
+<author>Clara Cabezas</author>
+<author>Okan Kolak</author>
+</authors>
+<title>Bootstrapping parsers via syntactic projection across parallel texts. Natural Language Engineering,</title>
+<date>2005</date>
+<pages>11--11</pages>
+<contexts>
+<context position="2800" citStr="Hwa et al. 2005" startWordPosition="382" endWordPosition="385">: kuzman@cis.upenn.edu. † University of Pennsylvania, Department of Computer and Information Science, 3330 Walnut Street, Philadelphia, PA 19104-6389. E-mail: taskar@cis.upenn.edu. Submission received:1 August 2009; revised submission received: 24 December 2009; accepted for publication: 10 March 2010. © 2010 Association for Computational Linguistics Computational Linguistics Volume 36, Number 3 MT system combination (Matusov, Ueffing, and Ney 2006). But their importance has grown far beyond machine translation: for instance, transferring annotations between languages (Yarowsky and Ngai 2001; Hwa et al. 2005; Ganchev, Gillenwater, and Taskar 2009); discovery of paraphrases (Bannard and Callison-Burch 2005); and joint unsupervised POS and parser induction across languages (Snyder and Barzilay 2008). IBM Models 1 and 2 and the HMM are simple and tractable probabilistic models, which produce the target sentence one target word at a time by choosing a source word and generating its translation. IBM Models 3, 4, and 5 attempt to capture fertility (the tendency of each source word to generate several target words), resulting in probabilistically deficient, intractable models that require local heuristi</context>
+</contexts>
+<marker>Hwa, Resnik, Weinberg, Cabezas, Kolak, 2005</marker>
+<rawString>Hwa, Rebecca, Philip Resnik, Amy Weinberg, Clara Cabezas, and Okan Kolak. 2005. Bootstrapping parsers via syntactic projection across parallel texts. Natural Language Engineering, 11:11–311.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Philipp Koehn</author>
+</authors>
+<title>Europarl: A parallel corpus for statistical machine translation.</title>
+<date>2005</date>
+<booktitle>In Machine Translation Summit, 12–15 September,</booktitle>
+<location>Phuket.</location>
+<contexts>
+<context position="9442" citStr="Koehn 2005" startWordPosition="1370" endWordPosition="1371">ength Max Length % Sure % 1-1 En/Fr 447 16/17 30/30 21 98 En/Es 400 29/31 90/99 67 86 En/Pt 60 11/11 20/20 54 91 Pt/Es 60 11/11 20/20 69 92 Pt/Fr 60 11/12 20/20 77 88 Es/Fr 60 11/12 20/20 79 87 are represented as squares without borders. Circles indicate the posterior probability associated with a given link and will be explained latter. We use six manually annotated corpora whose characteristics are summarized in Table 1. The corpora are: the Hansard corpus (Och and Ney 2000) of English/French Canadian Parliamentary proceedings (En-Fr), and the English/Spanish portion of the Europarl corpus (Koehn 2005) where the annotation is from EPPS (Lambert et al. 2005) (En-Es) using standard test and development set split. We also used the English/ Portuguese (En-Pt), Portuguese/Spanish (Pt-Es), Portuguese/French (Pt-Fr), and Spanish/French (Es-Fr) portions of the Europarl corpus using annotations described by Grac¸a et al. (2008), where we split the gold alignments into a dev/test set in a ratio of 40%/60%. Table 1 shows some of the variety of challenges presented by each corpus. For example, En-Es has longer sentences and hence more ambiguity for alignment. Furthermore, it has a smaller percentage of</context>
+<context position="52705" citStr="Koehn 2005" startWordPosition="8421" endWordPosition="8422"> for transferring from English to Bulgarian (En→Bg) and from English to Spanish (En→Es). The En→Bg 499 Computational Linguistics Volume 36, Number 3 Figure 10 Edge conservation for cross-lingual grammar induction. Left: En→Bg subtitle corpus; Right: En→Es parliamentary proceedings. Vertical axis: percentage of transferred edges that are correct. Horizontal axis: average number of transferred edges per sentence. results are based on a corpus of movie subtitles (Tiedemann 2007), and are consequently shorter sentences, whereas the En→Es results are based on a corpus of parliamentary proceedings (Koehn 2005). We see in Figure 10 that for both domains, the models trained using posterior regularization perform better than the baseline model trained using EM. 6. Related Work The idea of introducing constraints over a model to better guide the learning process has appeared before. In the context of word alignment, Deng and Byrne (2005) use a state-duration HMM in order to model word-to-phrase translations. The fertility of each source word is implicitly encoded in the durations of the HMM states. Without any restrictions, likelihood prefers to always use longer phrases and the authors try to control </context>
+</contexts>
+<marker>Koehn, 2005</marker>
+<rawString>Koehn, Philipp. 2005. Europarl: A parallel corpus for statistical machine translation. In Machine Translation Summit, 12–15 September, Phuket.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Philipp Koehn</author>
+<author>Franz Josef Och</author>
+<author>Daniel Marcu</author>
+</authors>
+<date>2003</date>
+<booktitle>Statistical phrase-based Computational Linguistics Volume 36, Number</booktitle>
+<volume>3</volume>
+<marker>Koehn, Och, Marcu, 2003</marker>
+<rawString>Koehn, Philipp, Franz Josef Och, and Daniel Marcu. 2003. Statistical phrase-based Computational Linguistics Volume 36, Number 3</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>translation</author>
+</authors>
+<booktitle>In Proceedings of the 2003 Conference of the North American Chapter of the Association for Computational Linguistics on Human Language Technology (NAACL),</booktitle>
+<pages>48--54</pages>
+<location>Morristown, NJ.</location>
+<marker>translation, </marker>
+<rawString>translation. In Proceedings of the 2003 Conference of the North American Chapter of the Association for Computational Linguistics on Human Language Technology (NAACL), pages 48–54, Morristown, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Shankar Kumar</author>
+<author>William Byrne</author>
+</authors>
+<title>Minimum Bayes-Risk word alignments of bilingual texts.</title>
+<date>2002</date>
+<booktitle>In Proceedings of the ACL-02 Conference on Empirical Methods in Natural Language Processing,</booktitle>
+<pages>140--147</pages>
+<location>Philadelphia, PA.</location>
+<contexts>
+<context position="16968" citStr="Kumar and Byrne 2002" startWordPosition="2624" endWordPosition="2627">rare source word occurs only in a few sentences it needs to spread its probability mass over fewer competing translations. In this case, choosing to align the rare word to all of these words leads to a higher likelihood than correctly linking them or them to the special null word, because it increases the likelihood of this sentence without lowering the likeli KL(q||p) Eq[log q(·) p(·)] G(θ) | = pθt(z| θt, “softly in” θt+1. θt+1 “garbage effect” linking hood of many other sentences. 2.3 Decoding lattice). Another possibility that often works better is to use Minimum Bayes-Risk (MBR) decoding (Kumar and Byrne 2002; Liang, Taskar, and Klein 2006; Ganchev, and Taskar 2007). Using this decoding we include an alignment link i j if the posterior probability that word i aligns to word j is above some threshold. This allows the accumulation of probability from several low-scoring alignments that agree on one alignment link. The threshold is tuned on some small amount of labeled data—in our case the development set—to some loss. Kumar and Byrne (2002) study different loss functions that incorporate linguisti HMM’s Grac¸a, − minimize c knowledge, and show significant Alignments are normally predicted using the </context>
+</contexts>
+<marker>Kumar, Byrne, 2002</marker>
+<rawString>Kumar, Shankar and William Byrne. 2002. Minimum Bayes-Risk word alignments of bilingual texts. In Proceedings of the ACL-02 Conference on Empirical Methods in Natural Language Processing, pages 140–147, Philadelphia, PA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Patrik Lambert</author>
+<author>Adri`a De Gispert</author>
+<author>Rafael Banchs</author>
+<author>Jos´e B Marino</author>
+</authors>
+<title>Guidelines for word alignment evaluation and manual alignment.</title>
+<date>2005</date>
+<journal>Language Resources and Evaluation,</journal>
+<volume>39</volume>
+<issue>4</issue>
+<marker>Lambert, De Gispert, Banchs, Marino, 2005</marker>
+<rawString>Lambert, Patrik, Adri`a De Gispert, Rafael Banchs, and Jos´e B. Marino. 2005. Guidelines for word alignment evaluation and manual alignment. Language Resources and Evaluation, 39(4):267–285.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Percy Liang</author>
+<author>Michael I Jordan</author>
+<author>Dan Klein</author>
+</authors>
+<title>Learning from measurements in exponential families.</title>
+<date>2009</date>
+<booktitle>In ICML ’09: Proceedings of the 26th Annual International Conference on Machine Learning,</booktitle>
+<pages>641--648</pages>
+<location>New York, NY.</location>
+<marker>Liang, Jordan, Klein, 2009</marker>
+<rawString>Liang, Percy, Michael I. Jordan, and Dan Klein. 2009. Learning from measurements in exponential families. In ICML ’09: Proceedings of the 26th Annual International Conference on Machine Learning, pages 641–648, New York, NY.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Percy Liang</author>
+<author>Ben Taskar</author>
+<author>Dan Klein</author>
+</authors>
+<title>Alignment by agreement.</title>
+<date>2006</date>
+<booktitle>In Proceedings of the Human Language Technology Conference of the NAACL, Main Conference,</booktitle>
+<pages>104--111</pages>
+<location>New York, NY.</location>
+<marker>Liang, Taskar, Klein, 2006</marker>
+<rawString>Liang, Percy, Ben Taskar, and Dan Klein. 2006. Alignment by agreement. In Proceedings of the Human Language Technology Conference of the NAACL, Main Conference, pages 104–111, New York, NY.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adam Lopez</author>
+<author>Philip Resnik</author>
+</authors>
+<title>Word-based alignment, phrase-based translation: Whats the link?</title>
+<date>2006</date>
+<booktitle>In Proceedings of the 7th Conference of the Association for Machine Translation in the Americas (AMTA): Visions for the Future of Machine Translation,</booktitle>
+<pages>90--99</pages>
+<location>Boston, MA.</location>
+<contexts>
+<context position="50618" citStr="Lopez and Resnik (2006)" startWordPosition="8097" endWordPosition="8100">for MERT optimization to converge varied from 2 to 28; and the best choice of threshold on the development set did not always correspond to the best on the test set. Contrary to conventional wisdom in the MT community, bigger phrase tables did not always perform better. In 14 out of 18 cases, the threshold picked was 0.4 (medium size phrase tables) and the other four times 0.2 was picked (smaller phrase tables). When we include only high confidence alignments, more phrases are extracted but many of these are erroneous. Potentially this leads to a poor estimate of the phrase probabilities. See Lopez and Resnik (2006) for further discussion. 5.2 Syntax Transfer In this section, we compare the different alignments produced with and without PR based on how well they can be used for transfer of linguistic resources across languages. We used the system proposed by Ganchev, Gillenwater, and Taskar (2009). This system uses a word-aligned corpus and a parser for a resource-rich language (source language) in order to create a parser for a resource-poor language (target language). We consider a parse tree on the source language as a set of dependency edges to be transferred. For each such edge, if both end points a</context>
+</contexts>
+<marker>Lopez, Resnik, 2006</marker>
+<rawString>Lopez, Adam and Philip Resnik. 2006. Word-based alignment, phrase-based translation: Whats the link? In Proceedings of the 7th Conference of the Association for Machine Translation in the Americas (AMTA): Visions for the Future of Machine Translation, pages 90–99, Boston, MA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Mann</author>
+<author>A McCallum</author>
+</authors>
+<title>Simple, robust, scalable semi-supervised learning via expectation regularization.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 24th International Conference on Machine Learning,</booktitle>
+<pages>600</pages>
+<location>Corvallis, OR.</location>
+<contexts>
+<context position="55147" citStr="Mann and McCallum (2007" startWordPosition="8836" endWordPosition="8839"> of b, for instance if b ≤ 0, even if the data is such that the model already uses too many short edges on average, this value of b will push for more short edges. By contrast the statements we can make in PR are of the form “there should be more short edges than long edges”. Such a statement is data-dependent in the sense that if the model satisfies the constraints then we do not need to change it; if it is far from satisfying it we might need to make very dramatic changes. 500 Grac¸a, Ganchev, and Taskar Learning Alignment Models with Complex Constraints PR is closely related to the work of Mann and McCallum (2007, 2008), who concurrently developed the idea of using penalties based on posterior expectations of features to guide semi-supervised learning. They call their method generalized expectation (GE) constraints or alternatively expectation regularization. In the original GE framework, the posteriors of the model on unlabeled data are regularized directly. They train a discriminative model, using conditional likelihood on labeled data and an “expectation regularization” penalty term on the unlabeled data: argmax Llabeled(0) − λ�E[||Epθ[f(x,z) − b||2 2]. (16) 0 Notice that there is no intermediate d</context>
+</contexts>
+<marker>Mann, McCallum, 2007</marker>
+<rawString>Mann, G. and A. McCallum. 2007. Simple, robust, scalable semi-supervised learning via expectation regularization. In Proceedings of the 24th International Conference on Machine Learning, page 600, Corvallis, OR.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gideon S Mann</author>
+<author>Andrew McCallum</author>
+</authors>
+<title>Generalized expectation criteria for semi-supervised learning of conditional random fields.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL-08: HLT,</booktitle>
+<pages>870--878</pages>
+<location>Columbus, OH.</location>
+<marker>Mann, McCallum, 2008</marker>
+<rawString>Mann, Gideon S. and Andrew McCallum. 2008. Generalized expectation criteria for semi-supervised learning of conditional random fields. In Proceedings of ACL-08: HLT, pages 870–878, Columbus, OH.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Evgeny Matusov</author>
+<author>Nicola Ueffing</author>
+<author>Hermann Ney</author>
+</authors>
+<title>Computing consensus translation from multiple machine translation systems using enhanced hypotheses alignment.</title>
+<date>2006</date>
+<booktitle>In Proceedings of the EACL,</booktitle>
+<pages>33--40</pages>
+<location>Cambridge.</location>
+<marker>Matusov, Ueffing, Ney, 2006</marker>
+<rawString>Matusov, Evgeny, Nicola Ueffing, and Hermann Ney. 2006. Computing consensus translation from multiple machine translation systems using enhanced hypotheses alignment. In Proceedings of the EACL, pages 33–40, Cambridge.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ryan McDonald</author>
+<author>Koby Crammer</author>
+<author>Fernando Pereira</author>
+</authors>
+<title>Online large-margin training of dependency parsers.</title>
+<date>2005</date>
+<booktitle>In ACL ’05: Proceedings of the 43rd Annual Meeting of the Association for Computational Linguistics,</booktitle>
+<pages>91--98</pages>
+<location>Morristown, NJ.</location>
+<marker>McDonald, Crammer, Pereira, 2005</marker>
+<rawString>McDonald, Ryan, Koby Crammer, and Fernando Pereira. 2005. Online large-margin training of dependency parsers. In ACL ’05: Proceedings of the 43rd Annual Meeting of the Association for Computational Linguistics, pages 91–98, Morristown, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Radford M Neal</author>
+<author>Geoffrey E Hinton</author>
+</authors>
+<title>A new view of the EM algorithm that justifies incremental, sparse and other variants.</title>
+<date>1998</date>
+<booktitle>Learning in Graphical Models.</booktitle>
+<pages>355--368</pages>
+<editor>In M. I. Jordan, editor,</editor>
+<publisher>Kluwer,</publisher>
+<location>Amsterdam,</location>
+<contexts>
+<context position="14041" citStr="Neal and Hinton 1998" startWordPosition="2113" endWordPosition="2116">: Log-Likelihood: G(0) = �E[log pθ(x |y)] = �E[log ~ pθ(x, z |y)] (2) z where E [ f (x, y)] = N ~n 1 f (xn, yn) denotes the empirical average of a function f (xn, yn ) over the N pairs of sentences {(x1,y1) � � �,(xN,yN)} in the training corpus. Because of the latent alignment variables z, the log-likelihood function for the HMM model is not concave, and the model is fit using the Expectation Maximization (EM) algorithm (Dempster, Laird, and Rubin 1977). EM maximizes G(0) via block-coordinate ascent on a lower bound F(q, 0) using an auxiliary distribution over the latent variables q(z |x, y) (Neal and Hinton 1998): ~~ � �E q(z |x,y)log pθ(x,z |y) z EM Lower Bound: G(0) &gt; F(q, 0) = q(z (3) 2 For both of these points, see the experimental setup in Section 4.1. 485 Computational Linguistics Volume 36, Number 3 To simplify notation, we will drop the dependence on y and will write pθ(x, z |y) as pθ(x, z), pθ(z |x, y) as pθ(z |x) and q(z |x, y) as q(z |x). The alternating E and M steps at iteration t + 1 are given by: E: qt+1(z |x) = arg max F(q,θt) = arg min KL(q(z |x) ||pθt(z |x)) = pθt(z |x) (4) q(z|x) q(z|x) �E � �E qt+1(z |x) log pθ(x, z) (5) z M: θt+1 = arg max θ F(qt+1,θ) = arg max θ where = is the Ku</context>
+</contexts>
+<marker>Neal, Hinton, 1998</marker>
+<rawString>Neal, Radford M. and Geoffrey E. Hinton. 1998. A new view of the EM algorithm that justifies incremental, sparse and other variants. In M. I. Jordan, editor, Learning in Graphical Models. Kluwer, Amsterdam, pages 355–368.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jorge Nocedal</author>
+<author>Stephen J Wright</author>
+</authors>
+<title>Numerical Optimization.</title>
+<date>1999</date>
+<publisher>Springer,</publisher>
+<location>Berlin.</location>
+<contexts>
+<context position="26340" citStr="Nocedal and Wright 1999" startWordPosition="4131" endWordPosition="4134">jection step uses the same inference algorithm (forward–backward for HMMs) to compute the gradient, only modifying the local factors using the current setting of λ. 1 λi ← 0; 2 while ||∇(λ)||2 &gt; η do 3 φ&apos;(x,zc) ← φ(x,zc)exp−λ7f(x,zc); 4 q(z |x) ← forwardBackward(φ&apos;(x,zc)); 5 λ ← λ + αβ∇(λ); 6 end Algorithm 1: Computing KL(Qx 11 pθ(z|x)) = minKL(q(z|x) 11 pθ(z|x)) qEQx 489 Computational Linguistics Volume 36, Number 3 We optimize the dual objective using the gradient based methods shown in Algorithm 1. Here 11 is an optimization precision, oc is a step size chosen with the strong Wolfe’s rule (Nocedal and Wright 1999). Here, PV(A) represents an ascent direction chosen as follows: For inequality constraints, it is the projected gradient (Bertsekas 1999); for equality constraints with slack, we use conjugate gradient (Nocedal and Wright 1999), noting that when A = 0, the objective is not differentiable. In practice this only happens at the start of optimization and we use a sub-gradient for the first direction. Computing the projection requires an algorithm for inference in the original model, and uses that inference as a subroutine. For HMM word alignments, we need to make several calls to forward–backward </context>
+</contexts>
+<marker>Nocedal, Wright, 1999</marker>
+<rawString>Nocedal, Jorge and Stephen J. Wright. 1999. Numerical Optimization. Springer, Berlin.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Josef Och</author>
+<author>Hermann Ney</author>
+</authors>
+<title>Improved statistical alignment models.</title>
+<date>2000</date>
+<booktitle>In ACL ’00: Proceedings of the 38th Annual Meeting on Association for Computational Linguistics,</booktitle>
+<pages>440--447</pages>
+<location>Morristown, NJ.</location>
+<contexts>
+<context position="9312" citStr="Och and Ney 2000" startWordPosition="1352" endWordPosition="1355">lish–French, English–Spanish, English–Portuguese, Portuguese–Spanish, Portuguese–French, and Spanish–French. Corpus Sentence Pairs Ave Length Max Length % Sure % 1-1 En/Fr 447 16/17 30/30 21 98 En/Es 400 29/31 90/99 67 86 En/Pt 60 11/11 20/20 54 91 Pt/Es 60 11/11 20/20 69 92 Pt/Fr 60 11/12 20/20 77 88 Es/Fr 60 11/12 20/20 79 87 are represented as squares without borders. Circles indicate the posterior probability associated with a given link and will be explained latter. We use six manually annotated corpora whose characteristics are summarized in Table 1. The corpora are: the Hansard corpus (Och and Ney 2000) of English/French Canadian Parliamentary proceedings (En-Fr), and the English/Spanish portion of the Europarl corpus (Koehn 2005) where the annotation is from EPPS (Lambert et al. 2005) (En-Es) using standard test and development set split. We also used the English/ Portuguese (En-Pt), Portuguese/Spanish (Pt-Es), Portuguese/French (Pt-Fr), and Spanish/French (Es-Fr) portions of the Europarl corpus using annotations described by Grac¸a et al. (2008), where we split the gold alignments into a dev/test set in a ratio of 40%/60%. Table 1 shows some of the variety of challenges presented by each c</context>
+</contexts>
+<marker>Och, Ney, 2000</marker>
+<rawString>Och, Franz Josef and Hermann Ney. 2000. Improved statistical alignment models. In ACL ’00: Proceedings of the 38th Annual Meeting on Association for Computational Linguistics, pages 440–447, Morristown, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Josef Och</author>
+<author>Hermann Ney</author>
+</authors>
+<title>A systematic comparison of various statistical alignment models.</title>
+<date>2003</date>
+<journal>Computational Linguistics,</journal>
+<volume>29</volume>
+<issue>1</issue>
+<contexts>
+<context position="3519" citStr="Och and Ney 2003" startWordPosition="492" endWordPosition="495">and joint unsupervised POS and parser induction across languages (Snyder and Barzilay 2008). IBM Models 1 and 2 and the HMM are simple and tractable probabilistic models, which produce the target sentence one target word at a time by choosing a source word and generating its translation. IBM Models 3, 4, and 5 attempt to capture fertility (the tendency of each source word to generate several target words), resulting in probabilistically deficient, intractable models that require local heuristic search and are difficult to implement and extend. Many researchers use the GIZA++ software package (Och and Ney 2003) as a black box, selecting IBM Model 4 as a compromise between alignment quality and efficiency. All of the models are asymmetric (switching target and source languages produces drastically different results) and the simpler models (IBM Models 1, 2, and HMM) do not enforce bijectivity (the majority of words translating as a single word). Although there are systematic translation phenomena where one cannot hope to obtain 1-to-1 alignments, we observe that in over 6 different European language pairs the majority of alignments are in fact 1-to-1 (86–98%). This leads to the common practice of post</context>
+<context position="7586" citStr="Och and Ney 2003" startWordPosition="1089" endWordPosition="1092">nglish He walked and French Il est all´e), articles required in one language but optional in the other (e.g., English Cars use gas and Portuguese Os carros usam gasolina), cases where the content is expressed using multiple words in one language and a single word in the other language (e.g., agglutination such as English weapons of mass destruction and German Massenvernichtungswaffen), and expressions translated indirectly. Due to this inherent ambiguity, manual annotations usually distinguish between sure correspondences for unambiguous translations, and possible, for ambiguous translations (Och and Ney 2003). The top row of Figure 1 shows two word alignments between an English–French sentence pair. We use the following notation: the alignment on the left (right) will be referenced as source–target (target–source) and contains source (target) words as rows and target (source) words as columns. Each entry in the matrix corresponds to a source–target word pair, and is the candidate for an alignment link. Sure links are represented as squares with borders, and possible links Figure 1 Posterior marginal distributions for different models for an English to French sentence translation. Left: EN→FR model</context>
+<context position="18893" citStr="Och and Ney 2003" startWordPosition="2923" endWordPosition="2926">n vs recall curves, by generating alignments for different thresholds (0..1). Second, with this method we can ignore the null word probabilities, which tend to be poorly estimated. 3. Posterior Regularization Word alignment models in general and the HMM in particular are very gross oversimplifications of the translation process and the optimal likelihood parameters learned often do not correspond to sensible alignments. One solution to this problem is to add more complexity to the model to better reflect the translation process. This is the approach taken by IBM Models 4+ (Brown et al. 1993b; Och and Ney 2003), and more recently by the LEAF model (Fraser and Marcu 2007). Unfortunately, these changes make the models probabilistically deficient and intractable, requiring approximations and heuristic learning and inference prone to search errors. Instead, we propose to use a learning framework called Posterior Regularization (Grac¸a, Ganchev, and Taskar 2007) that incorporates side information into unsupervised estimation in the form of constraints on the model’s posteriors. The constraints are expressed as inequalities on the expected values under the posterior distribution of user-defined constraint</context>
+<context position="30971" citStr="Och and Ney 2003" startWordPosition="4889" endWordPosition="4892">-1 alignment links from 78% to 97.3% for En-Fr (manual annotations have 98.1%); for En-Pt the increase is from 84.7% to 95.8% (manual annotations have 90.8%) (see Section 4.1). 3.4 Symmetry Constraints The directional nature of the generative models used to recover word alignments conflicts with their interpretation as translations. In practice, we see that the choice of which language is source versus target matters and changes the mistakes made by the model (the first row of panels in Figure 1). The standard approach is to train two models independently and then intersect their predictions (Och and Ney 2003). However, we show that it is much better to train two directional models concurrently, coupling their posterior distributions over alignments to approximately agree. Let the directional models be defined as: −� p (−� z ) (source–target) and �− p (�− z ) (target–source). We suppress dependence on x and y for brevity. Define z to range over the union of all possible 491 Computational Linguistics Volume 36, Number 3 −→ Z ∪ where ←−p (−→z ) = 0 and vice versa (i.e., the alignment of one directional model has probability zero according to the other model). We then define the following feature for </context>
+<context position="36869" citStr="Och and Ney 2003" startWordPosition="5908" endWordPosition="5911">ed with normal EM vs. trained with PR plus constraints. We also report results for IBM Model 4, because it is often used as the default word alignment model, and can be used as a reference. However, we would like to note that IBM Model 4 is a more complex model, able to capture more structure, albeit at the cost of intractable inference. Because our approach is orthogonal to the base model used, the constraints described here could be applied in principle to IBM Model 4 if exact inference was efficient, hopefully yielding similar improvements. We used a standard implementation of IBM Model 4 (Och and Ney 2003) and because changing the existing code is not trivial, we could not use the same stopping criterion to avoid overfitting and we are not able to produce precision/recall curves. We trained IBM Model 4 using the default configuration of the Figure 4 Precision/Recall curves for different models using 1,000k sentences. Precision on the horizontal axis. Left: Hansard EN-FR direction. Right: EN-PT Portuguese-English direction. 493 Computational Linguistics Volume 36, Number 3 Figure 5 Word alignment precision when the threshold is chosen to achieve IBM Model 4 recall with a difference of ± 0.005. T</context>
+<context position="42249" citStr="Och and Ney 2003" startWordPosition="6773" endWordPosition="6776">rds to null. 4.4 Symmetrization As discussed earlier, the word alignment models are asymmetric, whereas most applications require a single alignment for each sentence pair. Typically this is achieved by a symmetrization heuristic that takes two directional alignments and produces a single 495 Computational Linguistics Volume 36, Number 3 Figure 7 Precision and Recall as a function of training data size for En-Fr by common and rare words. Top Left: Common Precision, Top Right: Rare Precision, Bottom: Rare Recall. alignment. For MT the most commonly used heuristic is called grow diagonal final (Och and Ney 2003). This starts with the intersection of the sets of aligned points and adds points around the diagonal that are in the union of the two sets of aligned points. The alignment produced has high recall relative to the intersection and only slightly lower recall than the union. In syntax transfer the intersection heuristic is normally used, because one wants to have high precision links to transfer knowledge between languages. One pitfall of these symmetrization heuristics is that they can obfuscate the link between the original alignment and the ones used for a specific task, making errors more di</context>
+</contexts>
+<marker>Och, Ney, 2003</marker>
+<rawString>Och, Franz Josef and Hermann Ney. 2003. A systematic comparison of various statistical alignment models. Computational Linguistics, 29(1):19–51.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Noah A Smith</author>
+<author>Jason Eisner</author>
+</authors>
+<title>Annealing structural bias in multilingual weighted grammar induction.</title>
+<date>2006</date>
+<booktitle>In ACL-44: Proceedings of the 21st International Conference on Computational Linguistics and the 44th Annual Meeting of the Association for Computational Linguistics,</booktitle>
+<pages>569--576</pages>
+<location>Morristown, NJ.</location>
+<contexts>
+<context position="53517" citStr="Smith and Eisner (2006)" startWordPosition="8548" endWordPosition="8551">ng constraints over a model to better guide the learning process has appeared before. In the context of word alignment, Deng and Byrne (2005) use a state-duration HMM in order to model word-to-phrase translations. The fertility of each source word is implicitly encoded in the durations of the HMM states. Without any restrictions, likelihood prefers to always use longer phrases and the authors try to control this behavior by multiplying every transition probability by a constant ri &gt; 1. This encourages more transitions and hence shorter phrases. For the task of unsupervised dependency parsing, Smith and Eisner (2006) add a constraint of the form “the average length of dependencies should be X” to capture the locality of syntax (at least half of the dependencies are between adjacent words), using a scheme they call structural annealing. They modify the model’s distribution over trees pe(y) by a penalty term � as: pe(y) ∝ pe(y)e(δ Ee∈y length(e)), where length(e) is the surface length of edge e. The factor b changes from a high value to a lower one so that the preference for short edges (hence a smaller sum) is stronger at the start of training. These two approaches also have the goal of controlling unsuper</context>
+</contexts>
+<marker>Smith, Eisner, 2006</marker>
+<rawString>Smith, Noah A. and Jason Eisner. 2006. Annealing structural bias in multilingual weighted grammar induction. In ACL-44: Proceedings of the 21st International Conference on Computational Linguistics and the 44th Annual Meeting of the Association for Computational Linguistics, pages 569–576, Morristown, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Benjamin Snyder</author>
+<author>Regina Barzilay</author>
+</authors>
+<title>Unsupervised multilingual learning for morphological segmentation.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL-08: HLT,</booktitle>
+<pages>737--745</pages>
+<location>Columbus, OH.</location>
+<contexts>
+<context position="2993" citStr="Snyder and Barzilay 2008" startWordPosition="407" endWordPosition="410">bmission received:1 August 2009; revised submission received: 24 December 2009; accepted for publication: 10 March 2010. © 2010 Association for Computational Linguistics Computational Linguistics Volume 36, Number 3 MT system combination (Matusov, Ueffing, and Ney 2006). But their importance has grown far beyond machine translation: for instance, transferring annotations between languages (Yarowsky and Ngai 2001; Hwa et al. 2005; Ganchev, Gillenwater, and Taskar 2009); discovery of paraphrases (Bannard and Callison-Burch 2005); and joint unsupervised POS and parser induction across languages (Snyder and Barzilay 2008). IBM Models 1 and 2 and the HMM are simple and tractable probabilistic models, which produce the target sentence one target word at a time by choosing a source word and generating its translation. IBM Models 3, 4, and 5 attempt to capture fertility (the tendency of each source word to generate several target words), resulting in probabilistically deficient, intractable models that require local heuristic search and are difficult to implement and extend. Many researchers use the GIZA++ software package (Och and Ney 2003) as a black box, selecting IBM Model 4 as a compromise between alignment q</context>
+</contexts>
+<marker>Snyder, Barzilay, 2008</marker>
+<rawString>Snyder, Benjamin and Regina Barzilay. 2008. Unsupervised multilingual learning for morphological segmentation. In Proceedings of ACL-08: HLT, pages 737–745, Columbus, OH.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J¨org Tiedemann</author>
+</authors>
+<title>Building a multilingual parallel subtitle corpus.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 17th Conference on Computational Linguistics in the Netherlands (CLIN 17),</booktitle>
+<location>Leuven.</location>
+<contexts>
+<context position="52574" citStr="Tiedemann 2007" startWordPosition="8402" endWordPosition="8403">anchev, Gillenwater, and Taskar (2009), we filter alignment links between words with incompatible POS tags. Figure 10 shows our results for transferring from English to Bulgarian (En→Bg) and from English to Spanish (En→Es). The En→Bg 499 Computational Linguistics Volume 36, Number 3 Figure 10 Edge conservation for cross-lingual grammar induction. Left: En→Bg subtitle corpus; Right: En→Es parliamentary proceedings. Vertical axis: percentage of transferred edges that are correct. Horizontal axis: average number of transferred edges per sentence. results are based on a corpus of movie subtitles (Tiedemann 2007), and are consequently shorter sentences, whereas the En→Es results are based on a corpus of parliamentary proceedings (Koehn 2005). We see in Figure 10 that for both domains, the models trained using posterior regularization perform better than the baseline model trained using EM. 6. Related Work The idea of introducing constraints over a model to better guide the learning process has appeared before. In the context of word alignment, Deng and Byrne (2005) use a state-duration HMM in order to model word-to-phrase translations. The fertility of each source word is implicitly encoded in the dur</context>
+</contexts>
+<marker>Tiedemann, 2007</marker>
+<rawString>Tiedemann, J¨org. 2007. Building a multilingual parallel subtitle corpus. In Proceedings of the 17th Conference on Computational Linguistics in the Netherlands (CLIN 17), Leuven.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>Stephan Vogel</author>
+<author>Hermann Ney</author>
+<author>Christoph Tillmann 1996</author>
+</authors>
+<title>Hmm-based word alignment in statistical translation.</title>
+<booktitle>In Proceedings of the 16th Conference on Computational Linguistics,</booktitle>
+<pages>836--841</pages>
+<location>Morristown, NJ.</location>
+<marker>Vogel, Ney, 1996, </marker>
+<rawString>Vogel, Stephan, Hermann Ney, and Christoph Tillmann.1996. Hmm-based word alignment in statistical translation. In Proceedings of the 16th Conference on Computational Linguistics, pages 836–841, Morristown, NJ.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Yarowsky</author>
+<author>Grace Ngai</author>
+</authors>
+<title>Inducing multilingual POS taggers and NP bracketers via robust projection across aligned corpora.</title>
+<date>2001</date>
+<booktitle>In Proceedings of the North American Chapter Of The Association For Computational Linguistics,</booktitle>
+<pages>1--8</pages>
+<location>Morristown, NJ.</location>
+<contexts>
+<context position="2783" citStr="Yarowsky and Ngai 2001" startWordPosition="378" endWordPosition="381">a, PA 19104-6309. E-mail: kuzman@cis.upenn.edu. † University of Pennsylvania, Department of Computer and Information Science, 3330 Walnut Street, Philadelphia, PA 19104-6389. E-mail: taskar@cis.upenn.edu. Submission received:1 August 2009; revised submission received: 24 December 2009; accepted for publication: 10 March 2010. © 2010 Association for Computational Linguistics Computational Linguistics Volume 36, Number 3 MT system combination (Matusov, Ueffing, and Ney 2006). But their importance has grown far beyond machine translation: for instance, transferring annotations between languages (Yarowsky and Ngai 2001; Hwa et al. 2005; Ganchev, Gillenwater, and Taskar 2009); discovery of paraphrases (Bannard and Callison-Burch 2005); and joint unsupervised POS and parser induction across languages (Snyder and Barzilay 2008). IBM Models 1 and 2 and the HMM are simple and tractable probabilistic models, which produce the target sentence one target word at a time by choosing a source word and generating its translation. IBM Models 3, 4, and 5 attempt to capture fertility (the tendency of each source word to generate several target words), resulting in probabilistically deficient, intractable models that requi</context>
+</contexts>
+<marker>Yarowsky, Ngai, 2001</marker>
+<rawString>Yarowsky, David and Grace Ngai. 2001. Inducing multilingual POS taggers and NP bracketers via robust projection across aligned corpora. In Proceedings of the North American Chapter Of The Association For Computational Linguistics, pages 1–8, Morristown, NJ.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

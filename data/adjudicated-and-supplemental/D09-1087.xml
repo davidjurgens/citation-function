@@ -1,0 +1,1641 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.001532">
+<title confidence="0.9982585">
+Self-Training PCFG Grammars with Latent Annotations
+Across Languages
+</title>
+<author confidence="0.997817">
+Zhongqiang Huang&apos;
+</author>
+<affiliation confidence="0.99090425">
+&apos;Laboratory for Computational Linguistics
+and Information Processing
+Institute for Advanced Computer Studies
+University of Maryland, College Park
+</affiliation>
+<email confidence="0.998492">
+zqhuang@umiacs.umd.edu
+</email>
+<sectionHeader confidence="0.997384" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999927">
+We investigate the effectiveness of self-
+training PCFG grammars with latent anno-
+tations (PCFG-LA) for parsing languages
+with different amounts of labeled training
+data. Compared to Charniak’s lexicalized
+parser, the PCFG-LA parser was more ef-
+fectively adapted to a language for which
+parsing has been less well developed (i.e.,
+Chinese) and benefited more from self-
+training. We show for the first time that
+self-training is able to significantly im-
+prove the performance of the PCFG-LA
+parser, a single generative parser, on both
+small and large amounts of labeled train-
+ing data. Our approach achieves state-
+of-the-art parsing accuracies for a single
+parser on both English (91.5%) and Chi-
+nese (85.2%).
+</bodyText>
+<sectionHeader confidence="0.999517" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999881684210526">
+There is an extensive research literature on build-
+ing high quality parsers for English (Collins, 1999;
+Charniak, 2000; Charniak and Johnson, 2005;
+Petrov et al., 2006), however, models for parsing
+other languages are less well developed. Take Chi-
+nese for example; there have been several attempts
+to develop accurate parsers for Chinese (Bikel and
+Chiang, 2000; Levy and Manning, 2003; Petrov
+and Klein, 2007), but the state-of-the-art perfor-
+mance, around 83% F measure on Penn Chinese
+Treebank (achieved by the Berkeley parser (Petrov
+and Klein, 2007)) falls far short of performance
+on English (∼90-92%). As pointed out in (Levy
+and Manning, 2003), there are many linguistic dif-
+ferences between Chinese and English, as well as
+structural differences between their corresponding
+treebanks, and some of these make it a harder task
+to parse Chinese. Additionally, the fact that the
+available treebanked Chinese materials are more
+</bodyText>
+<note confidence="0.49604625">
+Mary Harper&apos; ,2
+2Human Language Technology
+Center of Excellence
+Johns Hopkins University
+</note>
+<email confidence="0.989057">
+mharper@umiacs.umd.edu
+</email>
+<bodyText confidence="0.999911414634147">
+limited than for English also increases the chal-
+lenge of building high quality Chinese parsers.
+Many of these differences would also tend to apply
+to other less well investigated languages.
+In this paper, we focus on English and Chinese
+because the former is a language for which ex-
+tensive parsing research has been conducted while
+the latter is a language that has been less exten-
+sively studied. We adapt and improve the Berke-
+ley parser, which learns PCFG grammars with la-
+tent annotations, and show through comparative
+studies that this parser significantly outperforms
+Charniak’s parser, which was initially developed
+for English and subsequently ported to Chinese.
+We focus on answering two questions: how well
+does a parser perform across languages and how
+much does it benefit from self-training?
+The first question is of special interest when
+choosing a parser that is designed for one language
+and adapting it to another less studied language.
+We improve the PCFG-LA parser by adding a
+language-independent method for handling rare
+words and adapt it to another language, Chinese,
+by creating a method to better model Chinese un-
+known words. Our results show that the PCFG-
+LA parser performs significantly better than Char-
+niak’s parser on Chinese, and is also somewhat
+more accurate on English, although both parsers
+have high accuracy.
+The second question is important because la-
+beled training data is often quite limited, espe-
+cially for less well investigated languages, while
+unlabeled data is ubiquitous. Early investigations
+on self-training for parsing have had mixed re-
+sults. Charniak (1997) reported no improvements
+from self-training a PCFG parser on the standard
+WSJ training set. Steedman et al. (2003) re-
+ported some degradation using a lexicalized tree
+adjoining grammar parser and minor improve-
+ment using Collins lexicalized PCFG parser; how-
+ever, this gain was obtained only when the parser
+</bodyText>
+<page confidence="0.95327">
+832
+</page>
+<note confidence="0.996609">
+Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing, pages 832–841,
+Singapore, 6-7 August 2009. c�2009 ACL and AFNLP
+</note>
+<bodyText confidence="0.99994111627907">
+was trained on a small labeled set. Reichart and
+Rappoport (2007) obtained significant gains us-
+ing Collins lexicalized parser with a different self-
+training protocol, but again they only looked at
+small labeled sets. McClosky et al. (2006) effec-
+tively utilized unlabeled data to improve parsing
+accuracy on the standard WSJ training set, but they
+used a two-stage parser comprised of Charniak’s
+lexicalized probabilistic parser with n-best pars-
+ing and a discriminative reranking parser (Char-
+niak and Johnson, 2005), and thus it would be bet-
+ter categorized as “co-training” (McClosky et al.,
+2008). It is worth noting that their attempts at self-
+training Charniak’s lexicalized parser directly re-
+sulted in no improvement. There are other suc-
+cessful semi-supervised training approaches for
+dependency parsing, such as (Koo et al., 2008;
+Wang et al., 2008), and it would be interesting
+to investigate how they could be applied to con-
+stituency parsing.
+We show in this paper, for the first time, that
+self-training is able to significantly improve the
+performance of the PCFG-LA parser, a single gen-
+erative parser, on both small and large amounts of
+labeled training data, for both English and Chi-
+nese. With self-training, a fraction of the WSJ
+or CTB6 treebank training data is sufficient to
+train a PCFG-LA parser that is able to achieve or
+even beat the accuracies obtained using a single
+parser trained on the entire treebank without self-
+training. We conjecture based on our comparison
+of the PCFG-LA parser to Charniak’s parser that
+the addition of self-training data helps the former
+parser learn more fine-grained latent annotations
+without over-fitting.
+The rest of this paper is organized as follows.
+We describe the PCFG-LA parser and several en-
+hancements in Section 2, and discuss self-training
+in Section 3. We then outline the experimental
+setup in Section 4, describe the results in Sec-
+tion 5, and present a detailed analysis in Section 6.
+The last section draws conclusions and describes
+future work.
+</bodyText>
+<sectionHeader confidence="0.994163" genericHeader="method">
+2 Parsing Model
+</sectionHeader>
+<bodyText confidence="0.997946857142857">
+The Berkeley parser (Petrov et al., 2006; Petrov
+and Klein, 2007) is an efficient and effective parser
+that introduces latent annotations (Matsuzaki et
+al., 2005) to refine syntactic categories to learn
+better PCFG grammars. In the example parse tree
+in Figure 1(a), each syntactic category is split into
+multiple latent subcategories, and accordingly the
+original parse tree is decomposed into many parse
+trees with latent annotations. Figure 1(b) depicts
+one of such trees. The grammar and lexical rules
+are split accordingly, e.g., NP→PRP is split into
+different NP-i→PRP-j rules. The expansion prob-
+abilities of these split rules are the parameters of a
+PCFG-LA grammar.
+</bodyText>
+<figureCaption confidence="0.977156">
+Figure 1: (a) original treebank tree, (b) after latent
+annotation.
+</figureCaption>
+<bodyText confidence="0.999859166666667">
+The objective of training is to learn a grammar
+with latent annotations that maximizes the like-
+lihood of the training trees, i.e., the sum of the
+likelihood of all parse trees with latent annota-
+tions. Since the latent annotations are not avail-
+able in the treebank, a variant of the EM algo-
+rithm is utilized to learn the rule probabilities for
+them. The Berkeley parser employs a hierarchi-
+cal split-merge method that gradually increases the
+number of latent annotations and adaptively allo-
+cates them to different treebank categories to best
+model the training data. In this paper, we call a
+grammar trained after n split-merge steps an n-
+th order grammar. The order of a grammar is a
+step (not continuous) function of the number of la-
+tent annotations because the split-merge algorithm
+first splits each latent annotation into two and then
+merges some of the splits back based on their abil-
+ity to increase training likelihood.
+For this paper, we implemented1 our own ver-
+sion of Berkeley parser. Updates include better
+handling of rare words across languages, as well
+as unknown Chinese words. The parser is able
+to process difficult sentences robustly using adap-
+tive beam expansion. The training algorithm was
+updated to support a wide range of self-training
+experiments (e.g., posterior-weighted unlabeled
+data, introducing self-training in later iterations)
+and to make use of multiple processors to paral-
+lelize EM training. The parallelization is crucial
+</bodyText>
+<footnote confidence="0.99063575">
+1A major motivation for this implementation was to sup-
+port some algorithms we are developing. Most of our en-
+hancements will be merged with a future release of the Berke-
+ley parser.
+</footnote>
+<figure confidence="0.9981838">
+S
+S−1
+NP VP
+.−1
+.
+VP−4
+NP−2
+NN−6
+She heard DT−2
+the noise
+VBD NP
+heard DT NN
+the noise
+(a) (b)
+.
+PRP−3 VBD−5
+NP−6
+.
+PRP
+She
+</figure>
+<page confidence="0.998601">
+833
+</page>
+<bodyText confidence="0.999886363636364">
+for training a model with large volumes of data in
+a reasonable amount of time2.
+We next describe the language-independent
+method to handle rare words, which is impor-
+tant for training better PCFG-LA grammars es-
+pecially when the training data is limited in size,
+and our unknown Chinese word handling method,
+highlighting the importance of utilizing language-
+specific features to enhance parsing performance.
+As we will see later, both of these methods signif-
+icantly improve parsing performance.
+</bodyText>
+<subsectionHeader confidence="0.991066">
+2.1 Rare Word Handling
+</subsectionHeader>
+<bodyText confidence="0.999976">
+Whereas rule expansions are frequently observed
+in the treebank, word-tag co-occurrences are
+sparser and more likely to suffer from over-fitting.
+Although the lexicon smoothing method in the
+Berkeley parser is able to make the word emis-
+sion probabilities of different latent states of a
+POS tag more alike, the EM training algorithm
+still strongly discriminates among word identities.
+Suppose word tag pairs (w1, t) and (w2, t) both
+appear the same number of times in the training
+data. In a PCFG grammar without latent annota-
+tions, the probabilities of emitting these two words
+given tag t would be the same, i.e., p(w1|t) =
+p(w2|t). After introducing latent annotation x to
+tag t, the emission probabilities of these two words
+given a latent state tx may no longer be the same
+because p(w1|tx) and p(w2|tx) are two indepen-
+dent parameters that the EM algorithm optimizes
+on. It is beneficial to learn subcategories of POS
+tags to model different types of words, especially
+for frequent words; however, it is not desirable to
+strongly discriminate among rare words because it
+could distract the model from learning about com-
+mon phenomena.
+To handle this problem, the probability of a la-
+tent state tx generating a rare word w is forced
+to be proportional to the emission probability of
+word w given the surface tag t. This is achieved
+by mapping all words with frequency less than
+threshold3 λ to the unk symbol, and for each la-
+tent state tx of a POS tag t, accumulating the word
+tag statistics of these rare words to cr(tx, unk) =
+Ew:c(w)&lt;A c(tx, w), and then redistributing them
+among the rare words to estimate their emission
+</bodyText>
+<footnote confidence="0.99814325">
+2The parallel version is able to train our largest grammar
+on a 8-core machine within a week, while the non-parallel
+version is not able to finish even after 3 weeks.
+3The value of λ is tuned on the development set.
+</footnote>
+<equation confidence="0.980507833333333">
+probabilities:
+c(t, w)
+c(tx, w) = cr(tx, unk) ·
+cr(t, unk)
+j:
+p(w|tx) = c(tx, w)/ w c(tx, w)
+</equation>
+<subsectionHeader confidence="0.996527">
+2.2 Chinese Unknown Word Handling
+</subsectionHeader>
+<bodyText confidence="0.9986275625">
+The Berkeley parser utilizes statistics associated
+with rare words (e.g., suffix, capitalization) to esti-
+mate the emission probabilities of unknown words
+at decoding time. This is adequate for for English,
+however, only a limited number of classes of un-
+known words, such as digits and dates, are handled
+for Chinese. In this paper, we develop a character-
+based unknown word model inspired by (Huang
+et al., 2007) that reflects the fact that characters in
+any position (prefix, infix, or suffix) can be predic-
+tive of the part-of-speech (POS) type for Chinese
+words. In our model, the word emission proba-
+bility, p(w|tx), of an unknown word w given the
+latent state tx of POS tag t is estimated by the ge-
+ometric average of the emission probability of the
+characters ck in the word:
+</bodyText>
+<equation confidence="0.98647">
+�r1P(w|tx) = n ck∈w,P(ck|t)�=0 P(ck|t)
+</equation>
+<bodyText confidence="0.999978">
+where n = |{ck E w|P(ck|t) =� 0}|. Characters
+not seen in the training data are ignored in the
+computation of the geometric average. We back
+off to use the rare word statistics regardless of
+word identity when the above equation cannot be
+used to compute the emission probability.
+</bodyText>
+<sectionHeader confidence="0.994781" genericHeader="method">
+3 Parser Self-Training
+</sectionHeader>
+<bodyText confidence="0.999965823529412">
+Our hypothesis is that combining automatically la-
+beled parses with treebank trees will help the EM
+training of the PCFG-LA parser to make more in-
+formed decisions about latent annotations and thus
+generate more effective grammars. In this section,
+we discuss how self-training is applied to train a
+PCFG-LA parser.
+There are several ways to automatically label
+the data. A fairly standard method is to parse the
+unlabeled sentences with a parser trained on la-
+beled training data, and then combine the result-
+ing parses with the treebank training data to re-
+train the parser. This is the approach we chose
+for self-training. An alternative approach is to run
+EM directly on the labeled treebank trees and the
+unlabeled sentences, without explicit parse trees
+for the unlabeled sentences. However, because the
+</bodyText>
+<page confidence="0.990737">
+834
+</page>
+<bodyText confidence="0.999977395348837">
+brackets would need to be determined for the un-
+labeled sentences together with the latent annota-
+tions, this would increase the running time from
+linear in the number of expansion rules to cubic in
+the length of the sentence.
+Another important decision is how to weight
+the gold standard and automatically labeled data
+when training a new parser model. Errors in the
+automatically labeled data could limit the accu-
+racy of the self-trained model, especially when
+there is a much greater quantity of automatically
+labeled data than the gold standard training data.
+To balance the gold standard and automatically
+labeled data, one could duplicate the treebank
+data to match the size of the automatically la-
+beled data; however, the training of the PCFG-
+LA parser would result in redundant applications
+of EM computations over the same data, increas-
+ing the cost of training. Instead we weight the
+posterior probabilities computed for the gold and
+automatically labeled data, so that they contribute
+equally to the resulting grammar. Our preliminary
+experiments show that balanced weighting is ef-
+fective, especially for Chinese (about 0.4% abso-
+lute improvement) where the automatic parse trees
+have a relatively lower accuracy.
+The training procedure of the PCFG-LA parser
+gradually introduces more latent annotations dur-
+ing each split-merge stage, and the self-labeled
+data can be introduced at any of these stages. In-
+troduction of the self-labeled data in later stages,
+after some important annotations are learned from
+the treebank, could result in more effective learn-
+ing. We have found that a middle stage introduc-
+tion (after 3 split-merge iterations) of the automat-
+ically labeled data has an effect similar to balanc-
+ing the weights of the gold and automatically la-
+beled trees, possibly due to the fact that both meth-
+ods place greater trust in the former than the latter.
+In this study, we introduce the automatically la-
+beled data at the outset and weight it equally with
+the gold treebank training data in order to focus
+our experiments to support a deeper analysis.
+</bodyText>
+<sectionHeader confidence="0.998384" genericHeader="method">
+4 Experimental Setup
+</sectionHeader>
+<bodyText confidence="0.999948184210526">
+For the English experiments, sections from the
+WSJ Penn Treebank are used as labeled training
+data: section 2-19 for training, section 22 for de-
+velopment, and section 23 as the test set. We also
+used 210k4 sentences of unlabeled news articles in
+the BLLIP corpus for English self-training.
+For the Chinese experiments, the Penn Chinese
+Treebank 6.0 (CTB6) (Xue et al., 2005) is used
+as labeled data. CTB6 includes both news articles
+and transcripts of broadcast news. We partitioned
+the news articles into train/development/test sets
+following Huang et al. (2007). The broadcast news
+section is added to the training data because it
+shares many of the characteristics of newswire text
+(e.g., fully punctuated, contains nonverbal expres-
+sions such as numbers and symbols). In addi-
+tion, 210k sentences of unlabeled Chinese news
+articles are used for self-training. Since the Chi-
+nese parsers in our experiments require word-
+segmented sentences as input, the unlabeled sen-
+tences need to be word-segmented first. As shown
+in (Harper and Huang, 2009), the accuracy of au-
+tomatic word segmentation has a great impact on
+Chinese parsing performance. We chose to use
+the Stanford segmenter (Chang et al., 2008) in
+our experiments because it is consistent with the
+treebank segmentation and provides the best per-
+formance among the segmenters that were tested.
+To minimize the discrepancy between the self-
+training data and the treebank data, we normalize
+both CTB6 and the self-training data using UW
+Decatur (Zhang and Kahn, 2008) text normaliza-
+tion.
+Table 1 summarizes the data set sizes used
+in our experiments. We used slightly modi-
+fied versions of the treebanks; empty nodes and
+nonterminal-yield unary rules5, e.g., NP→VP, are
+deleted using tsurgeon (Levy and Andrew, 2006).
+</bodyText>
+<table confidence="0.9937126">
+Train Dev Test Unlabeled
+English 39.8k 1.7k 2.4k 210k
+(950.0k) (40.1k) (56.7k) (5,082.1k)
+Chinese 24.4k 1.9k 2.0k 210k
+(678.8k) (51.2k) (52.9k) (6,254.9k)
+</table>
+<tableCaption confidence="0.787858">
+Table 1: The number of sentences (and words in
+parentheses) in our experiments.
+</tableCaption>
+<bodyText confidence="0.994075">
+We trained parsers on 20%, 40%, 60%, 80%,
+and 100% of the treebank training data to evaluate
+</bodyText>
+<footnote confidence="0.8774064">
+4This amount was constrained based on both CPU and
+memory. We plan to investigate cloud computing to exploit
+more unlabeled data.
+5As nonterminal-yield unary rules are less likely to be
+posited by a statistical parser, it is common for parsers trained
+on the standard Chinese treebank to have substantially higher
+precision than recall. This gap between bracket recall and
+precision is alleviated without loss of parse accuracy by delet-
+ing the nonterminal-yield unary rules. This modification sim-
+ilarly benefits both parsers we study here.
+</footnote>
+<page confidence="0.996397">
+835
+</page>
+<bodyText confidence="0.99978145">
+the effect of the amount of labeled training data on
+parsing performance. We also compare how self-
+training impacts the models trained with different
+amounts of gold-standard training data. This al-
+lows us to simulate scenarios where the language
+has limited human-labeled resources.
+We compare models trained only on the gold
+labeled training data with those that utilize ad-
+ditional unlabeled data. Self-training (PCFG-LA
+or Charniak) proceeds in two steps. In the first
+step, the parser is first trained on the allocated la-
+beled training data (e.g., 40%) and is then used
+to parse the unlabeled data. In the second step,
+a new parser is trained on the weighted combina-
+tion6 of the allocated labeled training data and the
+additional automatically labeled data. The devel-
+opment set is used in each step to select the gram-
+mar order with the best accuracy for the PCFG-LA
+parser and to tune the smoothing parameters for
+Charniak’s parser.
+</bodyText>
+<sectionHeader confidence="0.999967" genericHeader="method">
+5 Results
+</sectionHeader>
+<bodyText confidence="0.999861857142857">
+In this section, we first present the effect of un-
+known and rare word handling for the PCFG-LA
+parser, and then compare and discuss the perfor-
+mance of the PCFG-LA parser and Charniak’s
+parser across languages with different amounts
+of labeled training, either with or without self-
+training.
+</bodyText>
+<subsectionHeader confidence="0.975696">
+5.1 Rare and Unknown Word Handling
+</subsectionHeader>
+<bodyText confidence="0.999650307692308">
+Table 2 reports the effect of unknown and rare
+word handing for the PCFG-LA parser trained on
+100%7 of the labeled training data. The rare word
+handling improves the English parser by 0.68%
+and the Chinese parser by 0.56% over the Berke-
+ley parser. The Chinese unknown word handling
+method alone improves the Chinese parser by
+0.47%. The rare and unknown handling methods
+together improve the Chinese parser by 0.92%. All
+the improvements are statistically significant8.
+We found that the rare word handling method
+becomes more effective as the number of latent an-
+notations increases, especially when there is not a
+</bodyText>
+<footnote confidence="0.980401625">
+6We balance the size of manually and automatically la-
+beled data by posterior weighting for the PCFG-LA parsers
+and by duplication for Charniak’s parser.
+7Greater improvements are obtained using smaller
+amounts of labeled training data.
+8We use Bikel’s randomized parsing evaluation compara-
+tor to determine the significance (p &lt; 0.05) of difference
+between two parsers’ output.
+</footnote>
+<table confidence="0.9990726">
+English Chinese
+PCFG-LA 89.95 83.23
++R 90.63 83.79
++U N/A 83.70
++R+U N/A 84.15
+</table>
+<tableCaption confidence="0.995699">
+Table 2: Effects of rare word handling (+R) and
+Chinese unknown handling (+U) on the test set.
+</tableCaption>
+<bodyText confidence="0.997229833333333">
+sufficient amount of labeled training data. Shar-
+ing statistics of the rare words during training re-
+sults in more robust grammars with better pars-
+ing performance. The unknown word handling
+method also gives greater improvements on gram-
+mars trained on smaller amounts of training data,
+suggesting that it is quite helpful for modeling un-
+seen words at decoding time. However, it tends to
+be less effective when the number of latent anno-
+tations increases, probably because the probability
+estimation of unseen words based on surface tags
+is less reliable for finer-gained latent annotations.
+</bodyText>
+<subsectionHeader confidence="0.996865">
+5.2 Labeled Data Only
+</subsectionHeader>
+<bodyText confidence="0.999905846153846">
+When comparing the two parsers on both lan-
+guages in Figure 2 with treebank training, it is
+clear that they perform much better on English
+than Chinese. While this is probably due in part
+to the years of research on English, Chinese still
+appears to be more challenging than English. The
+comparison between the two parsing approaches
+provides two interesting conclusions.
+First, the PCFG-LA parser always performs sig-
+nificantly better than Charniak’s parser on Chi-
+nese, although both model English well. Ad-
+mittedly Charniak’s parser has not been opti-
+mized9 on Chinese, but neither has the PCFG-
+LA parser10. The lexicalized model in Charniak’s
+parser was first optimized for English and required
+sophisticated smoothing to deal with sparseness;
+however, the lexicalized model developed for Chi-
+nese works less well. In contrast, the PCFG-LA
+parser learns the latent annotations from the data,
+without any specification of what precisely should
+be modeled and how it should be modeled. This
+flexibility may help it better model new languages.
+Second, while both parsers benefit from in-
+creased amounts of gold standard training data,
+the PCFG-LA parser gains more. The PCFG-LA
+parser is initially poorer than Charniak’s parser
+</bodyText>
+<footnote confidence="0.9976965">
+9The Chinese port includes modification of the head table,
+implementation of a Chinese punctuation model, etc.
+10The PCFG-LA parser without the unknown word han-
+dling method still outperforms Charniak’s parser on Chinese.
+</footnote>
+<page confidence="0.995094">
+836
+</page>
+<figure confidence="0.99922685">
+PCFG-LA
+PCFG-LA.ST
+92
+91
+90
+89
+88
+87
+0.2 0.4 0.6 0.8 1 x 39,832
+Number of Labeled WSJ Training Trees
+(a) English
+86
+84
+82
+80
+78
+76
+0.2 0.4 0.6 0.8 1 x 24,416
+Number of Labeled CTB Training Trees
+(b) Chinese
+</figure>
+<figureCaption confidence="0.9079835">
+Figure 2: The performance of the PCFG-LA
+parser and Charniak’s parser evaluated on the test
+set, trained with different amounts of labeled train-
+ing data, with and without self-training (ST).
+</figureCaption>
+<bodyText confidence="0.999328733333333">
+when trained on 20% WSJ training data, proba-
+bly because the training data is too small for it to
+learn fine-grained annotations without over-fitting.
+As more labeled training data becomes avail-
+able, the performance of the PCFG-LA parser im-
+proves quickly and finally outperforms Charniak’s
+parser significantly. Moreover, performance of the
+PCFG-LA parser continues to grow when more la-
+beled training data is available, while the perfor-
+mance of Charniak’s parser levels out at around
+80% of the labeled data. The PCFG-LA parser im-
+proves by 3.5% when moving from 20% to 100%
+training data, compared to a 2.21% gain for Char-
+niak’s parser. Similarly for Chinese, the PCFG-
+LA parser also gains more (4.48% vs 3.63%).
+</bodyText>
+<subsectionHeader confidence="0.994276">
+5.3 Labeled + Self-Labeled
+</subsectionHeader>
+<bodyText confidence="0.999923125">
+The PCFG-LA parser is also able to benefit more
+from self-training than Charniak’s parser. On the
+WSJ data set, Charniak’s parser benefits from self-
+training initially when there is little labeled train-
+ing data, but the improvement levels out quickly
+as more labeled training trees become available.
+In contrast, the PCFG-LA parser benefits consis-
+tently from self-training11, even when using 100%
+</bodyText>
+<footnote confidence="0.3989205">
+11One may notice that the self-trained PCFG-LA parser
+with 100% labeled WSJ data has a slightly lower test accu-
+</footnote>
+<bodyText confidence="0.997836766666666">
+of the labeled training set. Similar trends are also
+found for Chinese.
+It should be noted that the PCFG-LA parser
+trained on a fraction of the treebank training data
+plus a large amount of self-labeled training data,
+which comes with little or no cost, performs com-
+parably or even better than grammars trained with
+additional labeled training data. For example, the
+self-trained PCFG-LA parser with 60% labeled
+data is able to outperform the grammar trained
+with 100% labeled training data alone for both En-
+glish and Chinese. With self-training, even 40%
+labeled WSJ training data is sufficient to train a
+PCFG-LA parser that is comparable to the model
+trained on the entire WSJ training data alone. This
+is of significant importance, especially for lan-
+guages with limited human-labeled resources.
+One might conjecture that the PCFG-LA parser
+benefits more from self-training than Charniak’s
+parser because its self-labeled data has higher ac-
+curacy. However, this is not true. As shown in Fig-
+ure 2 (a), the PCFG-LA parser trained with 40%
+of the WSJ training set alone has a much lower
+performance (88.57% vs 89.96%) than Charniak’s
+parser trained on the full WSJ training set. With
+the same amount of self-training data (labeled by
+each parser), the resulting PCFG-LA parser ob-
+tains a much higher F score than the self-trained
+Charniak’s parser (90.52% vs 90.18%). Similar
+patterns can also be found for Chinese.
+</bodyText>
+<table confidence="0.993463">
+English Chinese
+PCFG-LA 90.63 84.15
++ Self-training 91.46 85.18
+</table>
+<tableCaption confidence="0.999386">
+Table 3: Final results on the test set.
+</tableCaption>
+<bodyText confidence="0.993811411764706">
+Table 3 reports the final results on the test set
+when trained on the entire WSJ or CTB6 training
+set. For English, self-training contributes 0.83%
+absolute improvement to the PCFG-LA parser,
+which is comparable to the improvement obtained
+from using semi-supervised training with the two-
+stage parser in (McClosky et al., 2006). Note that
+their improvement is achieved with the addition
+of 2,000k unlabeled sentences using the combi-
+nation of a generative parser and a discriminative
+reranker, compared to using only 210k unlabeled
+sentences with a single generative parser in our
+approach. For Chinese, self-training results in a
+racy than the self-trained PCFG-LA parser with 80% labeled
+WSJ data. This is due to the variance in parser performance
+when initialized with different seeds and the fact that the de-
+velopment set is used to pick the best model for evaluation.
+</bodyText>
+<figure confidence="0.995568090909091">
+Charniak
+Charniak.ST
+F score
+F score
+837
+F score
+F score
+98
+97
+96
+95
+94
+93
+92
+91
+90
+89
+88
+87
+0.2 0.4 0.6 0.8 1
+Number of Labeled WSJ Training Trees
+x 39,832
+Test
+Test.ST
+Train
+Train.ST
+fewer latent states Split-Merge Rounds more latent states
+107
+100
+95
+Number of Rules (log scale)
+106
+90
+85
+F score
+105
+80
+75
+104
+70
+65
+103
+60
+Test
+Test.ST
+Rules
+Rules.ST
+Train
+Train.ST
+0.2 0.4 0.6 0.8 1
+Number of Labeled WSJ Training Trees
+U 39,832
+97
+96
+95
+94
+93
+92
+91
+90
+89
+88
+87
+6
+5
+7
+6
+7
+6
+7
+6 6
+7
+Test
+Test.ST
+Train
+Train.ST
+(a) Charniak (b) PCFG-LA (20% WSJ) (c) PCFG-LA
+</figure>
+<figureCaption confidence="0.995062">
+Figure 3: (a) The training/test accuracy of Charniak’s parser trained on varying amounts of labeled
+WSJ training data, with and without self-training (ST). (b) The training/test accuracy and the number
+of nonzero rules of the PCFG-LA grammars trained on 20% of the labeled WSJ training data, w/ and
+w/o ST. (c) The training/test accuracy of the PCFG-LA parser trained on varying amount of labeled WSJ
+training data, w/ and w/o ST; the numbers along the training curves indicate the order of the grammars.
+</figureCaption>
+<figure confidence="0.998903970588235">
+0.2 0.4 0.6 0.8 1
+Number of Labeled CTB Training Trees
+Test
+Test.ST
+Train
+Train.ST
+x 24,416
+107
+95
+106
+85
+80
+105
+75
+70
+104
+60
+55 103
+0 1 2 3 4 5 6 7
+100
+90
+Nonzero Rules (log scale)
+F score
+65
+94
+92
+90
+88
+86
+84
+82
+80
+78
+76
+F score
+fewer latent states Split-Merge Rounds more latent states
+Test
+Test.ST
+Train
+Train.ST
+Rules
+Rules.ST
+0.2 0.4 0.6 0.8 1
+Number of Labeled CTB Training Trees
+Test
+Test.ST
+Train
+Train.ST
+x 24,416
+6
+94
+7
+7
+6
+92
+6
+90
+6 6
+88
+5 5
+F score
+86
+4
+84
+82
+80
+78
+(a) Charniak (b) PCFG-LA (20% CTB) (c) PCFG-LA
+</figure>
+<figureCaption confidence="0.8802566">
+Figure 4: (a) The training/test accuracy of Charniak’s parser trained on varying amounts of labeled
+CTB training data, with and without self-training (ST). (b) The training/test accuracy and the number
+of nonzero rules of the PCFG-LA grammars trained on 20% of the labeled CTB training data, w/ and
+w/o ST. (c) The training/test accuracy of the PCFG-LA parser trained on varying amount of labeled CTB
+training data, w/ and w/o ST; the numbers along the training curves indicate the order of the grammars.
+</figureCaption>
+<bodyText confidence="0.999221">
+state-of-the-art parsing model with 85.18% accu-
+racy (1.03% absolute improvement) on a represen-
+tative test set. Both improvements are statistically
+significant.
+</bodyText>
+<sectionHeader confidence="0.975965" genericHeader="method">
+6 Analysis
+</sectionHeader>
+<bodyText confidence="0.999693818181818">
+In this section, we perform a series of analyses,
+focusing on English (refer to Figure 3), to investi-
+gate why the PCFG-LA parser benefits more from
+additional data, most particularly automatically la-
+beled data, when compared to Charniak’s parser.
+Similar analyses have been done for Chinese with
+similar results (refer to Figure 4).
+Charniak’s parser is a lexicalized PCFG parser
+that models lexicalized dependencies explicitly
+observable in the training data and relies on
+smoothing to avoid over-fitting. Although it is
+able to benefit from more training data because of
+broader lexicon and rule coverage and more robust
+estimation of parameters, its ability to benefit from
+the additional data is limited in the sense that it is
+not able to generate additional predictive features
+that are supported by this data. As shown in fig-
+ure 3(a), the parsing accuracy of Charniak’s parser
+on the test set improves as the amount of labeled
+training data increases; however, the training accu-
+racy12 degrades as more data is added. Note that
+the training accuracy13 of Charniak’s parser also
+</bodyText>
+<footnote confidence="0.995287">
+12The parser is tested on the treebank labeled set that the
+parser is trained on.
+13The self-training data is combined with the labeled tree-
+bank trees in a weighted manner; otherwise, the training ac-
+curacy would be even lower.
+</footnote>
+<page confidence="0.995638">
+838
+</page>
+<bodyText confidence="0.999525333333333">
+decreases after the addition of self-training data.
+This is expected for models like Charniak’s parser
+with fixed model parameters; it is harder to model
+more data with greater diversity. The addition of
+self-labeled data helps on the test set initially but it
+provides little gain when the labeled training data
+becomes relatively large.
+In contrast, the PCFG-LA grammar is able to
+model the training data with different granulari-
+ties. Fewer latent annotations are employed when
+the training set is small. As the size of the train-
+ing data increases, it is able to allocate more latent
+annotations to better model the data. As shown in
+Figure 3 (b), for a fixed amount (20%) of labeled
+training data, the accuracy of the model on train-
+ing data continues to improve as the number of la-
+tent annotation increases. Although it is important
+to limit the number of latent annotations to avoid
+over-fitting, the ability to model training data ac-
+curately given sufficient latent annotations is desir-
+able when more training data is available. When
+trained on the labeled data (20%) alone, the 5-th
+order grammar achieves its optimal generalization
+performance (based on the development set) and
+begins to degrade afterwords. With the addition of
+self-training data, the 5-th order grammar achieves
+an even greater accuracy on the test set and its per-
+formance continues to increase14 when moving to
+the 6-th or even 7-th order grammar.
+Figure 3 (c) plots the training and test curves
+of the English PCFG-LA parser with varying
+amounts of labeled training data, with and with-
+out self-training. This figure differs substantially
+from Figure 3 (a). First, as mentioned earlier, the
+PCFG-LA parser benefits much more from self-
+training than Charniak’s parser with moderate to
+large amounts of labeled training data. Second, in
+contrast to Charniak’s parser for which training ac-
+curacy degrades consistently as the amount of la-
+beled training data increases, the training accuracy
+of the PCFG-LA parser sometimes improves when
+trained on more labeled training data (e.g., the best
+model (at order 6) trained on 40%15 labeled train-
+14Although the 20% self-trained grammar has a higher test
+accuracy at the 7-th round than the 6-th round, the develop-
+ment accuracy was better at the 6-th round, and thus we report
+the test accuracy of the 6-th round grammar in Figure 3 (c).
+15For models trained with greater amounts of labeled train-
+ing data, although their training accuracy becomes lower (due
+to greater diversity) for the grammars (all at order 6) selected
+by the development set, their 7-th order grammars (not re-
+ported in the figure) actually have both higher training and
+test accuracies than the 6-th order grammar trained on less
+training data.
+ing data alone has a higher training accuracy than
+the best model (at order 5) trained on 20% labeled
+training data). Third, the addition of self-labeled
+data supports more accurate PCFG-LA grammars
+with higher orders than those trained without self-
+training, as evidenced by scores on both the train-
+ing and test data. This suggests that the self-
+trained grammars are able to utilize more latent
+annotations to learn deeper dependencies.
+</bodyText>
+<figure confidence="0.996464333333333">
+6 x 1e+4
+4.8
+3.6
+2.4
+1.2
+2 0
+0 2 4 6 8 10 12 14 16
+Span Length
++Labeled +Unlabled #Brackets
+</figure>
+<figureCaption confidence="0.995495">
+Figure 5: The relative reduction of bracketing er-
+</figureCaption>
+<bodyText confidence="0.994142464285714">
+rors for different span lengths, evaluated on the
+test set. The baseline model is the PCFG-LA
+parser trained on 20% of the WSJ training data.
+The +Unlabeled curve corresponds to the parser
+trained with the additional automatically labeled
+data and the +Labeled curve corresponds to the
+parser trained with additional 20% labeled training
+data. The counts of the brackets are computed on
+the gold reference. Span length ‘0’ is designated
+for the effect on preterminal POS tags to differ-
+entiate it from the non-terminal brackets spanning
+only one word.
+Figure 5 compares the effect of additional tree-
+bank labeled and automatically labeled data on the
+relative reduction of bracketing errors for different
+span lengths. It is clear from the figure that the im-
+provement in parsing accuracy from self-training
+is the result of better bracketing across all span
+lengths16. However, even though the automati-
+cally labeled training data provides more improve-
+ment than the additional treebank labeled data in
+terms of parsing accuracy, this data is less effective
+at improving tagging accuracy than the additional
+treebank labeled training data.
+So, how could self-training improve rule esti-
+mation when training the PCFG-LA parser with
+more latent annotations? One possibility is that the
+automatically labeled data smooths the parameter
+</bodyText>
+<footnote confidence="0.976832333333333">
+16There is a slight degradation in bracketing accuracy for
+some spans longer than 16 words, but the effect is negligible
+due to their low counts.
+</footnote>
+<figure confidence="0.986789083333333">
+Relative reduction of F error (%)
+22
+20
+18
+16
+14
+12
+10
+8
+6
+4
+Number of brackets
+</figure>
+<page confidence="0.994775">
+839
+</page>
+<bodyText confidence="0.9997725">
+estimates in the EM algorithm, enabling effective
+training of models with more parameters to learn
+deeper dependencies. Let p(a → b|e, t) be the
+posterior probability of expanding subcategories a
+to b given the event e, which is a rule expansion
+on a treebank parse tree t. Ti and T,, are the sets
+of gold and automatically labeled parse trees, re-
+spectively. The update of the rule expansion prob-
+ability p(a → b) in self-training (with weighting
+parameter α) can be expressed as:
+</bodyText>
+<equation confidence="0.9757235">
+p(a --+ b|e, t) + α E E p(a --+ b|e, t)
+tET,e eEt
+p(a --+ b|e, t) + α E E p(a --+ b|e, t))
+tET,e eEt
+</equation>
+<bodyText confidence="0.961576057142857">
+Since the unlabeled data is parsed by a lower
+order grammar (with fewer latent annotations),
+the expected counts from the automatically la-
+beled data can be thought of as counts from a
+lower-order grammar17 that smooth the higher-
+order (with more latent annotations) grammar.
+We observe that many of the rule parameters of
+the grammar trained on WSJ training data alone
+have zero probabilities (rules with extremely low
+probabilities are also filtered to zero), as was also
+pointed out in (Petrov et al., 2006). On the one
+hand, this is what we want because the grammar
+should learn to avoid impossible rule expansions.
+On the other hand, this might also be a sign of
+over-fitting of the labeled training data. As shown
+in Figure 3 (b), the grammar obtained with the ad-
+dition of automatically labeled data contains many
+more non-zero rules, and its performance contin-
+ues to improve with more latent annotations. Sim-
+ilar patterns also appear when using self-training
+for other amounts of labeled training data. As is
+partially reflected by the zero probability rules, the
+addition of the automatically labeled data enables
+the exploration of a broader parameter space with
+less danger of over-fitting the data. Also note that
+the benefit of the automatically labeled data is less
+clear in the early training stages (i.e., when there
+are fewer latent annotations), as can be seen in Fig-
+ure 3 (b). This is probably because there is a small
+number of free parameters and the treebank data is
+sufficiently large for robust parameter estimation.
+17We also trained models using only the automatically la-
+beled data without combining it with human-labeled training
+data, but they were no more accurate than those trained on
+the human-labeled training data alone without self-training.
+</bodyText>
+<sectionHeader confidence="0.998676" genericHeader="conclusions">
+7 Conclusion
+</sectionHeader>
+<bodyText confidence="0.999984387096774">
+In this paper, we showed that PCFG-LA parsers
+can be more effectively applied to languages
+where parsing is less well developed and that they
+are able to benefit more from self-training than
+lexicalized generative parsers. We show for the
+first time that self-training is able to significantly
+improve the performance of a PCFG-LA parser, a
+single generative parser, on both small and large
+amounts of labeled training data.
+We conjecture based on our analysis that the
+EM training algorithm is able to exploit the in-
+formation available in both gold and automati-
+cally labeled data with more complex grammars
+while being less affected by over-fitting. Bet-
+ter results would be expected by combining the
+PCFG-LA parser with discriminative reranking
+approaches (Charniak and Johnson, 2005; Huang,
+2008) for self training. Self-training should also
+benefit other discriminatively trained parsers with
+latent annotations (Petrov and Klein, 2008), al-
+though training would be much slower compared
+to using generative models, as in our case.
+In future work, we plan to scale up the training
+process with more unlabeled training data (e.g.,
+gigaword) and investigate automatic selection of
+materials that are most suitable for self-training.
+We also plan to investigate domain adaptation and
+apply the model to other languages with modest
+treebank resources. Finally, it is also important to
+explore other ways to exploit the use of unlabeled
+data.
+</bodyText>
+<sectionHeader confidence="0.999196" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.99993275">
+This material is based upon work supported in
+part by the Defense Advanced Research Projects
+Agency (DARPA) under Contract No. HR0011-
+06-C-0023 and NSF IIS-0703859. Any opinions,
+findings and/or recommendations expressed in this
+paper are those of the authors and do not necessar-
+ily reflect the views of the funding agencies or the
+institutions where the work was completed.
+</bodyText>
+<sectionHeader confidence="0.999574" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.995269">
+Daniel M. Bikel and David Chiang. 2000. Two sta-
+tistical parsing models applied to the chinese tree-
+bank. In Proceedings of the Second Chinese Lan-
+guage Processing Workshop.
+Pi-Chuan Chang, Michel Gally, and Christopher Man-
+ning. 2008. Optimizing chinese word segmentation
+</reference>
+<figure confidence="0.9991299">
+E
+eEt
+E
+tET1
+E
+b
+E
+eEt
+( E
+tET1
+</figure>
+<page confidence="0.700317">
+840
+</page>
+<reference confidence="0.948612380952381">
+for machine translation performance. In ACL 2008
+Third Workshop on Statistical Machine Translation.
+Mark Steedman, Miles Osborne, Anoop Sarkar,
+Stephen Clark, Rebecca Hwa, Julia Hockenmaier,
+Paul Ruhlen, Steven Baker, and Jeremiah Crim.
+2003. Bootstrapping statistical parsers from small
+datasets. In EACL.
+Eugene Charniak and Mark Johnson. 2005. Coarse-
+to-fine n-best parsing and maxent discriminative
+reranking. In ACL.
+Eugene Charniak. 1997. Statistical parsing with a
+context-free grammar and word statistics. In ICAI.
+Eugene Charniak. 2000. A maximum-entropy-
+inspired parser. In ACL.
+Michael John Collins. 1999. Head-driven statistical
+models for natural language parsing. Ph.D. thesis,
+University of Pennsylvania, Philadelphia, PA, USA.
+Mary Harper and Zhongqiang Huang. 2009. Chinese
+statistical parsing. To appear in The Gale Book.
+Zhongqiang Huang, Mary Harper, and Wen Wang.
+2007. Mandarin part-of-speech tagging and dis-
+criminative reranking. In EMNLP.
+Liang Huang. 2008. Forest reranking: Discriminative
+parsing with non-local features. In ACL.
+Terry Koo, Xavier Carrera, and Michael Collins. 2008.
+Simple semi-supervised dependency parsing. In
+ACL.
+Roger Levy and Galen Andrew. 2006. Tregex and tsur-
+geon: Tools for querying and manipulating tree data
+structures. In LREC.
+Roger Levy and Christopher Manning. 2003. Is it
+harder to parse chinese, or the chinese treebank. In
+ACL.
+Takuya Matsuzaki, Yusuke Miyao, and Jun’ichi Tsujii.
+2005. Probabilistic CFG with latent annotations. In
+ACL.
+David McClosky, Eugene Charniak, and Mark John-
+son. 2006. Effective self-training for parsing. In
+HLT-NAACL.
+David McClosky, Eugene Charniak, and Mark John-
+son. 2008. When is self-training effective for pars-
+ing? In COLING.
+Slav Petrov and Dan Klein. 2007. Improved inference
+for unlexicalized parsing. In HLT-NAACL.
+Slav Petrov and Dan Klein. 2008. Sparse multi-scale
+grammars for discriminative latent variable parsing.
+In EMNLP.
+Slav Petrov, Leon Barrett, Romain Thibaux, and Dan
+Klein. 2006. Learning accurate, compact, and inter-
+pretable tree annotation. In ACL.
+Roi Reichart and Ari Rappoport. 2007. Self-training
+for enhancement and domain adaptation of statistical
+parsers trained on small datasets. In ACL.
+Qin Wang, Dale Schuurmans, and Dekang Lin. 2008.
+Semi-supervised convex training for dependency
+parsing. In ACL.
+Nianwen Xue, Fei Xia, Fu-dong Chiou, and Marta
+Palmer. 2005. The Penn Chinese Treebank: Phrase
+structure annotation of a large corpus. Natural Lan-
+guage Engineering.
+Bin Zhang and Jeremy G. Kahn. 2008. Evaluation of
+decatur text normalizer for language model training.
+Technical report, University of Washington.
+</reference>
+<page confidence="0.998392">
+841
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.413064">
+<title confidence="0.957651">Self-Training PCFG Grammars with Latent Across Languages for Computational</title>
+<affiliation confidence="0.896503">and Information Institute for Advanced Computer University of Maryland, College</affiliation>
+<email confidence="0.99978">zqhuang@umiacs.umd.edu</email>
+<abstract confidence="0.981469421052631">We investigate the effectiveness of selftraining PCFG grammars with latent annotations (PCFG-LA) for parsing languages with different amounts of labeled training data. Compared to Charniak’s lexicalized parser, the PCFG-LA parser was more effectively adapted to a language for which parsing has been less well developed (i.e., Chinese) and benefited more from selftraining. We show for the first time that self-training is able to significantly improve the performance of the PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data. Our approach achieves stateof-the-art parsing accuracies for a single parser on both English (91.5%) and Chinese (85.2%).</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Daniel M Bikel</author>
+<author>David Chiang</author>
+</authors>
+<title>Two statistical parsing models applied to the chinese treebank.</title>
+<date>2000</date>
+<booktitle>In Proceedings of the Second Chinese Language Processing Workshop.</booktitle>
+<contexts>
+<context position="1340" citStr="Bikel and Chiang, 2000" startWordPosition="193" endWordPosition="196">the performance of the PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data. Our approach achieves stateof-the-art parsing accuracies for a single parser on both English (91.5%) and Chinese (85.2%). 1 Introduction There is an extensive research literature on building high quality parsers for English (Collins, 1999; Charniak, 2000; Charniak and Johnson, 2005; Petrov et al., 2006), however, models for parsing other languages are less well developed. Take Chinese for example; there have been several attempts to develop accurate parsers for Chinese (Bikel and Chiang, 2000; Levy and Manning, 2003; Petrov and Klein, 2007), but the state-of-the-art performance, around 83% F measure on Penn Chinese Treebank (achieved by the Berkeley parser (Petrov and Klein, 2007)) falls far short of performance on English (∼90-92%). As pointed out in (Levy and Manning, 2003), there are many linguistic differences between Chinese and English, as well as structural differences between their corresponding treebanks, and some of these make it a harder task to parse Chinese. Additionally, the fact that the available treebanked Chinese materials are more Mary Harper&apos; ,2 2Human Language</context>
+</contexts>
+<marker>Bikel, Chiang, 2000</marker>
+<rawString>Daniel M. Bikel and David Chiang. 2000. Two statistical parsing models applied to the chinese treebank. In Proceedings of the Second Chinese Language Processing Workshop.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Pi-Chuan Chang</author>
+<author>Michel Gally</author>
+<author>Christopher Manning</author>
+</authors>
+<title>Optimizing chinese word segmentation for machine translation performance.</title>
+<date>2008</date>
+<booktitle>In ACL 2008 Third Workshop on Statistical Machine Translation.</booktitle>
+<contexts>
+<context position="16318" citStr="Chang et al., 2008" startWordPosition="2636" endWordPosition="2639">news section is added to the training data because it shares many of the characteristics of newswire text (e.g., fully punctuated, contains nonverbal expressions such as numbers and symbols). In addition, 210k sentences of unlabeled Chinese news articles are used for self-training. Since the Chinese parsers in our experiments require wordsegmented sentences as input, the unlabeled sentences need to be word-segmented first. As shown in (Harper and Huang, 2009), the accuracy of automatic word segmentation has a great impact on Chinese parsing performance. We chose to use the Stanford segmenter (Chang et al., 2008) in our experiments because it is consistent with the treebank segmentation and provides the best performance among the segmenters that were tested. To minimize the discrepancy between the selftraining data and the treebank data, we normalize both CTB6 and the self-training data using UW Decatur (Zhang and Kahn, 2008) text normalization. Table 1 summarizes the data set sizes used in our experiments. We used slightly modified versions of the treebanks; empty nodes and nonterminal-yield unary rules5, e.g., NP→VP, are deleted using tsurgeon (Levy and Andrew, 2006). Train Dev Test Unlabeled Englis</context>
+</contexts>
+<marker>Chang, Gally, Manning, 2008</marker>
+<rawString>Pi-Chuan Chang, Michel Gally, and Christopher Manning. 2008. Optimizing chinese word segmentation for machine translation performance. In ACL 2008 Third Workshop on Statistical Machine Translation.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mark Steedman</author>
+<author>Miles Osborne</author>
+<author>Anoop Sarkar</author>
+<author>Stephen Clark</author>
+<author>Rebecca Hwa</author>
+<author>Julia Hockenmaier</author>
+<author>Paul Ruhlen</author>
+<author>Steven Baker</author>
+<author>Jeremiah Crim</author>
+</authors>
+<title>Bootstrapping statistical parsers from small datasets.</title>
+<date>2003</date>
+<booktitle>In EACL.</booktitle>
+<contexts>
+<context position="3739" citStr="Steedman et al. (2003)" startWordPosition="567" endWordPosition="570">ing a method to better model Chinese unknown words. Our results show that the PCFGLA parser performs significantly better than Charniak’s parser on Chinese, and is also somewhat more accurate on English, although both parsers have high accuracy. The second question is important because labeled training data is often quite limited, especially for less well investigated languages, while unlabeled data is ubiquitous. Early investigations on self-training for parsing have had mixed results. Charniak (1997) reported no improvements from self-training a PCFG parser on the standard WSJ training set. Steedman et al. (2003) reported some degradation using a lexicalized tree adjoining grammar parser and minor improvement using Collins lexicalized PCFG parser; however, this gain was obtained only when the parser 832 Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing, pages 832–841, Singapore, 6-7 August 2009. c�2009 ACL and AFNLP was trained on a small labeled set. Reichart and Rappoport (2007) obtained significant gains using Collins lexicalized parser with a different selftraining protocol, but again they only looked at small labeled sets. McClosky et al. (2006) effectively ut</context>
+</contexts>
+<marker>Steedman, Osborne, Sarkar, Clark, Hwa, Hockenmaier, Ruhlen, Baker, Crim, 2003</marker>
+<rawString>Mark Steedman, Miles Osborne, Anoop Sarkar, Stephen Clark, Rebecca Hwa, Julia Hockenmaier, Paul Ruhlen, Steven Baker, and Jeremiah Crim. 2003. Bootstrapping statistical parsers from small datasets. In EACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eugene Charniak</author>
+<author>Mark Johnson</author>
+</authors>
+<title>Coarseto-fine n-best parsing and maxent discriminative reranking.</title>
+<date>2005</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="1125" citStr="Charniak and Johnson, 2005" startWordPosition="159" endWordPosition="162">more effectively adapted to a language for which parsing has been less well developed (i.e., Chinese) and benefited more from selftraining. We show for the first time that self-training is able to significantly improve the performance of the PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data. Our approach achieves stateof-the-art parsing accuracies for a single parser on both English (91.5%) and Chinese (85.2%). 1 Introduction There is an extensive research literature on building high quality parsers for English (Collins, 1999; Charniak, 2000; Charniak and Johnson, 2005; Petrov et al., 2006), however, models for parsing other languages are less well developed. Take Chinese for example; there have been several attempts to develop accurate parsers for Chinese (Bikel and Chiang, 2000; Levy and Manning, 2003; Petrov and Klein, 2007), but the state-of-the-art performance, around 83% F measure on Penn Chinese Treebank (achieved by the Berkeley parser (Petrov and Klein, 2007)) falls far short of performance on English (∼90-92%). As pointed out in (Levy and Manning, 2003), there are many linguistic differences between Chinese and English, as well as structural diffe</context>
+<context position="4599" citStr="Charniak and Johnson, 2005" startWordPosition="698" endWordPosition="702">Empirical Methods in Natural Language Processing, pages 832–841, Singapore, 6-7 August 2009. c�2009 ACL and AFNLP was trained on a small labeled set. Reichart and Rappoport (2007) obtained significant gains using Collins lexicalized parser with a different selftraining protocol, but again they only looked at small labeled sets. McClosky et al. (2006) effectively utilized unlabeled data to improve parsing accuracy on the standard WSJ training set, but they used a two-stage parser comprised of Charniak’s lexicalized probabilistic parser with n-best parsing and a discriminative reranking parser (Charniak and Johnson, 2005), and thus it would be better categorized as “co-training” (McClosky et al., 2008). It is worth noting that their attempts at selftraining Charniak’s lexicalized parser directly resulted in no improvement. There are other successful semi-supervised training approaches for dependency parsing, such as (Koo et al., 2008; Wang et al., 2008), and it would be interesting to investigate how they could be applied to constituency parsing. We show in this paper, for the first time, that self-training is able to significantly improve the performance of the PCFG-LA parser, a single generative parser, on b</context>
+<context position="37888" citStr="Charniak and Johnson, 2005" startWordPosition="6221" endWordPosition="6224">fit more from self-training than lexicalized generative parsers. We show for the first time that self-training is able to significantly improve the performance of a PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data. We conjecture based on our analysis that the EM training algorithm is able to exploit the information available in both gold and automatically labeled data with more complex grammars while being less affected by over-fitting. Better results would be expected by combining the PCFG-LA parser with discriminative reranking approaches (Charniak and Johnson, 2005; Huang, 2008) for self training. Self-training should also benefit other discriminatively trained parsers with latent annotations (Petrov and Klein, 2008), although training would be much slower compared to using generative models, as in our case. In future work, we plan to scale up the training process with more unlabeled training data (e.g., gigaword) and investigate automatic selection of materials that are most suitable for self-training. We also plan to investigate domain adaptation and apply the model to other languages with modest treebank resources. Finally, it is also important to ex</context>
+</contexts>
+<marker>Charniak, Johnson, 2005</marker>
+<rawString>Eugene Charniak and Mark Johnson. 2005. Coarseto-fine n-best parsing and maxent discriminative reranking. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eugene Charniak</author>
+</authors>
+<title>Statistical parsing with a context-free grammar and word statistics.</title>
+<date>1997</date>
+<booktitle>In ICAI.</booktitle>
+<contexts>
+<context position="3624" citStr="Charniak (1997)" startWordPosition="551" endWordPosition="552">ng a language-independent method for handling rare words and adapt it to another language, Chinese, by creating a method to better model Chinese unknown words. Our results show that the PCFGLA parser performs significantly better than Charniak’s parser on Chinese, and is also somewhat more accurate on English, although both parsers have high accuracy. The second question is important because labeled training data is often quite limited, especially for less well investigated languages, while unlabeled data is ubiquitous. Early investigations on self-training for parsing have had mixed results. Charniak (1997) reported no improvements from self-training a PCFG parser on the standard WSJ training set. Steedman et al. (2003) reported some degradation using a lexicalized tree adjoining grammar parser and minor improvement using Collins lexicalized PCFG parser; however, this gain was obtained only when the parser 832 Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing, pages 832–841, Singapore, 6-7 August 2009. c�2009 ACL and AFNLP was trained on a small labeled set. Reichart and Rappoport (2007) obtained significant gains using Collins lexicalized parser with a diffe</context>
+</contexts>
+<marker>Charniak, 1997</marker>
+<rawString>Eugene Charniak. 1997. Statistical parsing with a context-free grammar and word statistics. In ICAI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eugene Charniak</author>
+</authors>
+<title>A maximum-entropyinspired parser.</title>
+<date>2000</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="1097" citStr="Charniak, 2000" startWordPosition="157" endWordPosition="158">G-LA parser was more effectively adapted to a language for which parsing has been less well developed (i.e., Chinese) and benefited more from selftraining. We show for the first time that self-training is able to significantly improve the performance of the PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data. Our approach achieves stateof-the-art parsing accuracies for a single parser on both English (91.5%) and Chinese (85.2%). 1 Introduction There is an extensive research literature on building high quality parsers for English (Collins, 1999; Charniak, 2000; Charniak and Johnson, 2005; Petrov et al., 2006), however, models for parsing other languages are less well developed. Take Chinese for example; there have been several attempts to develop accurate parsers for Chinese (Bikel and Chiang, 2000; Levy and Manning, 2003; Petrov and Klein, 2007), but the state-of-the-art performance, around 83% F measure on Penn Chinese Treebank (achieved by the Berkeley parser (Petrov and Klein, 2007)) falls far short of performance on English (∼90-92%). As pointed out in (Levy and Manning, 2003), there are many linguistic differences between Chinese and English,</context>
+</contexts>
+<marker>Charniak, 2000</marker>
+<rawString>Eugene Charniak. 2000. A maximum-entropyinspired parser. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael John Collins</author>
+</authors>
+<title>Head-driven statistical models for natural language parsing.</title>
+<date>1999</date>
+<tech>Ph.D. thesis,</tech>
+<institution>University of Pennsylvania,</institution>
+<location>Philadelphia, PA, USA.</location>
+<contexts>
+<context position="1081" citStr="Collins, 1999" startWordPosition="155" endWordPosition="156">parser, the PCFG-LA parser was more effectively adapted to a language for which parsing has been less well developed (i.e., Chinese) and benefited more from selftraining. We show for the first time that self-training is able to significantly improve the performance of the PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data. Our approach achieves stateof-the-art parsing accuracies for a single parser on both English (91.5%) and Chinese (85.2%). 1 Introduction There is an extensive research literature on building high quality parsers for English (Collins, 1999; Charniak, 2000; Charniak and Johnson, 2005; Petrov et al., 2006), however, models for parsing other languages are less well developed. Take Chinese for example; there have been several attempts to develop accurate parsers for Chinese (Bikel and Chiang, 2000; Levy and Manning, 2003; Petrov and Klein, 2007), but the state-of-the-art performance, around 83% F measure on Penn Chinese Treebank (achieved by the Berkeley parser (Petrov and Klein, 2007)) falls far short of performance on English (∼90-92%). As pointed out in (Levy and Manning, 2003), there are many linguistic differences between Chin</context>
+</contexts>
+<marker>Collins, 1999</marker>
+<rawString>Michael John Collins. 1999. Head-driven statistical models for natural language parsing. Ph.D. thesis, University of Pennsylvania, Philadelphia, PA, USA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mary Harper</author>
+<author>Zhongqiang Huang</author>
+</authors>
+<title>Chinese statistical parsing.</title>
+<date>2009</date>
+<note>To appear in The Gale Book.</note>
+<contexts>
+<context position="16162" citStr="Harper and Huang, 2009" startWordPosition="2610" endWordPosition="2613">news articles and transcripts of broadcast news. We partitioned the news articles into train/development/test sets following Huang et al. (2007). The broadcast news section is added to the training data because it shares many of the characteristics of newswire text (e.g., fully punctuated, contains nonverbal expressions such as numbers and symbols). In addition, 210k sentences of unlabeled Chinese news articles are used for self-training. Since the Chinese parsers in our experiments require wordsegmented sentences as input, the unlabeled sentences need to be word-segmented first. As shown in (Harper and Huang, 2009), the accuracy of automatic word segmentation has a great impact on Chinese parsing performance. We chose to use the Stanford segmenter (Chang et al., 2008) in our experiments because it is consistent with the treebank segmentation and provides the best performance among the segmenters that were tested. To minimize the discrepancy between the selftraining data and the treebank data, we normalize both CTB6 and the self-training data using UW Decatur (Zhang and Kahn, 2008) text normalization. Table 1 summarizes the data set sizes used in our experiments. We used slightly modified versions of the</context>
+</contexts>
+<marker>Harper, Huang, 2009</marker>
+<rawString>Mary Harper and Zhongqiang Huang. 2009. Chinese statistical parsing. To appear in The Gale Book.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Zhongqiang Huang</author>
+<author>Mary Harper</author>
+<author>Wen Wang</author>
+</authors>
+<title>Mandarin part-of-speech tagging and discriminative reranking.</title>
+<date>2007</date>
+<booktitle>In EMNLP.</booktitle>
+<contexts>
+<context position="11515" citStr="Huang et al., 2007" startWordPosition="1850" endWordPosition="1853">e to finish even after 3 weeks. 3The value of λ is tuned on the development set. probabilities: c(t, w) c(tx, w) = cr(tx, unk) · cr(t, unk) j: p(w|tx) = c(tx, w)/ w c(tx, w) 2.2 Chinese Unknown Word Handling The Berkeley parser utilizes statistics associated with rare words (e.g., suffix, capitalization) to estimate the emission probabilities of unknown words at decoding time. This is adequate for for English, however, only a limited number of classes of unknown words, such as digits and dates, are handled for Chinese. In this paper, we develop a characterbased unknown word model inspired by (Huang et al., 2007) that reflects the fact that characters in any position (prefix, infix, or suffix) can be predictive of the part-of-speech (POS) type for Chinese words. In our model, the word emission probability, p(w|tx), of an unknown word w given the latent state tx of POS tag t is estimated by the geometric average of the emission probability of the characters ck in the word: �r1P(w|tx) = n ck∈w,P(ck|t)�=0 P(ck|t) where n = |{ck E w|P(ck|t) =� 0}|. Characters not seen in the training data are ignored in the computation of the geometric average. We back off to use the rare word statistics regardless of wor</context>
+<context position="15683" citStr="Huang et al. (2007)" startWordPosition="2534" endWordPosition="2537">ents to support a deeper analysis. 4 Experimental Setup For the English experiments, sections from the WSJ Penn Treebank are used as labeled training data: section 2-19 for training, section 22 for development, and section 23 as the test set. We also used 210k4 sentences of unlabeled news articles in the BLLIP corpus for English self-training. For the Chinese experiments, the Penn Chinese Treebank 6.0 (CTB6) (Xue et al., 2005) is used as labeled data. CTB6 includes both news articles and transcripts of broadcast news. We partitioned the news articles into train/development/test sets following Huang et al. (2007). The broadcast news section is added to the training data because it shares many of the characteristics of newswire text (e.g., fully punctuated, contains nonverbal expressions such as numbers and symbols). In addition, 210k sentences of unlabeled Chinese news articles are used for self-training. Since the Chinese parsers in our experiments require wordsegmented sentences as input, the unlabeled sentences need to be word-segmented first. As shown in (Harper and Huang, 2009), the accuracy of automatic word segmentation has a great impact on Chinese parsing performance. We chose to use the Stan</context>
+</contexts>
+<marker>Huang, Harper, Wang, 2007</marker>
+<rawString>Zhongqiang Huang, Mary Harper, and Wen Wang. 2007. Mandarin part-of-speech tagging and discriminative reranking. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Liang Huang</author>
+</authors>
+<title>Forest reranking: Discriminative parsing with non-local features.</title>
+<date>2008</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="37902" citStr="Huang, 2008" startWordPosition="6225" endWordPosition="6226">than lexicalized generative parsers. We show for the first time that self-training is able to significantly improve the performance of a PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data. We conjecture based on our analysis that the EM training algorithm is able to exploit the information available in both gold and automatically labeled data with more complex grammars while being less affected by over-fitting. Better results would be expected by combining the PCFG-LA parser with discriminative reranking approaches (Charniak and Johnson, 2005; Huang, 2008) for self training. Self-training should also benefit other discriminatively trained parsers with latent annotations (Petrov and Klein, 2008), although training would be much slower compared to using generative models, as in our case. In future work, we plan to scale up the training process with more unlabeled training data (e.g., gigaword) and investigate automatic selection of materials that are most suitable for self-training. We also plan to investigate domain adaptation and apply the model to other languages with modest treebank resources. Finally, it is also important to explore other wa</context>
+</contexts>
+<marker>Huang, 2008</marker>
+<rawString>Liang Huang. 2008. Forest reranking: Discriminative parsing with non-local features. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Terry Koo</author>
+<author>Xavier Carrera</author>
+<author>Michael Collins</author>
+</authors>
+<title>Simple semi-supervised dependency parsing.</title>
+<date>2008</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="4917" citStr="Koo et al., 2008" startWordPosition="749" endWordPosition="752"> McClosky et al. (2006) effectively utilized unlabeled data to improve parsing accuracy on the standard WSJ training set, but they used a two-stage parser comprised of Charniak’s lexicalized probabilistic parser with n-best parsing and a discriminative reranking parser (Charniak and Johnson, 2005), and thus it would be better categorized as “co-training” (McClosky et al., 2008). It is worth noting that their attempts at selftraining Charniak’s lexicalized parser directly resulted in no improvement. There are other successful semi-supervised training approaches for dependency parsing, such as (Koo et al., 2008; Wang et al., 2008), and it would be interesting to investigate how they could be applied to constituency parsing. We show in this paper, for the first time, that self-training is able to significantly improve the performance of the PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data, for both English and Chinese. With self-training, a fraction of the WSJ or CTB6 treebank training data is sufficient to train a PCFG-LA parser that is able to achieve or even beat the accuracies obtained using a single parser trained on the entire treebank without</context>
+</contexts>
+<marker>Koo, Carrera, Collins, 2008</marker>
+<rawString>Terry Koo, Xavier Carrera, and Michael Collins. 2008. Simple semi-supervised dependency parsing. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Roger Levy</author>
+<author>Galen Andrew</author>
+</authors>
+<title>Tregex and tsurgeon: Tools for querying and manipulating tree data structures.</title>
+<date>2006</date>
+<booktitle>In LREC.</booktitle>
+<contexts>
+<context position="16885" citStr="Levy and Andrew, 2006" startWordPosition="2726" endWordPosition="2729">hose to use the Stanford segmenter (Chang et al., 2008) in our experiments because it is consistent with the treebank segmentation and provides the best performance among the segmenters that were tested. To minimize the discrepancy between the selftraining data and the treebank data, we normalize both CTB6 and the self-training data using UW Decatur (Zhang and Kahn, 2008) text normalization. Table 1 summarizes the data set sizes used in our experiments. We used slightly modified versions of the treebanks; empty nodes and nonterminal-yield unary rules5, e.g., NP→VP, are deleted using tsurgeon (Levy and Andrew, 2006). Train Dev Test Unlabeled English 39.8k 1.7k 2.4k 210k (950.0k) (40.1k) (56.7k) (5,082.1k) Chinese 24.4k 1.9k 2.0k 210k (678.8k) (51.2k) (52.9k) (6,254.9k) Table 1: The number of sentences (and words in parentheses) in our experiments. We trained parsers on 20%, 40%, 60%, 80%, and 100% of the treebank training data to evaluate 4This amount was constrained based on both CPU and memory. We plan to investigate cloud computing to exploit more unlabeled data. 5As nonterminal-yield unary rules are less likely to be posited by a statistical parser, it is common for parsers trained on the standard Ch</context>
+</contexts>
+<marker>Levy, Andrew, 2006</marker>
+<rawString>Roger Levy and Galen Andrew. 2006. Tregex and tsurgeon: Tools for querying and manipulating tree data structures. In LREC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Roger Levy</author>
+<author>Christopher Manning</author>
+</authors>
+<title>Is it harder to parse chinese, or the chinese treebank.</title>
+<date>2003</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="1364" citStr="Levy and Manning, 2003" startWordPosition="197" endWordPosition="200">CFG-LA parser, a single generative parser, on both small and large amounts of labeled training data. Our approach achieves stateof-the-art parsing accuracies for a single parser on both English (91.5%) and Chinese (85.2%). 1 Introduction There is an extensive research literature on building high quality parsers for English (Collins, 1999; Charniak, 2000; Charniak and Johnson, 2005; Petrov et al., 2006), however, models for parsing other languages are less well developed. Take Chinese for example; there have been several attempts to develop accurate parsers for Chinese (Bikel and Chiang, 2000; Levy and Manning, 2003; Petrov and Klein, 2007), but the state-of-the-art performance, around 83% F measure on Penn Chinese Treebank (achieved by the Berkeley parser (Petrov and Klein, 2007)) falls far short of performance on English (∼90-92%). As pointed out in (Levy and Manning, 2003), there are many linguistic differences between Chinese and English, as well as structural differences between their corresponding treebanks, and some of these make it a harder task to parse Chinese. Additionally, the fact that the available treebanked Chinese materials are more Mary Harper&apos; ,2 2Human Language Technology Center of Ex</context>
+</contexts>
+<marker>Levy, Manning, 2003</marker>
+<rawString>Roger Levy and Christopher Manning. 2003. Is it harder to parse chinese, or the chinese treebank. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Takuya Matsuzaki</author>
+<author>Yusuke Miyao</author>
+<author>Jun’ichi Tsujii</author>
+</authors>
+<title>Probabilistic CFG with latent annotations.</title>
+<date>2005</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="6274" citStr="Matsuzaki et al., 2005" startWordPosition="972" endWordPosition="975">a helps the former parser learn more fine-grained latent annotations without over-fitting. The rest of this paper is organized as follows. We describe the PCFG-LA parser and several enhancements in Section 2, and discuss self-training in Section 3. We then outline the experimental setup in Section 4, describe the results in Section 5, and present a detailed analysis in Section 6. The last section draws conclusions and describes future work. 2 Parsing Model The Berkeley parser (Petrov et al., 2006; Petrov and Klein, 2007) is an efficient and effective parser that introduces latent annotations (Matsuzaki et al., 2005) to refine syntactic categories to learn better PCFG grammars. In the example parse tree in Figure 1(a), each syntactic category is split into multiple latent subcategories, and accordingly the original parse tree is decomposed into many parse trees with latent annotations. Figure 1(b) depicts one of such trees. The grammar and lexical rules are split accordingly, e.g., NP→PRP is split into different NP-i→PRP-j rules. The expansion probabilities of these split rules are the parameters of a PCFG-LA grammar. Figure 1: (a) original treebank tree, (b) after latent annotation. The objective of trai</context>
+</contexts>
+<marker>Matsuzaki, Miyao, Tsujii, 2005</marker>
+<rawString>Takuya Matsuzaki, Yusuke Miyao, and Jun’ichi Tsujii. 2005. Probabilistic CFG with latent annotations. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David McClosky</author>
+<author>Eugene Charniak</author>
+<author>Mark Johnson</author>
+</authors>
+<title>Effective self-training for parsing.</title>
+<date>2006</date>
+<booktitle>In HLT-NAACL.</booktitle>
+<contexts>
+<context position="4324" citStr="McClosky et al. (2006)" startWordPosition="658" endWordPosition="661"> training set. Steedman et al. (2003) reported some degradation using a lexicalized tree adjoining grammar parser and minor improvement using Collins lexicalized PCFG parser; however, this gain was obtained only when the parser 832 Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing, pages 832–841, Singapore, 6-7 August 2009. c�2009 ACL and AFNLP was trained on a small labeled set. Reichart and Rappoport (2007) obtained significant gains using Collins lexicalized parser with a different selftraining protocol, but again they only looked at small labeled sets. McClosky et al. (2006) effectively utilized unlabeled data to improve parsing accuracy on the standard WSJ training set, but they used a two-stage parser comprised of Charniak’s lexicalized probabilistic parser with n-best parsing and a discriminative reranking parser (Charniak and Johnson, 2005), and thus it would be better categorized as “co-training” (McClosky et al., 2008). It is worth noting that their attempts at selftraining Charniak’s lexicalized parser directly resulted in no improvement. There are other successful semi-supervised training approaches for dependency parsing, such as (Koo et al., 2008; Wang </context>
+<context position="25740" citStr="McClosky et al., 2006" startWordPosition="4160" endWordPosition="4163">abeled by each parser), the resulting PCFG-LA parser obtains a much higher F score than the self-trained Charniak’s parser (90.52% vs 90.18%). Similar patterns can also be found for Chinese. English Chinese PCFG-LA 90.63 84.15 + Self-training 91.46 85.18 Table 3: Final results on the test set. Table 3 reports the final results on the test set when trained on the entire WSJ or CTB6 training set. For English, self-training contributes 0.83% absolute improvement to the PCFG-LA parser, which is comparable to the improvement obtained from using semi-supervised training with the twostage parser in (McClosky et al., 2006). Note that their improvement is achieved with the addition of 2,000k unlabeled sentences using the combination of a generative parser and a discriminative reranker, compared to using only 210k unlabeled sentences with a single generative parser in our approach. For Chinese, self-training results in a racy than the self-trained PCFG-LA parser with 80% labeled WSJ data. This is due to the variance in parser performance when initialized with different seeds and the fact that the development set is used to pick the best model for evaluation. Charniak Charniak.ST F score F score 837 F score F scor</context>
+</contexts>
+<marker>McClosky, Charniak, Johnson, 2006</marker>
+<rawString>David McClosky, Eugene Charniak, and Mark Johnson. 2006. Effective self-training for parsing. In HLT-NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David McClosky</author>
+<author>Eugene Charniak</author>
+<author>Mark Johnson</author>
+</authors>
+<title>When is self-training effective for parsing?</title>
+<date>2008</date>
+<booktitle>In COLING.</booktitle>
+<contexts>
+<context position="4681" citStr="McClosky et al., 2008" startWordPosition="713" endWordPosition="716">2009. c�2009 ACL and AFNLP was trained on a small labeled set. Reichart and Rappoport (2007) obtained significant gains using Collins lexicalized parser with a different selftraining protocol, but again they only looked at small labeled sets. McClosky et al. (2006) effectively utilized unlabeled data to improve parsing accuracy on the standard WSJ training set, but they used a two-stage parser comprised of Charniak’s lexicalized probabilistic parser with n-best parsing and a discriminative reranking parser (Charniak and Johnson, 2005), and thus it would be better categorized as “co-training” (McClosky et al., 2008). It is worth noting that their attempts at selftraining Charniak’s lexicalized parser directly resulted in no improvement. There are other successful semi-supervised training approaches for dependency parsing, such as (Koo et al., 2008; Wang et al., 2008), and it would be interesting to investigate how they could be applied to constituency parsing. We show in this paper, for the first time, that self-training is able to significantly improve the performance of the PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data, for both English and Chinese</context>
+</contexts>
+<marker>McClosky, Charniak, Johnson, 2008</marker>
+<rawString>David McClosky, Eugene Charniak, and Mark Johnson. 2008. When is self-training effective for parsing? In COLING.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Slav Petrov</author>
+<author>Dan Klein</author>
+</authors>
+<title>Improved inference for unlexicalized parsing.</title>
+<date>2007</date>
+<booktitle>In HLT-NAACL.</booktitle>
+<contexts>
+<context position="1389" citStr="Petrov and Klein, 2007" startWordPosition="201" endWordPosition="204">generative parser, on both small and large amounts of labeled training data. Our approach achieves stateof-the-art parsing accuracies for a single parser on both English (91.5%) and Chinese (85.2%). 1 Introduction There is an extensive research literature on building high quality parsers for English (Collins, 1999; Charniak, 2000; Charniak and Johnson, 2005; Petrov et al., 2006), however, models for parsing other languages are less well developed. Take Chinese for example; there have been several attempts to develop accurate parsers for Chinese (Bikel and Chiang, 2000; Levy and Manning, 2003; Petrov and Klein, 2007), but the state-of-the-art performance, around 83% F measure on Penn Chinese Treebank (achieved by the Berkeley parser (Petrov and Klein, 2007)) falls far short of performance on English (∼90-92%). As pointed out in (Levy and Manning, 2003), there are many linguistic differences between Chinese and English, as well as structural differences between their corresponding treebanks, and some of these make it a harder task to parse Chinese. Additionally, the fact that the available treebanked Chinese materials are more Mary Harper&apos; ,2 2Human Language Technology Center of Excellence Johns Hopkins Un</context>
+<context position="6177" citStr="Petrov and Klein, 2007" startWordPosition="958" endWordPosition="961"> our comparison of the PCFG-LA parser to Charniak’s parser that the addition of self-training data helps the former parser learn more fine-grained latent annotations without over-fitting. The rest of this paper is organized as follows. We describe the PCFG-LA parser and several enhancements in Section 2, and discuss self-training in Section 3. We then outline the experimental setup in Section 4, describe the results in Section 5, and present a detailed analysis in Section 6. The last section draws conclusions and describes future work. 2 Parsing Model The Berkeley parser (Petrov et al., 2006; Petrov and Klein, 2007) is an efficient and effective parser that introduces latent annotations (Matsuzaki et al., 2005) to refine syntactic categories to learn better PCFG grammars. In the example parse tree in Figure 1(a), each syntactic category is split into multiple latent subcategories, and accordingly the original parse tree is decomposed into many parse trees with latent annotations. Figure 1(b) depicts one of such trees. The grammar and lexical rules are split accordingly, e.g., NP→PRP is split into different NP-i→PRP-j rules. The expansion probabilities of these split rules are the parameters of a PCFG-LA </context>
+</contexts>
+<marker>Petrov, Klein, 2007</marker>
+<rawString>Slav Petrov and Dan Klein. 2007. Improved inference for unlexicalized parsing. In HLT-NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Slav Petrov</author>
+<author>Dan Klein</author>
+</authors>
+<title>Sparse multi-scale grammars for discriminative latent variable parsing.</title>
+<date>2008</date>
+<booktitle>In EMNLP.</booktitle>
+<contexts>
+<context position="38043" citStr="Petrov and Klein, 2008" startWordPosition="6241" endWordPosition="6244">e of a PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data. We conjecture based on our analysis that the EM training algorithm is able to exploit the information available in both gold and automatically labeled data with more complex grammars while being less affected by over-fitting. Better results would be expected by combining the PCFG-LA parser with discriminative reranking approaches (Charniak and Johnson, 2005; Huang, 2008) for self training. Self-training should also benefit other discriminatively trained parsers with latent annotations (Petrov and Klein, 2008), although training would be much slower compared to using generative models, as in our case. In future work, we plan to scale up the training process with more unlabeled training data (e.g., gigaword) and investigate automatic selection of materials that are most suitable for self-training. We also plan to investigate domain adaptation and apply the model to other languages with modest treebank resources. Finally, it is also important to explore other ways to exploit the use of unlabeled data. Acknowledgments This material is based upon work supported in part by the Defense Advanced Research </context>
+</contexts>
+<marker>Petrov, Klein, 2008</marker>
+<rawString>Slav Petrov and Dan Klein. 2008. Sparse multi-scale grammars for discriminative latent variable parsing. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Slav Petrov</author>
+<author>Leon Barrett</author>
+<author>Romain Thibaux</author>
+<author>Dan Klein</author>
+</authors>
+<title>Learning accurate, compact, and interpretable tree annotation.</title>
+<date>2006</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="1147" citStr="Petrov et al., 2006" startWordPosition="163" endWordPosition="166">a language for which parsing has been less well developed (i.e., Chinese) and benefited more from selftraining. We show for the first time that self-training is able to significantly improve the performance of the PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data. Our approach achieves stateof-the-art parsing accuracies for a single parser on both English (91.5%) and Chinese (85.2%). 1 Introduction There is an extensive research literature on building high quality parsers for English (Collins, 1999; Charniak, 2000; Charniak and Johnson, 2005; Petrov et al., 2006), however, models for parsing other languages are less well developed. Take Chinese for example; there have been several attempts to develop accurate parsers for Chinese (Bikel and Chiang, 2000; Levy and Manning, 2003; Petrov and Klein, 2007), but the state-of-the-art performance, around 83% F measure on Penn Chinese Treebank (achieved by the Berkeley parser (Petrov and Klein, 2007)) falls far short of performance on English (∼90-92%). As pointed out in (Levy and Manning, 2003), there are many linguistic differences between Chinese and English, as well as structural differences between their c</context>
+<context position="6152" citStr="Petrov et al., 2006" startWordPosition="954" endWordPosition="957">e conjecture based on our comparison of the PCFG-LA parser to Charniak’s parser that the addition of self-training data helps the former parser learn more fine-grained latent annotations without over-fitting. The rest of this paper is organized as follows. We describe the PCFG-LA parser and several enhancements in Section 2, and discuss self-training in Section 3. We then outline the experimental setup in Section 4, describe the results in Section 5, and present a detailed analysis in Section 6. The last section draws conclusions and describes future work. 2 Parsing Model The Berkeley parser (Petrov et al., 2006; Petrov and Klein, 2007) is an efficient and effective parser that introduces latent annotations (Matsuzaki et al., 2005) to refine syntactic categories to learn better PCFG grammars. In the example parse tree in Figure 1(a), each syntactic category is split into multiple latent subcategories, and accordingly the original parse tree is decomposed into many parse trees with latent annotations. Figure 1(b) depicts one of such trees. The grammar and lexical rules are split accordingly, e.g., NP→PRP is split into different NP-i→PRP-j rules. The expansion probabilities of these split rules are the</context>
+<context position="35825" citStr="Petrov et al., 2006" startWordPosition="5888" endWordPosition="5891">ressed as: p(a --+ b|e, t) + α E E p(a --+ b|e, t) tET,e eEt p(a --+ b|e, t) + α E E p(a --+ b|e, t)) tET,e eEt Since the unlabeled data is parsed by a lower order grammar (with fewer latent annotations), the expected counts from the automatically labeled data can be thought of as counts from a lower-order grammar17 that smooth the higherorder (with more latent annotations) grammar. We observe that many of the rule parameters of the grammar trained on WSJ training data alone have zero probabilities (rules with extremely low probabilities are also filtered to zero), as was also pointed out in (Petrov et al., 2006). On the one hand, this is what we want because the grammar should learn to avoid impossible rule expansions. On the other hand, this might also be a sign of over-fitting of the labeled training data. As shown in Figure 3 (b), the grammar obtained with the addition of automatically labeled data contains many more non-zero rules, and its performance continues to improve with more latent annotations. Similar patterns also appear when using self-training for other amounts of labeled training data. As is partially reflected by the zero probability rules, the addition of the automatically labeled d</context>
+</contexts>
+<marker>Petrov, Barrett, Thibaux, Klein, 2006</marker>
+<rawString>Slav Petrov, Leon Barrett, Romain Thibaux, and Dan Klein. 2006. Learning accurate, compact, and interpretable tree annotation. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Roi Reichart</author>
+<author>Ari Rappoport</author>
+</authors>
+<title>Self-training for enhancement and domain adaptation of statistical parsers trained on small datasets.</title>
+<date>2007</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="4151" citStr="Reichart and Rappoport (2007)" startWordPosition="631" endWordPosition="634"> ubiquitous. Early investigations on self-training for parsing have had mixed results. Charniak (1997) reported no improvements from self-training a PCFG parser on the standard WSJ training set. Steedman et al. (2003) reported some degradation using a lexicalized tree adjoining grammar parser and minor improvement using Collins lexicalized PCFG parser; however, this gain was obtained only when the parser 832 Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing, pages 832–841, Singapore, 6-7 August 2009. c�2009 ACL and AFNLP was trained on a small labeled set. Reichart and Rappoport (2007) obtained significant gains using Collins lexicalized parser with a different selftraining protocol, but again they only looked at small labeled sets. McClosky et al. (2006) effectively utilized unlabeled data to improve parsing accuracy on the standard WSJ training set, but they used a two-stage parser comprised of Charniak’s lexicalized probabilistic parser with n-best parsing and a discriminative reranking parser (Charniak and Johnson, 2005), and thus it would be better categorized as “co-training” (McClosky et al., 2008). It is worth noting that their attempts at selftraining Charniak’s le</context>
+</contexts>
+<marker>Reichart, Rappoport, 2007</marker>
+<rawString>Roi Reichart and Ari Rappoport. 2007. Self-training for enhancement and domain adaptation of statistical parsers trained on small datasets. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Qin Wang</author>
+<author>Dale Schuurmans</author>
+<author>Dekang Lin</author>
+</authors>
+<title>Semi-supervised convex training for dependency parsing.</title>
+<date>2008</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="4937" citStr="Wang et al., 2008" startWordPosition="753" endWordPosition="756">2006) effectively utilized unlabeled data to improve parsing accuracy on the standard WSJ training set, but they used a two-stage parser comprised of Charniak’s lexicalized probabilistic parser with n-best parsing and a discriminative reranking parser (Charniak and Johnson, 2005), and thus it would be better categorized as “co-training” (McClosky et al., 2008). It is worth noting that their attempts at selftraining Charniak’s lexicalized parser directly resulted in no improvement. There are other successful semi-supervised training approaches for dependency parsing, such as (Koo et al., 2008; Wang et al., 2008), and it would be interesting to investigate how they could be applied to constituency parsing. We show in this paper, for the first time, that self-training is able to significantly improve the performance of the PCFG-LA parser, a single generative parser, on both small and large amounts of labeled training data, for both English and Chinese. With self-training, a fraction of the WSJ or CTB6 treebank training data is sufficient to train a PCFG-LA parser that is able to achieve or even beat the accuracies obtained using a single parser trained on the entire treebank without selftraining. We co</context>
+</contexts>
+<marker>Wang, Schuurmans, Lin, 2008</marker>
+<rawString>Qin Wang, Dale Schuurmans, and Dekang Lin. 2008. Semi-supervised convex training for dependency parsing. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Nianwen Xue</author>
+<author>Fei Xia</author>
+<author>Fu-dong Chiou</author>
+<author>Marta Palmer</author>
+</authors>
+<title>The Penn Chinese Treebank: Phrase structure annotation of a large corpus. Natural Language Engineering.</title>
+<date>2005</date>
+<contexts>
+<context position="15494" citStr="Xue et al., 2005" startWordPosition="2506" endWordPosition="2509">e former than the latter. In this study, we introduce the automatically labeled data at the outset and weight it equally with the gold treebank training data in order to focus our experiments to support a deeper analysis. 4 Experimental Setup For the English experiments, sections from the WSJ Penn Treebank are used as labeled training data: section 2-19 for training, section 22 for development, and section 23 as the test set. We also used 210k4 sentences of unlabeled news articles in the BLLIP corpus for English self-training. For the Chinese experiments, the Penn Chinese Treebank 6.0 (CTB6) (Xue et al., 2005) is used as labeled data. CTB6 includes both news articles and transcripts of broadcast news. We partitioned the news articles into train/development/test sets following Huang et al. (2007). The broadcast news section is added to the training data because it shares many of the characteristics of newswire text (e.g., fully punctuated, contains nonverbal expressions such as numbers and symbols). In addition, 210k sentences of unlabeled Chinese news articles are used for self-training. Since the Chinese parsers in our experiments require wordsegmented sentences as input, the unlabeled sentences n</context>
+</contexts>
+<marker>Xue, Xia, Chiou, Palmer, 2005</marker>
+<rawString>Nianwen Xue, Fei Xia, Fu-dong Chiou, and Marta Palmer. 2005. The Penn Chinese Treebank: Phrase structure annotation of a large corpus. Natural Language Engineering.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Bin Zhang</author>
+<author>Jeremy G Kahn</author>
+</authors>
+<title>Evaluation of decatur text normalizer for language model training.</title>
+<date>2008</date>
+<tech>Technical report,</tech>
+<institution>University of Washington.</institution>
+<contexts>
+<context position="16637" citStr="Zhang and Kahn, 2008" startWordPosition="2687" endWordPosition="2690">xperiments require wordsegmented sentences as input, the unlabeled sentences need to be word-segmented first. As shown in (Harper and Huang, 2009), the accuracy of automatic word segmentation has a great impact on Chinese parsing performance. We chose to use the Stanford segmenter (Chang et al., 2008) in our experiments because it is consistent with the treebank segmentation and provides the best performance among the segmenters that were tested. To minimize the discrepancy between the selftraining data and the treebank data, we normalize both CTB6 and the self-training data using UW Decatur (Zhang and Kahn, 2008) text normalization. Table 1 summarizes the data set sizes used in our experiments. We used slightly modified versions of the treebanks; empty nodes and nonterminal-yield unary rules5, e.g., NP→VP, are deleted using tsurgeon (Levy and Andrew, 2006). Train Dev Test Unlabeled English 39.8k 1.7k 2.4k 210k (950.0k) (40.1k) (56.7k) (5,082.1k) Chinese 24.4k 1.9k 2.0k 210k (678.8k) (51.2k) (52.9k) (6,254.9k) Table 1: The number of sentences (and words in parentheses) in our experiments. We trained parsers on 20%, 40%, 60%, 80%, and 100% of the treebank training data to evaluate 4This amount was const</context>
+</contexts>
+<marker>Zhang, Kahn, 2008</marker>
+<rawString>Bin Zhang and Jeremy G. Kahn. 2008. Evaluation of decatur text normalizer for language model training. Technical report, University of Washington.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

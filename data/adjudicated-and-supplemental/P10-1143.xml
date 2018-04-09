@@ -1,0 +1,1983 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000002">
+<title confidence="0.987601">
+Unsupervised Event Coreference Resolution with Rich Linguistic Features
+</title>
+<author confidence="0.976467">
+Cosmin Adrian Bejan Sanda Harabagiu
+</author>
+<affiliation confidence="0.885947">
+Institute for Creative Technologies Human Language Technology Institute
+University of Southern California University of Texas at Dallas
+Marina del Rey, CA 90292, USA Richardson, TX 75083, USA
+</affiliation>
+<sectionHeader confidence="0.9696" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999887833333333">
+This paper examines how a new class of
+nonparametric Bayesian models can be ef-
+fectively applied to an open-domain event
+coreference task. Designed with the pur-
+pose of clustering complex linguistic ob-
+jects, these models consider a potentially
+infinite number of features and categorical
+outcomes. The evaluation performed for
+solving both within- and cross-document
+event coreference shows significant im-
+provements of the models when compared
+against two baselines for this task.
+</bodyText>
+<sectionHeader confidence="0.9988" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999954454545455">
+The event coreference task consists of finding
+clusters of event mentions that refer to the same
+event. Although it has not been extensively stud-
+ied in comparison with the related problem of en-
+tity coreference resolution, solving event coref-
+erence has already proved its usefulness in vari-
+ous applications such as topic detection and track-
+ing (Allan et al., 1998), information extraction
+(Humphreys et al., 1997), question answering
+(Narayanan and Harabagiu, 2004), textual entail-
+ment (Haghighi et al., 2005), and contradiction de-
+tection (de Marneffe et al., 2008).
+Previous approaches for solving event corefer-
+ence relied on supervised learning methods that
+explore various linguistic properties in order to de-
+cide if a pair of event mentions is coreferential
+or not (Humphreys et al., 1997; Bagga and Bald-
+win, 1999; Ahn, 2006; Chen and Ji, 2009). In
+spite of being successful for a particular labeled
+corpus, these pairwise models are dependent on
+the domain or language that they are trained on.
+Moreover, since event coreference resolution is a
+complex task that involves exploring a rich set of
+linguistic features, annotating a large corpus with
+event coreference information for a new language
+or domain of interest requires a substantial amount
+of manual effort. Also, since these models are de-
+pendent on local pairwise decisions, they are un-
+able to capture a global event distribution at topic
+or document collection level.
+To address these limitations and to provide a
+more flexible representation for modeling observ-
+able data with rich properties, we present two
+novel, fully generative, nonparametric Bayesian
+models for unsupervised within- and cross-
+document event coreference resolution. The first
+model extends the hierarchical Dirichlet process
+(Teh et al., 2006) to take into account additional
+properties associated with observable objects (i.e.,
+event mentions). The second model overcomes
+some of the limitations of the first model. It
+uses the infinite factorial hidden Markov model
+(Van Gael et al., 2008b) coupled to the infinite
+hidden Markov model (Beal et al., 2002) in or-
+der to (1) consider a potentially infinite number
+of features associated with observable objects, (2)
+perform an automatic selection of the most salient
+features, and (3) capture the structural dependen-
+cies of observable objects at the discourse level.
+Furthermore, both models are designed to account
+for a potentially infinite number of categorical out-
+comes (i.e., events). These models provide addi-
+tional details and experimental results to our pre-
+liminary work on unsupervised event coreference
+resolution (Bejan et al., 2009).
+</bodyText>
+<sectionHeader confidence="0.988125" genericHeader="method">
+2 Event Coreference
+</sectionHeader>
+<bodyText confidence="0.999920666666667">
+The problem of determining if two events are iden-
+tical was originally studied in philosophy. One
+relevant theory on event identity was proposed by
+Davidson (1969) who argued that two events are
+identical if they have the same causes and effects.
+Later on, a different theory was proposed by Quine
+(1985) who considered that each event refers to
+a physical object (which is well defined in space
+and time), and therefore, two events are identical
+</bodyText>
+<page confidence="0.952864">
+1412
+</page>
+<note confidence="0.964659">
+Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1412–1422,
+Uppsala, Sweden, 11-16 July 2010. c�2010 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.535248">
+if they have the same spatiotemporal location. In
+(Davidson, 1985), Davidson abandoned his sug-
+gestion to embrace the Quinean theory on event
+identity (Malpas, 2009).
+</bodyText>
+<figure confidence="0.581223">
+Topic 43
+Document 3
+</figure>
+<note confidence="0.5219218">
+s4: AMD agreed to [buy]em, Markham, Ontario-based
+ATI for around $5.4 billion in cash and stock, the
+companies announced Monday.
+s5: The [acquisition]em2 would turn AMD into one of
+the world’s largest providers of graphics chips.
+</note>
+<subsectionHeader confidence="0.982167">
+2.1 An Example
+</subsectionHeader>
+<bodyText confidence="0.9999456">
+In accordance with the Quinean theory, we con-
+sider that two event mentions are coreferential if
+they have the same event properties and share the
+same event participants. For instance, the sen-
+tences from Example 1 encode event mentions that
+refer to several individuated events. These sen-
+tences are extracted from a newly annotated cor-
+pus with event coreference information (see Sec-
+tion 4). In this corpus, we organize documents
+that describe the same seminal event into topics.
+In particular, the topics shown in this example de-
+scribe the seminal event of buying ATI by AMD
+(topic 43) and the seminal event of buying EDS
+by HP (topic 44).
+Although all the event mentions of interest em-
+phasized in boldface in Example 1 evoke the same
+generic event buy, they refer to three individu-
+ated events: e1 = {em1, em2}, e2 = {em3−6,
+em8}, and e3 = {em7}. For example, em1(buy)
+and em3(buy) correspond to different individuated
+events since they have a different AGENT ([BU-
+YER(em1)=AMD] =6 [BUYER(em3)=HP]). This
+organization of event mentions leads to the idea of
+creating an event hierarchy which has on the first
+level, event mentions, on the second level, individ-
+uated events, and on the third level, generic events.
+In particular, the event hierarchy corresponding to
+the event mentions annotated in our example is il-
+lustrated in Figure 1.
+Solving the event coreference problem poses
+many interesting challenges. For instance, in or-
+der to solve the coreference chain of event men-
+tions that refer to the event e2, we need to take
+into account the following issues: (i) a coreference
+chain can encode both within- and cross-document
+coreference information; (ii) two mentions from
+the same chain can have different word classes
+(e.g., em3(buy)–verb, em4(purchase)–noun); (iii)
+not all the mentions from the same chain are syn-
+onymous (e.g., em3(buy) and em8(acquire)), al-
+though a semantic relation might exist between
+them (e.g., in WordNet (Fellbaum, 1998), the
+genus of buy is acquire); (iv) partial (or all) prop-
+erties and participants of an event mention can be
+omitted in text (e.g., em4(purchase)). In Section
+</bodyText>
+<figure confidence="0.867750428571428">
+Topic 44
+Document 2
+s1: Hewlett-Packard is negotiating to [buy]em,, technol-
+ogy services provider Electronic Data Systems.
+ss: With a market value of about $115 billion, HP
+could easily use its own stock to finance the [pur-
+chase]em4.
+sq: If the [deal]em, is completed, it would be HP’s
+biggest [acquisition]em,, since it [bought]em7 Com-
+paq Computer Corp. for $19 billion in 2002.
+Document 5
+s2: Industry sources have confirmed to eWEEK that
+Hewlett-Packard will [acquire]em, Electronic Data
+Systems for about $13 billion.
+</figure>
+<figureCaption confidence="0.574548">
+Example 1: Examples of event mention annotations.
+</figureCaption>
+<equation confidence="0.456379333333333">
+buy
+e1 e2 e3
+em1 em2 em3 em4 ems ems emg em7
+</equation>
+<figureCaption confidence="0.994428">
+Figure 1: Fragment from the event hierarchy.
+</figureCaption>
+<bodyText confidence="0.9991435">
+5, we discuss additional aspects of the event coref-
+erence problem that are not revealed in Example 1.
+</bodyText>
+<subsectionHeader confidence="0.998875">
+2.2 Linguistic Features
+</subsectionHeader>
+<bodyText confidence="0.999920136363637">
+The events representing coreference clusters of
+event mentions are characterized by a large set of
+linguistic features. To compute an accurate event
+distribution for event coreference resolution, we
+associate the following categories of linguistic fea-
+tures with each annotated event mention.
+Lexical Features (LF) We capture the lexical con-
+text of an event mention by extracting the follow-
+ing features: the head word (HW), the lemmatized
+head word (HL), the lemmatized left and right
+words surrounding the mention (LHL,RHL), and
+the HL features corresponding to the left and right
+mentions (LHE,RHE). For instance, the lexical fea-
+tures extracted for the event mention em7(bought)
+from our example are HW:bought, HL:buy, LHL:it,
+RHL:Compaq, LHE:acquisition, and RHE:acquire.
+Class Features (CF) These features aim to group
+mentions into several types of classes: the part-
+of-speech of the HW feature (POS), the word class
+of the HW feature (HWC), and the event class of
+the mention (EC). The HWC feature can take one
+of the following values: VERB, NOUN, ADJEC-
+</bodyText>
+<page confidence="0.976708">
+1413
+</page>
+<bodyText confidence="0.99993036">
+TIVE, and OTHER. As values for the EC feature,
+we consider the seven event classes defined in
+the TimeML specification language (Pustejovsky
+et al., 2003a): OCCURRENCE, PERCEPTION, RE-
+PORTING, ASPECTUAL, STATE, I ACTION, and
+I STATE. In order to extract the event classes cor-
+responding to the event mentions from a given
+dataset, we employed the event extractor described
+in (Bejan, 2007). This extractor is trained on
+the TimeBank corpus (Pustejovsky et al., 2003b),
+which is a TimeML resource encoding temporal
+elements such as events, time expressions, and
+temporal relations.
+WordNet Features (WF) In our efforts to create
+clusters of event mention attributes as close as pos-
+sible to the true attribute clusters of the individu-
+ated events, we build two sets of word clusters us-
+ing the entire lexical information from the Word-
+Net database. After creating these sets of clusters,
+we then associate each event mention with only
+one cluster from each set. The first set uses the
+transitive closure of the WordNet SYNONYMOUS
+relation to form clusters with all the words from
+WordNet (WNS). For instance, the verbs buy and
+purchase correspond to the same cluster ID be-
+cause there exist a chain of SYNONYMOUS rela-
+tions between them in WordNet. The second set
+considers as grouping criteria the categorization
+of words from the WordNet lexicographer’s files
+(WNL). In addition, for each word that is not cov-
+ered in WordNet, we create a new cluster ID in
+each set of clusters.
+Semantic Features (SF) To extract features that
+characterize participants and properties of event
+mentions, we use the semantic parser described
+in (Bejan and Hathaway, 2007). One category of
+semantic features that we identify for event men-
+tions is the predicate argument structures encoded
+in PropBank annotations (Palmer et al., 2005).
+In PropBank, the predicate argument structures
+are represented by events expressed as verbs in
+text and by the semantic roles, or predicate argu-
+ments, associated with these events. For example,
+ARG0 annotates a specific type of semantic role
+which represents the AGENT, DOER, or ACTOR
+of a specific event. Another argument is ARG1,
+which plays the role of the PATIENT, THEME,
+or EXPERIENCER of an event. In particular, the
+predicate arguments associated to the event men-
+tion em8(bought) from Example 1 are ARG0:[it],
+ARG1:[Compaq Computer Corp.], ARG3:[for $19
+billion], and ARG-TMP:[in 2002].
+Event mentions are not only expressed as verbs
+in text, but also as nouns and adjectives. There-
+fore, for a better coverage of semantic features,
+we also employ the semantic annotations encoded
+in the FrameNet corpus (Baker et al., 1998).
+FrameNet annotates word expressions capable of
+evoking conceptual structures, or semantic frames,
+which describe specific situations, objects, or
+events (Fillmore, 1982). The semantic roles as-
+sociated with a word in FrameNet, or frame ele-
+ments, are locally defined for the semantic frame
+evoked by the word. In general, the words anno-
+tated in FrameNet are expressed as verbs, nouns,
+and adjectives.
+To preserve the consistency of semantic role
+features, we align frame elements to predicate ar-
+guments by running the PropBank semantic parser
+on the manual annotations from FrameNet; con-
+versely, we also run the FrameNet parser on the
+manual annotations from PropBank. Moreover, to
+obtain a better alignment of semantic roles, we
+run both parsers on a large amount of unlabeled
+text. The result of this process is a map with all
+frame elements statistically aligned to all predi-
+cate arguments. For instance, in 99.7% of the
+cases the frame element BUYER of the semantic
+frame COMMERCE BUY is mapped to ARG0, and
+in the remaining 0.3% of the cases to ARG1. Ad-
+ditionally, we use this map to create a more gen-
+eral semantic feature which assigns to each predi-
+cate argument a frame element label. In particular,
+the features for em8(acquire) are FEA0:BUYER,
+FEA1:GOODS, FEA3:MONEY, and FEATMP:TIME.
+Two additional semantic features used in our ex-
+periments are: (1) the semantic frame (FR) evoked
+by every mention;1 and (2) the WNS feature ap-
+plied to the head word of every semantic role (e.g.,
+WSA0, WSA1).
+Feature Combinations (FC) We also explore var-
+ious combinations of the features presented above.
+Examples include HW+HWC, HL+FR, FR+ARG1,
+LHL+RHL, etc.
+It is worth noting that there exist event mentions
+for which not all the features can be extracted. For
+example, the LHE and RHE features are missing
+for the first and last event mentions in a document,
+respectively. Also, many semantic roles can be ab-
+sent for an event mention in a given context.
+</bodyText>
+<footnote confidence="0.885306666666667">
+1 The reason for extracting this feature is given by the fact
+that, in general, frames are able to capture properties of
+generic events (Lowe et al., 1997).
+</footnote>
+<page confidence="0.99471">
+1414
+</page>
+<sectionHeader confidence="0.993023" genericHeader="method">
+3 Nonparametric Bayesian Models
+</sectionHeader>
+<bodyText confidence="0.999973428571428">
+As input for our models, we consider a collection
+of I documents, where each document i has Ji
+event mentions. For features, we make the dis-
+tinction between feature types and feature values
+(e.g., POS is a feature type and has values such
+as NN and VB). Each event mention is charac-
+terized by L feature types, FT, and each feature
+type is represented by a finite vocabulary of fea-
+ture values, fv. Thus, we can represent the ob-
+servable properties of an event mention as a vec-
+tor of L feature type – feature value pairs ((FT1 :
+fv1i), ... , (FTL : fvLi)), where each feature value
+index i ranges in the feature value space associated
+with a feature type.
+</bodyText>
+<subsectionHeader confidence="0.997241">
+3.1 A Finite Feature Model
+</subsectionHeader>
+<bodyText confidence="0.999939730769231">
+We present an extension of the hierarchical Dirich-
+let process (HDP) model which is able to represent
+each observable object (i.e., event mention) by a
+finite number of feature types L. Our HDP ex-
+tension is also inspired from the Bayesian model
+proposed by Haghighi and Klein (2007). How-
+ever, their model is strictly customized for entity
+coreference resolution, and therefore, extending it
+to include additional features for each observable
+object is a challenging task (Ng, 2008; Poon and
+Domingos, 2008).
+In the HDP model, a Dirichlet process (DP)
+(Ferguson, 1973) is associated with each docu-
+ment, and each mixture component (i.e., event) is
+shared across documents. To describe its exten-
+sion, we consider Z the set of indicator random
+variables for indices of events, φz the set of param-
+eters associated with an event z, φ a notation for
+all model parameters, and X a notation for all ran-
+dom variables that represent observable features.2
+Given a document collection annotated with event
+mentions, the goal is to find the best assignment
+of event indices Z*, which maximize the poste-
+rior probability P(Z|X). In a Bayesian approach,
+this probability is computed by integrating out all
+model parameters:
+</bodyText>
+<subsectionHeader confidence="0.303883">
+f f
+</subsectionHeader>
+<bodyText confidence="0.968075028571428">
+P(Z|X)= P(Z, φ|X)dφ= P(Z|X, φ)P(φ|X)dφ
+Our HDP extension is depicted graphically in
+Figure 2(a). Similar to the HDP model, the dis-
+tribution over events associated with each docu-
+ment, β, is generated by a Dirichlet process with a
+2 In this subsection, the feature term is used in context of a
+feature type.
+concentration parameter α &gt; 0. Since this setting
+enables a clustering of event mentions at the doc-
+ument level, it is desirable that events be shared
+across documents and the number of events K be
+inferred from data. To ensure this flexibility, a
+global nonparametric DP prior with a hyperparam-
+eter γ and a global base measure H can be consid-
+ered for β (Teh et al., 2006). The global distri-
+bution drawn from this DP prior, denoted as β0
+in Figure 2(a), encodes the event mixing weights.
+Thus, same global events are used for each docu-
+ment, but each event has a document specific dis-
+tribution βi that is drawn from a DP prior centered
+on the global weights β0.
+To infer the true posterior probability of
+P(Z|X), we follow (Teh et al., 2006) and use
+the Gibbs sampling algorithm (Geman and Ge-
+man, 1984) based on the direct assignment sam-
+pling scheme. In this sampling scheme, the pa-
+rameters β and φ are integrated out analytically.
+Moreover, to reduce the complexity of comput-
+ing P(Z|X), we make the naive Bayes assump-
+tion that the feature variables X are conditionally
+independent given Z. This allows us to factorize
+the joint distribution of feature variables X condi-
+tioned on Z into product of marginals. Thus, by
+Bayes rule, the formula for sampling an event in-
+dex for mention j from document i, Zi,j, is:3
+</bodyText>
+<equation confidence="0.9589265">
+P(Zi,j  |Z−i,j, X) a P(Zi,j  |Z−i,j) 11 P(Xi,j |Z, X−i,j)
+XEX
+</equation>
+<bodyText confidence="0.998930111111111">
+where Xi,j represents the feature value of a feature
+type corresponding to the event mention j from the
+document i.
+In the process of generating an event mention,
+an event index z is first sampled by using a mech-
+anism that facilitates sampling from a prior for in-
+finite mixture models called the Chinese restau-
+rant franchise (CRF) representation, as reported in
+(Teh et al., 2006):
+</bodyText>
+<equation confidence="0.990697">
+P(Zi,j = z  |Z−i,j ,β0) a{ αβo , if z = znew
+</equation>
+<bodyText confidence="0.855640454545454">
+nz + αβz0, otherwise
+represents a notation for Z
+3Z−i°&apos;
+−{Zi°&apos;}.
+Here, nz is the number of event mentions with
+event index z, znew is a new event index not used
+already in Z−i,j, βz0 are the global mixing propor-
+tions associated with the K events, and βu0 is the
+weight for the unknown mixture component.
+Next, to generate a feature value x (with the fea-
+ture type X) of the event mention, the event z is
+</bodyText>
+<page confidence="0.948901">
+1415
+</page>
+<figure confidence="0.99973402173913">
+γ
+H
+β0
+∞
+∞
+Zi
+Xi
+β
+L
+J, I
+α
+(a)
+φ
+∞
+γ
+α
+(b)
+(c)
+H
+θ
+Phase 2
+φ
+∞
+β0
+∞
+Phase 1
+S0 S1 S2 ST
+FM FM FM FM
+0 1 2 T
+β
+∞
+Zi
+F2 F2 F2 F2
+0 1 2 T
+HL;
+POS,
+F10
+F11
+F12
+F1T
+FR;
+J;
+I
+Y1
+Y2
+YT
+</figure>
+<figureCaption confidence="0.999514333333333">
+Figure 2: Graphical representation of our models: nodes correspond to random variables; shaded nodes denote observable
+variables; a rectangle captures the replication of the structure it contains, where the number of replications is indicated in the
+bottom-right corner. The model in (a) illustrates a flat representation of a limited number of features in a generalized framework
+(henceforth, HDPflat). The model in (b) captures a simple example of structured network topology of three feature variables
+(henceforth, HDP3t...t). The dependencies involving parameters 0 and B in these models are omitted for clarity. The model
+from (c) shows the representation of the iFHMM-iHMM model as well as the main phases of its generative process.
+</figureCaption>
+<bodyText confidence="0.9122076">
+associated with a multinomial emission distribu-
+tion over the feature values of X having the pa-
+rameters 0= (0xZ). We assume that this emission
+distribution is drawn from a symmetric Dirichlet
+distribution with concentration AX:
+</bodyText>
+<equation confidence="0.994934">
+P(Xi,j = x  |Z, X−i,j) a nx,z + AX
+</equation>
+<bodyText confidence="0.999798176470588">
+where Xi,j is the feature type of the mention j
+from the document i, and nx,z is the number of
+times the feature value x has been associated with
+the event index z in (Z, X−i,j). We also apply the
+Lidstone’s smoothing method to this distribution.
+In cases when only a feature type is considered
+(e.g., X = (HL)), the HDPflat model is identical
+with the original HDP model. We denote this one
+feature model by HDP1f.
+When dependencies between feature variables
+exist (e.g., in our case, frame elements are de-
+pendent on the semantic frames that define them,
+and frames are dependent on the words that evoke
+them), various global distributions are involved for
+computing P(Z|X). For the model depicted in
+Figure 2(b), for instance, the posterior probability
+is given by:
+</bodyText>
+<equation confidence="0.954393">
+P(Zi,j)P(F Ri,j |HLi,j, �) 11 P(Xi,j |Z)
+X∈X
+</equation>
+<bodyText confidence="0.999936">
+In this formula, P(FRi,j|HLi,j, 0) is a global dis-
+tribution parameterized by 0, and X is a feature
+variable from the set X = (HL, POS, FR). For
+the sake of clarity, we omit the conditioning com-
+ponents of Z, HL, FR, and POS.
+</bodyText>
+<subsectionHeader confidence="0.997201">
+3.2 An Infinite Feature Model
+</subsectionHeader>
+<bodyText confidence="0.999703233333334">
+To relax some of the restrictions of the first model,
+we devise an approach that combines the infinite
+factorial hidden Markov model (iFHMM) with the
+infinite hidden Markov model (iHMM) to form
+the iFHMM-iHMM model.
+The iFHMM framework uses the Markov In-
+dian buffet process (mIBP) (Van Gael et al.,
+2008b) in order to represent each object as a sparse
+subset of a potentially unbounded set of latent fea-
+tures (Griffiths and Ghahramani, 2006; Ghahra-
+mani et al., 2007; Van Gael et al., 2008a).4 Specif-
+ically, the mIBP defines a distribution over an un-
+bounded set of binary Markov chains, where each
+chain can be associated with a binary latent fea-
+ture that evolves over time according to Markov
+dynamics. Therefore, if we denote by M the to-
+tal number of feature chains and by T the num-
+ber of observable components, the mIBP defines
+a probability distribution over a binary matrix F
+with T rows, which correspond to observations,
+and an unbounded number of columns M, which
+correspond to features. An observation yt con-
+tains a subset from the unbounded set of features
+{f1, f2,..., fM} that is represented in the matrix
+by a binary vector Ft =(Ft1, Ft2, ... , FtM), where
+Fti = 1 indicates that fi is associated with yt. In
+other words, F decomposes the observations and
+represents them as feature factors, which can then
+be associated with hidden variables in an iFHMM
+model as depicted in Figure 2(c).
+</bodyText>
+<footnote confidence="0.8980935">
+4 In this subsection, a feature will be represented by a (fea-
+ture type:feature value) pair.
+</footnote>
+<page confidence="0.985657">
+1416
+</page>
+<bodyText confidence="0.99973874">
+Although the iFHMM allows a more flexible
+representation of the latent structure by letting the
+number of parallel Markov chains M be learned
+from data, it cannot be used as a framework where
+the number of clustering components K is infi-
+nite. On the other hand, the iHMM represents
+a nonparametric extension of the hidden Markov
+model (HMM) (Rabiner, 1989) that allows per-
+forming inference on an infinite number of states
+K. To further increase the representational power
+for modeling discrete time series data, we propose
+a nonparametric extension that combines the best
+of the two models, and lets the parameters M and
+K be learned from data.
+As shown in Figure 2(c), each step in the new
+iHMM-iFHMM generative process is performed
+in two phases: (i) the latent feature variables from
+the iFHMM framework are sampled using the
+mIBP mechanism; and (ii) the features sampled so
+far, which become observable during this second
+phase, are used in an adapted version of the beam
+sampling algorithm (Van Gael et al., 2008a) to in-
+fer the clustering components (i.e., latent events).
+In the first phase, the stochastic process for sam-
+pling features in F is defined as follows. The first
+component samples a number of Poisson(α′) fea-
+tures. In general, depending on the value that was
+sampled in the previous step (t − 1), a feature fm
+is sampled for the tth component according to the
+P(Ftm = 1 |Fmt−1 = 1) and P(Ftm = 1 |Fmt−1 = 0)
+probabilities.5 After all features are sampled for
+the tth component, a number of Poisson(α′/t)
+new features are assigned for this component, and
+M gets incremented accordingly.
+To describe the adapted beam sampler, which
+is employed in the second phase of the generative
+process, we introduce additional notations. We de-
+note by (s1,... , sT) the sequence of hidden states
+corresponding to the sequence of event mentions
+(y1, ... , yT), where each state st belongs to one
+of the K events, st ∈ {1, ... , K}, and each men-
+tion yt is represented by a sequence of latent fea-
+tures hFt1, Ft2, ... , FtMi. One element of the tran-
+sition probability 7r is defined as πij = P(st = j |
+st−1=i), and a mention yt is generated according
+to a likelihood model F that is parameterized by a
+state-dependent parameter φst (yt  |st ∼ F(φst)).
+The observation parameters 0 are drawn indepen-
+dently from an identical prior base distribution H.
+The beam sampling algorithm combines the
+</bodyText>
+<footnote confidence="0.8785025">
+5 Technical details for computing these probabilities are de-
+scribed in (Van Gael et al., 2008b).
+</footnote>
+<bodyText confidence="0.99976694117647">
+ideas of slice sampling and dynamic program-
+ming for an efficient sampling of state trajectories.
+Since in time series models the transition probabil-
+ities have independent priors (Beal et al., 2002),
+Van Gael and colleagues (2008a) also used the
+HDP mechanism to allow couplings across transi-
+tions. For sampling the whole hidden state trajec-
+tory s, this algorithm employs a forward filtering-
+backward sampling technique.
+In the forward step of our adapted beam sam-
+pler, for each mention yt, we sample features us-
+ing the mIBP mechanism and the auxiliary vari-
+able ut ∼ Uniform(0, πst−1st). As explained in
+(Van Gael et al., 2008a), the auxiliary variables u
+are used to filter only those trajectories s for which
+πst−1st ≥ ut for all t. Also, in this step, we com-
+pute the probabilities P(st |y1:t, u1:t) for all t:
+</bodyText>
+<equation confidence="0.961412">
+�P(st|y1:t,u1:t)∝P(yt|st) P(st−1|y1:t−1,u1:t−1)
+st−1:ut&lt;1rgt−1gt
+</equation>
+<bodyText confidence="0.994351103448276">
+Here, the dependencies involving parameters 7r
+and 0 are omitted for clarity.
+In the backward step, we first sample the
+event for the last state sT directly from P(sT |
+y1:T, u1:T) and then, for all t : T −1 ... 1, we sam-
+ple each state st given st+1 by using the formula
+P(st  |st+1, y1:T, u1:T) ∝ P(st  |y1:t, u1:t)P(st+1 |
+st, ut+1). To sample the emission distribution
+0 efficiently, and to ensure that each mention is
+characterized by a finite set of representative fea-
+tures, we set the base distribution H to be con-
+jugate with the data distribution F in a Dirichlet-
+multinomial model with the multinomial parame-
+ters (o1, ... , oK) defined as:
+� nmk
+f EBt
+In this formula, nmk counts how many times the
+feature fm was sampled for the event k, and Bt
+stores a finite set of features for yt.
+The mechanism for building a finite set of rep-
+resentative features for the mention yt is based on
+slice sampling (Neal, 2003). Letting qm be the
+number of times the feature fm was sampled in the
+mIBP, and vt an auxiliary variable for yt such that
+vt ∼ Uniform(1,max{qm : Ftm = 1}), we define
+the finite feature set Bt for the observation yt as
+Bt = {fm : Ftm = 1∧qm ≥ vt}. The finiteness of
+this feature set is based on the observation that, in
+the generative process of the mIBP, only a finite set
+</bodyText>
+<equation confidence="0.995365">
+T
+ok =
+t=1
+</equation>
+<page confidence="0.921376">
+1417
+</page>
+<bodyText confidence="0.9995825">
+of features are sampled for a component. We de-
+note this model as iFHMM-iHMMuniform. Also,
+it is worth mentioning that, by using this type of
+sampling, only the most representative features of
+yt get selected in Bt.
+Furthermore, we explore the mechanism for
+selecting a finite set of features associated with
+an observation by: (1) considering all the ob-
+servation’s features whose corresponding feature
+counter qm ≥ 1 (unfiltered); (2) selecting only
+the higher half of the feature distribution consist-
+ing of the observation’s features that were sampled
+at least once in the mIBP model (median); and
+(3) sampling vt from a discrete distribution of the
+observation’s features that were sampled at least
+once in the mIBP (discrete).
+</bodyText>
+<sectionHeader confidence="0.999737" genericHeader="method">
+4 Experiments
+</sectionHeader>
+<bodyText confidence="0.99993809375">
+Datasets One dataset we employed is the au-
+tomatic content extraction (ACE) (ACE-Event,
+2005). However, the utilization of the ACE corpus
+for the task of solving event coreference is lim-
+ited because this resource provides only within-
+document event coreference annotations using a
+restricted set of event types such as LIFE, BUSI-
+NESS, CONFLICT, and JUSTICE. Therefore, as a
+second dataset, we created the EventCorefBank
+(ECB) corpus6 to increase the diversity of event
+types and to be able to evaluate our models for
+both within- and cross-document event corefer-
+ence resolution. One important step in the cre-
+ation process of this corpus consists in finding sets
+of related documents that describe the same semi-
+nal event such that the annotation of coreferential
+event mentions across documents is possible. For
+this purpose, we selected from the GoogleNews
+archive7 various topics whose description contains
+keywords such as commercial transaction, attack,
+death, sports, terrorist act, election, arrest, natu-
+ral disaster, etc. The entire annotation process for
+creating the ECB resource is described in (Bejan
+and Harabagiu, 2008). Table 1 lists several basic
+statistics extracted from these two corpora.
+Evaluation For a more realistic approach, we not
+only trained the models on the manually annotated
+event mentions (i.e., true mentions), but also on all
+the possible mentions encoded in the two datasets.
+To extract all event mentions, we ran the event
+identifier described in (Bejan, 2007). The men-
+tions extracted by this system (i.e., system men-
+</bodyText>
+<footnote confidence="0.9870075">
+6 ECB is available at http://www.hlt.utdallas.edu/∼ady.
+7 http://news.google.com/
+</footnote>
+<table confidence="0.955261777777778">
+ACE ECB
+Number of topics – 43
+Number of documents 745 482
+Number of within-topic events – 339
+Number of cross-document events – 208
+Number of within-document events 4946 1302
+Number of true mentions 6553 1744
+Number of system mentions 45289 21175
+Number of distinct feature values 391798 237197
+</table>
+<tableCaption confidence="0.999916">
+Table 1: Statistics of the ACE and ECB corpora.
+</tableCaption>
+<bodyText confidence="0.999965761904762">
+tions) were able to cover all the true mentions from
+both datasets. As shown in Table 1, we extracted
+from ACE and ECB corpora 45289 and 21175 sys-
+tem mentions, respectively.
+We report results in terms of recall (R), preci-
+sion (P), and F-score (F) by employing the men-
+tion-based B3 metric (Bagga and Baldwin, 1998),
+the entity-based CEAF metric (Luo, 2005), and the
+pairwise F1 (PW) metric. All the results are av-
+eraged over 5 runs of the generative models. In
+the evaluation process, we considered only the
+true mentions of the ACE test dataset, and the
+event mentions of the test sets derived from a 5-
+fold cross validation scheme on the ECB dataset.
+For evaluating the cross-document coreference an-
+notations, we adopted the same approach as de-
+scribed in (Bagga and Baldwin, 1999) by merg-
+ing all the documents from the same topic into a
+meta-document and then scoring this document as
+performed for within-document evaluation. For
+both corpora, we considered a set of 132 feature
+types, where each feature type consists on average
+of 3900 distinct feature values.
+Baselines We consider two baselines for event
+coreference resolution (rows 1&amp;2 in Tables 2&amp;3).
+One baseline groups each event mention by its
+event class (BLeclass). Therefore, for this baseline,
+we cluster mentions according to their correspond-
+ing EC feature value. Similarly, the second base-
+line uses as grouping criteria for event mentions
+their corresponding WNS feature value (BLsyn).
+HDP Extensions Due to memory limitations, we
+evaluated the HDP models on a restricted set of
+manually selected feature types. In general, the
+HDP1f model with the feature type HL, which
+plays the role of a baseline for the HDPflat and
+HDPstruct models, outperforms both baselines on
+the ACE and ECB datasets. For the HDPflat mod-
+els (rows 4–7 in Tables 2&amp;3), we classified the ex-
+periments according to the set of feature types de-
+scribed in Section 2. Our experiments reveal that
+the best configuration of features for this model
+</bodyText>
+<page confidence="0.976527">
+1418
+</page>
+<table confidence="0.998858533333333">
+Model configuration R B3 F R CEAF F R PW F R B3 F R CEAF F R PW F
+P P P P P P
+ECB  |WD ECB  |CD
+BLeclass 97.7 55.8 71.0 44.5 80.1 57.2 93.7 25.4 39.8 93.8 49.6 64.9 36.6 72.7 48.7 90.7 28.6 43.3
+BLsyn 91.5 57.4 70.5 45.7 75.9 57.0 65.3 21.9 32.6 84.6 48.1 61.3 32.8 63.6 43.3 66.2 26.0 37.3
+HDP,f (HL) 84.3 89.0 86.5 83.4 79.6 81.4 36.6 53.4 42.6 67.0 86.2 75.3 76.2 57.1 65.2 34.9 58.9 43.5
+HDPflat (LF) 81.4 98.2 89.0 92.7 77.2 84.2 24.7 82.8 37.7 63.8 97.3 77.0 84.9 54.3 66.1 27.2 88.5 41.5
+(LF+CF) 81.5 98.0 89.0 92.8 77.9 84.7 24.6 80.7 37.4 64.6 97.3 77.6 85.3 55.6 67.2 27.6 88.7 42.0
+(LF+CF+WF) 82.0 98.9 89.6 93.7 78.4 85.3 26.8 89.9 41.0 65.8 98.0 78.7 86.7 57.1 68.8 29.6 93.0 44.8
+(LF+CF+WF+SF) 82.1 99.2 89.8 93.9 78.2 85.3 27.0 92.4 41.3 65.0 98.7 78.3 86.9 56.0 68.0 29.2 95.1 44.4
+HDPstruct (HL-.FR-.FEA) 84.3 97.1 90.2 92.7 81.1 86.5 34.4 83.0 48.6 69.3 95.8 80.4 86.2 60.1 70.8 37.5 85.6 52.1
+iFHMM-iHMMunfiltered 82.6 97.7 89.5 92.7 78.5 85.0 28.5 82.4 41.8 67.2 96.4 79.1 85.6 58.0 69.1 32.5 87.7 47.2
+iFHMM-iHMMdiscrete 82.6 98.1 89.7 93.2 79.0 85.5 29.7 85.4 44.0 66.2 96.2 78.4 84.8 57.2 68.3 32.2 88.1 47.1
+iFHMM-iHMMmedian 82.6 97.8 89.5 92.9 78.8 85.3 29.3 83.7 43.0 67.0 96.5 79.0 86.1 58.3 69.5 33.1 88.1 47.9
+iFHMM-iHMMuniform 82.5 98.1 89.6 93.1 78.8 85.3 29.4 86.6 43.7 67.0 96.4 79.0 85.5 58.0 69.1 33.3 88.3 48.2
+</table>
+<tableCaption confidence="0.789879">
+Table 2: Results for within-document (WD) and cross-document (WD) coreference resolution on the ECB dataset.
+</tableCaption>
+<table confidence="0.9997748">
+B3 CEAF PW
+R P F R P F R P F
+ACE  |WD
+97.9 25.0 39.9 14.7 64.4 24.0 93.5 8.2 15.2
+89.3 36.7 52.1 25.1 64.8 36.2 63.8 10.5 18.1
+86.0 70.6 77.5 62.3 76.4 68.6 50.5 27.7 35.8
+82.9 82.6 82.7 74.9 75.8 75.3 42.4 41.9 42.1
+82.0 84.9 83.4 77.8 75.3 76.6 37.9 45.1 41.2
+83.3 83.6 83.4 76.3 76.2 76.3 42.2 43.9 43.0
+83.4 84.2 83.8 76.9 76.5 76.7 43.3 47.1 45.1
+86.2 76.9 81.3 69.0 77.5 73.0 53.2 38.1 44.4
+82.8 83.6 83.2 75.8 75.0 75.4 41.4 42.6 42.0
+83.1 81.5 82.3 73.7 75.1 74.4 41.9 40.1 41.0
+83.0 81.3 82.1 73.2 75.2 74.2 40.7 39.0 39.8
+81.9 82.2 82.1 74.6 74.5 74.5 37.2 39.0 38.1
+</table>
+<tableCaption confidence="0.998979">
+Table 3: Results for WD coreference resolution on ACE.
+</tableCaption>
+<bodyText confidence="0.999948360655738">
+consists of a combination of feature types from
+all the categories of features (row 7). For the
+HDPstruct experiments, we considered the set of
+features of the best HDPflat experiment as well as
+the dependencies between HL, FR, and FEA. Over-
+all, we can assert that HDPflat achieved the best
+performance results on the ACE test dataset (Ta-
+ble 3), whereas HDPstruct proved to be more ef-
+fective on the ECB dataset (Table 2). Moreover,
+the results of the HDPflat and HDPstruct models
+show an F-score increase by 4-10% over HDP1f,
+and therefore, the results prove that the HDP ex-
+tension provides a more flexible representation for
+clustering objects with rich properties.
+We also plot the evolution of our generative
+processes. For instance, Figure 3(a) shows that
+the HDPflat model corresponding to row 7 in Ta-
+ble 3 converges in 350 iteration steps to a posterior
+distribution over event mentions from ACE with
+around 2000 latent events. Additionally, our ex-
+periments with different values of the A parame-
+ter for the Lidstone’s smoothing method indicate
+that this smoothing method is useful for improv-
+ing the performance of the HDP models. How-
+ever, we could not find a A value in our experi-
+ments that brings a major improvement over the
+non-smoothed HDP models. Figure3(b) shows the
+performances of HDPstruct on ECB with various A
+values.8 The HDP results from Tables 2&amp;3 corre-
+spond to a A value of 10−4 and 10−2 for HDPflat
+and HDPstruct, respectively.
+iFHMM-iHMM In spite of the fact that the
+iFHMM-iHMM model employs automatic feature
+selection, its results remain competitive against
+the results of the HDP models, where the fea-
+ture types were manually tuned. When compar-
+ing the strategies for filtering feature values in this
+framework, we could not find a distinct separation
+between the results obtained by the unfiltered,
+discrete, median, and uniform models. As ob-
+served from Tables 2&amp;3, most of the iFHMM-
+iHMM results fall in between the HDPflat and
+HDPstruct results. The results were obtained by
+automatically selecting only up to 1.5% of distinct
+feature values. Figure 3(c) shows the percents of
+features employed by this model for various val-
+ues of the parameter a′ that controls the number
+of sampled features. The best results (also listed
+in Tables 2&amp;3) were obtained for a′ = 10 (0.05%)
+on ACE and a′ = 150 (0.91%) on ECB.
+To show the usefulness of the sampling schemes
+considered for this model, we also compare in
+Table 4 the results obtained by an iFHMM-
+iHMM model that considers all the feature values
+associated with an observable object (iFHMM-
+iHMMall) against the iFHMM-iHMM models that
+employ the mIBP sampling scheme together with
+the unfiltered, discrete, median, and uniform
+filtering schemes. Because of the memory limi-
+tation constraints, we performed the experiments
+listed in Table 4 by selecting only a subset from
+</bodyText>
+<footnote confidence="0.442732">
+8 A configuration A = 0 in the Lidstone’s smoothing method
+is equivalent with a non-smoothed version of the model on
+which it is applied.
+</footnote>
+<figure confidence="0.993568582278481">
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+1419
+F1−measure
+Number of categories
+2500
+2000
+1500
+1000
+Log−likelihood
+−3
+−3.5
+−4
+50
+HDP,.  |ACE  |WD
+−2.5 x 105
+−4.5
+0 50 100 150 200 250 300 350
+Number of iterations
+(a)
+HDP�_  |ECB  |WD
+100
+90.27
+90
+86.53
+80
+70
+60
+48.62
+40
+B3 CEAF PW
+30
+10−7 10−6 10−4 10−3 10−2 101 102
+0 λ
+(b)
+IMMM−IHMM  |ECB  |WD&amp;CD
+2
+1.8
+10 50 100 150 200 250
+α’
+(c)
+Number of feature values (%)
+0.8
+0.6
+0.4
+0.2
+1.6
+1.4
+1.2
+0
+1
+0.07
+0.32
+0.63
+0.91
+1.20
+1.47
+</figure>
+<figureCaption confidence="0.984754">
+Figure 3: (a) Evolution of K and log-likelihood in the HDPflat model. (b) Evaluation of the Lidstone’s smoothing method in
+the HDP3t,.u,t model. (c) Counts of features employed by the iFHMM-iHMM model for various α′ values.
+</figureCaption>
+<table confidence="0.99836925">
+Model R B3 F R CEAF F R PW F
+P P P
+ACE I WD
+all 89.3 39.8 55.0 30.2 68.8 42.0 62.7 9.1 15.9
+unfiltered 83.3 77.7 80.4 70.6 75.9 73.2 42.1 34.6 38.0
+discrete 83.8 80.7 82.2 73.0 75.8 74.4 43.9 39.1 41.4
+median 83.5 80.2 81.8 72.2 75.3 73.7 42.7 38.2 40.3
+uniform 82.8 80.7 81.7 72.8 75.2 73.9 41.4 39.3 40.3
+ECB I WD
+all 89.5 62.5 73.6 53.3 76.5 62.8 60.7 22.9 33.2
+unfiltered 82.6 96.6 89.0 92.0 79.1 85.1 28.4 75.6 41.0
+discrete 83.1 96.7 89.4 91.6 79.2 84.9 30.5 79.0 43.9
+median 82.5 97.3 89.3 92.8 78.9 85.3 29.2 78.8 42.0
+uniform 82.7 96.0 88.9 91.1 79.0 84.6 29.3 74.9 41.6
+ECB I CD
+all 79.3 54.4 64.5 43.3 61.3 50.7 59.6 26.2 36.4
+unfiltered 67.2 94.5 78.5 84.7 59.2 69.6 32.8 82.5 46.8
+discrete 67.6 94.8 78.9 83.8 58.3 68.8 34.3 85.3 48.9
+median 66.7 95.2 78.4 84.5 57.7 68.5 32.2 83.7 46.3
+uniform 67.7 93.6 78.4 83.6 59.2 69.2 33.6 79.5 46.9
+</table>
+<tableCaption confidence="0.9936385">
+Table 4: Feature non-sampling vs. feature sampling in the
+iFHMM-iHMM model.
+</tableCaption>
+<bodyText confidence="0.999890142857143">
+the feature types which proved to be salient in
+the HDP experiments. As listed in Table 4,
+all the iFHMM-iHMM models that used a fea-
+ture sampling scheme significantly outperform
+the iFHMM-iHMMLll model; this proves that all
+the sampling schemes considered in the iFHMM-
+iHMM framework are able to successfully filter
+out noisy and redundant feature values.
+The closest comparison to prior work is the
+supervised approach described in (Chen and Ji,
+2009) that achieved a 92.2% B3 F-measure on the
+ACE corpus. However, for this result, ground truth
+event mentions as well as a manually tuned coref-
+erence threshold were employed.
+</bodyText>
+<sectionHeader confidence="0.999727" genericHeader="method">
+5 Error Analysis
+</sectionHeader>
+<bodyText confidence="0.976730857142857">
+One frequent error occurs when a more complex
+form of semantic inference is needed to find a cor-
+respondence between two event mentions of the
+same individuated event. For instance, since all
+properties and participants of em3(deal) are omit-
+ted in our example and no common features ex-
+ist between em3(buy) and em1(buy) to indicate a
+similarity between these mentions, they will most
+probably be assigned to different clusters. This ex-
+ample also suggests the need for a better modeling
+of the discourse salience for event mentions.
+Another common error is made when match-
+ing the semantic roles corresponding to coref-
+erential event mentions. Although we simu-
+lated entity coreference by using various seman-
+tic features, the task of matching participants of
+coreferential event mentions is not completely
+solved. This is because, in many coreferen-
+tial cases, partonomic relations between seman-
+tic roles need to be inferred.9 Examples of
+such relations extracted from ECB are Israeli
+forces −−−−→Israel, an Indian warship PART OF
+PART OF −−−−→the
+Indian navy, his cellPART OF −−−−→Sicilian jail. Simi-
+larly for event properties, many coreferential ex-
+amples do not specify a clear location and time
+interval (e.g., Jabaliya refugee camp
+−−−−→Gaza,
+</bodyText>
+<sectionHeader confidence="0.481122" genericHeader="method">
+PART OF
+</sectionHeader>
+<subsectionHeader confidence="0.469552">
+Tuesday PART OF
+</subsectionHeader>
+<bodyText confidence="0.9945602">
+−−−−→this week). In future work, we
+plan to build relevant clusters using partonomies
+and taxonomies such as the WordNet hierarchies
+built from MERONYMY/HOLONYMY and HYPER-
+NYMY/HYPONYMY relations, respectively.10
+</bodyText>
+<sectionHeader confidence="0.999235" genericHeader="conclusions">
+6 Conclusion
+</sectionHeader>
+<bodyText confidence="0.999979">
+We have presented two novel, nonparametric
+Bayesian models that are designed to solve com-
+plex problems that require clustering objects char-
+acterized by a rich set of properties. Our experi-
+ments for event coreference resolution proved that
+these models are able to solve real data applica-
+tions in which the feature and cluster numbers are
+treated as free parameters, and the selection of fea-
+ture values is performed automatically.
+</bodyText>
+<footnote confidence="0.7439665">
+9 This observation was also reported in (Hasler and Orasan,
+2009). 10 This task is not trivial since, if applying the tran-
+sitive closure on these relations, all words will end up being
+part from the same cluster with entity for instance.
+</footnote>
+<page confidence="0.98941">
+1420
+</page>
+<sectionHeader confidence="0.989569" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999188386792453">
+ACE-Event. 2005. ACE (Automatic Content Extrac-
+tion) English Annotation Guidelines for Events, ver-
+sion 5.4.3 2005.07.01.
+David Ahn. 2006. The stages of event extraction.
+In Proceedings of the Workshop on Annotating and
+Reasoning about Time and Events, pages 1–8.
+James Allan, Jaime Carbonell, George Doddington,
+Jonathan Yamron, and Yiming Yang. 1998. Topic
+Detection and Tracking Pilot Study: Final Report.
+In Proceedings of the Broadcast News Understand-
+ing and Transcription Workshop, pages 194–218.
+Amit Bagga and Breck Baldwin. 1998. Algorithms
+for Scoring Coreference Chains. In Proceedings of
+the 1st International Conference on Language Re-
+sources and Evaluation (LREC-1998).
+Amit Bagga and Breck Baldwin. 1999. Cross-
+Document Event Coreference: Annotations, Exper-
+iments, and Observations. In Proceedings of the
+ACL Workshop on Coreference and its Applications,
+pages 1–8.
+Collin F. Baker, Charles J. Fillmore, and John B. Lowe.
+1998. The Berkeley FrameNet project. In Pro-
+ceedings of the 36th Annual Meeting of the Associ-
+ation for Computational Linguistics and 17th Inter-
+national Conference on Computational Linguistics
+(COLING-ACL).
+Matthew J. Beal, Zoubin Ghahramani, and Carl Ed-
+ward Rasmussen. 2002. The Infinite Hidden
+Markov Model. In Advances in Neural Information
+Processing Systems 14 (NIPS).
+Cosmin Adrian Bejan and Sanda Harabagiu. 2008.
+A Linguistic Resource for Discovering Event Struc-
+tures and Resolving Event Coreference. In Proceed-
+ings of the Sixth International Conference on Lan-
+guage Resources and Evaluation (LREC).
+Cosmin Adrian Bejan and Chris Hathaway. 2007.
+UTD-SRL: A Pipeline Architecture for Extracting
+Frame Semantic Structures. In Proceedings of the
+Fourth International Workshop on Semantic Evalu-
+ations (SemEval), pages 460–463.
+Cosmin Adrian Bejan, Matthew Titsworth, Andrew
+Hickl, and Sanda Harabagiu. 2009. Nonparametric
+Bayesian Models for Unsupervised Event Corefer-
+ence Resolution. In Advances in Neural Information
+Processing Systems 23 (NIPS).
+Cosmin Adrian Bejan. 2007. Deriving Chronologi-
+cal Information from Texts through a Graph-based
+Algorithm. In Proceedings of the 20th Florida Ar-
+tificial Intelligence Research Society International
+Conference (FLAIRS), Applied Natural Language
+Processing track.
+Zheng Chen and Heng Ji. 2009. Graph-based Event
+Coreference Resolution. In Proceedings of the
+2009 Workshop on Graph-based Methods for Natu-
+ral Language Processing (TextGraphs-4), pages 54–
+57.
+Donald Davidson, 1969. The Individuation of Events.
+In N. Rescher et al., eds., Essays in Honor of Carl G.
+Hempel, Dordrecht: Reidel. Reprinted in D. David-
+son, ed., Essays on Actions and Events, 2001, Ox-
+ford: Clarendon Press.
+Donald Davidson, 1985. Reply to Quine on Events,
+pages 172–176. In E. LePore and B. McLaughlin,
+eds., Actions and Events: Perspectives on the Phi-
+losophy of Donald Davidson, Oxford: Blackwell.
+Marie-Catherine de Marneffe, Anna N. Rafferty, and
+Christopher D. Manning. 2008. Finding Contra-
+dictions in Text. In Proceedings of the 46th An-
+nual Meeting of the Association for Computational
+Linguistics: Human Language Technologies (ACL-
+HLT), pages 1039–1047.
+Christiane Fellbaum. 1998. WordNet: An Electronic
+Lexical Database. MIT Press.
+Thomas S. Ferguson. 1973. A Bayesian Analysis
+of Some Nonparametric Problems. The Annals of
+Statistics, 1(2):209–230.
+Charles J. Fillmore. 1982. Frame Semantics. In Lin-
+guistics in the Morning Calm.
+Stuart Geman and Donald Geman. 1984. Stochas-
+tic relaxation, Gibbs distributions and the Bayesian
+restoration of images. IEEE Transactions on Pattern
+Analysis and Machine Intelligence, 6:721–741.
+Zoubin Ghahramani, T. L. Griffiths, and Peter Sollich,
+2007. Bayesian Statistics 8, chapter Bayesian non-
+parametric latent feature models, pages 201–225.
+Oxford University Press.
+Tom Griffiths and Zoubin Ghahramani. 2006. Infinite
+Latent Feature Models and the Indian Buffet Pro-
+cess. In Advances in Neural Information Processing
+Systems 18 (NIPS), pages 475–482.
+Aria Haghighi and Dan Klein. 2007. Unsuper-
+vised Coreference Resolution in a Nonparametric
+Bayesian Model. In Proceedings of the 45th An-
+nual Meeting of the Association of Computational
+Linguistics (ACL), pages 848–855.
+Aria Haghighi, Andrew Ng, and Christopher Man-
+ning. 2005. Robust Textual Inference via Graph
+Matching. In Proceedings of Human Language
+Technology Conference and Conference on Empiri-
+cal Methods in Natural Language Processing (HLT-
+EMNLP), pages 387–394.
+Laura Hasler and Constantin Orasan. 2009. Do
+coreferential arguments make event mentions coref-
+erential? In Proceedings of the 7th Discourse
+Anaphora and Anaphor Resolution Colloquium
+(DAARC 2009).
+</reference>
+<page confidence="0.826819">
+1421
+</page>
+<reference confidence="0.999904621621622">
+Kevin Humphreys, Robert Gaizauskas, and Saliha Az-
+zam. 1997. Event coreference for information ex-
+traction. In Proceedings of the Workshop on Opera-
+tional Factors in Practical, Robust Anaphora Reso-
+lution for Unrestricted Texts, 35th Meeting of ACL,
+pages 75–81.
+John B. Lowe, Collin F. Baker, and Charles J. Fillmore.
+1997. A frame-semantic approach to semantic an-
+notation. In Proceedings of the SIGLEX Workshop
+on Tagging Text with Lexical Semantics: Why, What,
+and How?, pages 18–24.
+Xiaoqiang Luo. 2005. On coreference resolution per-
+formance metrics. In Proceedings of the Human
+Language Technology Conference and Conference
+on Empirical Methods in Natural Language Pro-
+cessing (EMNLP-2005), pages 25–32.
+Jeff Malpas. 2009. Donald Davidson. In The
+Stanford Encyclopedia of Philosophy (Fall 2009
+Edition), Edward N. Zalta (ed.), http://plato.stan
+ford.edu/archives/fall2009/entries/davidson/.
+Srini Narayanan and Sanda Harabagiu. 2004. Ques-
+tion Answering Based on Semantic Structures. In
+Proceedings of the 20th International Conference on
+Computational Linguistics (COLING), pages 693–
+701.
+Radford M. Neal. 2003. Slice Sampling. The Annals
+of Statistics, 31:705–741.
+Vincent Ng. 2008. Unsupervised Models for Corefer-
+ence Resolution. In Proceedings of the 2008 Con-
+ference on Empirical Methods in Natural Language
+Processing (EMNLP), pages 640–649.
+Martha Palmer, Daniel Gildea, and Paul Kingsbury.
+2005. The Proposition Bank: An Annotated Cor-
+pus of Semantic Roles. Computational Linguistics,
+31(1):71–105.
+Hoifung Poon and Pedro Domingos. 2008. Joint
+Unsupervised Coreference Resolution with Markov
+Logic. In Proceedings of the 2008 Conference on
+Empirical Methods in Natural Language Processing
+(EMNLP), pages 650–659.
+James Pustejovsky, Jose Castano, Bob Ingria, Roser
+Sauri, Rob Gaizauskas, Andrea Setzer, and Gra-
+ham Katz. 2003a. TimeML: Robust Specification
+of Event and Temporal Expressions in Text. In
+Proceedings of the Fifth International Workshop on
+Computational Semantics (IWCS).
+James Pustejovsky, Patrick Hanks, Roser Sauri, An-
+drew See, Robert Gaizauskas, Andrea Setzer,
+Dragomir Radev, Beth Sundheim, David Day, Lisa
+Ferro, and Marcia Lazo. 2003b. The TimeBank
+Corpus. In Corpus Linguistics, pages 647–656.
+W. V. O. Quine, 1985. Events and Reification, pages
+162–171. In E. LePore and B. P. McLaughlin, eds.,
+Actions and Events: Perspectives on the philosophy
+of Donald Davidson, Oxford: Blackwell. Reprinted
+in R. Casati and A. C. Varzi, eds., Events, 1996,
+pages 107–116, Aldershot: Dartmouth.
+Lawrence R. Rabiner. 1989. A Tutorial on Hid-
+den Markov Models and Selected Applications in
+Speech Recognition. In Proceedings of the IEEE,
+pages 257–286.
+Yee Whye Teh, Michael Jordan, Matthew Beal, and
+David Blei. 2006. Hierarchical Dirichlet Pro-
+cesses. Journal of the American Statistical Associa-
+tion, 101(476):1566–1581.
+Jurgen Van Gael, Y. Saatci, Yee Whye Teh, and Zoubin
+Ghahramani. 2008a. Beam Sampling for the Infi-
+nite Hidden Markov Model. In Proceedings of the
+25th Annual International Conference on Machine
+Learning (ICML), pages 1088–1095.
+Jurgen Van Gael, Yee Whye Teh, and Zoubin Ghahra-
+mani. 2008b. The Infinite Factorial Hidden Markov
+Model. In Advances in Neural Information Process-
+ing Systems 21 (NIPS).
+</reference>
+<page confidence="0.993192">
+1422
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.974308">
+<title confidence="0.999722">Unsupervised Event Coreference Resolution with Rich Linguistic Features</title>
+<author confidence="0.984674">Cosmin Adrian Bejan Sanda Harabagiu</author>
+<affiliation confidence="0.99988">Institute for Creative Technologies Human Language Technology Institute University of Southern California University of Texas at Dallas</affiliation>
+<address confidence="0.998686">Marina del Rey, CA 90292, USA Richardson, TX 75083, USA</address>
+<abstract confidence="0.999291384615385">This paper examines how a new class of nonparametric Bayesian models can be effectively applied to an open-domain event coreference task. Designed with the purpose of clustering complex linguistic objects, these models consider a potentially infinite number of features and categorical outcomes. The evaluation performed for solving both withinand cross-document event coreference shows significant improvements of the models when compared against two baselines for this task.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>ACE-Event</author>
+</authors>
+<date>2005</date>
+<journal>ACE (Automatic Content Extraction) English Annotation Guidelines for Events, version</journal>
+<volume>5</volume>
+<pages>2005--07</pages>
+<contexts>
+<context position="26914" citStr="ACE-Event, 2005" startWordPosition="4522" endWordPosition="4523">ermore, we explore the mechanism for selecting a finite set of features associated with an observation by: (1) considering all the observation’s features whose corresponding feature counter qm ≥ 1 (unfiltered); (2) selecting only the higher half of the feature distribution consisting of the observation’s features that were sampled at least once in the mIBP model (median); and (3) sampling vt from a discrete distribution of the observation’s features that were sampled at least once in the mIBP (discrete). 4 Experiments Datasets One dataset we employed is the automatic content extraction (ACE) (ACE-Event, 2005). However, the utilization of the ACE corpus for the task of solving event coreference is limited because this resource provides only withindocument event coreference annotations using a restricted set of event types such as LIFE, BUSINESS, CONFLICT, and JUSTICE. Therefore, as a second dataset, we created the EventCorefBank (ECB) corpus6 to increase the diversity of event types and to be able to evaluate our models for both within- and cross-document event coreference resolution. One important step in the creation process of this corpus consists in finding sets of related documents that descri</context>
+</contexts>
+<marker>ACE-Event, 2005</marker>
+<rawString>ACE-Event. 2005. ACE (Automatic Content Extraction) English Annotation Guidelines for Events, version 5.4.3 2005.07.01.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Ahn</author>
+</authors>
+<title>The stages of event extraction.</title>
+<date>2006</date>
+<booktitle>In Proceedings of the Workshop on Annotating and Reasoning about Time and Events,</booktitle>
+<pages>1--8</pages>
+<contexts>
+<context position="1630" citStr="Ahn, 2006" startWordPosition="243" endWordPosition="244">on, solving event coreference has already proved its usefulness in various applications such as topic detection and tracking (Allan et al., 1998), information extraction (Humphreys et al., 1997), question answering (Narayanan and Harabagiu, 2004), textual entailment (Haghighi et al., 2005), and contradiction detection (de Marneffe et al., 2008). Previous approaches for solving event coreference relied on supervised learning methods that explore various linguistic properties in order to decide if a pair of event mentions is coreferential or not (Humphreys et al., 1997; Bagga and Baldwin, 1999; Ahn, 2006; Chen and Ji, 2009). In spite of being successful for a particular labeled corpus, these pairwise models are dependent on the domain or language that they are trained on. Moreover, since event coreference resolution is a complex task that involves exploring a rich set of linguistic features, annotating a large corpus with event coreference information for a new language or domain of interest requires a substantial amount of manual effort. Also, since these models are dependent on local pairwise decisions, they are unable to capture a global event distribution at topic or document collection l</context>
+</contexts>
+<marker>Ahn, 2006</marker>
+<rawString>David Ahn. 2006. The stages of event extraction. In Proceedings of the Workshop on Annotating and Reasoning about Time and Events, pages 1–8.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James Allan</author>
+<author>Jaime Carbonell</author>
+<author>George Doddington</author>
+<author>Jonathan Yamron</author>
+<author>Yiming Yang</author>
+</authors>
+<title>Topic Detection and Tracking Pilot Study: Final Report.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the Broadcast News Understanding and Transcription Workshop,</booktitle>
+<pages>194--218</pages>
+<contexts>
+<context position="1166" citStr="Allan et al., 1998" startWordPosition="170" endWordPosition="173">lly infinite number of features and categorical outcomes. The evaluation performed for solving both within- and cross-document event coreference shows significant improvements of the models when compared against two baselines for this task. 1 Introduction The event coreference task consists of finding clusters of event mentions that refer to the same event. Although it has not been extensively studied in comparison with the related problem of entity coreference resolution, solving event coreference has already proved its usefulness in various applications such as topic detection and tracking (Allan et al., 1998), information extraction (Humphreys et al., 1997), question answering (Narayanan and Harabagiu, 2004), textual entailment (Haghighi et al., 2005), and contradiction detection (de Marneffe et al., 2008). Previous approaches for solving event coreference relied on supervised learning methods that explore various linguistic properties in order to decide if a pair of event mentions is coreferential or not (Humphreys et al., 1997; Bagga and Baldwin, 1999; Ahn, 2006; Chen and Ji, 2009). In spite of being successful for a particular labeled corpus, these pairwise models are dependent on the domain or</context>
+</contexts>
+<marker>Allan, Carbonell, Doddington, Yamron, Yang, 1998</marker>
+<rawString>James Allan, Jaime Carbonell, George Doddington, Jonathan Yamron, and Yiming Yang. 1998. Topic Detection and Tracking Pilot Study: Final Report. In Proceedings of the Broadcast News Understanding and Transcription Workshop, pages 194–218.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Amit Bagga</author>
+<author>Breck Baldwin</author>
+</authors>
+<title>Algorithms for Scoring Coreference Chains.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the 1st International Conference on Language Resources and Evaluation (LREC-1998).</booktitle>
+<contexts>
+<context position="29110" citStr="Bagga and Baldwin, 1998" startWordPosition="4870" endWordPosition="4873">mber of documents 745 482 Number of within-topic events – 339 Number of cross-document events – 208 Number of within-document events 4946 1302 Number of true mentions 6553 1744 Number of system mentions 45289 21175 Number of distinct feature values 391798 237197 Table 1: Statistics of the ACE and ECB corpora. tions) were able to cover all the true mentions from both datasets. As shown in Table 1, we extracted from ACE and ECB corpora 45289 and 21175 system mentions, respectively. We report results in terms of recall (R), precision (P), and F-score (F) by employing the mention-based B3 metric (Bagga and Baldwin, 1998), the entity-based CEAF metric (Luo, 2005), and the pairwise F1 (PW) metric. All the results are averaged over 5 runs of the generative models. In the evaluation process, we considered only the true mentions of the ACE test dataset, and the event mentions of the test sets derived from a 5- fold cross validation scheme on the ECB dataset. For evaluating the cross-document coreference annotations, we adopted the same approach as described in (Bagga and Baldwin, 1999) by merging all the documents from the same topic into a meta-document and then scoring this document as performed for within-docum</context>
+</contexts>
+<marker>Bagga, Baldwin, 1998</marker>
+<rawString>Amit Bagga and Breck Baldwin. 1998. Algorithms for Scoring Coreference Chains. In Proceedings of the 1st International Conference on Language Resources and Evaluation (LREC-1998).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Amit Bagga</author>
+<author>Breck Baldwin</author>
+</authors>
+<title>CrossDocument Event Coreference: Annotations, Experiments, and Observations.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the ACL Workshop on Coreference and its Applications,</booktitle>
+<pages>1--8</pages>
+<contexts>
+<context position="1619" citStr="Bagga and Baldwin, 1999" startWordPosition="238" endWordPosition="242">tity coreference resolution, solving event coreference has already proved its usefulness in various applications such as topic detection and tracking (Allan et al., 1998), information extraction (Humphreys et al., 1997), question answering (Narayanan and Harabagiu, 2004), textual entailment (Haghighi et al., 2005), and contradiction detection (de Marneffe et al., 2008). Previous approaches for solving event coreference relied on supervised learning methods that explore various linguistic properties in order to decide if a pair of event mentions is coreferential or not (Humphreys et al., 1997; Bagga and Baldwin, 1999; Ahn, 2006; Chen and Ji, 2009). In spite of being successful for a particular labeled corpus, these pairwise models are dependent on the domain or language that they are trained on. Moreover, since event coreference resolution is a complex task that involves exploring a rich set of linguistic features, annotating a large corpus with event coreference information for a new language or domain of interest requires a substantial amount of manual effort. Also, since these models are dependent on local pairwise decisions, they are unable to capture a global event distribution at topic or document c</context>
+<context position="29579" citStr="Bagga and Baldwin, 1999" startWordPosition="4950" endWordPosition="4953">, respectively. We report results in terms of recall (R), precision (P), and F-score (F) by employing the mention-based B3 metric (Bagga and Baldwin, 1998), the entity-based CEAF metric (Luo, 2005), and the pairwise F1 (PW) metric. All the results are averaged over 5 runs of the generative models. In the evaluation process, we considered only the true mentions of the ACE test dataset, and the event mentions of the test sets derived from a 5- fold cross validation scheme on the ECB dataset. For evaluating the cross-document coreference annotations, we adopted the same approach as described in (Bagga and Baldwin, 1999) by merging all the documents from the same topic into a meta-document and then scoring this document as performed for within-document evaluation. For both corpora, we considered a set of 132 feature types, where each feature type consists on average of 3900 distinct feature values. Baselines We consider two baselines for event coreference resolution (rows 1&amp;2 in Tables 2&amp;3). One baseline groups each event mention by its event class (BLeclass). Therefore, for this baseline, we cluster mentions according to their corresponding EC feature value. Similarly, the second baseline uses as grouping cr</context>
+</contexts>
+<marker>Bagga, Baldwin, 1999</marker>
+<rawString>Amit Bagga and Breck Baldwin. 1999. CrossDocument Event Coreference: Annotations, Experiments, and Observations. In Proceedings of the ACL Workshop on Coreference and its Applications, pages 1–8.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Collin F Baker</author>
+<author>Charles J Fillmore</author>
+<author>John B Lowe</author>
+</authors>
+<title>The Berkeley FrameNet project.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the 36th Annual Meeting of the Association for Computational Linguistics and 17th International Conference on Computational Linguistics (COLING-ACL).</booktitle>
+<contexts>
+<context position="11121" citStr="Baker et al., 1998" startWordPosition="1755" endWordPosition="1758">specific type of semantic role which represents the AGENT, DOER, or ACTOR of a specific event. Another argument is ARG1, which plays the role of the PATIENT, THEME, or EXPERIENCER of an event. In particular, the predicate arguments associated to the event mention em8(bought) from Example 1 are ARG0:[it], ARG1:[Compaq Computer Corp.], ARG3:[for $19 billion], and ARG-TMP:[in 2002]. Event mentions are not only expressed as verbs in text, but also as nouns and adjectives. Therefore, for a better coverage of semantic features, we also employ the semantic annotations encoded in the FrameNet corpus (Baker et al., 1998). FrameNet annotates word expressions capable of evoking conceptual structures, or semantic frames, which describe specific situations, objects, or events (Fillmore, 1982). The semantic roles associated with a word in FrameNet, or frame elements, are locally defined for the semantic frame evoked by the word. In general, the words annotated in FrameNet are expressed as verbs, nouns, and adjectives. To preserve the consistency of semantic role features, we align frame elements to predicate arguments by running the PropBank semantic parser on the manual annotations from FrameNet; conversely, we a</context>
+</contexts>
+<marker>Baker, Fillmore, Lowe, 1998</marker>
+<rawString>Collin F. Baker, Charles J. Fillmore, and John B. Lowe. 1998. The Berkeley FrameNet project. In Proceedings of the 36th Annual Meeting of the Association for Computational Linguistics and 17th International Conference on Computational Linguistics (COLING-ACL).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Matthew J Beal</author>
+<author>Zoubin Ghahramani</author>
+<author>Carl Edward Rasmussen</author>
+</authors>
+<title>The Infinite Hidden Markov Model.</title>
+<date>2002</date>
+<booktitle>In Advances in Neural Information Processing Systems 14 (NIPS).</booktitle>
+<contexts>
+<context position="2895" citStr="Beal et al., 2002" startWordPosition="436" endWordPosition="439">de a more flexible representation for modeling observable data with rich properties, we present two novel, fully generative, nonparametric Bayesian models for unsupervised within- and crossdocument event coreference resolution. The first model extends the hierarchical Dirichlet process (Teh et al., 2006) to take into account additional properties associated with observable objects (i.e., event mentions). The second model overcomes some of the limitations of the first model. It uses the infinite factorial hidden Markov model (Van Gael et al., 2008b) coupled to the infinite hidden Markov model (Beal et al., 2002) in order to (1) consider a potentially infinite number of features associated with observable objects, (2) perform an automatic selection of the most salient features, and (3) capture the structural dependencies of observable objects at the discourse level. Furthermore, both models are designed to account for a potentially infinite number of categorical outcomes (i.e., events). These models provide additional details and experimental results to our preliminary work on unsupervised event coreference resolution (Bejan et al., 2009). 2 Event Coreference The problem of determining if two events a</context>
+<context position="24093" citStr="Beal et al., 2002" startWordPosition="4023" endWordPosition="4026">y 7r is defined as πij = P(st = j | st−1=i), and a mention yt is generated according to a likelihood model F that is parameterized by a state-dependent parameter φst (yt |st ∼ F(φst)). The observation parameters 0 are drawn independently from an identical prior base distribution H. The beam sampling algorithm combines the 5 Technical details for computing these probabilities are described in (Van Gael et al., 2008b). ideas of slice sampling and dynamic programming for an efficient sampling of state trajectories. Since in time series models the transition probabilities have independent priors (Beal et al., 2002), Van Gael and colleagues (2008a) also used the HDP mechanism to allow couplings across transitions. For sampling the whole hidden state trajectory s, this algorithm employs a forward filteringbackward sampling technique. In the forward step of our adapted beam sampler, for each mention yt, we sample features using the mIBP mechanism and the auxiliary variable ut ∼ Uniform(0, πst−1st). As explained in (Van Gael et al., 2008a), the auxiliary variables u are used to filter only those trajectories s for which πst−1st ≥ ut for all t. Also, in this step, we compute the probabilities P(st |y1:t, u1:</context>
+</contexts>
+<marker>Beal, Ghahramani, Rasmussen, 2002</marker>
+<rawString>Matthew J. Beal, Zoubin Ghahramani, and Carl Edward Rasmussen. 2002. The Infinite Hidden Markov Model. In Advances in Neural Information Processing Systems 14 (NIPS).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Cosmin Adrian Bejan</author>
+<author>Sanda Harabagiu</author>
+</authors>
+<title>A Linguistic Resource for Discovering Event Structures and Resolving Event Coreference.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the Sixth International Conference on Language Resources and Evaluation (LREC).</booktitle>
+<contexts>
+<context position="27951" citStr="Bejan and Harabagiu, 2008" startWordPosition="4680" endWordPosition="4683"> models for both within- and cross-document event coreference resolution. One important step in the creation process of this corpus consists in finding sets of related documents that describe the same seminal event such that the annotation of coreferential event mentions across documents is possible. For this purpose, we selected from the GoogleNews archive7 various topics whose description contains keywords such as commercial transaction, attack, death, sports, terrorist act, election, arrest, natural disaster, etc. The entire annotation process for creating the ECB resource is described in (Bejan and Harabagiu, 2008). Table 1 lists several basic statistics extracted from these two corpora. Evaluation For a more realistic approach, we not only trained the models on the manually annotated event mentions (i.e., true mentions), but also on all the possible mentions encoded in the two datasets. To extract all event mentions, we ran the event identifier described in (Bejan, 2007). The mentions extracted by this system (i.e., system men6 ECB is available at http://www.hlt.utdallas.edu/∼ady. 7 http://news.google.com/ ACE ECB Number of topics – 43 Number of documents 745 482 Number of within-topic events – 339 Num</context>
+</contexts>
+<marker>Bejan, Harabagiu, 2008</marker>
+<rawString>Cosmin Adrian Bejan and Sanda Harabagiu. 2008. A Linguistic Resource for Discovering Event Structures and Resolving Event Coreference. In Proceedings of the Sixth International Conference on Language Resources and Evaluation (LREC).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Cosmin Adrian Bejan</author>
+<author>Chris Hathaway</author>
+</authors>
+<title>UTD-SRL: A Pipeline Architecture for Extracting Frame Semantic Structures.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the Fourth International Workshop on Semantic Evaluations (SemEval),</booktitle>
+<pages>460--463</pages>
+<contexts>
+<context position="10127" citStr="Bejan and Hathaway, 2007" startWordPosition="1598" endWordPosition="1601">US relation to form clusters with all the words from WordNet (WNS). For instance, the verbs buy and purchase correspond to the same cluster ID because there exist a chain of SYNONYMOUS relations between them in WordNet. The second set considers as grouping criteria the categorization of words from the WordNet lexicographer’s files (WNL). In addition, for each word that is not covered in WordNet, we create a new cluster ID in each set of clusters. Semantic Features (SF) To extract features that characterize participants and properties of event mentions, we use the semantic parser described in (Bejan and Hathaway, 2007). One category of semantic features that we identify for event mentions is the predicate argument structures encoded in PropBank annotations (Palmer et al., 2005). In PropBank, the predicate argument structures are represented by events expressed as verbs in text and by the semantic roles, or predicate arguments, associated with these events. For example, ARG0 annotates a specific type of semantic role which represents the AGENT, DOER, or ACTOR of a specific event. Another argument is ARG1, which plays the role of the PATIENT, THEME, or EXPERIENCER of an event. In particular, the predicate arg</context>
+</contexts>
+<marker>Bejan, Hathaway, 2007</marker>
+<rawString>Cosmin Adrian Bejan and Chris Hathaway. 2007. UTD-SRL: A Pipeline Architecture for Extracting Frame Semantic Structures. In Proceedings of the Fourth International Workshop on Semantic Evaluations (SemEval), pages 460–463.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Cosmin Adrian Bejan</author>
+<author>Matthew Titsworth</author>
+<author>Andrew Hickl</author>
+<author>Sanda Harabagiu</author>
+</authors>
+<title>Nonparametric Bayesian Models for Unsupervised Event Coreference Resolution.</title>
+<date>2009</date>
+<booktitle>In Advances in Neural Information Processing Systems 23 (NIPS).</booktitle>
+<contexts>
+<context position="3431" citStr="Bejan et al., 2009" startWordPosition="517" endWordPosition="520">Gael et al., 2008b) coupled to the infinite hidden Markov model (Beal et al., 2002) in order to (1) consider a potentially infinite number of features associated with observable objects, (2) perform an automatic selection of the most salient features, and (3) capture the structural dependencies of observable objects at the discourse level. Furthermore, both models are designed to account for a potentially infinite number of categorical outcomes (i.e., events). These models provide additional details and experimental results to our preliminary work on unsupervised event coreference resolution (Bejan et al., 2009). 2 Event Coreference The problem of determining if two events are identical was originally studied in philosophy. One relevant theory on event identity was proposed by Davidson (1969) who argued that two events are identical if they have the same causes and effects. Later on, a different theory was proposed by Quine (1985) who considered that each event refers to a physical object (which is well defined in space and time), and therefore, two events are identical 1412 Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1412–1422, Uppsala, Sweden, 11-1</context>
+</contexts>
+<marker>Bejan, Titsworth, Hickl, Harabagiu, 2009</marker>
+<rawString>Cosmin Adrian Bejan, Matthew Titsworth, Andrew Hickl, and Sanda Harabagiu. 2009. Nonparametric Bayesian Models for Unsupervised Event Coreference Resolution. In Advances in Neural Information Processing Systems 23 (NIPS).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Cosmin Adrian Bejan</author>
+</authors>
+<title>Deriving Chronological Information from Texts through a Graph-based Algorithm.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 20th Florida Artificial Intelligence Research Society International Conference (FLAIRS), Applied Natural Language Processing track.</booktitle>
+<contexts>
+<context position="8869" citStr="Bejan, 2007" startWordPosition="1393" endWordPosition="1394">everal types of classes: the partof-speech of the HW feature (POS), the word class of the HW feature (HWC), and the event class of the mention (EC). The HWC feature can take one of the following values: VERB, NOUN, ADJEC1413 TIVE, and OTHER. As values for the EC feature, we consider the seven event classes defined in the TimeML specification language (Pustejovsky et al., 2003a): OCCURRENCE, PERCEPTION, REPORTING, ASPECTUAL, STATE, I ACTION, and I STATE. In order to extract the event classes corresponding to the event mentions from a given dataset, we employed the event extractor described in (Bejan, 2007). This extractor is trained on the TimeBank corpus (Pustejovsky et al., 2003b), which is a TimeML resource encoding temporal elements such as events, time expressions, and temporal relations. WordNet Features (WF) In our efforts to create clusters of event mention attributes as close as possible to the true attribute clusters of the individuated events, we build two sets of word clusters using the entire lexical information from the WordNet database. After creating these sets of clusters, we then associate each event mention with only one cluster from each set. The first set uses the transitiv</context>
+<context position="28315" citStr="Bejan, 2007" startWordPosition="4740" endWordPosition="4741">ose description contains keywords such as commercial transaction, attack, death, sports, terrorist act, election, arrest, natural disaster, etc. The entire annotation process for creating the ECB resource is described in (Bejan and Harabagiu, 2008). Table 1 lists several basic statistics extracted from these two corpora. Evaluation For a more realistic approach, we not only trained the models on the manually annotated event mentions (i.e., true mentions), but also on all the possible mentions encoded in the two datasets. To extract all event mentions, we ran the event identifier described in (Bejan, 2007). The mentions extracted by this system (i.e., system men6 ECB is available at http://www.hlt.utdallas.edu/∼ady. 7 http://news.google.com/ ACE ECB Number of topics – 43 Number of documents 745 482 Number of within-topic events – 339 Number of cross-document events – 208 Number of within-document events 4946 1302 Number of true mentions 6553 1744 Number of system mentions 45289 21175 Number of distinct feature values 391798 237197 Table 1: Statistics of the ACE and ECB corpora. tions) were able to cover all the true mentions from both datasets. As shown in Table 1, we extracted from ACE and ECB</context>
+</contexts>
+<marker>Bejan, 2007</marker>
+<rawString>Cosmin Adrian Bejan. 2007. Deriving Chronological Information from Texts through a Graph-based Algorithm. In Proceedings of the 20th Florida Artificial Intelligence Research Society International Conference (FLAIRS), Applied Natural Language Processing track.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Zheng Chen</author>
+<author>Heng Ji</author>
+</authors>
+<title>Graph-based Event Coreference Resolution.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the 2009 Workshop on Graph-based Methods for Natural Language Processing (TextGraphs-4),</booktitle>
+<pages>54--57</pages>
+<contexts>
+<context position="1650" citStr="Chen and Ji, 2009" startWordPosition="245" endWordPosition="248"> event coreference has already proved its usefulness in various applications such as topic detection and tracking (Allan et al., 1998), information extraction (Humphreys et al., 1997), question answering (Narayanan and Harabagiu, 2004), textual entailment (Haghighi et al., 2005), and contradiction detection (de Marneffe et al., 2008). Previous approaches for solving event coreference relied on supervised learning methods that explore various linguistic properties in order to decide if a pair of event mentions is coreferential or not (Humphreys et al., 1997; Bagga and Baldwin, 1999; Ahn, 2006; Chen and Ji, 2009). In spite of being successful for a particular labeled corpus, these pairwise models are dependent on the domain or language that they are trained on. Moreover, since event coreference resolution is a complex task that involves exploring a rich set of linguistic features, annotating a large corpus with event coreference information for a new language or domain of interest requires a substantial amount of manual effort. Also, since these models are dependent on local pairwise decisions, they are unable to capture a global event distribution at topic or document collection level. To address the</context>
+<context position="37934" citStr="Chen and Ji, 2009" startWordPosition="6461" endWordPosition="6464">.2 78.4 84.5 57.7 68.5 32.2 83.7 46.3 uniform 67.7 93.6 78.4 83.6 59.2 69.2 33.6 79.5 46.9 Table 4: Feature non-sampling vs. feature sampling in the iFHMM-iHMM model. the feature types which proved to be salient in the HDP experiments. As listed in Table 4, all the iFHMM-iHMM models that used a feature sampling scheme significantly outperform the iFHMM-iHMMLll model; this proves that all the sampling schemes considered in the iFHMMiHMM framework are able to successfully filter out noisy and redundant feature values. The closest comparison to prior work is the supervised approach described in (Chen and Ji, 2009) that achieved a 92.2% B3 F-measure on the ACE corpus. However, for this result, ground truth event mentions as well as a manually tuned coreference threshold were employed. 5 Error Analysis One frequent error occurs when a more complex form of semantic inference is needed to find a correspondence between two event mentions of the same individuated event. For instance, since all properties and participants of em3(deal) are omitted in our example and no common features exist between em3(buy) and em1(buy) to indicate a similarity between these mentions, they will most probably be assigned to dif</context>
+</contexts>
+<marker>Chen, Ji, 2009</marker>
+<rawString>Zheng Chen and Heng Ji. 2009. Graph-based Event Coreference Resolution. In Proceedings of the 2009 Workshop on Graph-based Methods for Natural Language Processing (TextGraphs-4), pages 54– 57.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Donald Davidson</author>
+</authors>
+<title>The Individuation of Events. In</title>
+<date>1969</date>
+<booktitle>Essays in Honor of Carl G. Hempel,</booktitle>
+<editor>N. Rescher et al., eds.,</editor>
+<publisher>Clarendon Press.</publisher>
+<location>Dordrecht:</location>
+<contexts>
+<context position="3615" citStr="Davidson (1969)" startWordPosition="548" endWordPosition="549">2) perform an automatic selection of the most salient features, and (3) capture the structural dependencies of observable objects at the discourse level. Furthermore, both models are designed to account for a potentially infinite number of categorical outcomes (i.e., events). These models provide additional details and experimental results to our preliminary work on unsupervised event coreference resolution (Bejan et al., 2009). 2 Event Coreference The problem of determining if two events are identical was originally studied in philosophy. One relevant theory on event identity was proposed by Davidson (1969) who argued that two events are identical if they have the same causes and effects. Later on, a different theory was proposed by Quine (1985) who considered that each event refers to a physical object (which is well defined in space and time), and therefore, two events are identical 1412 Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1412–1422, Uppsala, Sweden, 11-16 July 2010. c�2010 Association for Computational Linguistics if they have the same spatiotemporal location. In (Davidson, 1985), Davidson abandoned his suggestion to embrace the Quine</context>
+</contexts>
+<marker>Davidson, 1969</marker>
+<rawString>Donald Davidson, 1969. The Individuation of Events. In N. Rescher et al., eds., Essays in Honor of Carl G. Hempel, Dordrecht: Reidel. Reprinted in D. Davidson, ed., Essays on Actions and Events, 2001, Oxford: Clarendon Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Donald Davidson</author>
+</authors>
+<title>Reply to Quine on Events,</title>
+<date>1985</date>
+<booktitle>Actions and Events: Perspectives on the Philosophy of Donald</booktitle>
+<pages>172--176</pages>
+<editor>In E. LePore and B. McLaughlin, eds.,</editor>
+<publisher>Blackwell.</publisher>
+<location>Davidson, Oxford:</location>
+<contexts>
+<context position="4159" citStr="Davidson, 1985" startWordPosition="632" endWordPosition="633">. One relevant theory on event identity was proposed by Davidson (1969) who argued that two events are identical if they have the same causes and effects. Later on, a different theory was proposed by Quine (1985) who considered that each event refers to a physical object (which is well defined in space and time), and therefore, two events are identical 1412 Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1412–1422, Uppsala, Sweden, 11-16 July 2010. c�2010 Association for Computational Linguistics if they have the same spatiotemporal location. In (Davidson, 1985), Davidson abandoned his suggestion to embrace the Quinean theory on event identity (Malpas, 2009). Topic 43 Document 3 s4: AMD agreed to [buy]em, Markham, Ontario-based ATI for around $5.4 billion in cash and stock, the companies announced Monday. s5: The [acquisition]em2 would turn AMD into one of the world’s largest providers of graphics chips. 2.1 An Example In accordance with the Quinean theory, we consider that two event mentions are coreferential if they have the same event properties and share the same event participants. For instance, the sentences from Example 1 encode event mentions</context>
+</contexts>
+<marker>Davidson, 1985</marker>
+<rawString>Donald Davidson, 1985. Reply to Quine on Events, pages 172–176. In E. LePore and B. McLaughlin, eds., Actions and Events: Perspectives on the Philosophy of Donald Davidson, Oxford: Blackwell.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Marie-Catherine de Marneffe</author>
+<author>Anna N Rafferty</author>
+<author>Christopher D Manning</author>
+</authors>
+<title>Finding Contradictions in Text.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 46th Annual Meeting of the Association for Computational Linguistics: Human Language Technologies (ACLHLT),</booktitle>
+<pages>1039--1047</pages>
+<marker>de Marneffe, Rafferty, Manning, 2008</marker>
+<rawString>Marie-Catherine de Marneffe, Anna N. Rafferty, and Christopher D. Manning. 2008. Finding Contradictions in Text. In Proceedings of the 46th Annual Meeting of the Association for Computational Linguistics: Human Language Technologies (ACLHLT), pages 1039–1047.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Christiane Fellbaum</author>
+</authors>
+<title>WordNet: An Electronic Lexical Database.</title>
+<date>1998</date>
+<publisher>MIT Press.</publisher>
+<contexts>
+<context position="6474" citStr="Fellbaum, 1998" startWordPosition="1009" endWordPosition="1010"> Solving the event coreference problem poses many interesting challenges. For instance, in order to solve the coreference chain of event mentions that refer to the event e2, we need to take into account the following issues: (i) a coreference chain can encode both within- and cross-document coreference information; (ii) two mentions from the same chain can have different word classes (e.g., em3(buy)–verb, em4(purchase)–noun); (iii) not all the mentions from the same chain are synonymous (e.g., em3(buy) and em8(acquire)), although a semantic relation might exist between them (e.g., in WordNet (Fellbaum, 1998), the genus of buy is acquire); (iv) partial (or all) properties and participants of an event mention can be omitted in text (e.g., em4(purchase)). In Section Topic 44 Document 2 s1: Hewlett-Packard is negotiating to [buy]em,, technology services provider Electronic Data Systems. ss: With a market value of about $115 billion, HP could easily use its own stock to finance the [purchase]em4. sq: If the [deal]em, is completed, it would be HP’s biggest [acquisition]em,, since it [bought]em7 Compaq Computer Corp. for $19 billion in 2002. Document 5 s2: Industry sources have confirmed to eWEEK that H</context>
+</contexts>
+<marker>Fellbaum, 1998</marker>
+<rawString>Christiane Fellbaum. 1998. WordNet: An Electronic Lexical Database. MIT Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Thomas S Ferguson</author>
+</authors>
+<title>A Bayesian Analysis of Some Nonparametric Problems.</title>
+<date>1973</date>
+<journal>The Annals of Statistics,</journal>
+<volume>1</volume>
+<issue>2</issue>
+<contexts>
+<context position="14512" citStr="Ferguson, 1973" startWordPosition="2330" endWordPosition="2331"> with a feature type. 3.1 A Finite Feature Model We present an extension of the hierarchical Dirichlet process (HDP) model which is able to represent each observable object (i.e., event mention) by a finite number of feature types L. Our HDP extension is also inspired from the Bayesian model proposed by Haghighi and Klein (2007). However, their model is strictly customized for entity coreference resolution, and therefore, extending it to include additional features for each observable object is a challenging task (Ng, 2008; Poon and Domingos, 2008). In the HDP model, a Dirichlet process (DP) (Ferguson, 1973) is associated with each document, and each mixture component (i.e., event) is shared across documents. To describe its extension, we consider Z the set of indicator random variables for indices of events, φz the set of parameters associated with an event z, φ a notation for all model parameters, and X a notation for all random variables that represent observable features.2 Given a document collection annotated with event mentions, the goal is to find the best assignment of event indices Z*, which maximize the posterior probability P(Z|X). In a Bayesian approach, this probability is computed b</context>
+</contexts>
+<marker>Ferguson, 1973</marker>
+<rawString>Thomas S. Ferguson. 1973. A Bayesian Analysis of Some Nonparametric Problems. The Annals of Statistics, 1(2):209–230.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Charles J Fillmore</author>
+</authors>
+<title>Frame Semantics.</title>
+<date>1982</date>
+<booktitle>In Linguistics in the Morning Calm.</booktitle>
+<contexts>
+<context position="11292" citStr="Fillmore, 1982" startWordPosition="1778" endWordPosition="1779">NCER of an event. In particular, the predicate arguments associated to the event mention em8(bought) from Example 1 are ARG0:[it], ARG1:[Compaq Computer Corp.], ARG3:[for $19 billion], and ARG-TMP:[in 2002]. Event mentions are not only expressed as verbs in text, but also as nouns and adjectives. Therefore, for a better coverage of semantic features, we also employ the semantic annotations encoded in the FrameNet corpus (Baker et al., 1998). FrameNet annotates word expressions capable of evoking conceptual structures, or semantic frames, which describe specific situations, objects, or events (Fillmore, 1982). The semantic roles associated with a word in FrameNet, or frame elements, are locally defined for the semantic frame evoked by the word. In general, the words annotated in FrameNet are expressed as verbs, nouns, and adjectives. To preserve the consistency of semantic role features, we align frame elements to predicate arguments by running the PropBank semantic parser on the manual annotations from FrameNet; conversely, we also run the FrameNet parser on the manual annotations from PropBank. Moreover, to obtain a better alignment of semantic roles, we run both parsers on a large amount of unl</context>
+</contexts>
+<marker>Fillmore, 1982</marker>
+<rawString>Charles J. Fillmore. 1982. Frame Semantics. In Linguistics in the Morning Calm.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stuart Geman</author>
+<author>Donald Geman</author>
+</authors>
+<title>Stochastic relaxation, Gibbs distributions and the Bayesian restoration of images.</title>
+<date>1984</date>
+<journal>IEEE Transactions on Pattern Analysis and Machine Intelligence,</journal>
+<pages>6--721</pages>
+<contexts>
+<context position="16262" citStr="Geman and Geman, 1984" startWordPosition="2634" endWordPosition="2638">ber of events K be inferred from data. To ensure this flexibility, a global nonparametric DP prior with a hyperparameter γ and a global base measure H can be considered for β (Teh et al., 2006). The global distribution drawn from this DP prior, denoted as β0 in Figure 2(a), encodes the event mixing weights. Thus, same global events are used for each document, but each event has a document specific distribution βi that is drawn from a DP prior centered on the global weights β0. To infer the true posterior probability of P(Z|X), we follow (Teh et al., 2006) and use the Gibbs sampling algorithm (Geman and Geman, 1984) based on the direct assignment sampling scheme. In this sampling scheme, the parameters β and φ are integrated out analytically. Moreover, to reduce the complexity of computing P(Z|X), we make the naive Bayes assumption that the feature variables X are conditionally independent given Z. This allows us to factorize the joint distribution of feature variables X conditioned on Z into product of marginals. Thus, by Bayes rule, the formula for sampling an event index for mention j from document i, Zi,j, is:3 P(Zi,j |Z−i,j, X) a P(Zi,j |Z−i,j) 11 P(Xi,j |Z, X−i,j) XEX where Xi,j represents the feat</context>
+</contexts>
+<marker>Geman, Geman, 1984</marker>
+<rawString>Stuart Geman and Donald Geman. 1984. Stochastic relaxation, Gibbs distributions and the Bayesian restoration of images. IEEE Transactions on Pattern Analysis and Machine Intelligence, 6:721–741.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Zoubin Ghahramani</author>
+<author>T L Griffiths</author>
+<author>Peter Sollich</author>
+</authors>
+<title>Bayesian Statistics 8, chapter Bayesian nonparametric latent feature models,</title>
+<date>2007</date>
+<pages>201--225</pages>
+<publisher>Oxford University Press.</publisher>
+<contexts>
+<context position="20377" citStr="Ghahramani et al., 2007" startWordPosition="3376" endWordPosition="3380">re variable from the set X = (HL, POS, FR). For the sake of clarity, we omit the conditioning components of Z, HL, FR, and POS. 3.2 An Infinite Feature Model To relax some of the restrictions of the first model, we devise an approach that combines the infinite factorial hidden Markov model (iFHMM) with the infinite hidden Markov model (iHMM) to form the iFHMM-iHMM model. The iFHMM framework uses the Markov Indian buffet process (mIBP) (Van Gael et al., 2008b) in order to represent each object as a sparse subset of a potentially unbounded set of latent features (Griffiths and Ghahramani, 2006; Ghahramani et al., 2007; Van Gael et al., 2008a).4 Specifically, the mIBP defines a distribution over an unbounded set of binary Markov chains, where each chain can be associated with a binary latent feature that evolves over time according to Markov dynamics. Therefore, if we denote by M the total number of feature chains and by T the number of observable components, the mIBP defines a probability distribution over a binary matrix F with T rows, which correspond to observations, and an unbounded number of columns M, which correspond to features. An observation yt contains a subset from the unbounded set of features</context>
+</contexts>
+<marker>Ghahramani, Griffiths, Sollich, 2007</marker>
+<rawString>Zoubin Ghahramani, T. L. Griffiths, and Peter Sollich, 2007. Bayesian Statistics 8, chapter Bayesian nonparametric latent feature models, pages 201–225. Oxford University Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tom Griffiths</author>
+<author>Zoubin Ghahramani</author>
+</authors>
+<title>Infinite Latent Feature Models and the Indian Buffet Process.</title>
+<date>2006</date>
+<booktitle>In Advances in Neural Information Processing Systems 18 (NIPS),</booktitle>
+<pages>475--482</pages>
+<contexts>
+<context position="20352" citStr="Griffiths and Ghahramani, 2006" startWordPosition="3372" endWordPosition="3375">meterized by 0, and X is a feature variable from the set X = (HL, POS, FR). For the sake of clarity, we omit the conditioning components of Z, HL, FR, and POS. 3.2 An Infinite Feature Model To relax some of the restrictions of the first model, we devise an approach that combines the infinite factorial hidden Markov model (iFHMM) with the infinite hidden Markov model (iHMM) to form the iFHMM-iHMM model. The iFHMM framework uses the Markov Indian buffet process (mIBP) (Van Gael et al., 2008b) in order to represent each object as a sparse subset of a potentially unbounded set of latent features (Griffiths and Ghahramani, 2006; Ghahramani et al., 2007; Van Gael et al., 2008a).4 Specifically, the mIBP defines a distribution over an unbounded set of binary Markov chains, where each chain can be associated with a binary latent feature that evolves over time according to Markov dynamics. Therefore, if we denote by M the total number of feature chains and by T the number of observable components, the mIBP defines a probability distribution over a binary matrix F with T rows, which correspond to observations, and an unbounded number of columns M, which correspond to features. An observation yt contains a subset from the </context>
+</contexts>
+<marker>Griffiths, Ghahramani, 2006</marker>
+<rawString>Tom Griffiths and Zoubin Ghahramani. 2006. Infinite Latent Feature Models and the Indian Buffet Process. In Advances in Neural Information Processing Systems 18 (NIPS), pages 475–482.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Aria Haghighi</author>
+<author>Dan Klein</author>
+</authors>
+<title>Unsupervised Coreference Resolution in a Nonparametric Bayesian Model.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 45th Annual Meeting of the Association of Computational Linguistics (ACL),</booktitle>
+<pages>848--855</pages>
+<contexts>
+<context position="14227" citStr="Haghighi and Klein (2007)" startWordPosition="2285" endWordPosition="2288">is represented by a finite vocabulary of feature values, fv. Thus, we can represent the observable properties of an event mention as a vector of L feature type – feature value pairs ((FT1 : fv1i), ... , (FTL : fvLi)), where each feature value index i ranges in the feature value space associated with a feature type. 3.1 A Finite Feature Model We present an extension of the hierarchical Dirichlet process (HDP) model which is able to represent each observable object (i.e., event mention) by a finite number of feature types L. Our HDP extension is also inspired from the Bayesian model proposed by Haghighi and Klein (2007). However, their model is strictly customized for entity coreference resolution, and therefore, extending it to include additional features for each observable object is a challenging task (Ng, 2008; Poon and Domingos, 2008). In the HDP model, a Dirichlet process (DP) (Ferguson, 1973) is associated with each document, and each mixture component (i.e., event) is shared across documents. To describe its extension, we consider Z the set of indicator random variables for indices of events, φz the set of parameters associated with an event z, φ a notation for all model parameters, and X a notation </context>
+</contexts>
+<marker>Haghighi, Klein, 2007</marker>
+<rawString>Aria Haghighi and Dan Klein. 2007. Unsupervised Coreference Resolution in a Nonparametric Bayesian Model. In Proceedings of the 45th Annual Meeting of the Association of Computational Linguistics (ACL), pages 848–855.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Aria Haghighi</author>
+<author>Andrew Ng</author>
+<author>Christopher Manning</author>
+</authors>
+<title>Robust Textual Inference via Graph Matching.</title>
+<date>2005</date>
+<booktitle>In Proceedings of Human Language Technology Conference and Conference on Empirical Methods in Natural Language Processing (HLTEMNLP),</booktitle>
+<pages>387--394</pages>
+<contexts>
+<context position="1311" citStr="Haghighi et al., 2005" startWordPosition="189" endWordPosition="192">ce shows significant improvements of the models when compared against two baselines for this task. 1 Introduction The event coreference task consists of finding clusters of event mentions that refer to the same event. Although it has not been extensively studied in comparison with the related problem of entity coreference resolution, solving event coreference has already proved its usefulness in various applications such as topic detection and tracking (Allan et al., 1998), information extraction (Humphreys et al., 1997), question answering (Narayanan and Harabagiu, 2004), textual entailment (Haghighi et al., 2005), and contradiction detection (de Marneffe et al., 2008). Previous approaches for solving event coreference relied on supervised learning methods that explore various linguistic properties in order to decide if a pair of event mentions is coreferential or not (Humphreys et al., 1997; Bagga and Baldwin, 1999; Ahn, 2006; Chen and Ji, 2009). In spite of being successful for a particular labeled corpus, these pairwise models are dependent on the domain or language that they are trained on. Moreover, since event coreference resolution is a complex task that involves exploring a rich set of linguist</context>
+</contexts>
+<marker>Haghighi, Ng, Manning, 2005</marker>
+<rawString>Aria Haghighi, Andrew Ng, and Christopher Manning. 2005. Robust Textual Inference via Graph Matching. In Proceedings of Human Language Technology Conference and Conference on Empirical Methods in Natural Language Processing (HLTEMNLP), pages 387–394.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Laura Hasler</author>
+<author>Constantin Orasan</author>
+</authors>
+<title>Do coreferential arguments make event mentions coreferential?</title>
+<date>2009</date>
+<booktitle>In Proceedings of the 7th Discourse Anaphora and Anaphor Resolution Colloquium (DAARC</booktitle>
+<marker>Hasler, Orasan, 2009</marker>
+<rawString>Laura Hasler and Constantin Orasan. 2009. Do coreferential arguments make event mentions coreferential? In Proceedings of the 7th Discourse Anaphora and Anaphor Resolution Colloquium (DAARC 2009).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kevin Humphreys</author>
+<author>Robert Gaizauskas</author>
+<author>Saliha Azzam</author>
+</authors>
+<title>Event coreference for information extraction.</title>
+<date>1997</date>
+<booktitle>In Proceedings of the Workshop on Operational Factors in Practical, Robust Anaphora Resolution for Unrestricted Texts, 35th Meeting of ACL,</booktitle>
+<pages>75--81</pages>
+<contexts>
+<context position="1215" citStr="Humphreys et al., 1997" startWordPosition="176" endWordPosition="179">al outcomes. The evaluation performed for solving both within- and cross-document event coreference shows significant improvements of the models when compared against two baselines for this task. 1 Introduction The event coreference task consists of finding clusters of event mentions that refer to the same event. Although it has not been extensively studied in comparison with the related problem of entity coreference resolution, solving event coreference has already proved its usefulness in various applications such as topic detection and tracking (Allan et al., 1998), information extraction (Humphreys et al., 1997), question answering (Narayanan and Harabagiu, 2004), textual entailment (Haghighi et al., 2005), and contradiction detection (de Marneffe et al., 2008). Previous approaches for solving event coreference relied on supervised learning methods that explore various linguistic properties in order to decide if a pair of event mentions is coreferential or not (Humphreys et al., 1997; Bagga and Baldwin, 1999; Ahn, 2006; Chen and Ji, 2009). In spite of being successful for a particular labeled corpus, these pairwise models are dependent on the domain or language that they are trained on. Moreover, sin</context>
+</contexts>
+<marker>Humphreys, Gaizauskas, Azzam, 1997</marker>
+<rawString>Kevin Humphreys, Robert Gaizauskas, and Saliha Azzam. 1997. Event coreference for information extraction. In Proceedings of the Workshop on Operational Factors in Practical, Robust Anaphora Resolution for Unrestricted Texts, 35th Meeting of ACL, pages 75–81.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>John B Lowe</author>
+<author>Collin F Baker</author>
+<author>Charles J Fillmore</author>
+</authors>
+<title>A frame-semantic approach to semantic annotation.</title>
+<date>1997</date>
+<booktitle>In Proceedings of the SIGLEX Workshop on Tagging Text with Lexical Semantics: Why, What, and How?,</booktitle>
+<pages>18--24</pages>
+<contexts>
+<context position="13227" citStr="Lowe et al., 1997" startWordPosition="2105" endWordPosition="2108"> WSA0, WSA1). Feature Combinations (FC) We also explore various combinations of the features presented above. Examples include HW+HWC, HL+FR, FR+ARG1, LHL+RHL, etc. It is worth noting that there exist event mentions for which not all the features can be extracted. For example, the LHE and RHE features are missing for the first and last event mentions in a document, respectively. Also, many semantic roles can be absent for an event mention in a given context. 1 The reason for extracting this feature is given by the fact that, in general, frames are able to capture properties of generic events (Lowe et al., 1997). 1414 3 Nonparametric Bayesian Models As input for our models, we consider a collection of I documents, where each document i has Ji event mentions. For features, we make the distinction between feature types and feature values (e.g., POS is a feature type and has values such as NN and VB). Each event mention is characterized by L feature types, FT, and each feature type is represented by a finite vocabulary of feature values, fv. Thus, we can represent the observable properties of an event mention as a vector of L feature type – feature value pairs ((FT1 : fv1i), ... , (FTL : fvLi)), where e</context>
+</contexts>
+<marker>Lowe, Baker, Fillmore, 1997</marker>
+<rawString>John B. Lowe, Collin F. Baker, and Charles J. Fillmore. 1997. A frame-semantic approach to semantic annotation. In Proceedings of the SIGLEX Workshop on Tagging Text with Lexical Semantics: Why, What, and How?, pages 18–24.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Xiaoqiang Luo</author>
+</authors>
+<title>On coreference resolution performance metrics.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the Human Language Technology Conference and Conference on Empirical Methods in Natural Language Processing (EMNLP-2005),</booktitle>
+<pages>25--32</pages>
+<contexts>
+<context position="29152" citStr="Luo, 2005" startWordPosition="4878" endWordPosition="4879">– 339 Number of cross-document events – 208 Number of within-document events 4946 1302 Number of true mentions 6553 1744 Number of system mentions 45289 21175 Number of distinct feature values 391798 237197 Table 1: Statistics of the ACE and ECB corpora. tions) were able to cover all the true mentions from both datasets. As shown in Table 1, we extracted from ACE and ECB corpora 45289 and 21175 system mentions, respectively. We report results in terms of recall (R), precision (P), and F-score (F) by employing the mention-based B3 metric (Bagga and Baldwin, 1998), the entity-based CEAF metric (Luo, 2005), and the pairwise F1 (PW) metric. All the results are averaged over 5 runs of the generative models. In the evaluation process, we considered only the true mentions of the ACE test dataset, and the event mentions of the test sets derived from a 5- fold cross validation scheme on the ECB dataset. For evaluating the cross-document coreference annotations, we adopted the same approach as described in (Bagga and Baldwin, 1999) by merging all the documents from the same topic into a meta-document and then scoring this document as performed for within-document evaluation. For both corpora, we consi</context>
+</contexts>
+<marker>Luo, 2005</marker>
+<rawString>Xiaoqiang Luo. 2005. On coreference resolution performance metrics. In Proceedings of the Human Language Technology Conference and Conference on Empirical Methods in Natural Language Processing (EMNLP-2005), pages 25–32.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jeff Malpas</author>
+</authors>
+<title>Donald Davidson.</title>
+<date>2009</date>
+<booktitle>In The Stanford Encyclopedia of Philosophy (Fall</booktitle>
+<editor>Edition), Edward N. Zalta (ed.),</editor>
+<note>http://plato.stan ford.edu/archives/fall2009/entries/davidson/.</note>
+<contexts>
+<context position="4257" citStr="Malpas, 2009" startWordPosition="647" endWordPosition="648">re identical if they have the same causes and effects. Later on, a different theory was proposed by Quine (1985) who considered that each event refers to a physical object (which is well defined in space and time), and therefore, two events are identical 1412 Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1412–1422, Uppsala, Sweden, 11-16 July 2010. c�2010 Association for Computational Linguistics if they have the same spatiotemporal location. In (Davidson, 1985), Davidson abandoned his suggestion to embrace the Quinean theory on event identity (Malpas, 2009). Topic 43 Document 3 s4: AMD agreed to [buy]em, Markham, Ontario-based ATI for around $5.4 billion in cash and stock, the companies announced Monday. s5: The [acquisition]em2 would turn AMD into one of the world’s largest providers of graphics chips. 2.1 An Example In accordance with the Quinean theory, we consider that two event mentions are coreferential if they have the same event properties and share the same event participants. For instance, the sentences from Example 1 encode event mentions that refer to several individuated events. These sentences are extracted from a newly annotated c</context>
+</contexts>
+<marker>Malpas, 2009</marker>
+<rawString>Jeff Malpas. 2009. Donald Davidson. In The Stanford Encyclopedia of Philosophy (Fall 2009 Edition), Edward N. Zalta (ed.), http://plato.stan ford.edu/archives/fall2009/entries/davidson/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Srini Narayanan</author>
+<author>Sanda Harabagiu</author>
+</authors>
+<title>Question Answering Based on Semantic Structures.</title>
+<date>2004</date>
+<booktitle>In Proceedings of the 20th International Conference on Computational Linguistics (COLING),</booktitle>
+<pages>693--701</pages>
+<contexts>
+<context position="1267" citStr="Narayanan and Harabagiu, 2004" startWordPosition="182" endWordPosition="185">ving both within- and cross-document event coreference shows significant improvements of the models when compared against two baselines for this task. 1 Introduction The event coreference task consists of finding clusters of event mentions that refer to the same event. Although it has not been extensively studied in comparison with the related problem of entity coreference resolution, solving event coreference has already proved its usefulness in various applications such as topic detection and tracking (Allan et al., 1998), information extraction (Humphreys et al., 1997), question answering (Narayanan and Harabagiu, 2004), textual entailment (Haghighi et al., 2005), and contradiction detection (de Marneffe et al., 2008). Previous approaches for solving event coreference relied on supervised learning methods that explore various linguistic properties in order to decide if a pair of event mentions is coreferential or not (Humphreys et al., 1997; Bagga and Baldwin, 1999; Ahn, 2006; Chen and Ji, 2009). In spite of being successful for a particular labeled corpus, these pairwise models are dependent on the domain or language that they are trained on. Moreover, since event coreference resolution is a complex task th</context>
+</contexts>
+<marker>Narayanan, Harabagiu, 2004</marker>
+<rawString>Srini Narayanan and Sanda Harabagiu. 2004. Question Answering Based on Semantic Structures. In Proceedings of the 20th International Conference on Computational Linguistics (COLING), pages 693– 701.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Radford M Neal</author>
+</authors>
+<title>Slice Sampling. The Annals of Statistics,</title>
+<date>2003</date>
+<pages>31--705</pages>
+<contexts>
+<context position="25688" citStr="Neal, 2003" startWordPosition="4308" endWordPosition="4309">:t, u1:t)P(st+1 | st, ut+1). To sample the emission distribution 0 efficiently, and to ensure that each mention is characterized by a finite set of representative features, we set the base distribution H to be conjugate with the data distribution F in a Dirichletmultinomial model with the multinomial parameters (o1, ... , oK) defined as: � nmk f EBt In this formula, nmk counts how many times the feature fm was sampled for the event k, and Bt stores a finite set of features for yt. The mechanism for building a finite set of representative features for the mention yt is based on slice sampling (Neal, 2003). Letting qm be the number of times the feature fm was sampled in the mIBP, and vt an auxiliary variable for yt such that vt ∼ Uniform(1,max{qm : Ftm = 1}), we define the finite feature set Bt for the observation yt as Bt = {fm : Ftm = 1∧qm ≥ vt}. The finiteness of this feature set is based on the observation that, in the generative process of the mIBP, only a finite set T ok = t=1 1417 of features are sampled for a component. We denote this model as iFHMM-iHMMuniform. Also, it is worth mentioning that, by using this type of sampling, only the most representative features of yt get selected in</context>
+</contexts>
+<marker>Neal, 2003</marker>
+<rawString>Radford M. Neal. 2003. Slice Sampling. The Annals of Statistics, 31:705–741.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Vincent Ng</author>
+</authors>
+<title>Unsupervised Models for Coreference Resolution.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing (EMNLP),</booktitle>
+<pages>640--649</pages>
+<contexts>
+<context position="14425" citStr="Ng, 2008" startWordPosition="2316" endWordPosition="2317">), where each feature value index i ranges in the feature value space associated with a feature type. 3.1 A Finite Feature Model We present an extension of the hierarchical Dirichlet process (HDP) model which is able to represent each observable object (i.e., event mention) by a finite number of feature types L. Our HDP extension is also inspired from the Bayesian model proposed by Haghighi and Klein (2007). However, their model is strictly customized for entity coreference resolution, and therefore, extending it to include additional features for each observable object is a challenging task (Ng, 2008; Poon and Domingos, 2008). In the HDP model, a Dirichlet process (DP) (Ferguson, 1973) is associated with each document, and each mixture component (i.e., event) is shared across documents. To describe its extension, we consider Z the set of indicator random variables for indices of events, φz the set of parameters associated with an event z, φ a notation for all model parameters, and X a notation for all random variables that represent observable features.2 Given a document collection annotated with event mentions, the goal is to find the best assignment of event indices Z*, which maximize t</context>
+</contexts>
+<marker>Ng, 2008</marker>
+<rawString>Vincent Ng. 2008. Unsupervised Models for Coreference Resolution. In Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 640–649.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Martha Palmer</author>
+<author>Daniel Gildea</author>
+<author>Paul Kingsbury</author>
+</authors>
+<title>The Proposition Bank: An Annotated Corpus of Semantic Roles.</title>
+<date>2005</date>
+<journal>Computational Linguistics,</journal>
+<volume>31</volume>
+<issue>1</issue>
+<contexts>
+<context position="10289" citStr="Palmer et al., 2005" startWordPosition="1623" endWordPosition="1626">ain of SYNONYMOUS relations between them in WordNet. The second set considers as grouping criteria the categorization of words from the WordNet lexicographer’s files (WNL). In addition, for each word that is not covered in WordNet, we create a new cluster ID in each set of clusters. Semantic Features (SF) To extract features that characterize participants and properties of event mentions, we use the semantic parser described in (Bejan and Hathaway, 2007). One category of semantic features that we identify for event mentions is the predicate argument structures encoded in PropBank annotations (Palmer et al., 2005). In PropBank, the predicate argument structures are represented by events expressed as verbs in text and by the semantic roles, or predicate arguments, associated with these events. For example, ARG0 annotates a specific type of semantic role which represents the AGENT, DOER, or ACTOR of a specific event. Another argument is ARG1, which plays the role of the PATIENT, THEME, or EXPERIENCER of an event. In particular, the predicate arguments associated to the event mention em8(bought) from Example 1 are ARG0:[it], ARG1:[Compaq Computer Corp.], ARG3:[for $19 billion], and ARG-TMP:[in 2002]. Even</context>
+</contexts>
+<marker>Palmer, Gildea, Kingsbury, 2005</marker>
+<rawString>Martha Palmer, Daniel Gildea, and Paul Kingsbury. 2005. The Proposition Bank: An Annotated Corpus of Semantic Roles. Computational Linguistics, 31(1):71–105.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hoifung Poon</author>
+<author>Pedro Domingos</author>
+</authors>
+<title>Joint Unsupervised Coreference Resolution with Markov Logic.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing (EMNLP),</booktitle>
+<pages>650--659</pages>
+<contexts>
+<context position="14451" citStr="Poon and Domingos, 2008" startWordPosition="2318" endWordPosition="2321">ach feature value index i ranges in the feature value space associated with a feature type. 3.1 A Finite Feature Model We present an extension of the hierarchical Dirichlet process (HDP) model which is able to represent each observable object (i.e., event mention) by a finite number of feature types L. Our HDP extension is also inspired from the Bayesian model proposed by Haghighi and Klein (2007). However, their model is strictly customized for entity coreference resolution, and therefore, extending it to include additional features for each observable object is a challenging task (Ng, 2008; Poon and Domingos, 2008). In the HDP model, a Dirichlet process (DP) (Ferguson, 1973) is associated with each document, and each mixture component (i.e., event) is shared across documents. To describe its extension, we consider Z the set of indicator random variables for indices of events, φz the set of parameters associated with an event z, φ a notation for all model parameters, and X a notation for all random variables that represent observable features.2 Given a document collection annotated with event mentions, the goal is to find the best assignment of event indices Z*, which maximize the posterior probability P</context>
+</contexts>
+<marker>Poon, Domingos, 2008</marker>
+<rawString>Hoifung Poon and Pedro Domingos. 2008. Joint Unsupervised Coreference Resolution with Markov Logic. In Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 650–659.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James Pustejovsky</author>
+<author>Jose Castano</author>
+<author>Bob Ingria</author>
+<author>Roser Sauri</author>
+<author>Rob Gaizauskas</author>
+<author>Andrea Setzer</author>
+<author>Graham Katz</author>
+</authors>
+<title>TimeML: Robust Specification of Event and Temporal Expressions in Text.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the Fifth International Workshop on Computational Semantics (IWCS).</booktitle>
+<contexts>
+<context position="8635" citStr="Pustejovsky et al., 2003" startWordPosition="1354" endWordPosition="1357">LHE,RHE). For instance, the lexical features extracted for the event mention em7(bought) from our example are HW:bought, HL:buy, LHL:it, RHL:Compaq, LHE:acquisition, and RHE:acquire. Class Features (CF) These features aim to group mentions into several types of classes: the partof-speech of the HW feature (POS), the word class of the HW feature (HWC), and the event class of the mention (EC). The HWC feature can take one of the following values: VERB, NOUN, ADJEC1413 TIVE, and OTHER. As values for the EC feature, we consider the seven event classes defined in the TimeML specification language (Pustejovsky et al., 2003a): OCCURRENCE, PERCEPTION, REPORTING, ASPECTUAL, STATE, I ACTION, and I STATE. In order to extract the event classes corresponding to the event mentions from a given dataset, we employed the event extractor described in (Bejan, 2007). This extractor is trained on the TimeBank corpus (Pustejovsky et al., 2003b), which is a TimeML resource encoding temporal elements such as events, time expressions, and temporal relations. WordNet Features (WF) In our efforts to create clusters of event mention attributes as close as possible to the true attribute clusters of the individuated events, we build t</context>
+</contexts>
+<marker>Pustejovsky, Castano, Ingria, Sauri, Gaizauskas, Setzer, Katz, 2003</marker>
+<rawString>James Pustejovsky, Jose Castano, Bob Ingria, Roser Sauri, Rob Gaizauskas, Andrea Setzer, and Graham Katz. 2003a. TimeML: Robust Specification of Event and Temporal Expressions in Text. In Proceedings of the Fifth International Workshop on Computational Semantics (IWCS).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James Pustejovsky</author>
+<author>Patrick Hanks</author>
+<author>Roser Sauri</author>
+<author>Andrew See</author>
+<author>Robert Gaizauskas</author>
+<author>Andrea Setzer</author>
+<author>Dragomir Radev</author>
+<author>Beth Sundheim</author>
+<author>David Day</author>
+<author>Lisa Ferro</author>
+<author>Marcia Lazo</author>
+</authors>
+<title>The TimeBank Corpus. In Corpus Linguistics,</title>
+<date>2003</date>
+<pages>647--656</pages>
+<contexts>
+<context position="8635" citStr="Pustejovsky et al., 2003" startWordPosition="1354" endWordPosition="1357">LHE,RHE). For instance, the lexical features extracted for the event mention em7(bought) from our example are HW:bought, HL:buy, LHL:it, RHL:Compaq, LHE:acquisition, and RHE:acquire. Class Features (CF) These features aim to group mentions into several types of classes: the partof-speech of the HW feature (POS), the word class of the HW feature (HWC), and the event class of the mention (EC). The HWC feature can take one of the following values: VERB, NOUN, ADJEC1413 TIVE, and OTHER. As values for the EC feature, we consider the seven event classes defined in the TimeML specification language (Pustejovsky et al., 2003a): OCCURRENCE, PERCEPTION, REPORTING, ASPECTUAL, STATE, I ACTION, and I STATE. In order to extract the event classes corresponding to the event mentions from a given dataset, we employed the event extractor described in (Bejan, 2007). This extractor is trained on the TimeBank corpus (Pustejovsky et al., 2003b), which is a TimeML resource encoding temporal elements such as events, time expressions, and temporal relations. WordNet Features (WF) In our efforts to create clusters of event mention attributes as close as possible to the true attribute clusters of the individuated events, we build t</context>
+</contexts>
+<marker>Pustejovsky, Hanks, Sauri, See, Gaizauskas, Setzer, Radev, Sundheim, Day, Ferro, Lazo, 2003</marker>
+<rawString>James Pustejovsky, Patrick Hanks, Roser Sauri, Andrew See, Robert Gaizauskas, Andrea Setzer, Dragomir Radev, Beth Sundheim, David Day, Lisa Ferro, and Marcia Lazo. 2003b. The TimeBank Corpus. In Corpus Linguistics, pages 647–656.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W V O Quine</author>
+</authors>
+<title>Events and Reification,</title>
+<date>1985</date>
+<booktitle>Actions and Events: Perspectives on the philosophy of Donald Davidson,</booktitle>
+<pages>162--171</pages>
+<editor>In E. LePore and B. P. McLaughlin, eds.,</editor>
+<publisher>Blackwell. Reprinted</publisher>
+<location>Oxford:</location>
+<contexts>
+<context position="3756" citStr="Quine (1985)" startWordPosition="573" endWordPosition="574">se level. Furthermore, both models are designed to account for a potentially infinite number of categorical outcomes (i.e., events). These models provide additional details and experimental results to our preliminary work on unsupervised event coreference resolution (Bejan et al., 2009). 2 Event Coreference The problem of determining if two events are identical was originally studied in philosophy. One relevant theory on event identity was proposed by Davidson (1969) who argued that two events are identical if they have the same causes and effects. Later on, a different theory was proposed by Quine (1985) who considered that each event refers to a physical object (which is well defined in space and time), and therefore, two events are identical 1412 Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1412–1422, Uppsala, Sweden, 11-16 July 2010. c�2010 Association for Computational Linguistics if they have the same spatiotemporal location. In (Davidson, 1985), Davidson abandoned his suggestion to embrace the Quinean theory on event identity (Malpas, 2009). Topic 43 Document 3 s4: AMD agreed to [buy]em, Markham, Ontario-based ATI for around $5.4 billion</context>
+</contexts>
+<marker>Quine, 1985</marker>
+<rawString>W. V. O. Quine, 1985. Events and Reification, pages 162–171. In E. LePore and B. P. McLaughlin, eds., Actions and Events: Perspectives on the philosophy of Donald Davidson, Oxford: Blackwell. Reprinted</rawString>
+</citation>
+<citation valid="false">
+<date>1996</date>
+<pages>107--116</pages>
+<editor>in R. Casati and A. C. Varzi, eds., Events,</editor>
+<location>Aldershot: Dartmouth.</location>
+<marker>1996</marker>
+<rawString>in R. Casati and A. C. Varzi, eds., Events, 1996, pages 107–116, Aldershot: Dartmouth.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Lawrence R Rabiner</author>
+</authors>
+<title>A Tutorial on Hidden Markov Models and Selected Applications in Speech Recognition.</title>
+<date>1989</date>
+<booktitle>In Proceedings of the IEEE,</booktitle>
+<pages>257--286</pages>
+<contexts>
+<context position="21766" citStr="Rabiner, 1989" startWordPosition="3621" endWordPosition="3622">mposes the observations and represents them as feature factors, which can then be associated with hidden variables in an iFHMM model as depicted in Figure 2(c). 4 In this subsection, a feature will be represented by a (feature type:feature value) pair. 1416 Although the iFHMM allows a more flexible representation of the latent structure by letting the number of parallel Markov chains M be learned from data, it cannot be used as a framework where the number of clustering components K is infinite. On the other hand, the iHMM represents a nonparametric extension of the hidden Markov model (HMM) (Rabiner, 1989) that allows performing inference on an infinite number of states K. To further increase the representational power for modeling discrete time series data, we propose a nonparametric extension that combines the best of the two models, and lets the parameters M and K be learned from data. As shown in Figure 2(c), each step in the new iHMM-iFHMM generative process is performed in two phases: (i) the latent feature variables from the iFHMM framework are sampled using the mIBP mechanism; and (ii) the features sampled so far, which become observable during this second phase, are used in an adapted </context>
+</contexts>
+<marker>Rabiner, 1989</marker>
+<rawString>Lawrence R. Rabiner. 1989. A Tutorial on Hidden Markov Models and Selected Applications in Speech Recognition. In Proceedings of the IEEE, pages 257–286.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yee Whye Teh</author>
+<author>Michael Jordan</author>
+<author>Matthew Beal</author>
+<author>David Blei</author>
+</authors>
+<title>Hierarchical Dirichlet Processes.</title>
+<date>2006</date>
+<journal>Journal of the American Statistical Association,</journal>
+<volume>101</volume>
+<issue>476</issue>
+<contexts>
+<context position="2582" citStr="Teh et al., 2006" startWordPosition="387" endWordPosition="390">ference information for a new language or domain of interest requires a substantial amount of manual effort. Also, since these models are dependent on local pairwise decisions, they are unable to capture a global event distribution at topic or document collection level. To address these limitations and to provide a more flexible representation for modeling observable data with rich properties, we present two novel, fully generative, nonparametric Bayesian models for unsupervised within- and crossdocument event coreference resolution. The first model extends the hierarchical Dirichlet process (Teh et al., 2006) to take into account additional properties associated with observable objects (i.e., event mentions). The second model overcomes some of the limitations of the first model. It uses the infinite factorial hidden Markov model (Van Gael et al., 2008b) coupled to the infinite hidden Markov model (Beal et al., 2002) in order to (1) consider a potentially infinite number of features associated with observable objects, (2) perform an automatic selection of the most salient features, and (3) capture the structural dependencies of observable objects at the discourse level. Furthermore, both models are</context>
+<context position="15833" citStr="Teh et al., 2006" startWordPosition="2557" endWordPosition="2560">depicted graphically in Figure 2(a). Similar to the HDP model, the distribution over events associated with each document, β, is generated by a Dirichlet process with a 2 In this subsection, the feature term is used in context of a feature type. concentration parameter α &gt; 0. Since this setting enables a clustering of event mentions at the document level, it is desirable that events be shared across documents and the number of events K be inferred from data. To ensure this flexibility, a global nonparametric DP prior with a hyperparameter γ and a global base measure H can be considered for β (Teh et al., 2006). The global distribution drawn from this DP prior, denoted as β0 in Figure 2(a), encodes the event mixing weights. Thus, same global events are used for each document, but each event has a document specific distribution βi that is drawn from a DP prior centered on the global weights β0. To infer the true posterior probability of P(Z|X), we follow (Teh et al., 2006) and use the Gibbs sampling algorithm (Geman and Geman, 1984) based on the direct assignment sampling scheme. In this sampling scheme, the parameters β and φ are integrated out analytically. Moreover, to reduce the complexity of com</context>
+<context position="17212" citStr="Teh et al., 2006" startWordPosition="2800" endWordPosition="2803">bution of feature variables X conditioned on Z into product of marginals. Thus, by Bayes rule, the formula for sampling an event index for mention j from document i, Zi,j, is:3 P(Zi,j |Z−i,j, X) a P(Zi,j |Z−i,j) 11 P(Xi,j |Z, X−i,j) XEX where Xi,j represents the feature value of a feature type corresponding to the event mention j from the document i. In the process of generating an event mention, an event index z is first sampled by using a mechanism that facilitates sampling from a prior for infinite mixture models called the Chinese restaurant franchise (CRF) representation, as reported in (Teh et al., 2006): P(Zi,j = z |Z−i,j ,β0) a{ αβo , if z = znew nz + αβz0, otherwise represents a notation for Z 3Z−i°&apos; −{Zi°&apos;}. Here, nz is the number of event mentions with event index z, znew is a new event index not used already in Z−i,j, βz0 are the global mixing proportions associated with the K events, and βu0 is the weight for the unknown mixture component. Next, to generate a feature value x (with the feature type X) of the event mention, the event z is 1415 γ H β0 ∞ ∞ Zi Xi β L J, I α (a) φ ∞ γ α (b) (c) H θ Phase 2 φ ∞ β0 ∞ Phase 1 S0 S1 S2 ST FM FM FM FM 0 1 2 T β ∞ Zi F2 F2 F2 F2 0 1 2 T HL; POS, F</context>
+</contexts>
+<marker>Teh, Jordan, Beal, Blei, 2006</marker>
+<rawString>Yee Whye Teh, Michael Jordan, Matthew Beal, and David Blei. 2006. Hierarchical Dirichlet Processes. Journal of the American Statistical Association, 101(476):1566–1581.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jurgen Van Gael</author>
+<author>Y Saatci</author>
+<author>Yee Whye Teh</author>
+<author>Zoubin Ghahramani</author>
+</authors>
+<title>Beam Sampling for the Infinite Hidden Markov Model.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 25th Annual International Conference on Machine Learning (ICML),</booktitle>
+<pages>1088--1095</pages>
+<marker>Van Gael, Saatci, Teh, Ghahramani, 2008</marker>
+<rawString>Jurgen Van Gael, Y. Saatci, Yee Whye Teh, and Zoubin Ghahramani. 2008a. Beam Sampling for the Infinite Hidden Markov Model. In Proceedings of the 25th Annual International Conference on Machine Learning (ICML), pages 1088–1095.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jurgen Van Gael</author>
+<author>Yee Whye Teh</author>
+<author>Zoubin Ghahramani</author>
+</authors>
+<title>The Infinite Factorial Hidden Markov Model.</title>
+<date>2008</date>
+<booktitle>In Advances in Neural Information Processing Systems 21 (NIPS).</booktitle>
+<marker>Van Gael, Teh, Ghahramani, 2008</marker>
+<rawString>Jurgen Van Gael, Yee Whye Teh, and Zoubin Ghahramani. 2008b. The Infinite Factorial Hidden Markov Model. In Advances in Neural Information Processing Systems 21 (NIPS).</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

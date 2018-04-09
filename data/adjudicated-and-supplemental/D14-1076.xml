@@ -1,0 +1,1916 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000003">
+<title confidence="0.886165">
+Improving Multi-documents Summarization by Sentence Compression
+based on Expanded Constituent Parse Trees
+</title>
+<author confidence="0.971145">
+Chen Li1, Yang Liu1, Fei Liu2, Lin Zhao3, Fuliang Weng3
+</author>
+<affiliation confidence="0.8699132">
+1 Computer Science Department, The University of Texas at Dallas
+Richardson, TX 75080, USA
+2 School of Computer Science, Carnegie Mellon University
+Pittsburgh, PA 15213, USA
+3 Research and Technology Center, Robert Bosch LLC
+</affiliation>
+<address confidence="0.722016">
+Palo Alto, California 94304, USA
+</address>
+<email confidence="0.931425333333333">
+{chenli,yangl@hlt.utdallas.edu}
+{feiliu@cs.cmu.edu}
+{lin.zhao,fuliang.weng@us.bosch.com}
+</email>
+<sectionHeader confidence="0.983043" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999865523809524">
+In this paper, we focus on the problem
+of using sentence compression techniques
+to improve multi-document summariza-
+tion. We propose an innovative sentence
+compression method by considering every
+node in the constituent parse tree and de-
+ciding its status – remove or retain. In-
+teger liner programming with discrimina-
+tive training is used to solve the problem.
+Under this model, we incorporate various
+constraints to improve the linguistic qual-
+ity of the compressed sentences. Then we
+utilize a pipeline summarization frame-
+work where sentences are first compressed
+by our proposed compression model to ob-
+tain top-n candidates and then a sentence
+selection module is used to generate the
+final summary. Compared with state-of-
+the-art algorithms, our model has simi-
+lar ROUGE-2 scores but better linguistic
+quality on TAC data.
+</bodyText>
+<sectionHeader confidence="0.992505" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999978531914893">
+Automatic summarization can be broadly divided
+into two categories: extractive and abstractive
+summarization. Extractive summarization focuses
+on selecting salient sentences from the document
+collection and concatenating them to form a sum-
+mary; while abstractive summarization is gener-
+ally considered more difficult, involving sophisti-
+cated techniques for meaning representation, con-
+tent planning, surface realization, etc.
+There has been a surge of interest in recent years
+on generating compressed document summaries as
+a viable step towards abstractive summarization.
+These compressive summaries often contain more
+information than sentence-based extractive sum-
+maries since they can remove insignificant sen-
+tence constituents and make space for more salient
+information that is otherwise dropped due to the
+summary length constraint. Two general strate-
+gies have been used for compressive summariza-
+tion. One is a pipeline approach, where sentence-
+based extractive summarization is followed or pro-
+ceeded by sentence compression (Lin, 2003; Zajic
+et al., 2007; Vanderwende et al., 2007; Wang et al.,
+2013). Another line of work uses joint compres-
+sion and summarization. Such methods have been
+shown to achieve promising performance (Daum´e,
+2006; Chali and Hasan, 2012; Almeida and Mar-
+tins, 2013; Qian and Liu, 2013), but they are typi-
+cally computationally expensive.
+In this study, we propose an innovative sen-
+tence compression model based on expanded con-
+stituent parse trees. Our model uses integer lin-
+ear programming (ILP) to search the entire space
+of compression, and is discriminatively trained.
+It is built based on the discriminative sentence
+compression model from (McDonald, 2006) and
+(Clarke and Lapata, 2008), but our method uses
+an expanded constituent parse tree rather than only
+the leaf nodes in previous work. Therefore we
+can extract rich features for every node in the con-
+stituent parser tree. This is an advantage of tree-
+based compression technique (Knight and Marcu,
+2000; Galley and McKeown, 2007; Wang et al.,
+2013). Similar to (Li et al., 2013a), we use a
+pipeline summarization framework where multi-
+ple compression candidates are generated for each
+pre-selected important sentence, and then an ILP-
+</bodyText>
+<page confidence="0.435523">
+691
+</page>
+<note confidence="0.979587">
+Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 691–701,
+October 25-29, 2014, Doha, Qatar. c�2014 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.9997738">
+based summarization model is used to select the
+final compressed sentences. We evaluate our pro-
+posed method on the TAC 2008 and 2011 data
+sets using the standard ROUGE metric (Lin, 2004)
+and human evaluation of the linguistic quality.
+Our results show that using our proposed sentence
+compression model in the summarization system
+can yield significant performance gain in linguis-
+tic quality, without losing much performance on
+the ROUGE metric.
+</bodyText>
+<sectionHeader confidence="0.999298" genericHeader="introduction">
+2 Related Work
+</sectionHeader>
+<bodyText confidence="0.999828844444444">
+Summarization research has seen great develop-
+ment over the last fifty years (Nenkova and McKe-
+own, 2011). Compared to the abstractive counter-
+part, extractive summarization has received con-
+siderable attention due to its clear problem for-
+mulation: to extract a set of salient and non-
+redundant sentences from the given document
+set. Both unsupervised and supervised approaches
+have been explored for sentence selection. Su-
+pervised approaches include the Bayesian classi-
+fier (Kupiec et al., 1995), maximum entropy (Os-
+borne, 2002), skip-chain CRF (Galley, 2006), dis-
+criminative reranking (Aker et al., 2010), among
+others. The extractive summary sentence selec-
+tion problem can also be formulated in an opti-
+mization framework. Previous methods include
+using integer linear programming (ILP) and sub-
+modular functions to solve the optimization prob-
+lem (Gillick et al., 2009; Li et al., 2013b; Lin and
+Bilmes, 2010).
+Compressive summarization receives increas-
+ing attention in recent years, since it offers a vi-
+able step towards abstractive summarization. The
+compressed summaries can be generated through a
+joint model of the sentence selection and compres-
+sion processes, or through a pipeline approach that
+integrates a sentence compression model with a
+summary sentence pre-selection or post-selection
+step.
+Many studies have explored the joint sentence
+compression and selection setting. Martins and
+Smith (2009) jointly performed sentence extrac-
+tion and compression by solving an ILP prob-
+lem. Berg-Kirkpatrick et al. (2011) proposed an
+approach to score the candidate summaries ac-
+cording to a combined linear model of extrac-
+tive sentence selection and compression. They
+trained the model using a margin-based objec-
+tive whose loss captures the final summary qual-
+ity. Woodsend and Lapata (2012) presented an-
+other method where the summary’s informative-
+ness, succinctness, and grammaticality are learned
+separately from data but optimized jointly using an
+ILP setup. Yoshikawa et al. (2012) incorporated
+semantic role information in the ILP model.
+Our work is closely related with the pipeline
+approach, where sentence-based extractive sum-
+marization is followed or proceeded by sentence
+compression. There have been many studies on
+sentence compression, independent of the summa-
+rization task. McDonald (2006) firstly introduced
+a discriminative sentence compression model to
+directly optimize the quality of the compressed
+sentences produced. Clarke and Lapata (2008)
+improved the above discriminative model by us-
+ing ILP in decoding, making it convenient to
+add constraints to preserve grammatical structure.
+Nomoto (2007) treated the compression task as
+a sequence labeling problem and used CRF for
+it. Thadani and McKeown (2013) presented an
+approach for discriminative sentence compression
+that jointly produces sequential and syntactic rep-
+resentations for output text. Filippova and Altun
+(2013) presented a method to automatically build
+a sentence compression corpus with hundreds of
+thousands of instances on which deletion-based
+compression algorithms can be trained.
+In addition to the work on sentence compres-
+sion as a stand-alone task, prior studies have also
+investigated compression for the summarization
+task. Knight and Marcu (2000) utilized the noisy
+channel and decision tree method to perform sen-
+tence compression in the summarization task. Lin
+(2003) showed that pure syntactic-based compres-
+sion may not significantly improve the summariza-
+tion performance. Zajic et al. (2007) compared
+two sentence compression approaches for multi-
+document summarization, including a ‘parse-and-
+trim’ and a noisy-channel approach. Galanis and
+Androutsopoulos (2010) used the maximum en-
+tropy model to generate the candidate compres-
+sions by removing branches from the source sen-
+tences. Woodsend and Lapata (2010) presented a
+joint content selection and compression model for
+single-document summarization. They operated
+over a phrase-based representation of the source
+document which they obtained by merging infor-
+mation from PCFG parse trees and dependency
+graphs. Liu and Liu (2013) adopted the CRF-
+based sentence compression approach for summa-
+</bodyText>
+<page confidence="0.856341">
+692
+</page>
+<bodyText confidence="0.999858">
+rizing spoken documents. Unlike the word-based
+operation, some of these models e.g (Knight and
+Marcu, 2000; Siddharthan et al., 2004; Turner
+and Charniak, 2005; Galanis and Androutsopou-
+los, 2010; Wang et al., 2013), are tree-based ap-
+proaches that operate on the parse trees and thus
+the compression decision can be made for a con-
+stituent, instead of a single word.
+</bodyText>
+<sectionHeader confidence="0.973769" genericHeader="method">
+3 Sentence Compression Method
+</sectionHeader>
+<bodyText confidence="0.999965090909091">
+Sentence compression is a task of producing a
+summary for a single sentence. The compressed
+sentence should be shorter, contain important con-
+tent from the original sentence, and be grammat-
+ical. In some sense, sentence compression can
+be described as a ‘scaled down version of the
+text summarization problem’ (Knight and Marcu,
+2002). Here similar to much previous work on
+sentence compression, we just focus on how to re-
+move/select words in the original sentence without
+using operation like rewriting sentence.
+</bodyText>
+<sectionHeader confidence="0.6849185" genericHeader="method">
+3.1 Discriminative Compression Model by
+ILP
+</sectionHeader>
+<bodyText confidence="0.999960625">
+McDonald (2006) presented a discriminative com-
+pression model, and Clarke and Lapata (2008) im-
+proved it by using ILP for decoding. Since our
+proposed method is based upon this model, in
+the following we briefly describe it first. Details
+can be found in (Clarke and Lapata, 2008). In
+this model, the following score function is used
+to evaluate each compression candidate:
+</bodyText>
+<equation confidence="0.991917333333333">
+|y|
+s(x, y) = X s(x, L(yj−1), L(yj)) (1)
+j=2
+</equation>
+<bodyText confidence="0.999984785714286">
+where x = x1x2, ..., xn represents an original sen-
+tence and y = y1y2,..., ym denotes a compressed
+sentence. Because the sentence compression prob-
+lem is defined as a word deletion task, yj must oc-
+cur in x. Function L(yi) ∈ [1...n] maps word yi in
+the compression to the word index in the original
+sentence x. Note that L(yi) &lt; L(yi+1) is required,
+that is, each word in x can only occur at most
+once in compression y. In this model, a first or-
+der Markov assumption is used for the score func-
+tion. Decoding this model is to find the combina-
+tion of bigrams that maximizes the score function
+in Eq (1). Clarke and Lapata (2008) introduced the
+following variables and used ILP to solve it:
+</bodyText>
+<equation confidence="0.992597933333334">
+(
+1 if xi is in the compression
+Si =
+0 otherwise
+∀i ∈ [1..n]
+(
+1 if xi starts the compression
+αi =
+0 otherwise
+∀i ∈ [1..n]
+(
+Qi 1 if xi ends the compression
+=
+0 otherwise
+∀i ∈ [1..n]
+</equation>
+<bodyText confidence="0.892837">
+Using these variables, the objective function can
+be defined as:
+</bodyText>
+<equation confidence="0.99660675">
+max z = Xn αi · s(x, 0, i)
+i=1
+n−1X
++
+i=1
+n
++X Qi · s(x, i, n + 1) (2)
+i=1
+</equation>
+<bodyText confidence="0.9735735">
+The following four basic constraints are used to
+make the compressed result reasonable:
+</bodyText>
+<equation confidence="0.99983575">
+Xn αi = 1 (3)
+i=1
+Sj − αj − X j γij = 0 ∀j ∈ [1..n] (4)
+i=1
+Si − Xn γij − Qi = 0 ∀i ∈ [1..n] (5)
+j=i+1
+Xn Qi = 1 (6)
+i=1
+</equation>
+<bodyText confidence="0.8969342">
+Formula (3) and (6) denote that exactly one
+word can begin or end a sentence. Formula (4)
+means if a word is in the compressed sentence, it
+must either start the compression or follow another
+word; formula (5) represents if a word is in the
+</bodyText>
+<equation confidence="0.936312375">
+(
+1 if xi, xj are in the compression
+0 otherwise
+γij =
+∀i ∈ [1..n − 1]∀j ∈ [i + 1..n]
+Xn γij · s(x, i, j)
+j=i+1
+693
+</equation>
+<bodyText confidence="0.996941">
+compressed sentence, it must either end the sen-
+tence or be followed by another word.
+Furthermore, discriminative models are used for
+the score function:
+</bodyText>
+<equation confidence="0.984834">
+|y|
+s(x, y) = X w · f(x, L(yj−1), L(yj)) (7)
+j=2
+</equation>
+<bodyText confidence="0.999718416666667">
+High dimensional features are used and their cor-
+responding weights are trained discriminatively.
+Above is the basic supervised ILP formula-
+tion for sentence compression. Linguistically and
+semantically motivated constraints can be added
+in the ILP model to ensure the correct grammar
+structure in the compressed sentence. For exam-
+ple, Clarke and Lapata (2008) forced the introduc-
+ing term of prepositional phrases and subordinate
+clauses to be included in the compression if any
+word from within that syntactic constituent is also
+included, and vice versa.
+</bodyText>
+<subsectionHeader confidence="0.9963555">
+3.2 Compression Model based on Expanded
+Constituent Parse Tree
+</subsectionHeader>
+<bodyText confidence="0.999996866666667">
+In the above ILP model, variables are defined for
+each word in the sentence, and the task is to pre-
+dict each word’s status. In this paper, we propose
+to adopt the above ILP framework, but operate di-
+rectly on the nodes in the constituent parse tree,
+rather than just the words (leaf nodes in the tree).
+This way we can remove or retain a chunk of the
+sentence rather than isolated words, which we ex-
+pect can improve the readability and grammar cor-
+rectness of the compressed sentences.
+The top part of Fig1 is a standard constituent
+parse tree. For some levels of the tree, the nodes
+at that same level can not represent a sentence. We
+extend the parse tree by duplicating non-POS con-
+stituents so that leaf nodes (words and their corre-
+sponding POS tags) are aligned at the bottom level
+as shown in bottom of as Fig1. In the example tree,
+the solid lines represent relationship of nodes from
+the original parse tree, the long dot lines denote the
+extension of the duplication nodes from the up-
+per level to the lower level, and the nodes at the
+same level are connected (arrowed lines) to repre-
+sent that is a sequence. Based on this expanded
+constituent parse tree, we can consider every level
+as a ‘sentence’ and the tokens are POS tags and
+parse tree labels. We apply the above compression
+model in Section 3.1 on every level to decide every
+node’s status in the final compressed sentence. In
+order to make the compressed parsed tree reason-
+able, we model the relationship of nodes between
+</bodyText>
+<figure confidence="0.774011">
+S
+</figure>
+<figureCaption confidence="0.91938">
+Figure 1: A regular constituent parse tree and its
+Expanded constituent tree.
+</figureCaption>
+<bodyText confidence="0.999003833333333">
+adjacent levels as following: if the parent node is
+labeled as removed, all of its children will be re-
+moved; one node will retain if at least one of its
+children is kept.
+Therefore, the objective function in the new ILP
+formulation is:
+</bodyText>
+<equation confidence="0.9974302">
+αli · s(x, 0, li)
+nl−1 X
++
+i=1
+βli · s(x, li, nl + 1) ) (8)
+</equation>
+<bodyText confidence="0.999812">
+where height is the depth for a parse tree (starting
+from level 1 for the tree), and nl means the length
+of level l (for example, n5 = 6 in the example
+in Fig1). Then every level will have a set of pa-
+rameters δli, αli, βli, and γlij, and the corresponding
+constraints as shown in Formula (3) to (6). The re-
+lationship between nodes from adjacent levels can
+be expressed as:
+</bodyText>
+<equation confidence="0.999286666666667">
+δli ≥ δ(l+1) (9)
+j
+δZ δil+1) (10)
+</equation>
+<bodyText confidence="0.994974">
+in which node j at level (l +1) is the child of node
+</bodyText>
+<figure confidence="0.993072474576271">
+VP
+NP
+NP
+PRP/
+I
+VBP/
+am
+NP
+PP
+S
+DT/
+the
+NNP/
+USA
+NP VP
+DT/
+a
+NN/
+worker
+IN/
+from
+NP
+VBP NP
+VBP
+PRP
+PRP
+NP PP
+PRP/
+I
+VBP/
+am
+DT/
+a
+NN/
+worker
+IN/
+from
+DT/
+the
+NNP/
+USA
+VBP
+IN
+DT NN
+PRP
+NP
+max z = height Xnl
+X (
+l=1 i=1
+l
+γij · s(x, li, lj)
+Xnl
+j=i+1
+Xnl
++
+i=1
+694
+i at level l. In addition, 1 &lt; l &lt; height − 1,
+1 &lt; i &lt; nl and 1 &lt; j &lt; nl+1.
+</figure>
+<subsectionHeader confidence="0.98386">
+3.3 Linguistically Motivated Constraints
+</subsectionHeader>
+<bodyText confidence="0.999898583333333">
+In our proposed model, we can jointly decide the
+status of every node in the constituent parse tree
+at the same time. One advantage is that we can
+add constraints based on internal nodes or rela-
+tionship in the parse tree, rather than only using
+the relationship based on words. In addition to
+the constraints proposed in (Clarke and Lapata,
+2008), we introduce more linguistically motivated
+constraints to keep the compressed sentence more
+grammatically correct. The following describes
+the constraints we used based on the constituent
+parse tree.
+</bodyText>
+<listItem confidence="0.898639692307692">
+• If a node’s label is ‘SBAR’, its parent’s label
+is ‘NP’ and its first child’s label is ‘WHNP’ or
+‘WHPP’ or ‘IN’, then if we can find a noun
+in the left siblings of ‘SBAR’, this subordi-
+nate clause could be an attributive clause or
+appositive clause. Therefore the found noun
+node should be included in the compression
+if the ‘SBAR’ is also included, because the
+node ‘SBAR’ decorates the noun. For exam-
+ple, the top part of Fig 2 is part of expanded
+constituent parse tree of sentence ‘Those who
+knew David were all dead.’ The nodes in el-
+lipse should share the same status.
+• If a node’s label is ‘SBAR’, its parent’s label
+is ‘VP’ and its first child’s label is ‘WHNP’,
+then if we can find a verb in the left siblings
+of ‘SBAR’, this subordinate clause could be
+an objective clause. Therefore, the found
+verb node should be included in the compres-
+sion if the ‘SBAR’ node is also included, be-
+cause the node ‘SBAR’ is the object of that
+verb. An example is shown in the bottom part
+of Fig 2. The nodes in ellipse should share the
+same status.
+• If a node’s label is ‘SBAR’, its parent’s
+label is ‘VP’ and its first child’s label is
+</listItem>
+<bodyText confidence="0.7269965">
+‘WHADVP’, then if the first leaf for this node
+is a wh-word (e.g., ‘where, when, why’) or
+‘how’, this clause may be an objective clause
+(when the word is ‘why, how, where’) or at-
+tributive clause (when the word is ‘where’) or
+adverbial clause (when the word is ‘when’).
+Therefore, similar to above, if a verb or noun
+is found in the left siblings of ‘SBAR’, the
+</bodyText>
+<figure confidence="0.459561">
+NP
+</figure>
+<figureCaption confidence="0.9448715">
+Figure 2: Expanded constituent parse tree for ex-
+amples.
+</figureCaption>
+<bodyText confidence="0.963861666666667">
+found verb or noun node should be included
+in the compression if the ‘SBAR’ node is also
+included.
+</bodyText>
+<listItem confidence="0.9807806">
+• If a node’s label is ‘SBAR’ and its parent’s la-
+bel is ‘ADJP’, then if we can find a ‘JJ’, ‘JJR’,
+or ‘JJS’ in the left siblings of ‘SBAR’, the
+‘SBAR’ node should be included in the com-
+pression if the found ‘JJ’, ‘JJR’ or ’JJS’ node
+is also included because the node ‘SBAR’ is
+decorated by the adjective.
+• The node with a label of ‘PRN’ can be re-
+moved without other constraints.
+We also include some other constraints based on
+the Stanford dependency parse tree. Table 1 lists
+the dependency relations we considered.
+• For type I relations, the parent and child node
+with those relationships should have the same
+value in the compressed result (both are kept
+or removed).
+• For type II relations, if the child node in
+those relations is retained in the compressed
+sentence, the parent node should be also re-
+tained.
+</listItem>
+<figure confidence="0.943422775">
+S
+WHNP
+WHNP
+DT
+DT
+VP
+NP
+SBAR
+DT/
+Those
+WP/
+who
+VBD/
+knew
+NNP/
+David
+S
+PRP VBP
+WHNP S
+NP VP
+PRP VBP
+WP
+PRP/
+I
+VBD/
+said
+VBP/
+believe
+WP/
+what
+PRP/
+he
+VBD
+WP
+DT
+NP
+PRP VBP
+NP VP
+SBAR
+695
+</figure>
+<table confidence="0.996736833333333">
+Dependency Relation Example
+I prt: phrase verb particle They shut down the station. prt(shut,down)
+prep: prepositional modifier He lives in a small village. prep(lives,in)
+pobj: object of a preposition I sat on the chair. pobj(on,chair)
+nsubj: nominal subject The boy is cute. nsubj(cute,boy)
+cop: copula Bill is big. cop(big,is)
+II partmod: participial modifier Truffles picked during the spring are tasty. partmod(truffles,picked)
+nn: noun compound modifier Oil price futures. nn(futures,oil)
+acomp: adjectival complement She looks very beautiful. acomp(looks,beautiful)
+III pcomp: prepositional complement He felt sad after learning that tragedy. pcomp(after,learning)
+ccomp: clausal complement I am certain that he did it. ccomp(certain,did)
+tmod: temporal modifier Last night I swam in the pool. tmod(swam,night)
+</table>
+<tableCaption confidence="0.9609565">
+Table 1: Some dependency relations used for extra constraints. All the examples are from (Marneffe and
+Manning, 2002)
+</tableCaption>
+<listItem confidence="0.683720666666667">
+• For type III relations, if the parent node in
+these relations is retained, the child node
+should be kept as well.
+</listItem>
+<subsectionHeader confidence="0.659993">
+3.4 Features
+</subsectionHeader>
+<bodyText confidence="0.999976875">
+So far we have defined the decoding process
+and related constraints used in decoding. These
+all rely on the score function s(x, y) = w ·
+f(x, L(yj−1), L(yj)) for every level in the con-
+stituent parse tree. We included all the features in-
+troduced in (Clarke and Lapata, 2008) (those fea-
+tures are designed for leaves). Table 2 lists the
+additional features we used in our system.
+</bodyText>
+<listItem confidence="0.984823842105263">
+General Features for Every Node
+1. individual node label and concatenation of a pair of
+nodes
+2. distance of two nodes at the same level
+3. is the node at beginning or end at that level?
+4. do the two nodes have the same parent?
+5. if two nodes do not have the same parent, then is the left
+node the rightmost child of its parent? is the right node the
+leftmost child of its parent?
+6. combination of parent label if the node pair are not
+under the same parent
+7. number of node’s children: 1/0/&gt;1
+8. depth of nodes in the parse tree
+Extra Features for Leaf nodes
+1. word itself and concatenation of two words
+2. POS and concatenation of two words’ POS
+3. whether the word is a stopword
+4. node’s named entity tag
+5. dependency relationship between two leaves
+</listItem>
+<tableCaption confidence="0.9770595">
+Table 2: Features used in our system besides those
+used in (Clarke and Lapata, 2008).
+</tableCaption>
+<subsectionHeader confidence="0.95515">
+3.5 Learning
+</subsectionHeader>
+<bodyText confidence="0.9999351">
+To learn the feature weights during training, we
+perform ILP decoding on every sentence in the
+training set, to find the best hypothesis for each
+node in the expanded constituent parse tree. If
+the hypothesis is incorrect, we update the feature
+weights using the structured perceptron learning
+strategy (Collins, 2002). The reference label for
+every node in the expanded constituent parse tree
+is obtained automatically from the bottom to the
+top of the tree. Since every leaf node (word) is
+human annotated (removed or retain), we annotate
+the internal nodes as removed if all of its children
+are removed. Otherwise, the node is annotated as
+retained.
+During perceptron training, a fixed learning rate
+is used and parameters are averaged to prevent
+overfitting. In our experiment, we observe sta-
+ble convergence using the held-out development
+corpus, with best performance usually obtained
+around 10-20 epochs.
+</bodyText>
+<sectionHeader confidence="0.934788" genericHeader="method">
+4 Summarization System
+</sectionHeader>
+<bodyText confidence="0.999654047619048">
+Similar to (Li et al., 2013a), our summarization
+system is , which consists of three key compo-
+nents: an initial sentence pre-selection module
+to select some important sentence candidates; the
+above compression model to generate n-best com-
+pressions for each sentence; and then an ILP sum-
+marization method to select the best summary sen-
+tences from the multiple compressed sentences.
+The sentence pre-selection model is a simple su-
+pervised support vector regression (SVR) model
+that predicts a salience score for each sentence and
+selects the top ranked sentences for further pro-
+cessing (compression and summarization). The
+target value for each sentence during training is
+the ROUGE-2 score between the sentence and the
+human written abstracts. We use three common
+features: (1) sentence position in the document;
+(2) sentence length; and (3) interpolated n-gram
+document frequency as introduced in (Ng et al.,
+2012).
+The final sentence selection process follows the
+</bodyText>
+<page confidence="0.884322">
+696
+</page>
+<bodyText confidence="0.999539285714286">
+ILP method introduced in (Gillick et al., 2009).
+Word bi-grams are used as concepts, and their doc-
+ument frequency is used as weights. Since we use
+multiple compressions for one sentence, an addi-
+tional constraint is used: for each sentence, only
+one of its n-best compressions may be included in
+the summary.
+For the compression module, using the ILP
+method described above only finds the best com-
+pression result for a given sentence. To generate
+n-best compression candidates, we use an iterative
+approach – we add one more constraints to prevent
+it from generating the same answer every time af-
+ter getting one solution.
+</bodyText>
+<sectionHeader confidence="0.990544" genericHeader="evaluation">
+5 Experimental Results
+</sectionHeader>
+<subsectionHeader confidence="0.930844">
+5.1 Experimental Setup
+</subsectionHeader>
+<bodyText confidence="0.999087481481482">
+Summarization Data For summarization experi-
+ments, we use the standard TAC data sets1, which
+have been used in the NIST competitions. In par-
+ticular, we used the TAC 2010 data set as train-
+ing data for the SVR sentence pre-selection model,
+TAC 2009 data set as development set for parame-
+ter tuning, and the TAC 2008 and 2011 data as the
+test set for reporting the final summarization re-
+sults. The training data for the sentence compres-
+sion module in the summarization system is sum-
+mary guided compression corpus annotated by (Li
+et al., 2013a) using TAC2010 data. In the com-
+pression module, for each word we also used its
+document level feature.2
+Compression Data We also evaluate our com-
+pression model using the data set from (Clarke
+and Lapata, 2008). It includes 82 newswire arti-
+cles with manually produced compression for each
+sentence. We use the same partitions as (Martins
+and Smith, 2009), i.e., 1,188 sentences for training
+and 441 for testing.
+Data Processing We use Stanford CoreNLP
+toolkit3 to tokenize the sentences, extract name en-
+tity tags, and generate the dependency parse tree.
+Berkeley Parser (Petrov et al., 2006) is adopted
+to obtain the constituent parse tree for every sen-
+tence and POS tag for every token. We use Pocket
+</bodyText>
+<footnote confidence="0.714117857142857">
+1http://www.nist.gov/tac/data/index.html
+2Document level features for a word include information
+such as the word’s document frequency in a topic. These
+features cannot be extracted from a single sentence, as in the
+standard sentence compression task, and are related to the
+document summarization task.
+3http://nlp.stanford.edu/software/corenlp.shtml
+</footnote>
+<bodyText confidence="0.97353225">
+CRF4 to implement the CRF sentence compres-
+sion model. SVMlight5 is used for the summary
+sentence pre-selection model. Gurobi ILP solver6
+does all ILP decoding.
+</bodyText>
+<subsectionHeader confidence="0.999826">
+5.2 Summarization Results
+</subsectionHeader>
+<bodyText confidence="0.999989487179487">
+We compare our summarization system against
+four recent studies, which have reported some of
+the highest published results on this task. Berg-
+Kirkpatrick et al. (2011) introduced a joint model
+for sentence extraction and compression. Wood-
+send and Lapata (2012) learned individual sum-
+mary aspects from data, e.g., informativeness, suc-
+cinctness, grammaticalness, stylistic writing con-
+ventions, and jointly optimized the outcome in
+an ILP framework. Ng et al. (2012) exploited
+category-specific information for multi-document
+summarization. Almeida and Martins (2013) pro-
+posed compressive summarization method by dual
+decomposition and multi-task learning. Our sum-
+marization framework is the same as (Li et al.,
+2013a), except they used a CRF-based compres-
+sion model. In addition to the four previous stud-
+ies, we also report the best achieved results in the
+TAC competitions.
+Table 3 shows the summarization results of our
+method and others. The top part contains the re-
+sults for TAC 2008 data and bottom part is for
+TAC 2011 data. We use the ROUGE evaluation
+metrics (Lin, 2004), with R-2 measuring the bi-
+gram overlap between the system and reference
+summaries and R-SU4 measuring the skip-bigram
+with the maximum gap length of 4. In addition,
+we evaluate the linguistic quality (LQ) of the sum-
+maries for our system and (Li et al., 2013a).7 The
+linguistic quality consists of two parts. One eval-
+uates the grammar quality within a sentence. For
+this, annotators marked if a compressed sentence
+is grammatically correct. Typical grammar errors
+include lack of verb or subordinate clause. The
+other evaluates the coherence between sentences,
+including the order of sentences and irrelevant sen-
+tences. We invited 3 English native speakers to do
+this evaluation. They gave every compressed sen-
+tence a grammar score and a coherence score for
+</bodyText>
+<footnote confidence="0.997705666666667">
+4http://sourceforge.net/projects/pocket-crf-1/
+5http://svmlight.joachims.org/
+6http://www.gurobi.com
+</footnote>
+<bodyText confidence="0.894733">
+7We chose to evaluate the linguistic quality for this system
+because of two reasons: one is that we have an implementa-
+tion of that method; the other more important one is that it
+has the highest reported ROUGE results among the compared
+methods.
+</bodyText>
+<page confidence="0.594199">
+697
+</page>
+<table confidence="0.999828181818182">
+System R-2 R-SU4 Gram Cohere
+TAC’08 Best System 11.03 13.96 n/a n/a
+(Berg-Kirk et al., 2011) 11.70 14.38 n/a n/a
+(Woodsend et al., 2012) 11.37 14.47 n/a n/a
+(Almeida et al.,2013) 12.30 15.18 n/a n/a
+(Li et al., 2013a) 12.35 15.27 3.81 3.41
+Our System 12.23 15.47 4.29 4.11
+TAC’11 Best System 13.44 16.51 n/a n/a
+(Ng et al., 2012) 13.93 16.83 n/a n/a
+(Li et al., 2013a) 14.40 16.89 3.67 3.32
+Our System 14.04 16.67 4.18 4.07
+</table>
+<tableCaption confidence="0.9196105">
+Table 3: Summarization results on the TAC 2008
+and 2011 data sets.
+</tableCaption>
+<bodyText confidence="0.999241892857143">
+each topic. The score is scaled and ranges from 1
+(bad) to 5 (good). Therefore, in table 3, the gram-
+mar score is the average score for each sentence
+and coherence score is the average for each topic.
+We measure annotators’ agreement in the follow-
+ing way: we consider the scores from each anno-
+tator as a distribution and we find that these three
+distributions are not statistically significantly dif-
+ferent each other (p &gt; 0.05 based on paired t-test).
+We can see from the table that in general, our
+system achieves better ROUGE results than most
+previous work except (Li et al., 2013a) on both
+TAC 2008 and TAC 2011 data. However, our
+system’s linguistic quality is better than (Li et
+al., 2013a). The CRF-based compression model
+used in (Li et al., 2013a) can not well model the
+grammar. Particularly, our results (ROUGE-2) are
+statistically significantly (p &lt; 0.05) higher than
+TAC08 Best system, but are not statistically signif-
+icant compared with (Li et al., 2013a) (p &gt; 0.05).
+The pattern is similar in TAC 2011 data. Our result
+(R-2) is statistically significantly (p &lt; 0.05) better
+than TAC11 Best system, but not statistically (p &gt;
+0.05) significantly different from (Li et al., 2013a).
+However, for the grammar and coherence score,
+our results are statistically significantly (p &lt; 0.05)
+than (Li et al., 2013a). All the above statistics are
+based on paired t-test.
+</bodyText>
+<subsectionHeader confidence="0.999262">
+5.3 Compression Results
+</subsectionHeader>
+<bodyText confidence="0.999943857142857">
+The results above show that our summarization
+system is competitive. In this section we focus
+on the evaluation of our proposed compression
+method. We compare our compression system
+against four other models. HedgeTrimmer in Dorr
+et al. (2003) applied a variety of linguistically-
+motivated heuristics to guide the sentences com-
+</bodyText>
+<table confidence="0.999697333333333">
+System C Rate (%) Uni-F1 Rel-F1
+HedgeTrimmer 57.64 0.64 0.50
+McDonald (2006) 70.95 0.77 0.55
+Martins (2009) 71.35 0.77 0.56
+Wang (2013) 68.06 0.79 0.59
+Our System 71.19 0.77 0.58
+</table>
+<tableCaption confidence="0.991648">
+Table 4: Sentence compression results. The hu-
+</tableCaption>
+<bodyText confidence="0.995450953488372">
+man compression rate of the test set is 69%.
+pression; McDonald (2006) used the output of two
+parsers as features in a discriminative model that
+decomposes over pairs of consecutive words; Mar-
+tins and Smith (2009) built the compression model
+in the dependency parse and utilized the relation-
+ship between the head and modifier to preserve the
+grammar relationship; Wang et al. (2013) devel-
+oped a novel beam search decoder using the tree-
+based compression model on the constituent parse
+tree, which could find the most probable compres-
+sion efficiently.
+Table 4 shows the compression results of vari-
+ous systems, along with the compression ratio (C
+Rate) of the system output. We adopt the com-
+pression metrics as used in (Martins and Smith,
+2009) that measures the macro F-measure for the
+retained unigrams (Uni-F1), and the one used
+in (Clarke and Lapata, 2008) that calculates the
+F1 score of the grammatical relations labeled by
+(Briscoe and Carroll, 2002) (Rel-F1). We can see
+that our proposed compression method performs
+well, similar to the state-of-the-art systems.
+To evaluate the power of using the expanded
+parse tree in our model, we conducted another ex-
+periment where we only consider the bottom level
+of the constituent parse tree. In some sense, this
+could be considered as the system in (Clarke and
+Lapata, 2008). Furthermore, we use two differ-
+ent setups: one uses the lexical features (about the
+words) and the other does not. Table 5 shows the
+results using the data in (Clarke and Lapata, 2008).
+For a comparison, we also include the results us-
+ing the CRF-based compression model (the one
+used in (Nomoto, 2007; Li et al., 2013a)). We
+report results using both the automatically calcu-
+lated compression metrics and the linguistic qual-
+ity score. Three English native speaker annotators
+were asked to judge two aspects of the compressed
+sentence compared with the gold result: one is the
+content that looks at whether the important words
+are kept and the other is the grammar score which
+evaluates the sentence’s readability. Each of these
+</bodyText>
+<page confidence="0.816309">
+698
+</page>
+<bodyText confidence="0.999804310344827">
+two scores ranges from 1(bad) to 5(good).
+Table 5 shows that when using lexical features,
+our system has statistically significantly (p &lt; 0.05)
+higher Grammar value and content importance
+value than the CRF and the leaves only system.
+When no lexical features are used, default system
+can achieve statistically significantly (p &lt; 0.01)
+higher results than the CRF and the leaves only
+system.
+We can see that using the expanded parse tree
+performs better than using the leaves only, espe-
+cially when lexical features are not used. In ad-
+dition, we observe that our proposed compression
+method is more generalizable than the CRF-based
+model. When our system does not use lexical
+features in the leaves, it achieves better perfor-
+mance than the CRF-based model. This is impor-
+tant since such a model is more robust and may be
+used in multiple domains, whereas a model rely-
+ing on lexical information may suffer more from
+domain mismatch. From the table we can see our
+proposed tree based compression method consis-
+tently has better linguistic quality. On the other
+hand, the CRF compression model is the most
+computationally efficient one among these three
+compression methods. It is about 200 times faster
+than our model using the expanded parse tree. Ta-
+ble 6 shows some examples using different meth-
+ods.
+</bodyText>
+<table confidence="0.999517333333333">
+System C Rate(%) Uni-F1 Rel-F1 Gram Imp
+Using lexical features
+CRF 79.98 0.80 0.51 3.9 4.0
+ILP(I) 80.54 0.79 0.57 4.0 4.2
+ILP(II) 79.90 0.80 0.57 4.2 4.4
+No lexical features
+CRF 77.75 0.78 0.51 3.35 3.5
+ILP(I) 77.77 0.78 0.56 3.7 3.9
+ILP(II) 77.78 0.80 0.58 4.1 4.2
+</table>
+<tableCaption confidence="0.983826">
+Table 5: Sentence compression results: effect of
+</tableCaption>
+<bodyText confidence="0.9645715">
+lexical features and expanded parse tree. ILP(I)
+represents the system using only bottom nodes in
+constituent parse tree. ILP(II) is our system. Imp
+means the content importance value.
+</bodyText>
+<sectionHeader confidence="0.998142" genericHeader="conclusions">
+6 Conclusion
+</sectionHeader>
+<bodyText confidence="0.999118857142857">
+In this paper, we propose a discriminative ILP sen-
+tence compression model based on the expanded
+constituent parse tree, which aims to improve the
+linguistic quality of the compressed sentences in
+the summarization task. Linguistically motivated
+constraints are incorporated to improve the sen-
+tence quality. We conduct experiments on the TAC
+</bodyText>
+<table confidence="0.999612382352941">
+Using lexical features
+Source:
+Apart from drugs, detectives believe money is laun-
+dered from a variety of black market deals involving
+arms and high technology.
+Human compress:
+detectives believe money is laundered from a variety of
+black market deals.
+CRF result:
+Apart from drugs detectives believe money is laundered
+from a black market deals involving arms and technol-
+ogy.
+ILP(I) Result:
+detectives believe money is laundered from a variety of
+black deals involving arms.
+ILP(II) Result:
+detectives believe money is laundered from black mar-
+ket deals.
+No lexical features
+Source:
+Mrs Allan’s son disappeared in May 1989, after a party
+during his back packing trip across North America.
+Human compress:
+Mrs Allan’s son disappeared in 1989, after a party dur-
+ing his trip across North America.
+CRF result:
+Mrs Allan’s son disappeared May 1989, after during his
+packing trip across North America.
+ILP(I) Result:
+Mrs Allan’s son disappeared in May, 1989, after a party
+during his packing trip across North America.
+ILP(II) Result:
+Mrs Allan’s son disappeared in May 1989, after a party
+during his trip.
+</table>
+<tableCaption confidence="0.969537">
+Table 6: Examples of original sentences and their
+compressed sentences from different systems.
+</tableCaption>
+<bodyText confidence="0.9954805">
+2008 and 2011 summarization data sets and show
+that by incorporating this sentence compression
+model, our summarization system can yield signif-
+icant performance gain in linguistic quality with-
+out losing much ROUGE results. The analysis
+of the compression module also demonstrates its
+competitiveness, in particular the better linguistic
+quality and less reliance on lexical cues.
+</bodyText>
+<sectionHeader confidence="0.99547" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.999975">
+We thank the anonymous reviewers for their de-
+tailed and insightful comments on earlier drafts
+of this paper. The work is also partially sup-
+ported by NSF award IIS-0845484 and DARPA
+Contract No. FA8750-13-2-0041. Any opinions,
+findings, and conclusions or recommendations ex-
+pressed are those of the authors and do not neces-
+sarily reflect the views of the funding agencies.
+</bodyText>
+<page confidence="0.904392">
+699
+</page>
+<sectionHeader confidence="0.979893" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.997226013986014">
+Ahmet Aker, Trevor Cohn, and Robert Gaizauskas.
+2010. Multi-document summarization using a*
+search and discriminative training. In Proceedings
+ofEMNLP.
+Miguel B. Almeida and Andre F. T. Martins. 2013.
+Fast and robust compressive summarization with
+dual decomposition and multi-task learning. In Pro-
+ceedings ofACL.
+Taylor Berg-Kirkpatrick, Dan Gillick, and Dan Klein.
+2011. Jointly learning to extract and compress. In
+Proceedings ofACL.
+Ted Briscoe and John Carroll. 2002. Robust accurate
+statistical annotation of general text. In Proceedings
+ofLREC.
+Yllias Chali and Sadid A. Hasan. 2012. On the effec-
+tiveness of using sentence compression models for
+query-focused multi-document summarization. In
+Proceedings of COLING.
+James Clarke and Mirella Lapata. 2008. Global in-
+ference for sentence compression an integer linear
+programming approach. Journal ofArtificialIntelli-
+gence Research.
+Michael Collins. 2002. Discriminative training meth-
+ods for hidden markov models: Theory and exper-
+iments with perceptron algorithms. In Proceedings
+ofEMNLP.
+Hal Daum´e. 2006. Practical structured learning tech-
+niques for natural language processing. Ph.D. the-
+sis, University of Southern California.
+Bonnie Dorr, David Zajic, and Richard Schwartz.
+2003. Hedge trimmer: A parse-and-trim approach
+to headline generation. In Proceedings ofNAACL.
+Katja Filippova and Yasemin Altun. 2013. Overcom-
+ing the lack ofparallel data in sentence compression.
+In Proceedings ofEMNLP.
+Dimitrios Galanis and Ion Androutsopoulos. 2010. An
+extractive supervised two-stage method for sentence
+compression. In Proceedings ofNAACL.
+Michel Galley and Kathleen McKeown. 2007. Lexi-
+calized markov grammars for sentence compression.
+In Processings ofNAACL.
+Michel Galley. 2006. A skip-chain conditional random
+field for ranking meeting utterances by importance.
+In Proceedings ofEMNLP.
+Dan Gillick, Benoit Favre, Dilek Hakkani-Tur, Berndt
+Bohnet, Yang Liu, and Shasha Xie. 2009. The
+icsi/utd summarization system at tac 2009. In Pro-
+ceedings of TAC.
+Kevin Knight and Daniel Marcu. 2000. Statistics-
+based summarization - step one: Sentence compres-
+sion. In Proceedings ofAAAI.
+Kevin Knight and Daniel Marcu. 2002. Summariza-
+tion beyond sentence extraction: A probabilistic ap-
+proach to sentence compression. Artificial Intelli-
+gence, 139(1):91–107.
+Julian Kupiec, Jan Pedersen, and Francine Chen. 1995.
+A trainable document summarizer. In Proceedings
+of SIGIR.
+Chen Li, Fei Liu, Fuliang Weng, and Yang Liu. 2013a.
+Document summarization via guided sentence com-
+pression. In Proceedings of the EMNLP.
+Chen Li, Xian Qian, and Yang Liu. 2013b. Using su-
+pervised bigram-based ilp for extractive summariza-
+tion. In Proceedings ofACL.
+Hui Lin and Jeff Bilmes. 2010. Multi-document sum-
+marization via budgeted maximization of submodu-
+lar functions. In Proceedings ofNAACL.
+Chin-Yew Lin. 2003. Improving summarization per-
+formance by sentence compression - A pilot study.
+In Proceeding of the Sixth International Workshop
+on Information Retrieval with Asian Language.
+Chin-Yew Lin. 2004. Rouge: a package for automatic
+evaluation of summaries. In Proceedings ofACL.
+Fei Liu and Yang Liu. 2013. Towards abstractive
+speech summarization: Exploring unsupervised and
+supervised approaches for spoken utterance com-
+pression. IEEE Transactions on Audio, Speech, and
+Language Processing.
+Marie-Catherine de Marneffe and Christopher D Man-
+ning. 2002. Stanford typed dependencies manual.
+Andre F. T. Martins and Noah A. Smith. 2009. Sum-
+marization with a joint model for sentence extrac-
+tion and compression. In Proceedings of the ACL
+Workshop on Integer Linear Programmingfor Natu-
+ral Language Processing.
+Ryan McDonald. 2006. Discriminative sentence com-
+pression with soft syntactic evidence. In Proceed-
+ings of EACL.
+Ani Nenkova and Kathleen McKeown. 2011. Auto-
+matic summarization. Foundations and Trends in
+Information Retrieval.
+Jun-Ping Ng, Praveen Bysani, Ziheng Lin, Min-Yen
+Kan, and Chew-Lim Tan. 2012. Exploiting
+category-specific information for multi-document
+summarization. In Proceedings of COLING.
+Tadashi Nomoto. 2007. Discriminative sentence com-
+pression with conditional random fields. Informa-
+tion Processing and Management.
+Miles Osborne. 2002. Using maximum entropy for
+sentence extraction. In Proceedings of the ACL-02
+Workshop on Automatic Summarization.
+700
+Slav Petrov, Leon Barrett, Romain Thibaux, and Dan
+Klein. 2006. Learning accurate, compact, and
+interpretable tree annotation. In Proceedings of
+COLING-ACL.
+Xian Qian and Yang Liu. 2013. Fast joint compression
+and summarization via graph cuts. In Proceedings
+ofEMNLP.
+Advaith Siddharthan, Ani Nenkova, and Kathleen
+McKeown. 2004. Syntactic simplification for im-
+proving content selection in multi-document sum-
+marization. In Proceedings of Coling.
+Kapil Thadani and Kathleen McKeown. 2013. Sen-
+tence compression with joint structural inference. In
+Proceedings of CoNLL.
+Jenine Turner and Eugene Charniak. 2005. Super-
+vised and unsupervised learning for sentence com-
+pression. In Proceedings ofACL.
+Lucy Vanderwende, Hisami Suzuki, Chris Brockett,
+and Ani Nenkova. 2007. Beyond sumbasic: Task-
+focused summarization with sentence simplification
+and lexical expansion. Information Processing &amp;
+Management.
+Lu Wang, Hema Raghavan, Vittorio Castelli, Radu Flo-
+rian, and Claire Cardie. 2013. A sentence com-
+pression based framework to query-focused multi-
+document summarization. In Proceedings ofACL.
+Kristian Woodsend and Mirella Lapata. 2010. Auto-
+matic generation of story highlights. In Proceedings
+ofACL.
+Kristian Woodsend and Mirella Lapata. 2012. Mul-
+tiple aspect summarization using integer linear pro-
+gramming. In Proceedings ofEMNLP-CoNLL.
+Katsumasa Yoshikawa, Tsutomu Hirao, Ryu Iida, and
+Manabu Okumura. 2012. Sentence compression
+with semantic role constraints. In Proceedings of
+ACL.
+David Zajic, Bonnie J. Dorr, Jimmy Lin, and Richard
+Schwartz. 2007. Multi-candidate reduction: Sen-
+tence compression as a tool for document summa-
+rization tasks. In Information Processing and Man-
+agement.
+</reference>
+<page confidence="0.902942">
+701
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.501732">
+<title confidence="0.9977525">Improving Multi-documents Summarization by Sentence based on Expanded Constituent Parse Trees</title>
+<author confidence="0.99972">Yang Fei Lin Fuliang</author>
+<affiliation confidence="0.934880333333333">1Computer Science Department, The University of Texas at Richardson, TX 75080, 2School of Computer Science, Carnegie Mellon</affiliation>
+<address confidence="0.826513333333333">Pittsburgh, PA 15213, 3Research and Technology Center, Robert Bosch Palo Alto, California 94304,</address>
+<abstract confidence="0.998867545454545">In this paper, we focus on the problem of using sentence compression techniques to improve multi-document summarization. We propose an innovative sentence compression method by considering every node in the constituent parse tree and deciding its status – remove or retain. Integer liner programming with discriminative training is used to solve the problem. Under this model, we incorporate various constraints to improve the linguistic quality of the compressed sentences. Then we utilize a pipeline summarization framework where sentences are first compressed by our proposed compression model to obtain top-n candidates and then a sentence selection module is used to generate the final summary. Compared with state-ofthe-art algorithms, our model has similar ROUGE-2 scores but better linguistic quality on TAC data.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Ahmet Aker</author>
+<author>Trevor Cohn</author>
+<author>Robert Gaizauskas</author>
+</authors>
+<title>Multi-document summarization using a* search and discriminative training.</title>
+<date>2010</date>
+<booktitle>In Proceedings ofEMNLP.</booktitle>
+<contexts>
+<context position="4836" citStr="Aker et al., 2010" startWordPosition="716" endWordPosition="719">. 2 Related Work Summarization research has seen great development over the last fifty years (Nenkova and McKeown, 2011). Compared to the abstractive counterpart, extractive summarization has received considerable attention due to its clear problem formulation: to extract a set of salient and nonredundant sentences from the given document set. Both unsupervised and supervised approaches have been explored for sentence selection. Supervised approaches include the Bayesian classifier (Kupiec et al., 1995), maximum entropy (Osborne, 2002), skip-chain CRF (Galley, 2006), discriminative reranking (Aker et al., 2010), among others. The extractive summary sentence selection problem can also be formulated in an optimization framework. Previous methods include using integer linear programming (ILP) and submodular functions to solve the optimization problem (Gillick et al., 2009; Li et al., 2013b; Lin and Bilmes, 2010). Compressive summarization receives increasing attention in recent years, since it offers a viable step towards abstractive summarization. The compressed summaries can be generated through a joint model of the sentence selection and compression processes, or through a pipeline approach that int</context>
+</contexts>
+<marker>Aker, Cohn, Gaizauskas, 2010</marker>
+<rawString>Ahmet Aker, Trevor Cohn, and Robert Gaizauskas. 2010. Multi-document summarization using a* search and discriminative training. In Proceedings ofEMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Miguel B Almeida</author>
+<author>Andre F T Martins</author>
+</authors>
+<title>Fast and robust compressive summarization with dual decomposition and multi-task learning.</title>
+<date>2013</date>
+<booktitle>In Proceedings ofACL.</booktitle>
+<contexts>
+<context position="2649" citStr="Almeida and Martins, 2013" startWordPosition="377" endWordPosition="381">s since they can remove insignificant sentence constituents and make space for more salient information that is otherwise dropped due to the summary length constraint. Two general strategies have been used for compressive summarization. One is a pipeline approach, where sentencebased extractive summarization is followed or proceeded by sentence compression (Lin, 2003; Zajic et al., 2007; Vanderwende et al., 2007; Wang et al., 2013). Another line of work uses joint compression and summarization. Such methods have been shown to achieve promising performance (Daum´e, 2006; Chali and Hasan, 2012; Almeida and Martins, 2013; Qian and Liu, 2013), but they are typically computationally expensive. In this study, we propose an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, 2006) and (Clarke and Lapata, 2008), but our method uses an expanded constituent parse tree rather than only the leaf nodes in previous work. Therefore we can extract rich features for every node in the constit</context>
+<context position="25249" citStr="Almeida and Martins (2013)" startWordPosition="4196" endWordPosition="4199">i ILP solver6 does all ILP decoding. 5.2 Summarization Results We compare our summarization system against four recent studies, which have reported some of the highest published results on this task. BergKirkpatrick et al. (2011) introduced a joint model for sentence extraction and compression. Woodsend and Lapata (2012) learned individual summary aspects from data, e.g., informativeness, succinctness, grammaticalness, stylistic writing conventions, and jointly optimized the outcome in an ILP framework. Ng et al. (2012) exploited category-specific information for multi-document summarization. Almeida and Martins (2013) proposed compressive summarization method by dual decomposition and multi-task learning. Our summarization framework is the same as (Li et al., 2013a), except they used a CRF-based compression model. In addition to the four previous studies, we also report the best achieved results in the TAC competitions. Table 3 shows the summarization results of our method and others. The top part contains the results for TAC 2008 data and bottom part is for TAC 2011 data. We use the ROUGE evaluation metrics (Lin, 2004), with R-2 measuring the bigram overlap between the system and reference summaries and R</context>
+</contexts>
+<marker>Almeida, Martins, 2013</marker>
+<rawString>Miguel B. Almeida and Andre F. T. Martins. 2013. Fast and robust compressive summarization with dual decomposition and multi-task learning. In Proceedings ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Taylor Berg-Kirkpatrick</author>
+<author>Dan Gillick</author>
+<author>Dan Klein</author>
+</authors>
+<title>Jointly learning to extract and compress.</title>
+<date>2011</date>
+<booktitle>In Proceedings ofACL.</booktitle>
+<contexts>
+<context position="5752" citStr="Berg-Kirkpatrick et al. (2011)" startWordPosition="852" endWordPosition="855"> and Bilmes, 2010). Compressive summarization receives increasing attention in recent years, since it offers a viable step towards abstractive summarization. The compressed summaries can be generated through a joint model of the sentence selection and compression processes, or through a pipeline approach that integrates a sentence compression model with a summary sentence pre-selection or post-selection step. Many studies have explored the joint sentence compression and selection setting. Martins and Smith (2009) jointly performed sentence extraction and compression by solving an ILP problem. Berg-Kirkpatrick et al. (2011) proposed an approach to score the candidate summaries according to a combined linear model of extractive sentence selection and compression. They trained the model using a margin-based objective whose loss captures the final summary quality. Woodsend and Lapata (2012) presented another method where the summary’s informativeness, succinctness, and grammaticality are learned separately from data but optimized jointly using an ILP setup. Yoshikawa et al. (2012) incorporated semantic role information in the ILP model. Our work is closely related with the pipeline approach, where sentence-based ex</context>
+</contexts>
+<marker>Berg-Kirkpatrick, Gillick, Klein, 2011</marker>
+<rawString>Taylor Berg-Kirkpatrick, Dan Gillick, and Dan Klein. 2011. Jointly learning to extract and compress. In Proceedings ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ted Briscoe</author>
+<author>John Carroll</author>
+</authors>
+<title>Robust accurate statistical annotation of general text.</title>
+<date>2002</date>
+<booktitle>In Proceedings ofLREC.</booktitle>
+<contexts>
+<context position="30262" citStr="Briscoe and Carroll, 2002" startWordPosition="5025" endWordPosition="5028"> preserve the grammar relationship; Wang et al. (2013) developed a novel beam search decoder using the treebased compression model on the constituent parse tree, which could find the most probable compression efficiently. Table 4 shows the compression results of various systems, along with the compression ratio (C Rate) of the system output. We adopt the compression metrics as used in (Martins and Smith, 2009) that measures the macro F-measure for the retained unigrams (Uni-F1), and the one used in (Clarke and Lapata, 2008) that calculates the F1 score of the grammatical relations labeled by (Briscoe and Carroll, 2002) (Rel-F1). We can see that our proposed compression method performs well, similar to the state-of-the-art systems. To evaluate the power of using the expanded parse tree in our model, we conducted another experiment where we only consider the bottom level of the constituent parse tree. In some sense, this could be considered as the system in (Clarke and Lapata, 2008). Furthermore, we use two different setups: one uses the lexical features (about the words) and the other does not. Table 5 shows the results using the data in (Clarke and Lapata, 2008). For a comparison, we also include the result</context>
+</contexts>
+<marker>Briscoe, Carroll, 2002</marker>
+<rawString>Ted Briscoe and John Carroll. 2002. Robust accurate statistical annotation of general text. In Proceedings ofLREC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yllias Chali</author>
+<author>Sadid A Hasan</author>
+</authors>
+<title>On the effectiveness of using sentence compression models for query-focused multi-document summarization.</title>
+<date>2012</date>
+<booktitle>In Proceedings of COLING.</booktitle>
+<contexts>
+<context position="2622" citStr="Chali and Hasan, 2012" startWordPosition="373" endWordPosition="376">sed extractive summaries since they can remove insignificant sentence constituents and make space for more salient information that is otherwise dropped due to the summary length constraint. Two general strategies have been used for compressive summarization. One is a pipeline approach, where sentencebased extractive summarization is followed or proceeded by sentence compression (Lin, 2003; Zajic et al., 2007; Vanderwende et al., 2007; Wang et al., 2013). Another line of work uses joint compression and summarization. Such methods have been shown to achieve promising performance (Daum´e, 2006; Chali and Hasan, 2012; Almeida and Martins, 2013; Qian and Liu, 2013), but they are typically computationally expensive. In this study, we propose an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, 2006) and (Clarke and Lapata, 2008), but our method uses an expanded constituent parse tree rather than only the leaf nodes in previous work. Therefore we can extract rich features fo</context>
+</contexts>
+<marker>Chali, Hasan, 2012</marker>
+<rawString>Yllias Chali and Sadid A. Hasan. 2012. On the effectiveness of using sentence compression models for query-focused multi-document summarization. In Proceedings of COLING.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James Clarke</author>
+<author>Mirella Lapata</author>
+</authors>
+<title>Global inference for sentence compression an integer linear programming approach.</title>
+<date>2008</date>
+<journal>Journal ofArtificialIntelligence Research.</journal>
+<contexts>
+<context position="3074" citStr="Clarke and Lapata, 2008" startWordPosition="444" endWordPosition="447">l., 2013). Another line of work uses joint compression and summarization. Such methods have been shown to achieve promising performance (Daum´e, 2006; Chali and Hasan, 2012; Almeida and Martins, 2013; Qian and Liu, 2013), but they are typically computationally expensive. In this study, we propose an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, 2006) and (Clarke and Lapata, 2008), but our method uses an expanded constituent parse tree rather than only the leaf nodes in previous work. Therefore we can extract rich features for every node in the constituent parser tree. This is an advantage of treebased compression technique (Knight and Marcu, 2000; Galley and McKeown, 2007; Wang et al., 2013). Similar to (Li et al., 2013a), we use a pipeline summarization framework where multiple compression candidates are generated for each pre-selected important sentence, and then an ILP691 Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP)</context>
+<context position="6692" citStr="Clarke and Lapata (2008)" startWordPosition="989" endWordPosition="992">nformativeness, succinctness, and grammaticality are learned separately from data but optimized jointly using an ILP setup. Yoshikawa et al. (2012) incorporated semantic role information in the ILP model. Our work is closely related with the pipeline approach, where sentence-based extractive summarization is followed or proceeded by sentence compression. There have been many studies on sentence compression, independent of the summarization task. McDonald (2006) firstly introduced a discriminative sentence compression model to directly optimize the quality of the compressed sentences produced. Clarke and Lapata (2008) improved the above discriminative model by using ILP in decoding, making it convenient to add constraints to preserve grammatical structure. Nomoto (2007) treated the compression task as a sequence labeling problem and used CRF for it. Thadani and McKeown (2013) presented an approach for discriminative sentence compression that jointly produces sequential and syntactic representations for output text. Filippova and Altun (2013) presented a method to automatically build a sentence compression corpus with hundreds of thousands of instances on which deletion-based compression algorithms can be t</context>
+<context position="9413" citStr="Clarke and Lapata (2008)" startWordPosition="1398" endWordPosition="1401">s a task of producing a summary for a single sentence. The compressed sentence should be shorter, contain important content from the original sentence, and be grammatical. In some sense, sentence compression can be described as a ‘scaled down version of the text summarization problem’ (Knight and Marcu, 2002). Here similar to much previous work on sentence compression, we just focus on how to remove/select words in the original sentence without using operation like rewriting sentence. 3.1 Discriminative Compression Model by ILP McDonald (2006) presented a discriminative compression model, and Clarke and Lapata (2008) improved it by using ILP for decoding. Since our proposed method is based upon this model, in the following we briefly describe it first. Details can be found in (Clarke and Lapata, 2008). In this model, the following score function is used to evaluate each compression candidate: |y| s(x, y) = X s(x, L(yj−1), L(yj)) (1) j=2 where x = x1x2, ..., xn represents an original sentence and y = y1y2,..., ym denotes a compressed sentence. Because the sentence compression problem is defined as a word deletion task, yj must occur in x. Function L(yi) ∈ [1...n] maps word yi in the compression to the word</context>
+<context position="11874" citStr="Clarke and Lapata (2008)" startWordPosition="1878" endWordPosition="1881"> = ∀i ∈ [1..n − 1]∀j ∈ [i + 1..n] Xn γij · s(x, i, j) j=i+1 693 compressed sentence, it must either end the sentence or be followed by another word. Furthermore, discriminative models are used for the score function: |y| s(x, y) = X w · f(x, L(yj−1), L(yj)) (7) j=2 High dimensional features are used and their corresponding weights are trained discriminatively. Above is the basic supervised ILP formulation for sentence compression. Linguistically and semantically motivated constraints can be added in the ILP model to ensure the correct grammar structure in the compressed sentence. For example, Clarke and Lapata (2008) forced the introducing term of prepositional phrases and subordinate clauses to be included in the compression if any word from within that syntactic constituent is also included, and vice versa. 3.2 Compression Model based on Expanded Constituent Parse Tree In the above ILP model, variables are defined for each word in the sentence, and the task is to predict each word’s status. In this paper, we propose to adopt the above ILP framework, but operate directly on the nodes in the constituent parse tree, rather than just the words (leaf nodes in the tree). This way we can remove or retain a chu</context>
+<context position="15183" citStr="Clarke and Lapata, 2008" startWordPosition="2514" endWordPosition="2517"> NP PP PRP/ I VBP/ am DT/ a NN/ worker IN/ from DT/ the NNP/ USA VBP IN DT NN PRP NP max z = height Xnl X ( l=1 i=1 l γij · s(x, li, lj) Xnl j=i+1 Xnl + i=1 694 i at level l. In addition, 1 &lt; l &lt; height − 1, 1 &lt; i &lt; nl and 1 &lt; j &lt; nl+1. 3.3 Linguistically Motivated Constraints In our proposed model, we can jointly decide the status of every node in the constituent parse tree at the same time. One advantage is that we can add constraints based on internal nodes or relationship in the parse tree, rather than only using the relationship based on words. In addition to the constraints proposed in (Clarke and Lapata, 2008), we introduce more linguistically motivated constraints to keep the compressed sentence more grammatically correct. The following describes the constraints we used based on the constituent parse tree. • If a node’s label is ‘SBAR’, its parent’s label is ‘NP’ and its first child’s label is ‘WHNP’ or ‘WHPP’ or ‘IN’, then if we can find a noun in the left siblings of ‘SBAR’, this subordinate clause could be an attributive clause or appositive clause. Therefore the found noun node should be included in the compression if the ‘SBAR’ is also included, because the node ‘SBAR’ decorates the noun. For</context>
+<context position="19374" citStr="Clarke and Lapata, 2008" startWordPosition="3249" endWordPosition="3252">t he did it. ccomp(certain,did) tmod: temporal modifier Last night I swam in the pool. tmod(swam,night) Table 1: Some dependency relations used for extra constraints. All the examples are from (Marneffe and Manning, 2002) • For type III relations, if the parent node in these relations is retained, the child node should be kept as well. 3.4 Features So far we have defined the decoding process and related constraints used in decoding. These all rely on the score function s(x, y) = w · f(x, L(yj−1), L(yj)) for every level in the constituent parse tree. We included all the features introduced in (Clarke and Lapata, 2008) (those features are designed for leaves). Table 2 lists the additional features we used in our system. General Features for Every Node 1. individual node label and concatenation of a pair of nodes 2. distance of two nodes at the same level 3. is the node at beginning or end at that level? 4. do the two nodes have the same parent? 5. if two nodes do not have the same parent, then is the left node the rightmost child of its parent? is the right node the leftmost child of its parent? 6. combination of parent label if the node pair are not under the same parent 7. number of node’s children: 1/0/&gt;</context>
+<context position="23656" citStr="Clarke and Lapata, 2008" startWordPosition="3965" endWordPosition="3968">itions. In particular, we used the TAC 2010 data set as training data for the SVR sentence pre-selection model, TAC 2009 data set as development set for parameter tuning, and the TAC 2008 and 2011 data as the test set for reporting the final summarization results. The training data for the sentence compression module in the summarization system is summary guided compression corpus annotated by (Li et al., 2013a) using TAC2010 data. In the compression module, for each word we also used its document level feature.2 Compression Data We also evaluate our compression model using the data set from (Clarke and Lapata, 2008). It includes 82 newswire articles with manually produced compression for each sentence. We use the same partitions as (Martins and Smith, 2009), i.e., 1,188 sentences for training and 441 for testing. Data Processing We use Stanford CoreNLP toolkit3 to tokenize the sentences, extract name entity tags, and generate the dependency parse tree. Berkeley Parser (Petrov et al., 2006) is adopted to obtain the constituent parse tree for every sentence and POS tag for every token. We use Pocket 1http://www.nist.gov/tac/data/index.html 2Document level features for a word include information such as the</context>
+<context position="30165" citStr="Clarke and Lapata, 2008" startWordPosition="5010" endWordPosition="5013">on model in the dependency parse and utilized the relationship between the head and modifier to preserve the grammar relationship; Wang et al. (2013) developed a novel beam search decoder using the treebased compression model on the constituent parse tree, which could find the most probable compression efficiently. Table 4 shows the compression results of various systems, along with the compression ratio (C Rate) of the system output. We adopt the compression metrics as used in (Martins and Smith, 2009) that measures the macro F-measure for the retained unigrams (Uni-F1), and the one used in (Clarke and Lapata, 2008) that calculates the F1 score of the grammatical relations labeled by (Briscoe and Carroll, 2002) (Rel-F1). We can see that our proposed compression method performs well, similar to the state-of-the-art systems. To evaluate the power of using the expanded parse tree in our model, we conducted another experiment where we only consider the bottom level of the constituent parse tree. In some sense, this could be considered as the system in (Clarke and Lapata, 2008). Furthermore, we use two different setups: one uses the lexical features (about the words) and the other does not. Table 5 shows the </context>
+</contexts>
+<marker>Clarke, Lapata, 2008</marker>
+<rawString>James Clarke and Mirella Lapata. 2008. Global inference for sentence compression an integer linear programming approach. Journal ofArtificialIntelligence Research.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>Discriminative training methods for hidden markov models: Theory and experiments with perceptron algorithms.</title>
+<date>2002</date>
+<booktitle>In Proceedings ofEMNLP.</booktitle>
+<contexts>
+<context position="20655" citStr="Collins, 2002" startWordPosition="3480" endWordPosition="3481"> 1. word itself and concatenation of two words 2. POS and concatenation of two words’ POS 3. whether the word is a stopword 4. node’s named entity tag 5. dependency relationship between two leaves Table 2: Features used in our system besides those used in (Clarke and Lapata, 2008). 3.5 Learning To learn the feature weights during training, we perform ILP decoding on every sentence in the training set, to find the best hypothesis for each node in the expanded constituent parse tree. If the hypothesis is incorrect, we update the feature weights using the structured perceptron learning strategy (Collins, 2002). The reference label for every node in the expanded constituent parse tree is obtained automatically from the bottom to the top of the tree. Since every leaf node (word) is human annotated (removed or retain), we annotate the internal nodes as removed if all of its children are removed. Otherwise, the node is annotated as retained. During perceptron training, a fixed learning rate is used and parameters are averaged to prevent overfitting. In our experiment, we observe stable convergence using the held-out development corpus, with best performance usually obtained around 10-20 epochs. 4 Summa</context>
+</contexts>
+<marker>Collins, 2002</marker>
+<rawString>Michael Collins. 2002. Discriminative training methods for hidden markov models: Theory and experiments with perceptron algorithms. In Proceedings ofEMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hal Daum´e</author>
+</authors>
+<title>Practical structured learning techniques for natural language processing.</title>
+<date>2006</date>
+<tech>Ph.D. thesis,</tech>
+<institution>University of Southern California.</institution>
+<marker>Daum´e, 2006</marker>
+<rawString>Hal Daum´e. 2006. Practical structured learning techniques for natural language processing. Ph.D. thesis, University of Southern California.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Bonnie Dorr</author>
+<author>David Zajic</author>
+<author>Richard Schwartz</author>
+</authors>
+<title>Hedge trimmer: A parse-and-trim approach to headline generation.</title>
+<date>2003</date>
+<booktitle>In Proceedings ofNAACL.</booktitle>
+<contexts>
+<context position="29001" citStr="Dorr et al. (2003)" startWordPosition="4818" endWordPosition="4821">Our result (R-2) is statistically significantly (p &lt; 0.05) better than TAC11 Best system, but not statistically (p &gt; 0.05) significantly different from (Li et al., 2013a). However, for the grammar and coherence score, our results are statistically significantly (p &lt; 0.05) than (Li et al., 2013a). All the above statistics are based on paired t-test. 5.3 Compression Results The results above show that our summarization system is competitive. In this section we focus on the evaluation of our proposed compression method. We compare our compression system against four other models. HedgeTrimmer in Dorr et al. (2003) applied a variety of linguisticallymotivated heuristics to guide the sentences comSystem C Rate (%) Uni-F1 Rel-F1 HedgeTrimmer 57.64 0.64 0.50 McDonald (2006) 70.95 0.77 0.55 Martins (2009) 71.35 0.77 0.56 Wang (2013) 68.06 0.79 0.59 Our System 71.19 0.77 0.58 Table 4: Sentence compression results. The human compression rate of the test set is 69%. pression; McDonald (2006) used the output of two parsers as features in a discriminative model that decomposes over pairs of consecutive words; Martins and Smith (2009) built the compression model in the dependency parse and utilized the relationsh</context>
+</contexts>
+<marker>Dorr, Zajic, Schwartz, 2003</marker>
+<rawString>Bonnie Dorr, David Zajic, and Richard Schwartz. 2003. Hedge trimmer: A parse-and-trim approach to headline generation. In Proceedings ofNAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Katja Filippova</author>
+<author>Yasemin Altun</author>
+</authors>
+<title>Overcoming the lack ofparallel data in sentence compression.</title>
+<date>2013</date>
+<booktitle>In Proceedings ofEMNLP.</booktitle>
+<contexts>
+<context position="7124" citStr="Filippova and Altun (2013)" startWordPosition="1052" endWordPosition="1055">summarization task. McDonald (2006) firstly introduced a discriminative sentence compression model to directly optimize the quality of the compressed sentences produced. Clarke and Lapata (2008) improved the above discriminative model by using ILP in decoding, making it convenient to add constraints to preserve grammatical structure. Nomoto (2007) treated the compression task as a sequence labeling problem and used CRF for it. Thadani and McKeown (2013) presented an approach for discriminative sentence compression that jointly produces sequential and syntactic representations for output text. Filippova and Altun (2013) presented a method to automatically build a sentence compression corpus with hundreds of thousands of instances on which deletion-based compression algorithms can be trained. In addition to the work on sentence compression as a stand-alone task, prior studies have also investigated compression for the summarization task. Knight and Marcu (2000) utilized the noisy channel and decision tree method to perform sentence compression in the summarization task. Lin (2003) showed that pure syntactic-based compression may not significantly improve the summarization performance. Zajic et al. (2007) comp</context>
+</contexts>
+<marker>Filippova, Altun, 2013</marker>
+<rawString>Katja Filippova and Yasemin Altun. 2013. Overcoming the lack ofparallel data in sentence compression. In Proceedings ofEMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dimitrios Galanis</author>
+<author>Ion Androutsopoulos</author>
+</authors>
+<title>An extractive supervised two-stage method for sentence compression.</title>
+<date>2010</date>
+<booktitle>In Proceedings ofNAACL.</booktitle>
+<contexts>
+<context position="7890" citStr="Galanis and Androutsopoulos (2010)" startWordPosition="1161" endWordPosition="1164">ased compression algorithms can be trained. In addition to the work on sentence compression as a stand-alone task, prior studies have also investigated compression for the summarization task. Knight and Marcu (2000) utilized the noisy channel and decision tree method to perform sentence compression in the summarization task. Lin (2003) showed that pure syntactic-based compression may not significantly improve the summarization performance. Zajic et al. (2007) compared two sentence compression approaches for multidocument summarization, including a ‘parse-andtrim’ and a noisy-channel approach. Galanis and Androutsopoulos (2010) used the maximum entropy model to generate the candidate compressions by removing branches from the source sentences. Woodsend and Lapata (2010) presented a joint content selection and compression model for single-document summarization. They operated over a phrase-based representation of the source document which they obtained by merging information from PCFG parse trees and dependency graphs. Liu and Liu (2013) adopted the CRFbased sentence compression approach for summa692 rizing spoken documents. Unlike the word-based operation, some of these models e.g (Knight and Marcu, 2000; Siddhartha</context>
+</contexts>
+<marker>Galanis, Androutsopoulos, 2010</marker>
+<rawString>Dimitrios Galanis and Ion Androutsopoulos. 2010. An extractive supervised two-stage method for sentence compression. In Proceedings ofNAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michel Galley</author>
+<author>Kathleen McKeown</author>
+</authors>
+<title>Lexicalized markov grammars for sentence compression.</title>
+<date>2007</date>
+<booktitle>In Processings ofNAACL.</booktitle>
+<contexts>
+<context position="3372" citStr="Galley and McKeown, 2007" startWordPosition="494" endWordPosition="497">an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, 2006) and (Clarke and Lapata, 2008), but our method uses an expanded constituent parse tree rather than only the leaf nodes in previous work. Therefore we can extract rich features for every node in the constituent parser tree. This is an advantage of treebased compression technique (Knight and Marcu, 2000; Galley and McKeown, 2007; Wang et al., 2013). Similar to (Li et al., 2013a), we use a pipeline summarization framework where multiple compression candidates are generated for each pre-selected important sentence, and then an ILP691 Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 691–701, October 25-29, 2014, Doha, Qatar. c�2014 Association for Computational Linguistics based summarization model is used to select the final compressed sentences. We evaluate our proposed method on the TAC 2008 and 2011 data sets using the standard ROUGE metric (Lin, 2004) and human e</context>
+</contexts>
+<marker>Galley, McKeown, 2007</marker>
+<rawString>Michel Galley and Kathleen McKeown. 2007. Lexicalized markov grammars for sentence compression. In Processings ofNAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michel Galley</author>
+</authors>
+<title>A skip-chain conditional random field for ranking meeting utterances by importance.</title>
+<date>2006</date>
+<booktitle>In Proceedings ofEMNLP.</booktitle>
+<contexts>
+<context position="4790" citStr="Galley, 2006" startWordPosition="711" endWordPosition="712">sing much performance on the ROUGE metric. 2 Related Work Summarization research has seen great development over the last fifty years (Nenkova and McKeown, 2011). Compared to the abstractive counterpart, extractive summarization has received considerable attention due to its clear problem formulation: to extract a set of salient and nonredundant sentences from the given document set. Both unsupervised and supervised approaches have been explored for sentence selection. Supervised approaches include the Bayesian classifier (Kupiec et al., 1995), maximum entropy (Osborne, 2002), skip-chain CRF (Galley, 2006), discriminative reranking (Aker et al., 2010), among others. The extractive summary sentence selection problem can also be formulated in an optimization framework. Previous methods include using integer linear programming (ILP) and submodular functions to solve the optimization problem (Gillick et al., 2009; Li et al., 2013b; Lin and Bilmes, 2010). Compressive summarization receives increasing attention in recent years, since it offers a viable step towards abstractive summarization. The compressed summaries can be generated through a joint model of the sentence selection and compression proc</context>
+</contexts>
+<marker>Galley, 2006</marker>
+<rawString>Michel Galley. 2006. A skip-chain conditional random field for ranking meeting utterances by importance. In Proceedings ofEMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dan Gillick</author>
+<author>Benoit Favre</author>
+<author>Dilek Hakkani-Tur</author>
+<author>Berndt Bohnet</author>
+<author>Yang Liu</author>
+<author>Shasha Xie</author>
+</authors>
+<title>The icsi/utd summarization system at tac</title>
+<date>2009</date>
+<booktitle>In Proceedings of TAC.</booktitle>
+<contexts>
+<context position="5099" citStr="Gillick et al., 2009" startWordPosition="756" endWordPosition="759"> to extract a set of salient and nonredundant sentences from the given document set. Both unsupervised and supervised approaches have been explored for sentence selection. Supervised approaches include the Bayesian classifier (Kupiec et al., 1995), maximum entropy (Osborne, 2002), skip-chain CRF (Galley, 2006), discriminative reranking (Aker et al., 2010), among others. The extractive summary sentence selection problem can also be formulated in an optimization framework. Previous methods include using integer linear programming (ILP) and submodular functions to solve the optimization problem (Gillick et al., 2009; Li et al., 2013b; Lin and Bilmes, 2010). Compressive summarization receives increasing attention in recent years, since it offers a viable step towards abstractive summarization. The compressed summaries can be generated through a joint model of the sentence selection and compression processes, or through a pipeline approach that integrates a sentence compression model with a summary sentence pre-selection or post-selection step. Many studies have explored the joint sentence compression and selection setting. Martins and Smith (2009) jointly performed sentence extraction and compression by s</context>
+<context position="22287" citStr="Gillick et al., 2009" startWordPosition="3732" endWordPosition="3735">re-selection model is a simple supervised support vector regression (SVR) model that predicts a salience score for each sentence and selects the top ranked sentences for further processing (compression and summarization). The target value for each sentence during training is the ROUGE-2 score between the sentence and the human written abstracts. We use three common features: (1) sentence position in the document; (2) sentence length; and (3) interpolated n-gram document frequency as introduced in (Ng et al., 2012). The final sentence selection process follows the 696 ILP method introduced in (Gillick et al., 2009). Word bi-grams are used as concepts, and their document frequency is used as weights. Since we use multiple compressions for one sentence, an additional constraint is used: for each sentence, only one of its n-best compressions may be included in the summary. For the compression module, using the ILP method described above only finds the best compression result for a given sentence. To generate n-best compression candidates, we use an iterative approach – we add one more constraints to prevent it from generating the same answer every time after getting one solution. 5 Experimental Results 5.1</context>
+</contexts>
+<marker>Gillick, Favre, Hakkani-Tur, Bohnet, Liu, Xie, 2009</marker>
+<rawString>Dan Gillick, Benoit Favre, Dilek Hakkani-Tur, Berndt Bohnet, Yang Liu, and Shasha Xie. 2009. The icsi/utd summarization system at tac 2009. In Proceedings of TAC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kevin Knight</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>Statisticsbased summarization - step one: Sentence compression.</title>
+<date>2000</date>
+<booktitle>In Proceedings ofAAAI.</booktitle>
+<contexts>
+<context position="3346" citStr="Knight and Marcu, 2000" startWordPosition="490" endWordPosition="493"> this study, we propose an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, 2006) and (Clarke and Lapata, 2008), but our method uses an expanded constituent parse tree rather than only the leaf nodes in previous work. Therefore we can extract rich features for every node in the constituent parser tree. This is an advantage of treebased compression technique (Knight and Marcu, 2000; Galley and McKeown, 2007; Wang et al., 2013). Similar to (Li et al., 2013a), we use a pipeline summarization framework where multiple compression candidates are generated for each pre-selected important sentence, and then an ILP691 Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 691–701, October 25-29, 2014, Doha, Qatar. c�2014 Association for Computational Linguistics based summarization model is used to select the final compressed sentences. We evaluate our proposed method on the TAC 2008 and 2011 data sets using the standard ROUGE metr</context>
+<context position="7471" citStr="Knight and Marcu (2000)" startWordPosition="1103" endWordPosition="1106">treated the compression task as a sequence labeling problem and used CRF for it. Thadani and McKeown (2013) presented an approach for discriminative sentence compression that jointly produces sequential and syntactic representations for output text. Filippova and Altun (2013) presented a method to automatically build a sentence compression corpus with hundreds of thousands of instances on which deletion-based compression algorithms can be trained. In addition to the work on sentence compression as a stand-alone task, prior studies have also investigated compression for the summarization task. Knight and Marcu (2000) utilized the noisy channel and decision tree method to perform sentence compression in the summarization task. Lin (2003) showed that pure syntactic-based compression may not significantly improve the summarization performance. Zajic et al. (2007) compared two sentence compression approaches for multidocument summarization, including a ‘parse-andtrim’ and a noisy-channel approach. Galanis and Androutsopoulos (2010) used the maximum entropy model to generate the candidate compressions by removing branches from the source sentences. Woodsend and Lapata (2010) presented a joint content selection</context>
+</contexts>
+<marker>Knight, Marcu, 2000</marker>
+<rawString>Kevin Knight and Daniel Marcu. 2000. Statisticsbased summarization - step one: Sentence compression. In Proceedings ofAAAI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kevin Knight</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>Summarization beyond sentence extraction: A probabilistic approach to sentence compression.</title>
+<date>2002</date>
+<journal>Artificial Intelligence,</journal>
+<volume>139</volume>
+<issue>1</issue>
+<contexts>
+<context position="9099" citStr="Knight and Marcu, 2002" startWordPosition="1351" endWordPosition="1354">00; Siddharthan et al., 2004; Turner and Charniak, 2005; Galanis and Androutsopoulos, 2010; Wang et al., 2013), are tree-based approaches that operate on the parse trees and thus the compression decision can be made for a constituent, instead of a single word. 3 Sentence Compression Method Sentence compression is a task of producing a summary for a single sentence. The compressed sentence should be shorter, contain important content from the original sentence, and be grammatical. In some sense, sentence compression can be described as a ‘scaled down version of the text summarization problem’ (Knight and Marcu, 2002). Here similar to much previous work on sentence compression, we just focus on how to remove/select words in the original sentence without using operation like rewriting sentence. 3.1 Discriminative Compression Model by ILP McDonald (2006) presented a discriminative compression model, and Clarke and Lapata (2008) improved it by using ILP for decoding. Since our proposed method is based upon this model, in the following we briefly describe it first. Details can be found in (Clarke and Lapata, 2008). In this model, the following score function is used to evaluate each compression candidate: |y| </context>
+</contexts>
+<marker>Knight, Marcu, 2002</marker>
+<rawString>Kevin Knight and Daniel Marcu. 2002. Summarization beyond sentence extraction: A probabilistic approach to sentence compression. Artificial Intelligence, 139(1):91–107.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Julian Kupiec</author>
+<author>Jan Pedersen</author>
+<author>Francine Chen</author>
+</authors>
+<title>A trainable document summarizer.</title>
+<date>1995</date>
+<booktitle>In Proceedings of SIGIR.</booktitle>
+<contexts>
+<context position="4726" citStr="Kupiec et al., 1995" startWordPosition="700" endWordPosition="703">an yield significant performance gain in linguistic quality, without losing much performance on the ROUGE metric. 2 Related Work Summarization research has seen great development over the last fifty years (Nenkova and McKeown, 2011). Compared to the abstractive counterpart, extractive summarization has received considerable attention due to its clear problem formulation: to extract a set of salient and nonredundant sentences from the given document set. Both unsupervised and supervised approaches have been explored for sentence selection. Supervised approaches include the Bayesian classifier (Kupiec et al., 1995), maximum entropy (Osborne, 2002), skip-chain CRF (Galley, 2006), discriminative reranking (Aker et al., 2010), among others. The extractive summary sentence selection problem can also be formulated in an optimization framework. Previous methods include using integer linear programming (ILP) and submodular functions to solve the optimization problem (Gillick et al., 2009; Li et al., 2013b; Lin and Bilmes, 2010). Compressive summarization receives increasing attention in recent years, since it offers a viable step towards abstractive summarization. The compressed summaries can be generated thro</context>
+</contexts>
+<marker>Kupiec, Pedersen, Chen, 1995</marker>
+<rawString>Julian Kupiec, Jan Pedersen, and Francine Chen. 1995. A trainable document summarizer. In Proceedings of SIGIR.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chen Li</author>
+<author>Fei Liu</author>
+<author>Fuliang Weng</author>
+<author>Yang Liu</author>
+</authors>
+<title>Document summarization via guided sentence compression.</title>
+<date>2013</date>
+<booktitle>In Proceedings of the EMNLP.</booktitle>
+<contexts>
+<context position="3421" citStr="Li et al., 2013" startWordPosition="504" endWordPosition="507"> constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, 2006) and (Clarke and Lapata, 2008), but our method uses an expanded constituent parse tree rather than only the leaf nodes in previous work. Therefore we can extract rich features for every node in the constituent parser tree. This is an advantage of treebased compression technique (Knight and Marcu, 2000; Galley and McKeown, 2007; Wang et al., 2013). Similar to (Li et al., 2013a), we use a pipeline summarization framework where multiple compression candidates are generated for each pre-selected important sentence, and then an ILP691 Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 691–701, October 25-29, 2014, Doha, Qatar. c�2014 Association for Computational Linguistics based summarization model is used to select the final compressed sentences. We evaluate our proposed method on the TAC 2008 and 2011 data sets using the standard ROUGE metric (Lin, 2004) and human evaluation of the linguistic quality. Our results </context>
+<context position="5116" citStr="Li et al., 2013" startWordPosition="760" endWordPosition="763">alient and nonredundant sentences from the given document set. Both unsupervised and supervised approaches have been explored for sentence selection. Supervised approaches include the Bayesian classifier (Kupiec et al., 1995), maximum entropy (Osborne, 2002), skip-chain CRF (Galley, 2006), discriminative reranking (Aker et al., 2010), among others. The extractive summary sentence selection problem can also be formulated in an optimization framework. Previous methods include using integer linear programming (ILP) and submodular functions to solve the optimization problem (Gillick et al., 2009; Li et al., 2013b; Lin and Bilmes, 2010). Compressive summarization receives increasing attention in recent years, since it offers a viable step towards abstractive summarization. The compressed summaries can be generated through a joint model of the sentence selection and compression processes, or through a pipeline approach that integrates a sentence compression model with a summary sentence pre-selection or post-selection step. Many studies have explored the joint sentence compression and selection setting. Martins and Smith (2009) jointly performed sentence extraction and compression by solving an ILP pro</context>
+<context position="21298" citStr="Li et al., 2013" startWordPosition="3580" endWordPosition="3583">ery node in the expanded constituent parse tree is obtained automatically from the bottom to the top of the tree. Since every leaf node (word) is human annotated (removed or retain), we annotate the internal nodes as removed if all of its children are removed. Otherwise, the node is annotated as retained. During perceptron training, a fixed learning rate is used and parameters are averaged to prevent overfitting. In our experiment, we observe stable convergence using the held-out development corpus, with best performance usually obtained around 10-20 epochs. 4 Summarization System Similar to (Li et al., 2013a), our summarization system is , which consists of three key components: an initial sentence pre-selection module to select some important sentence candidates; the above compression model to generate n-best compressions for each sentence; and then an ILP summarization method to select the best summary sentences from the multiple compressed sentences. The sentence pre-selection model is a simple supervised support vector regression (SVR) model that predicts a salience score for each sentence and selects the top ranked sentences for further processing (compression and summarization). The target</context>
+<context position="23445" citStr="Li et al., 2013" startWordPosition="3929" endWordPosition="3932">me after getting one solution. 5 Experimental Results 5.1 Experimental Setup Summarization Data For summarization experiments, we use the standard TAC data sets1, which have been used in the NIST competitions. In particular, we used the TAC 2010 data set as training data for the SVR sentence pre-selection model, TAC 2009 data set as development set for parameter tuning, and the TAC 2008 and 2011 data as the test set for reporting the final summarization results. The training data for the sentence compression module in the summarization system is summary guided compression corpus annotated by (Li et al., 2013a) using TAC2010 data. In the compression module, for each word we also used its document level feature.2 Compression Data We also evaluate our compression model using the data set from (Clarke and Lapata, 2008). It includes 82 newswire articles with manually produced compression for each sentence. We use the same partitions as (Martins and Smith, 2009), i.e., 1,188 sentences for training and 441 for testing. Data Processing We use Stanford CoreNLP toolkit3 to tokenize the sentences, extract name entity tags, and generate the dependency parse tree. Berkeley Parser (Petrov et al., 2006) is adop</context>
+<context position="25398" citStr="Li et al., 2013" startWordPosition="4219" endWordPosition="4222">highest published results on this task. BergKirkpatrick et al. (2011) introduced a joint model for sentence extraction and compression. Woodsend and Lapata (2012) learned individual summary aspects from data, e.g., informativeness, succinctness, grammaticalness, stylistic writing conventions, and jointly optimized the outcome in an ILP framework. Ng et al. (2012) exploited category-specific information for multi-document summarization. Almeida and Martins (2013) proposed compressive summarization method by dual decomposition and multi-task learning. Our summarization framework is the same as (Li et al., 2013a), except they used a CRF-based compression model. In addition to the four previous studies, we also report the best achieved results in the TAC competitions. Table 3 shows the summarization results of our method and others. The top part contains the results for TAC 2008 data and bottom part is for TAC 2011 data. We use the ROUGE evaluation metrics (Lin, 2004), with R-2 measuring the bigram overlap between the system and reference summaries and R-SU4 measuring the skip-bigram with the maximum gap length of 4. In addition, we evaluate the linguistic quality (LQ) of the summaries for our system</context>
+<context position="27085" citStr="Li et al., 2013" startWordPosition="4492" endWordPosition="4495">ntence a grammar score and a coherence score for 4http://sourceforge.net/projects/pocket-crf-1/ 5http://svmlight.joachims.org/ 6http://www.gurobi.com 7We chose to evaluate the linguistic quality for this system because of two reasons: one is that we have an implementation of that method; the other more important one is that it has the highest reported ROUGE results among the compared methods. 697 System R-2 R-SU4 Gram Cohere TAC’08 Best System 11.03 13.96 n/a n/a (Berg-Kirk et al., 2011) 11.70 14.38 n/a n/a (Woodsend et al., 2012) 11.37 14.47 n/a n/a (Almeida et al.,2013) 12.30 15.18 n/a n/a (Li et al., 2013a) 12.35 15.27 3.81 3.41 Our System 12.23 15.47 4.29 4.11 TAC’11 Best System 13.44 16.51 n/a n/a (Ng et al., 2012) 13.93 16.83 n/a n/a (Li et al., 2013a) 14.40 16.89 3.67 3.32 Our System 14.04 16.67 4.18 4.07 Table 3: Summarization results on the TAC 2008 and 2011 data sets. each topic. The score is scaled and ranges from 1 (bad) to 5 (good). Therefore, in table 3, the grammar score is the average score for each sentence and coherence score is the average for each topic. We measure annotators’ agreement in the following way: we consider the scores from each annotator as a distribution and we f</context>
+<context position="28327" citStr="Li et al., 2013" startWordPosition="4710" endWordPosition="4713">butions are not statistically significantly different each other (p &gt; 0.05 based on paired t-test). We can see from the table that in general, our system achieves better ROUGE results than most previous work except (Li et al., 2013a) on both TAC 2008 and TAC 2011 data. However, our system’s linguistic quality is better than (Li et al., 2013a). The CRF-based compression model used in (Li et al., 2013a) can not well model the grammar. Particularly, our results (ROUGE-2) are statistically significantly (p &lt; 0.05) higher than TAC08 Best system, but are not statistically significant compared with (Li et al., 2013a) (p &gt; 0.05). The pattern is similar in TAC 2011 data. Our result (R-2) is statistically significantly (p &lt; 0.05) better than TAC11 Best system, but not statistically (p &gt; 0.05) significantly different from (Li et al., 2013a). However, for the grammar and coherence score, our results are statistically significantly (p &lt; 0.05) than (Li et al., 2013a). All the above statistics are based on paired t-test. 5.3 Compression Results The results above show that our summarization system is competitive. In this section we focus on the evaluation of our proposed compression method. We compare our compre</context>
+<context position="30949" citStr="Li et al., 2013" startWordPosition="5143" endWordPosition="5146">, similar to the state-of-the-art systems. To evaluate the power of using the expanded parse tree in our model, we conducted another experiment where we only consider the bottom level of the constituent parse tree. In some sense, this could be considered as the system in (Clarke and Lapata, 2008). Furthermore, we use two different setups: one uses the lexical features (about the words) and the other does not. Table 5 shows the results using the data in (Clarke and Lapata, 2008). For a comparison, we also include the results using the CRF-based compression model (the one used in (Nomoto, 2007; Li et al., 2013a)). We report results using both the automatically calculated compression metrics and the linguistic quality score. Three English native speaker annotators were asked to judge two aspects of the compressed sentence compared with the gold result: one is the content that looks at whether the important words are kept and the other is the grammar score which evaluates the sentence’s readability. Each of these 698 two scores ranges from 1(bad) to 5(good). Table 5 shows that when using lexical features, our system has statistically significantly (p &lt; 0.05) higher Grammar value and content importanc</context>
+</contexts>
+<marker>Li, Liu, Weng, Liu, 2013</marker>
+<rawString>Chen Li, Fei Liu, Fuliang Weng, and Yang Liu. 2013a. Document summarization via guided sentence compression. In Proceedings of the EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chen Li</author>
+<author>Xian Qian</author>
+<author>Yang Liu</author>
+</authors>
+<title>Using supervised bigram-based ilp for extractive summarization.</title>
+<date>2013</date>
+<booktitle>In Proceedings ofACL.</booktitle>
+<contexts>
+<context position="3421" citStr="Li et al., 2013" startWordPosition="504" endWordPosition="507"> constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, 2006) and (Clarke and Lapata, 2008), but our method uses an expanded constituent parse tree rather than only the leaf nodes in previous work. Therefore we can extract rich features for every node in the constituent parser tree. This is an advantage of treebased compression technique (Knight and Marcu, 2000; Galley and McKeown, 2007; Wang et al., 2013). Similar to (Li et al., 2013a), we use a pipeline summarization framework where multiple compression candidates are generated for each pre-selected important sentence, and then an ILP691 Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 691–701, October 25-29, 2014, Doha, Qatar. c�2014 Association for Computational Linguistics based summarization model is used to select the final compressed sentences. We evaluate our proposed method on the TAC 2008 and 2011 data sets using the standard ROUGE metric (Lin, 2004) and human evaluation of the linguistic quality. Our results </context>
+<context position="5116" citStr="Li et al., 2013" startWordPosition="760" endWordPosition="763">alient and nonredundant sentences from the given document set. Both unsupervised and supervised approaches have been explored for sentence selection. Supervised approaches include the Bayesian classifier (Kupiec et al., 1995), maximum entropy (Osborne, 2002), skip-chain CRF (Galley, 2006), discriminative reranking (Aker et al., 2010), among others. The extractive summary sentence selection problem can also be formulated in an optimization framework. Previous methods include using integer linear programming (ILP) and submodular functions to solve the optimization problem (Gillick et al., 2009; Li et al., 2013b; Lin and Bilmes, 2010). Compressive summarization receives increasing attention in recent years, since it offers a viable step towards abstractive summarization. The compressed summaries can be generated through a joint model of the sentence selection and compression processes, or through a pipeline approach that integrates a sentence compression model with a summary sentence pre-selection or post-selection step. Many studies have explored the joint sentence compression and selection setting. Martins and Smith (2009) jointly performed sentence extraction and compression by solving an ILP pro</context>
+<context position="21298" citStr="Li et al., 2013" startWordPosition="3580" endWordPosition="3583">ery node in the expanded constituent parse tree is obtained automatically from the bottom to the top of the tree. Since every leaf node (word) is human annotated (removed or retain), we annotate the internal nodes as removed if all of its children are removed. Otherwise, the node is annotated as retained. During perceptron training, a fixed learning rate is used and parameters are averaged to prevent overfitting. In our experiment, we observe stable convergence using the held-out development corpus, with best performance usually obtained around 10-20 epochs. 4 Summarization System Similar to (Li et al., 2013a), our summarization system is , which consists of three key components: an initial sentence pre-selection module to select some important sentence candidates; the above compression model to generate n-best compressions for each sentence; and then an ILP summarization method to select the best summary sentences from the multiple compressed sentences. The sentence pre-selection model is a simple supervised support vector regression (SVR) model that predicts a salience score for each sentence and selects the top ranked sentences for further processing (compression and summarization). The target</context>
+<context position="23445" citStr="Li et al., 2013" startWordPosition="3929" endWordPosition="3932">me after getting one solution. 5 Experimental Results 5.1 Experimental Setup Summarization Data For summarization experiments, we use the standard TAC data sets1, which have been used in the NIST competitions. In particular, we used the TAC 2010 data set as training data for the SVR sentence pre-selection model, TAC 2009 data set as development set for parameter tuning, and the TAC 2008 and 2011 data as the test set for reporting the final summarization results. The training data for the sentence compression module in the summarization system is summary guided compression corpus annotated by (Li et al., 2013a) using TAC2010 data. In the compression module, for each word we also used its document level feature.2 Compression Data We also evaluate our compression model using the data set from (Clarke and Lapata, 2008). It includes 82 newswire articles with manually produced compression for each sentence. We use the same partitions as (Martins and Smith, 2009), i.e., 1,188 sentences for training and 441 for testing. Data Processing We use Stanford CoreNLP toolkit3 to tokenize the sentences, extract name entity tags, and generate the dependency parse tree. Berkeley Parser (Petrov et al., 2006) is adop</context>
+<context position="25398" citStr="Li et al., 2013" startWordPosition="4219" endWordPosition="4222">highest published results on this task. BergKirkpatrick et al. (2011) introduced a joint model for sentence extraction and compression. Woodsend and Lapata (2012) learned individual summary aspects from data, e.g., informativeness, succinctness, grammaticalness, stylistic writing conventions, and jointly optimized the outcome in an ILP framework. Ng et al. (2012) exploited category-specific information for multi-document summarization. Almeida and Martins (2013) proposed compressive summarization method by dual decomposition and multi-task learning. Our summarization framework is the same as (Li et al., 2013a), except they used a CRF-based compression model. In addition to the four previous studies, we also report the best achieved results in the TAC competitions. Table 3 shows the summarization results of our method and others. The top part contains the results for TAC 2008 data and bottom part is for TAC 2011 data. We use the ROUGE evaluation metrics (Lin, 2004), with R-2 measuring the bigram overlap between the system and reference summaries and R-SU4 measuring the skip-bigram with the maximum gap length of 4. In addition, we evaluate the linguistic quality (LQ) of the summaries for our system</context>
+<context position="27085" citStr="Li et al., 2013" startWordPosition="4492" endWordPosition="4495">ntence a grammar score and a coherence score for 4http://sourceforge.net/projects/pocket-crf-1/ 5http://svmlight.joachims.org/ 6http://www.gurobi.com 7We chose to evaluate the linguistic quality for this system because of two reasons: one is that we have an implementation of that method; the other more important one is that it has the highest reported ROUGE results among the compared methods. 697 System R-2 R-SU4 Gram Cohere TAC’08 Best System 11.03 13.96 n/a n/a (Berg-Kirk et al., 2011) 11.70 14.38 n/a n/a (Woodsend et al., 2012) 11.37 14.47 n/a n/a (Almeida et al.,2013) 12.30 15.18 n/a n/a (Li et al., 2013a) 12.35 15.27 3.81 3.41 Our System 12.23 15.47 4.29 4.11 TAC’11 Best System 13.44 16.51 n/a n/a (Ng et al., 2012) 13.93 16.83 n/a n/a (Li et al., 2013a) 14.40 16.89 3.67 3.32 Our System 14.04 16.67 4.18 4.07 Table 3: Summarization results on the TAC 2008 and 2011 data sets. each topic. The score is scaled and ranges from 1 (bad) to 5 (good). Therefore, in table 3, the grammar score is the average score for each sentence and coherence score is the average for each topic. We measure annotators’ agreement in the following way: we consider the scores from each annotator as a distribution and we f</context>
+<context position="28327" citStr="Li et al., 2013" startWordPosition="4710" endWordPosition="4713">butions are not statistically significantly different each other (p &gt; 0.05 based on paired t-test). We can see from the table that in general, our system achieves better ROUGE results than most previous work except (Li et al., 2013a) on both TAC 2008 and TAC 2011 data. However, our system’s linguistic quality is better than (Li et al., 2013a). The CRF-based compression model used in (Li et al., 2013a) can not well model the grammar. Particularly, our results (ROUGE-2) are statistically significantly (p &lt; 0.05) higher than TAC08 Best system, but are not statistically significant compared with (Li et al., 2013a) (p &gt; 0.05). The pattern is similar in TAC 2011 data. Our result (R-2) is statistically significantly (p &lt; 0.05) better than TAC11 Best system, but not statistically (p &gt; 0.05) significantly different from (Li et al., 2013a). However, for the grammar and coherence score, our results are statistically significantly (p &lt; 0.05) than (Li et al., 2013a). All the above statistics are based on paired t-test. 5.3 Compression Results The results above show that our summarization system is competitive. In this section we focus on the evaluation of our proposed compression method. We compare our compre</context>
+<context position="30949" citStr="Li et al., 2013" startWordPosition="5143" endWordPosition="5146">, similar to the state-of-the-art systems. To evaluate the power of using the expanded parse tree in our model, we conducted another experiment where we only consider the bottom level of the constituent parse tree. In some sense, this could be considered as the system in (Clarke and Lapata, 2008). Furthermore, we use two different setups: one uses the lexical features (about the words) and the other does not. Table 5 shows the results using the data in (Clarke and Lapata, 2008). For a comparison, we also include the results using the CRF-based compression model (the one used in (Nomoto, 2007; Li et al., 2013a)). We report results using both the automatically calculated compression metrics and the linguistic quality score. Three English native speaker annotators were asked to judge two aspects of the compressed sentence compared with the gold result: one is the content that looks at whether the important words are kept and the other is the grammar score which evaluates the sentence’s readability. Each of these 698 two scores ranges from 1(bad) to 5(good). Table 5 shows that when using lexical features, our system has statistically significantly (p &lt; 0.05) higher Grammar value and content importanc</context>
+</contexts>
+<marker>Li, Qian, Liu, 2013</marker>
+<rawString>Chen Li, Xian Qian, and Yang Liu. 2013b. Using supervised bigram-based ilp for extractive summarization. In Proceedings ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hui Lin</author>
+<author>Jeff Bilmes</author>
+</authors>
+<title>Multi-document summarization via budgeted maximization of submodular functions.</title>
+<date>2010</date>
+<booktitle>In Proceedings ofNAACL.</booktitle>
+<contexts>
+<context position="5140" citStr="Lin and Bilmes, 2010" startWordPosition="764" endWordPosition="767">ndant sentences from the given document set. Both unsupervised and supervised approaches have been explored for sentence selection. Supervised approaches include the Bayesian classifier (Kupiec et al., 1995), maximum entropy (Osborne, 2002), skip-chain CRF (Galley, 2006), discriminative reranking (Aker et al., 2010), among others. The extractive summary sentence selection problem can also be formulated in an optimization framework. Previous methods include using integer linear programming (ILP) and submodular functions to solve the optimization problem (Gillick et al., 2009; Li et al., 2013b; Lin and Bilmes, 2010). Compressive summarization receives increasing attention in recent years, since it offers a viable step towards abstractive summarization. The compressed summaries can be generated through a joint model of the sentence selection and compression processes, or through a pipeline approach that integrates a sentence compression model with a summary sentence pre-selection or post-selection step. Many studies have explored the joint sentence compression and selection setting. Martins and Smith (2009) jointly performed sentence extraction and compression by solving an ILP problem. Berg-Kirkpatrick e</context>
+</contexts>
+<marker>Lin, Bilmes, 2010</marker>
+<rawString>Hui Lin and Jeff Bilmes. 2010. Multi-document summarization via budgeted maximization of submodular functions. In Proceedings ofNAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chin-Yew Lin</author>
+</authors>
+<title>Improving summarization performance by sentence compression - A pilot study.</title>
+<date>2003</date>
+<booktitle>In Proceeding of the Sixth International Workshop on Information Retrieval with Asian Language.</booktitle>
+<contexts>
+<context position="2393" citStr="Lin, 2003" startWordPosition="338" endWordPosition="339"> has been a surge of interest in recent years on generating compressed document summaries as a viable step towards abstractive summarization. These compressive summaries often contain more information than sentence-based extractive summaries since they can remove insignificant sentence constituents and make space for more salient information that is otherwise dropped due to the summary length constraint. Two general strategies have been used for compressive summarization. One is a pipeline approach, where sentencebased extractive summarization is followed or proceeded by sentence compression (Lin, 2003; Zajic et al., 2007; Vanderwende et al., 2007; Wang et al., 2013). Another line of work uses joint compression and summarization. Such methods have been shown to achieve promising performance (Daum´e, 2006; Chali and Hasan, 2012; Almeida and Martins, 2013; Qian and Liu, 2013), but they are typically computationally expensive. In this study, we propose an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminati</context>
+<context position="7593" citStr="Lin (2003)" startWordPosition="1124" endWordPosition="1125">iscriminative sentence compression that jointly produces sequential and syntactic representations for output text. Filippova and Altun (2013) presented a method to automatically build a sentence compression corpus with hundreds of thousands of instances on which deletion-based compression algorithms can be trained. In addition to the work on sentence compression as a stand-alone task, prior studies have also investigated compression for the summarization task. Knight and Marcu (2000) utilized the noisy channel and decision tree method to perform sentence compression in the summarization task. Lin (2003) showed that pure syntactic-based compression may not significantly improve the summarization performance. Zajic et al. (2007) compared two sentence compression approaches for multidocument summarization, including a ‘parse-andtrim’ and a noisy-channel approach. Galanis and Androutsopoulos (2010) used the maximum entropy model to generate the candidate compressions by removing branches from the source sentences. Woodsend and Lapata (2010) presented a joint content selection and compression model for single-document summarization. They operated over a phrase-based representation of the source d</context>
+</contexts>
+<marker>Lin, 2003</marker>
+<rawString>Chin-Yew Lin. 2003. Improving summarization performance by sentence compression - A pilot study. In Proceeding of the Sixth International Workshop on Information Retrieval with Asian Language.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chin-Yew Lin</author>
+</authors>
+<title>Rouge: a package for automatic evaluation of summaries.</title>
+<date>2004</date>
+<booktitle>In Proceedings ofACL.</booktitle>
+<contexts>
+<context position="3960" citStr="Lin, 2004" startWordPosition="586" endWordPosition="587">lley and McKeown, 2007; Wang et al., 2013). Similar to (Li et al., 2013a), we use a pipeline summarization framework where multiple compression candidates are generated for each pre-selected important sentence, and then an ILP691 Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 691–701, October 25-29, 2014, Doha, Qatar. c�2014 Association for Computational Linguistics based summarization model is used to select the final compressed sentences. We evaluate our proposed method on the TAC 2008 and 2011 data sets using the standard ROUGE metric (Lin, 2004) and human evaluation of the linguistic quality. Our results show that using our proposed sentence compression model in the summarization system can yield significant performance gain in linguistic quality, without losing much performance on the ROUGE metric. 2 Related Work Summarization research has seen great development over the last fifty years (Nenkova and McKeown, 2011). Compared to the abstractive counterpart, extractive summarization has received considerable attention due to its clear problem formulation: to extract a set of salient and nonredundant sentences from the given document s</context>
+<context position="25761" citStr="Lin, 2004" startWordPosition="4286" endWordPosition="4287">ploited category-specific information for multi-document summarization. Almeida and Martins (2013) proposed compressive summarization method by dual decomposition and multi-task learning. Our summarization framework is the same as (Li et al., 2013a), except they used a CRF-based compression model. In addition to the four previous studies, we also report the best achieved results in the TAC competitions. Table 3 shows the summarization results of our method and others. The top part contains the results for TAC 2008 data and bottom part is for TAC 2011 data. We use the ROUGE evaluation metrics (Lin, 2004), with R-2 measuring the bigram overlap between the system and reference summaries and R-SU4 measuring the skip-bigram with the maximum gap length of 4. In addition, we evaluate the linguistic quality (LQ) of the summaries for our system and (Li et al., 2013a).7 The linguistic quality consists of two parts. One evaluates the grammar quality within a sentence. For this, annotators marked if a compressed sentence is grammatically correct. Typical grammar errors include lack of verb or subordinate clause. The other evaluates the coherence between sentences, including the order of sentences and ir</context>
+</contexts>
+<marker>Lin, 2004</marker>
+<rawString>Chin-Yew Lin. 2004. Rouge: a package for automatic evaluation of summaries. In Proceedings ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Fei Liu</author>
+<author>Yang Liu</author>
+</authors>
+<title>Towards abstractive speech summarization: Exploring unsupervised and supervised approaches for spoken utterance compression.</title>
+<date>2013</date>
+<journal>IEEE Transactions on Audio, Speech, and Language Processing.</journal>
+<contexts>
+<context position="8307" citStr="Liu and Liu (2013)" startWordPosition="1224" endWordPosition="1227">rformance. Zajic et al. (2007) compared two sentence compression approaches for multidocument summarization, including a ‘parse-andtrim’ and a noisy-channel approach. Galanis and Androutsopoulos (2010) used the maximum entropy model to generate the candidate compressions by removing branches from the source sentences. Woodsend and Lapata (2010) presented a joint content selection and compression model for single-document summarization. They operated over a phrase-based representation of the source document which they obtained by merging information from PCFG parse trees and dependency graphs. Liu and Liu (2013) adopted the CRFbased sentence compression approach for summa692 rizing spoken documents. Unlike the word-based operation, some of these models e.g (Knight and Marcu, 2000; Siddharthan et al., 2004; Turner and Charniak, 2005; Galanis and Androutsopoulos, 2010; Wang et al., 2013), are tree-based approaches that operate on the parse trees and thus the compression decision can be made for a constituent, instead of a single word. 3 Sentence Compression Method Sentence compression is a task of producing a summary for a single sentence. The compressed sentence should be shorter, contain important co</context>
+</contexts>
+<marker>Liu, Liu, 2013</marker>
+<rawString>Fei Liu and Yang Liu. 2013. Towards abstractive speech summarization: Exploring unsupervised and supervised approaches for spoken utterance compression. IEEE Transactions on Audio, Speech, and Language Processing.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Marie-Catherine de Marneffe</author>
+<author>Christopher D Manning</author>
+</authors>
+<date>2002</date>
+<note>Stanford typed dependencies manual.</note>
+<marker>de Marneffe, Manning, 2002</marker>
+<rawString>Marie-Catherine de Marneffe and Christopher D Manning. 2002. Stanford typed dependencies manual.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andre F T Martins</author>
+<author>Noah A Smith</author>
+</authors>
+<title>Summarization with a joint model for sentence extraction and compression.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the ACL Workshop on Integer Linear Programmingfor Natural Language Processing.</booktitle>
+<contexts>
+<context position="5640" citStr="Martins and Smith (2009)" startWordPosition="835" endWordPosition="838">P) and submodular functions to solve the optimization problem (Gillick et al., 2009; Li et al., 2013b; Lin and Bilmes, 2010). Compressive summarization receives increasing attention in recent years, since it offers a viable step towards abstractive summarization. The compressed summaries can be generated through a joint model of the sentence selection and compression processes, or through a pipeline approach that integrates a sentence compression model with a summary sentence pre-selection or post-selection step. Many studies have explored the joint sentence compression and selection setting. Martins and Smith (2009) jointly performed sentence extraction and compression by solving an ILP problem. Berg-Kirkpatrick et al. (2011) proposed an approach to score the candidate summaries according to a combined linear model of extractive sentence selection and compression. They trained the model using a margin-based objective whose loss captures the final summary quality. Woodsend and Lapata (2012) presented another method where the summary’s informativeness, succinctness, and grammaticality are learned separately from data but optimized jointly using an ILP setup. Yoshikawa et al. (2012) incorporated semantic ro</context>
+<context position="23800" citStr="Martins and Smith, 2009" startWordPosition="3988" endWordPosition="3991"> set for parameter tuning, and the TAC 2008 and 2011 data as the test set for reporting the final summarization results. The training data for the sentence compression module in the summarization system is summary guided compression corpus annotated by (Li et al., 2013a) using TAC2010 data. In the compression module, for each word we also used its document level feature.2 Compression Data We also evaluate our compression model using the data set from (Clarke and Lapata, 2008). It includes 82 newswire articles with manually produced compression for each sentence. We use the same partitions as (Martins and Smith, 2009), i.e., 1,188 sentences for training and 441 for testing. Data Processing We use Stanford CoreNLP toolkit3 to tokenize the sentences, extract name entity tags, and generate the dependency parse tree. Berkeley Parser (Petrov et al., 2006) is adopted to obtain the constituent parse tree for every sentence and POS tag for every token. We use Pocket 1http://www.nist.gov/tac/data/index.html 2Document level features for a word include information such as the word’s document frequency in a topic. These features cannot be extracted from a single sentence, as in the standard sentence compression task, </context>
+<context position="29521" citStr="Martins and Smith (2009)" startWordPosition="4902" endWordPosition="4906"> method. We compare our compression system against four other models. HedgeTrimmer in Dorr et al. (2003) applied a variety of linguisticallymotivated heuristics to guide the sentences comSystem C Rate (%) Uni-F1 Rel-F1 HedgeTrimmer 57.64 0.64 0.50 McDonald (2006) 70.95 0.77 0.55 Martins (2009) 71.35 0.77 0.56 Wang (2013) 68.06 0.79 0.59 Our System 71.19 0.77 0.58 Table 4: Sentence compression results. The human compression rate of the test set is 69%. pression; McDonald (2006) used the output of two parsers as features in a discriminative model that decomposes over pairs of consecutive words; Martins and Smith (2009) built the compression model in the dependency parse and utilized the relationship between the head and modifier to preserve the grammar relationship; Wang et al. (2013) developed a novel beam search decoder using the treebased compression model on the constituent parse tree, which could find the most probable compression efficiently. Table 4 shows the compression results of various systems, along with the compression ratio (C Rate) of the system output. We adopt the compression metrics as used in (Martins and Smith, 2009) that measures the macro F-measure for the retained unigrams (Uni-F1), a</context>
+</contexts>
+<marker>Martins, Smith, 2009</marker>
+<rawString>Andre F. T. Martins and Noah A. Smith. 2009. Summarization with a joint model for sentence extraction and compression. In Proceedings of the ACL Workshop on Integer Linear Programmingfor Natural Language Processing.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ryan McDonald</author>
+</authors>
+<title>Discriminative sentence compression with soft syntactic evidence.</title>
+<date>2006</date>
+<booktitle>In Proceedings of EACL.</booktitle>
+<contexts>
+<context position="3044" citStr="McDonald, 2006" startWordPosition="441" endWordPosition="442"> al., 2007; Wang et al., 2013). Another line of work uses joint compression and summarization. Such methods have been shown to achieve promising performance (Daum´e, 2006; Chali and Hasan, 2012; Almeida and Martins, 2013; Qian and Liu, 2013), but they are typically computationally expensive. In this study, we propose an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, 2006) and (Clarke and Lapata, 2008), but our method uses an expanded constituent parse tree rather than only the leaf nodes in previous work. Therefore we can extract rich features for every node in the constituent parser tree. This is an advantage of treebased compression technique (Knight and Marcu, 2000; Galley and McKeown, 2007; Wang et al., 2013). Similar to (Li et al., 2013a), we use a pipeline summarization framework where multiple compression candidates are generated for each pre-selected important sentence, and then an ILP691 Proceedings of the 2014 Conference on Empirical Methods in Natur</context>
+<context position="6533" citStr="McDonald (2006)" startWordPosition="970" endWordPosition="971">sing a margin-based objective whose loss captures the final summary quality. Woodsend and Lapata (2012) presented another method where the summary’s informativeness, succinctness, and grammaticality are learned separately from data but optimized jointly using an ILP setup. Yoshikawa et al. (2012) incorporated semantic role information in the ILP model. Our work is closely related with the pipeline approach, where sentence-based extractive summarization is followed or proceeded by sentence compression. There have been many studies on sentence compression, independent of the summarization task. McDonald (2006) firstly introduced a discriminative sentence compression model to directly optimize the quality of the compressed sentences produced. Clarke and Lapata (2008) improved the above discriminative model by using ILP in decoding, making it convenient to add constraints to preserve grammatical structure. Nomoto (2007) treated the compression task as a sequence labeling problem and used CRF for it. Thadani and McKeown (2013) presented an approach for discriminative sentence compression that jointly produces sequential and syntactic representations for output text. Filippova and Altun (2013) presente</context>
+<context position="9338" citStr="McDonald (2006)" startWordPosition="1389" endWordPosition="1390"> single word. 3 Sentence Compression Method Sentence compression is a task of producing a summary for a single sentence. The compressed sentence should be shorter, contain important content from the original sentence, and be grammatical. In some sense, sentence compression can be described as a ‘scaled down version of the text summarization problem’ (Knight and Marcu, 2002). Here similar to much previous work on sentence compression, we just focus on how to remove/select words in the original sentence without using operation like rewriting sentence. 3.1 Discriminative Compression Model by ILP McDonald (2006) presented a discriminative compression model, and Clarke and Lapata (2008) improved it by using ILP for decoding. Since our proposed method is based upon this model, in the following we briefly describe it first. Details can be found in (Clarke and Lapata, 2008). In this model, the following score function is used to evaluate each compression candidate: |y| s(x, y) = X s(x, L(yj−1), L(yj)) (1) j=2 where x = x1x2, ..., xn represents an original sentence and y = y1y2,..., ym denotes a compressed sentence. Because the sentence compression problem is defined as a word deletion task, yj must occur</context>
+<context position="29160" citStr="McDonald (2006)" startWordPosition="4844" endWordPosition="4845">, 2013a). However, for the grammar and coherence score, our results are statistically significantly (p &lt; 0.05) than (Li et al., 2013a). All the above statistics are based on paired t-test. 5.3 Compression Results The results above show that our summarization system is competitive. In this section we focus on the evaluation of our proposed compression method. We compare our compression system against four other models. HedgeTrimmer in Dorr et al. (2003) applied a variety of linguisticallymotivated heuristics to guide the sentences comSystem C Rate (%) Uni-F1 Rel-F1 HedgeTrimmer 57.64 0.64 0.50 McDonald (2006) 70.95 0.77 0.55 Martins (2009) 71.35 0.77 0.56 Wang (2013) 68.06 0.79 0.59 Our System 71.19 0.77 0.58 Table 4: Sentence compression results. The human compression rate of the test set is 69%. pression; McDonald (2006) used the output of two parsers as features in a discriminative model that decomposes over pairs of consecutive words; Martins and Smith (2009) built the compression model in the dependency parse and utilized the relationship between the head and modifier to preserve the grammar relationship; Wang et al. (2013) developed a novel beam search decoder using the treebased compression</context>
+</contexts>
+<marker>McDonald, 2006</marker>
+<rawString>Ryan McDonald. 2006. Discriminative sentence compression with soft syntactic evidence. In Proceedings of EACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ani Nenkova</author>
+<author>Kathleen McKeown</author>
+</authors>
+<title>Automatic summarization. Foundations and Trends in Information Retrieval.</title>
+<date>2011</date>
+<contexts>
+<context position="4338" citStr="Nenkova and McKeown, 2011" startWordPosition="641" endWordPosition="645">Doha, Qatar. c�2014 Association for Computational Linguistics based summarization model is used to select the final compressed sentences. We evaluate our proposed method on the TAC 2008 and 2011 data sets using the standard ROUGE metric (Lin, 2004) and human evaluation of the linguistic quality. Our results show that using our proposed sentence compression model in the summarization system can yield significant performance gain in linguistic quality, without losing much performance on the ROUGE metric. 2 Related Work Summarization research has seen great development over the last fifty years (Nenkova and McKeown, 2011). Compared to the abstractive counterpart, extractive summarization has received considerable attention due to its clear problem formulation: to extract a set of salient and nonredundant sentences from the given document set. Both unsupervised and supervised approaches have been explored for sentence selection. Supervised approaches include the Bayesian classifier (Kupiec et al., 1995), maximum entropy (Osborne, 2002), skip-chain CRF (Galley, 2006), discriminative reranking (Aker et al., 2010), among others. The extractive summary sentence selection problem can also be formulated in an optimiz</context>
+</contexts>
+<marker>Nenkova, McKeown, 2011</marker>
+<rawString>Ani Nenkova and Kathleen McKeown. 2011. Automatic summarization. Foundations and Trends in Information Retrieval.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jun-Ping Ng</author>
+<author>Praveen Bysani</author>
+<author>Ziheng Lin</author>
+<author>Min-Yen Kan</author>
+<author>Chew-Lim Tan</author>
+</authors>
+<title>Exploiting category-specific information for multi-document summarization.</title>
+<date>2012</date>
+<booktitle>In Proceedings of COLING.</booktitle>
+<contexts>
+<context position="22185" citStr="Ng et al., 2012" startWordPosition="3716" endWordPosition="3719">ethod to select the best summary sentences from the multiple compressed sentences. The sentence pre-selection model is a simple supervised support vector regression (SVR) model that predicts a salience score for each sentence and selects the top ranked sentences for further processing (compression and summarization). The target value for each sentence during training is the ROUGE-2 score between the sentence and the human written abstracts. We use three common features: (1) sentence position in the document; (2) sentence length; and (3) interpolated n-gram document frequency as introduced in (Ng et al., 2012). The final sentence selection process follows the 696 ILP method introduced in (Gillick et al., 2009). Word bi-grams are used as concepts, and their document frequency is used as weights. Since we use multiple compressions for one sentence, an additional constraint is used: for each sentence, only one of its n-best compressions may be included in the summary. For the compression module, using the ILP method described above only finds the best compression result for a given sentence. To generate n-best compression candidates, we use an iterative approach – we add one more constraints to preven</context>
+<context position="25148" citStr="Ng et al. (2012)" startWordPosition="4186" endWordPosition="4189">ce compression model. SVMlight5 is used for the summary sentence pre-selection model. Gurobi ILP solver6 does all ILP decoding. 5.2 Summarization Results We compare our summarization system against four recent studies, which have reported some of the highest published results on this task. BergKirkpatrick et al. (2011) introduced a joint model for sentence extraction and compression. Woodsend and Lapata (2012) learned individual summary aspects from data, e.g., informativeness, succinctness, grammaticalness, stylistic writing conventions, and jointly optimized the outcome in an ILP framework. Ng et al. (2012) exploited category-specific information for multi-document summarization. Almeida and Martins (2013) proposed compressive summarization method by dual decomposition and multi-task learning. Our summarization framework is the same as (Li et al., 2013a), except they used a CRF-based compression model. In addition to the four previous studies, we also report the best achieved results in the TAC competitions. Table 3 shows the summarization results of our method and others. The top part contains the results for TAC 2008 data and bottom part is for TAC 2011 data. We use the ROUGE evaluation metric</context>
+<context position="27199" citStr="Ng et al., 2012" startWordPosition="4513" endWordPosition="4516">joachims.org/ 6http://www.gurobi.com 7We chose to evaluate the linguistic quality for this system because of two reasons: one is that we have an implementation of that method; the other more important one is that it has the highest reported ROUGE results among the compared methods. 697 System R-2 R-SU4 Gram Cohere TAC’08 Best System 11.03 13.96 n/a n/a (Berg-Kirk et al., 2011) 11.70 14.38 n/a n/a (Woodsend et al., 2012) 11.37 14.47 n/a n/a (Almeida et al.,2013) 12.30 15.18 n/a n/a (Li et al., 2013a) 12.35 15.27 3.81 3.41 Our System 12.23 15.47 4.29 4.11 TAC’11 Best System 13.44 16.51 n/a n/a (Ng et al., 2012) 13.93 16.83 n/a n/a (Li et al., 2013a) 14.40 16.89 3.67 3.32 Our System 14.04 16.67 4.18 4.07 Table 3: Summarization results on the TAC 2008 and 2011 data sets. each topic. The score is scaled and ranges from 1 (bad) to 5 (good). Therefore, in table 3, the grammar score is the average score for each sentence and coherence score is the average for each topic. We measure annotators’ agreement in the following way: we consider the scores from each annotator as a distribution and we find that these three distributions are not statistically significantly different each other (p &gt; 0.05 based on pai</context>
+</contexts>
+<marker>Ng, Bysani, Lin, Kan, Tan, 2012</marker>
+<rawString>Jun-Ping Ng, Praveen Bysani, Ziheng Lin, Min-Yen Kan, and Chew-Lim Tan. 2012. Exploiting category-specific information for multi-document summarization. In Proceedings of COLING.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tadashi Nomoto</author>
+</authors>
+<title>Discriminative sentence compression with conditional random fields. Information Processing and Management.</title>
+<date>2007</date>
+<contexts>
+<context position="6847" citStr="Nomoto (2007)" startWordPosition="1014" endWordPosition="1015">tic role information in the ILP model. Our work is closely related with the pipeline approach, where sentence-based extractive summarization is followed or proceeded by sentence compression. There have been many studies on sentence compression, independent of the summarization task. McDonald (2006) firstly introduced a discriminative sentence compression model to directly optimize the quality of the compressed sentences produced. Clarke and Lapata (2008) improved the above discriminative model by using ILP in decoding, making it convenient to add constraints to preserve grammatical structure. Nomoto (2007) treated the compression task as a sequence labeling problem and used CRF for it. Thadani and McKeown (2013) presented an approach for discriminative sentence compression that jointly produces sequential and syntactic representations for output text. Filippova and Altun (2013) presented a method to automatically build a sentence compression corpus with hundreds of thousands of instances on which deletion-based compression algorithms can be trained. In addition to the work on sentence compression as a stand-alone task, prior studies have also investigated compression for the summarization task.</context>
+<context position="30932" citStr="Nomoto, 2007" startWordPosition="5141" endWordPosition="5142"> performs well, similar to the state-of-the-art systems. To evaluate the power of using the expanded parse tree in our model, we conducted another experiment where we only consider the bottom level of the constituent parse tree. In some sense, this could be considered as the system in (Clarke and Lapata, 2008). Furthermore, we use two different setups: one uses the lexical features (about the words) and the other does not. Table 5 shows the results using the data in (Clarke and Lapata, 2008). For a comparison, we also include the results using the CRF-based compression model (the one used in (Nomoto, 2007; Li et al., 2013a)). We report results using both the automatically calculated compression metrics and the linguistic quality score. Three English native speaker annotators were asked to judge two aspects of the compressed sentence compared with the gold result: one is the content that looks at whether the important words are kept and the other is the grammar score which evaluates the sentence’s readability. Each of these 698 two scores ranges from 1(bad) to 5(good). Table 5 shows that when using lexical features, our system has statistically significantly (p &lt; 0.05) higher Grammar value and </context>
+</contexts>
+<marker>Nomoto, 2007</marker>
+<rawString>Tadashi Nomoto. 2007. Discriminative sentence compression with conditional random fields. Information Processing and Management.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Miles Osborne</author>
+</authors>
+<title>Using maximum entropy for sentence extraction.</title>
+<date>2002</date>
+<booktitle>In Proceedings of the ACL-02 Workshop on Automatic Summarization.</booktitle>
+<pages>700</pages>
+<contexts>
+<context position="4759" citStr="Osborne, 2002" startWordPosition="706" endWordPosition="708">n linguistic quality, without losing much performance on the ROUGE metric. 2 Related Work Summarization research has seen great development over the last fifty years (Nenkova and McKeown, 2011). Compared to the abstractive counterpart, extractive summarization has received considerable attention due to its clear problem formulation: to extract a set of salient and nonredundant sentences from the given document set. Both unsupervised and supervised approaches have been explored for sentence selection. Supervised approaches include the Bayesian classifier (Kupiec et al., 1995), maximum entropy (Osborne, 2002), skip-chain CRF (Galley, 2006), discriminative reranking (Aker et al., 2010), among others. The extractive summary sentence selection problem can also be formulated in an optimization framework. Previous methods include using integer linear programming (ILP) and submodular functions to solve the optimization problem (Gillick et al., 2009; Li et al., 2013b; Lin and Bilmes, 2010). Compressive summarization receives increasing attention in recent years, since it offers a viable step towards abstractive summarization. The compressed summaries can be generated through a joint model of the sentence</context>
+</contexts>
+<marker>Osborne, 2002</marker>
+<rawString>Miles Osborne. 2002. Using maximum entropy for sentence extraction. In Proceedings of the ACL-02 Workshop on Automatic Summarization. 700</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Slav Petrov</author>
+<author>Leon Barrett</author>
+<author>Romain Thibaux</author>
+<author>Dan Klein</author>
+</authors>
+<title>Learning accurate, compact, and interpretable tree annotation.</title>
+<date>2006</date>
+<booktitle>In Proceedings of COLING-ACL.</booktitle>
+<contexts>
+<context position="24037" citStr="Petrov et al., 2006" startWordPosition="4025" endWordPosition="4028">nnotated by (Li et al., 2013a) using TAC2010 data. In the compression module, for each word we also used its document level feature.2 Compression Data We also evaluate our compression model using the data set from (Clarke and Lapata, 2008). It includes 82 newswire articles with manually produced compression for each sentence. We use the same partitions as (Martins and Smith, 2009), i.e., 1,188 sentences for training and 441 for testing. Data Processing We use Stanford CoreNLP toolkit3 to tokenize the sentences, extract name entity tags, and generate the dependency parse tree. Berkeley Parser (Petrov et al., 2006) is adopted to obtain the constituent parse tree for every sentence and POS tag for every token. We use Pocket 1http://www.nist.gov/tac/data/index.html 2Document level features for a word include information such as the word’s document frequency in a topic. These features cannot be extracted from a single sentence, as in the standard sentence compression task, and are related to the document summarization task. 3http://nlp.stanford.edu/software/corenlp.shtml CRF4 to implement the CRF sentence compression model. SVMlight5 is used for the summary sentence pre-selection model. Gurobi ILP solver6 </context>
+</contexts>
+<marker>Petrov, Barrett, Thibaux, Klein, 2006</marker>
+<rawString>Slav Petrov, Leon Barrett, Romain Thibaux, and Dan Klein. 2006. Learning accurate, compact, and interpretable tree annotation. In Proceedings of COLING-ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Xian Qian</author>
+<author>Yang Liu</author>
+</authors>
+<title>Fast joint compression and summarization via graph cuts.</title>
+<date>2013</date>
+<booktitle>In Proceedings ofEMNLP.</booktitle>
+<contexts>
+<context position="2670" citStr="Qian and Liu, 2013" startWordPosition="382" endWordPosition="385">ignificant sentence constituents and make space for more salient information that is otherwise dropped due to the summary length constraint. Two general strategies have been used for compressive summarization. One is a pipeline approach, where sentencebased extractive summarization is followed or proceeded by sentence compression (Lin, 2003; Zajic et al., 2007; Vanderwende et al., 2007; Wang et al., 2013). Another line of work uses joint compression and summarization. Such methods have been shown to achieve promising performance (Daum´e, 2006; Chali and Hasan, 2012; Almeida and Martins, 2013; Qian and Liu, 2013), but they are typically computationally expensive. In this study, we propose an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, 2006) and (Clarke and Lapata, 2008), but our method uses an expanded constituent parse tree rather than only the leaf nodes in previous work. Therefore we can extract rich features for every node in the constituent parser tree. Thi</context>
+</contexts>
+<marker>Qian, Liu, 2013</marker>
+<rawString>Xian Qian and Yang Liu. 2013. Fast joint compression and summarization via graph cuts. In Proceedings ofEMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Advaith Siddharthan</author>
+<author>Ani Nenkova</author>
+<author>Kathleen McKeown</author>
+</authors>
+<title>Syntactic simplification for improving content selection in multi-document summarization.</title>
+<date>2004</date>
+<booktitle>In Proceedings of Coling.</booktitle>
+<contexts>
+<context position="8504" citStr="Siddharthan et al., 2004" startWordPosition="1254" endWordPosition="1257">los (2010) used the maximum entropy model to generate the candidate compressions by removing branches from the source sentences. Woodsend and Lapata (2010) presented a joint content selection and compression model for single-document summarization. They operated over a phrase-based representation of the source document which they obtained by merging information from PCFG parse trees and dependency graphs. Liu and Liu (2013) adopted the CRFbased sentence compression approach for summa692 rizing spoken documents. Unlike the word-based operation, some of these models e.g (Knight and Marcu, 2000; Siddharthan et al., 2004; Turner and Charniak, 2005; Galanis and Androutsopoulos, 2010; Wang et al., 2013), are tree-based approaches that operate on the parse trees and thus the compression decision can be made for a constituent, instead of a single word. 3 Sentence Compression Method Sentence compression is a task of producing a summary for a single sentence. The compressed sentence should be shorter, contain important content from the original sentence, and be grammatical. In some sense, sentence compression can be described as a ‘scaled down version of the text summarization problem’ (Knight and Marcu, 2002). Her</context>
+</contexts>
+<marker>Siddharthan, Nenkova, McKeown, 2004</marker>
+<rawString>Advaith Siddharthan, Ani Nenkova, and Kathleen McKeown. 2004. Syntactic simplification for improving content selection in multi-document summarization. In Proceedings of Coling.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kapil Thadani</author>
+<author>Kathleen McKeown</author>
+</authors>
+<title>Sentence compression with joint structural inference.</title>
+<date>2013</date>
+<booktitle>In Proceedings of CoNLL.</booktitle>
+<contexts>
+<context position="6955" citStr="Thadani and McKeown (2013)" startWordPosition="1030" endWordPosition="1033">where sentence-based extractive summarization is followed or proceeded by sentence compression. There have been many studies on sentence compression, independent of the summarization task. McDonald (2006) firstly introduced a discriminative sentence compression model to directly optimize the quality of the compressed sentences produced. Clarke and Lapata (2008) improved the above discriminative model by using ILP in decoding, making it convenient to add constraints to preserve grammatical structure. Nomoto (2007) treated the compression task as a sequence labeling problem and used CRF for it. Thadani and McKeown (2013) presented an approach for discriminative sentence compression that jointly produces sequential and syntactic representations for output text. Filippova and Altun (2013) presented a method to automatically build a sentence compression corpus with hundreds of thousands of instances on which deletion-based compression algorithms can be trained. In addition to the work on sentence compression as a stand-alone task, prior studies have also investigated compression for the summarization task. Knight and Marcu (2000) utilized the noisy channel and decision tree method to perform sentence compression</context>
+</contexts>
+<marker>Thadani, McKeown, 2013</marker>
+<rawString>Kapil Thadani and Kathleen McKeown. 2013. Sentence compression with joint structural inference. In Proceedings of CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jenine Turner</author>
+<author>Eugene Charniak</author>
+</authors>
+<title>Supervised and unsupervised learning for sentence compression.</title>
+<date>2005</date>
+<booktitle>In Proceedings ofACL.</booktitle>
+<contexts>
+<context position="8531" citStr="Turner and Charniak, 2005" startWordPosition="1258" endWordPosition="1261">m entropy model to generate the candidate compressions by removing branches from the source sentences. Woodsend and Lapata (2010) presented a joint content selection and compression model for single-document summarization. They operated over a phrase-based representation of the source document which they obtained by merging information from PCFG parse trees and dependency graphs. Liu and Liu (2013) adopted the CRFbased sentence compression approach for summa692 rizing spoken documents. Unlike the word-based operation, some of these models e.g (Knight and Marcu, 2000; Siddharthan et al., 2004; Turner and Charniak, 2005; Galanis and Androutsopoulos, 2010; Wang et al., 2013), are tree-based approaches that operate on the parse trees and thus the compression decision can be made for a constituent, instead of a single word. 3 Sentence Compression Method Sentence compression is a task of producing a summary for a single sentence. The compressed sentence should be shorter, contain important content from the original sentence, and be grammatical. In some sense, sentence compression can be described as a ‘scaled down version of the text summarization problem’ (Knight and Marcu, 2002). Here similar to much previous </context>
+</contexts>
+<marker>Turner, Charniak, 2005</marker>
+<rawString>Jenine Turner and Eugene Charniak. 2005. Supervised and unsupervised learning for sentence compression. In Proceedings ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Lucy Vanderwende</author>
+<author>Hisami Suzuki</author>
+<author>Chris Brockett</author>
+<author>Ani Nenkova</author>
+</authors>
+<title>Beyond sumbasic: Taskfocused summarization with sentence simplification and lexical expansion.</title>
+<date>2007</date>
+<journal>Information Processing &amp; Management.</journal>
+<contexts>
+<context position="2439" citStr="Vanderwende et al., 2007" startWordPosition="344" endWordPosition="347">n recent years on generating compressed document summaries as a viable step towards abstractive summarization. These compressive summaries often contain more information than sentence-based extractive summaries since they can remove insignificant sentence constituents and make space for more salient information that is otherwise dropped due to the summary length constraint. Two general strategies have been used for compressive summarization. One is a pipeline approach, where sentencebased extractive summarization is followed or proceeded by sentence compression (Lin, 2003; Zajic et al., 2007; Vanderwende et al., 2007; Wang et al., 2013). Another line of work uses joint compression and summarization. Such methods have been shown to achieve promising performance (Daum´e, 2006; Chali and Hasan, 2012; Almeida and Martins, 2013; Qian and Liu, 2013), but they are typically computationally expensive. In this study, we propose an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, </context>
+</contexts>
+<marker>Vanderwende, Suzuki, Brockett, Nenkova, 2007</marker>
+<rawString>Lucy Vanderwende, Hisami Suzuki, Chris Brockett, and Ani Nenkova. 2007. Beyond sumbasic: Taskfocused summarization with sentence simplification and lexical expansion. Information Processing &amp; Management.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Lu Wang</author>
+<author>Hema Raghavan</author>
+<author>Vittorio Castelli</author>
+<author>Radu Florian</author>
+<author>Claire Cardie</author>
+</authors>
+<title>A sentence compression based framework to query-focused multidocument summarization.</title>
+<date>2013</date>
+<booktitle>In Proceedings ofACL.</booktitle>
+<contexts>
+<context position="2459" citStr="Wang et al., 2013" startWordPosition="348" endWordPosition="351">ng compressed document summaries as a viable step towards abstractive summarization. These compressive summaries often contain more information than sentence-based extractive summaries since they can remove insignificant sentence constituents and make space for more salient information that is otherwise dropped due to the summary length constraint. Two general strategies have been used for compressive summarization. One is a pipeline approach, where sentencebased extractive summarization is followed or proceeded by sentence compression (Lin, 2003; Zajic et al., 2007; Vanderwende et al., 2007; Wang et al., 2013). Another line of work uses joint compression and summarization. Such methods have been shown to achieve promising performance (Daum´e, 2006; Chali and Hasan, 2012; Almeida and Martins, 2013; Qian and Liu, 2013), but they are typically computationally expensive. In this study, we propose an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compression model from (McDonald, 2006) and (Clarke an</context>
+<context position="8586" citStr="Wang et al., 2013" startWordPosition="1267" endWordPosition="1270">ving branches from the source sentences. Woodsend and Lapata (2010) presented a joint content selection and compression model for single-document summarization. They operated over a phrase-based representation of the source document which they obtained by merging information from PCFG parse trees and dependency graphs. Liu and Liu (2013) adopted the CRFbased sentence compression approach for summa692 rizing spoken documents. Unlike the word-based operation, some of these models e.g (Knight and Marcu, 2000; Siddharthan et al., 2004; Turner and Charniak, 2005; Galanis and Androutsopoulos, 2010; Wang et al., 2013), are tree-based approaches that operate on the parse trees and thus the compression decision can be made for a constituent, instead of a single word. 3 Sentence Compression Method Sentence compression is a task of producing a summary for a single sentence. The compressed sentence should be shorter, contain important content from the original sentence, and be grammatical. In some sense, sentence compression can be described as a ‘scaled down version of the text summarization problem’ (Knight and Marcu, 2002). Here similar to much previous work on sentence compression, we just focus on how to r</context>
+<context position="29690" citStr="Wang et al. (2013)" startWordPosition="4930" endWordPosition="4933">entences comSystem C Rate (%) Uni-F1 Rel-F1 HedgeTrimmer 57.64 0.64 0.50 McDonald (2006) 70.95 0.77 0.55 Martins (2009) 71.35 0.77 0.56 Wang (2013) 68.06 0.79 0.59 Our System 71.19 0.77 0.58 Table 4: Sentence compression results. The human compression rate of the test set is 69%. pression; McDonald (2006) used the output of two parsers as features in a discriminative model that decomposes over pairs of consecutive words; Martins and Smith (2009) built the compression model in the dependency parse and utilized the relationship between the head and modifier to preserve the grammar relationship; Wang et al. (2013) developed a novel beam search decoder using the treebased compression model on the constituent parse tree, which could find the most probable compression efficiently. Table 4 shows the compression results of various systems, along with the compression ratio (C Rate) of the system output. We adopt the compression metrics as used in (Martins and Smith, 2009) that measures the macro F-measure for the retained unigrams (Uni-F1), and the one used in (Clarke and Lapata, 2008) that calculates the F1 score of the grammatical relations labeled by (Briscoe and Carroll, 2002) (Rel-F1). We can see that o</context>
+</contexts>
+<marker>Wang, Raghavan, Castelli, Florian, Cardie, 2013</marker>
+<rawString>Lu Wang, Hema Raghavan, Vittorio Castelli, Radu Florian, and Claire Cardie. 2013. A sentence compression based framework to query-focused multidocument summarization. In Proceedings ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kristian Woodsend</author>
+<author>Mirella Lapata</author>
+</authors>
+<title>Automatic generation of story highlights.</title>
+<date>2010</date>
+<booktitle>In Proceedings ofACL.</booktitle>
+<contexts>
+<context position="8035" citStr="Woodsend and Lapata (2010)" startWordPosition="1185" endWordPosition="1188">ompression for the summarization task. Knight and Marcu (2000) utilized the noisy channel and decision tree method to perform sentence compression in the summarization task. Lin (2003) showed that pure syntactic-based compression may not significantly improve the summarization performance. Zajic et al. (2007) compared two sentence compression approaches for multidocument summarization, including a ‘parse-andtrim’ and a noisy-channel approach. Galanis and Androutsopoulos (2010) used the maximum entropy model to generate the candidate compressions by removing branches from the source sentences. Woodsend and Lapata (2010) presented a joint content selection and compression model for single-document summarization. They operated over a phrase-based representation of the source document which they obtained by merging information from PCFG parse trees and dependency graphs. Liu and Liu (2013) adopted the CRFbased sentence compression approach for summa692 rizing spoken documents. Unlike the word-based operation, some of these models e.g (Knight and Marcu, 2000; Siddharthan et al., 2004; Turner and Charniak, 2005; Galanis and Androutsopoulos, 2010; Wang et al., 2013), are tree-based approaches that operate on the p</context>
+</contexts>
+<marker>Woodsend, Lapata, 2010</marker>
+<rawString>Kristian Woodsend and Mirella Lapata. 2010. Automatic generation of story highlights. In Proceedings ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kristian Woodsend</author>
+<author>Mirella Lapata</author>
+</authors>
+<title>Multiple aspect summarization using integer linear programming.</title>
+<date>2012</date>
+<booktitle>In Proceedings ofEMNLP-CoNLL.</booktitle>
+<contexts>
+<context position="6021" citStr="Woodsend and Lapata (2012)" startWordPosition="895" endWordPosition="898">, or through a pipeline approach that integrates a sentence compression model with a summary sentence pre-selection or post-selection step. Many studies have explored the joint sentence compression and selection setting. Martins and Smith (2009) jointly performed sentence extraction and compression by solving an ILP problem. Berg-Kirkpatrick et al. (2011) proposed an approach to score the candidate summaries according to a combined linear model of extractive sentence selection and compression. They trained the model using a margin-based objective whose loss captures the final summary quality. Woodsend and Lapata (2012) presented another method where the summary’s informativeness, succinctness, and grammaticality are learned separately from data but optimized jointly using an ILP setup. Yoshikawa et al. (2012) incorporated semantic role information in the ILP model. Our work is closely related with the pipeline approach, where sentence-based extractive summarization is followed or proceeded by sentence compression. There have been many studies on sentence compression, independent of the summarization task. McDonald (2006) firstly introduced a discriminative sentence compression model to directly optimize the</context>
+<context position="24945" citStr="Woodsend and Lapata (2012)" startWordPosition="4156" endWordPosition="4160"> extracted from a single sentence, as in the standard sentence compression task, and are related to the document summarization task. 3http://nlp.stanford.edu/software/corenlp.shtml CRF4 to implement the CRF sentence compression model. SVMlight5 is used for the summary sentence pre-selection model. Gurobi ILP solver6 does all ILP decoding. 5.2 Summarization Results We compare our summarization system against four recent studies, which have reported some of the highest published results on this task. BergKirkpatrick et al. (2011) introduced a joint model for sentence extraction and compression. Woodsend and Lapata (2012) learned individual summary aspects from data, e.g., informativeness, succinctness, grammaticalness, stylistic writing conventions, and jointly optimized the outcome in an ILP framework. Ng et al. (2012) exploited category-specific information for multi-document summarization. Almeida and Martins (2013) proposed compressive summarization method by dual decomposition and multi-task learning. Our summarization framework is the same as (Li et al., 2013a), except they used a CRF-based compression model. In addition to the four previous studies, we also report the best achieved results in the TAC c</context>
+</contexts>
+<marker>Woodsend, Lapata, 2012</marker>
+<rawString>Kristian Woodsend and Mirella Lapata. 2012. Multiple aspect summarization using integer linear programming. In Proceedings ofEMNLP-CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Katsumasa Yoshikawa</author>
+<author>Tsutomu Hirao</author>
+<author>Ryu Iida</author>
+<author>Manabu Okumura</author>
+</authors>
+<title>Sentence compression with semantic role constraints.</title>
+<date>2012</date>
+<booktitle>In Proceedings of ACL.</booktitle>
+<contexts>
+<context position="6215" citStr="Yoshikawa et al. (2012)" startWordPosition="923" endWordPosition="926"> and selection setting. Martins and Smith (2009) jointly performed sentence extraction and compression by solving an ILP problem. Berg-Kirkpatrick et al. (2011) proposed an approach to score the candidate summaries according to a combined linear model of extractive sentence selection and compression. They trained the model using a margin-based objective whose loss captures the final summary quality. Woodsend and Lapata (2012) presented another method where the summary’s informativeness, succinctness, and grammaticality are learned separately from data but optimized jointly using an ILP setup. Yoshikawa et al. (2012) incorporated semantic role information in the ILP model. Our work is closely related with the pipeline approach, where sentence-based extractive summarization is followed or proceeded by sentence compression. There have been many studies on sentence compression, independent of the summarization task. McDonald (2006) firstly introduced a discriminative sentence compression model to directly optimize the quality of the compressed sentences produced. Clarke and Lapata (2008) improved the above discriminative model by using ILP in decoding, making it convenient to add constraints to preserve gram</context>
+</contexts>
+<marker>Yoshikawa, Hirao, Iida, Okumura, 2012</marker>
+<rawString>Katsumasa Yoshikawa, Tsutomu Hirao, Ryu Iida, and Manabu Okumura. 2012. Sentence compression with semantic role constraints. In Proceedings of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Zajic</author>
+<author>Bonnie J Dorr</author>
+<author>Jimmy Lin</author>
+<author>Richard Schwartz</author>
+</authors>
+<title>Multi-candidate reduction: Sentence compression as a tool for document summarization tasks.</title>
+<date>2007</date>
+<booktitle>In Information Processing and Management.</booktitle>
+<contexts>
+<context position="2413" citStr="Zajic et al., 2007" startWordPosition="340" endWordPosition="343"> surge of interest in recent years on generating compressed document summaries as a viable step towards abstractive summarization. These compressive summaries often contain more information than sentence-based extractive summaries since they can remove insignificant sentence constituents and make space for more salient information that is otherwise dropped due to the summary length constraint. Two general strategies have been used for compressive summarization. One is a pipeline approach, where sentencebased extractive summarization is followed or proceeded by sentence compression (Lin, 2003; Zajic et al., 2007; Vanderwende et al., 2007; Wang et al., 2013). Another line of work uses joint compression and summarization. Such methods have been shown to achieve promising performance (Daum´e, 2006; Chali and Hasan, 2012; Almeida and Martins, 2013; Qian and Liu, 2013), but they are typically computationally expensive. In this study, we propose an innovative sentence compression model based on expanded constituent parse trees. Our model uses integer linear programming (ILP) to search the entire space of compression, and is discriminatively trained. It is built based on the discriminative sentence compress</context>
+<context position="7719" citStr="Zajic et al. (2007)" startWordPosition="1140" endWordPosition="1143">lippova and Altun (2013) presented a method to automatically build a sentence compression corpus with hundreds of thousands of instances on which deletion-based compression algorithms can be trained. In addition to the work on sentence compression as a stand-alone task, prior studies have also investigated compression for the summarization task. Knight and Marcu (2000) utilized the noisy channel and decision tree method to perform sentence compression in the summarization task. Lin (2003) showed that pure syntactic-based compression may not significantly improve the summarization performance. Zajic et al. (2007) compared two sentence compression approaches for multidocument summarization, including a ‘parse-andtrim’ and a noisy-channel approach. Galanis and Androutsopoulos (2010) used the maximum entropy model to generate the candidate compressions by removing branches from the source sentences. Woodsend and Lapata (2010) presented a joint content selection and compression model for single-document summarization. They operated over a phrase-based representation of the source document which they obtained by merging information from PCFG parse trees and dependency graphs. Liu and Liu (2013) adopted the</context>
+</contexts>
+<marker>Zajic, Dorr, Lin, Schwartz, 2007</marker>
+<rawString>David Zajic, Bonnie J. Dorr, Jimmy Lin, and Richard Schwartz. 2007. Multi-candidate reduction: Sentence compression as a tool for document summarization tasks. In Information Processing and Management.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

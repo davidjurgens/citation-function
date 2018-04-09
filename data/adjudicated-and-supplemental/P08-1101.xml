@@ -1,0 +1,1217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000383">
+<title confidence="0.982392">
+Joint Word Segmentation and POS Tagging using a Single Perceptron
+</title>
+<author confidence="0.998898">
+Yue Zhang and Stephen Clark
+</author>
+<affiliation confidence="0.998592">
+Oxford University Computing Laboratory
+</affiliation>
+<address confidence="0.990206">
+Wolfson Building, Parks Road
+Oxford OX1 3QD, UK
+</address>
+<email confidence="0.99978">
+{yue.zhang,stephen.clark}@comlab.ox.ac.uk
+</email>
+<sectionHeader confidence="0.998596" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999152173913043">
+For Chinese POS tagging, word segmentation
+is a preliminary step. To avoid error propa-
+gation and improve segmentation by utilizing
+POS information, segmentation and tagging
+can be performed simultaneously. A challenge
+for this joint approach is the large combined
+search space, which makes efficient decod-
+ing very hard. Recent research has explored
+the integration of segmentation and POS tag-
+ging, by decoding under restricted versions of
+the full combined search space. In this paper,
+we propose a joint segmentation and POS tag-
+ging model that does not impose any hard con-
+straints on the interaction between word and
+POS information. Fast decoding is achieved
+by using a novel multiple-beam search algo-
+rithm. The system uses a discriminative sta-
+tistical model, trained using the generalized
+perceptron algorithm. The joint model gives
+an error reduction in segmentation accuracy of
+14.6% and an error reduction in tagging ac-
+curacy of 12.2%, compared to the traditional
+pipeline approach.
+</bodyText>
+<sectionHeader confidence="0.999472" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999971046511628">
+Since Chinese sentences do not contain explicitly
+marked word boundaries, word segmentation is a
+necessary step before POS tagging can be performed.
+Typically, a Chinese POS tagger takes segmented in-
+puts, which are produced by a separate word seg-
+mentor. This two-step approach, however, has an
+obvious flaw of error propagation, since word seg-
+mentation errors cannot be corrected by the POS tag-
+ger. A better approach would be to utilize POS in-
+formation to improve word segmentation. For ex-
+ample, the POS-word pattern “number word” + “^
+(a common measure word)” can help in segmenting
+the character sequence “�^A” into the word se-
+quence “� (one) ^ (measure word) A (person)”
+instead of “� (one) ^A (personal; adj)”. More-
+over, the comparatively rare POS pattern “number
+word” + “number word” can help to prevent seg-
+menting a long number word into two words.
+In order to avoid error propagation and make use
+of POS information for word segmentation, segmen-
+tation and POS tagging can be viewed as a single
+task: given a raw Chinese input sentence, the joint
+POS tagger considers all possible segmented and
+tagged sequences, and chooses the overall best out-
+put. A major challenge for such a joint system is
+the large search space faced by the decoder. For a
+sentence with n characters, the number of possible
+output sequences is O(2n−1 · Tn), where T is the
+size of the tag set. Due to the nature of the com-
+bined candidate items, decoding can be inefficient
+even with dynamic programming.
+Recent research on Chinese POS tagging has
+started to investigate joint segmentation and tagging,
+reporting accuracy improvements over the pipeline
+approach. Various decoding approaches have been
+used to reduce the combined search space. Ng and
+Low (2004) mapped the joint segmentation and POS
+tagging task into a single character sequence tagging
+problem. Two types of tags are assigned to each
+character to represent its segmentation and POS. For
+example, the tag “b NN” indicates a character at
+the beginning of a noun. Using this method, POS
+features are allowed to interact with segmentation.
+</bodyText>
+<page confidence="0.989994">
+888
+</page>
+<note confidence="0.695986">
+Proceedings ofACL-08: HLT, pages 888–896,
+</note>
+<page confidence="0.494205">
+Columbus, Ohio, USA, June 2008. c�2008 Association for Computational Linguistics
+</page>
+<bodyText confidence="0.999927729166667">
+Since tagging is restricted to characters, the search
+space is reduced to O((4T)&apos;), and beam search de-
+coding is effective with a small beam size. How-
+ever, the disadvantage of this model is the difficulty
+in incorporating whole word information into POS
+tagging. For example, the standard “word + POS
+tag” feature is not explicitly applicable. Shi and
+Wang (2007) introduced POS information to seg-
+mentation by reranking. N-best segmentation out-
+puts are passed to a separately-trained POS tagger,
+and the best output is selected using the overall POS-
+segmentation probability score. In this system, the
+decoding for word segmentation and POS tagging
+are still performed separately, and exact inference
+for both is possible. However, the interaction be-
+tween POS and segmentation is restricted by rerank-
+ing: POS information is used to improve segmenta-
+tion only for the N segmentor outputs.
+In this paper, we propose a novel joint model
+for Chinese word segmentation and POS tagging,
+which does not limiting the interaction between
+segmentation and POS information in reducing the
+combined search space. Instead, a novel multiple
+beam search algorithm is used to do decoding effi-
+ciently. Candidate ranking is based on a discrimina-
+tive joint model, with features being extracted from
+segmented words and POS tags simultaneously. The
+training is performed by a single generalized percep-
+tron (Collins, 2002). In experiments with the Chi-
+nese Treebank data, the joint model gave an error
+reduction of 14.6% in segmentation accuracy and
+12.2% in the overall segmentation and tagging accu-
+racy, compared to the traditional pipeline approach.
+In addition, the overall results are comparable to the
+best systems in the literature, which exploit knowl-
+edge outside the training data, even though our sys-
+tem is fully data-driven.
+Different methods have been proposed to reduce
+error propagation between pipelined tasks, both in
+general (Sutton et al., 2004; Daum´e III and Marcu,
+2005; Finkel et al., 2006) and for specific problems
+such as language modeling and utterance classifica-
+tion (Saraclar and Roark, 2005) and labeling and
+chunking (Shimizu and Haas, 2006). Though our
+model is built specifically for Chinese word segmen-
+tation and POS tagging, the idea of using the percep-
+tron model to solve multiple tasks simultaneously
+can be generalized to other tasks.
+</bodyText>
+<tableCaption confidence="0.998161">
+Table 1: Feature templates for the baseline segmentor
+</tableCaption>
+<sectionHeader confidence="0.826374" genericHeader="method">
+2 The Baseline System
+</sectionHeader>
+<bodyText confidence="0.995702740740741">
+We built a two-stage baseline system, using the per-
+ceptron segmentation model from our previous work
+(Zhang and Clark, 2007) and the perceptron POS tag-
+ging model from Collins (2002). We use baseline
+system to refer to the system which performs seg-
+mentation first, followed by POS tagging (using the
+single-best segmentation); baseline segmentor to re-
+fer to the segmentor from (Zhang and Clark, 2007)
+which performs segmentation only; and baseline
+POStagger to refer to the Collins tagger which per-
+forms POS tagging only (given segmentation). The
+features used by the baseline segmentor are shown in
+Table 1. The features used by the POS tagger, some
+of which are different to those from Collins (2002)
+and are specific to Chinese, are shown in Table 2.
+The word segmentation features are extracted
+from word bigrams, capturing word, word length
+and character information in the context. The word
+length features are normalized, with those more than
+15 being treated as 15.
+The POS tagging features are based on contex-
+tual information from the tag trigram, as well as the
+neighboring three-word window. To reduce overfit-
+ting and increase the decoding speed, templates 4, 5,
+6 and 7 only include words with less than 3 charac-
+ters. Like the baseline segmentor, the baseline tag-
+ger also normalizes word length features.
+</bodyText>
+<figure confidence="0.819113333333333">
+word w
+word bigram w1w2
+single-character word w
+a word of length l with starting character c
+a word of length l with ending character c
+space-separated characters c1 and c2
+character bigram c1c2 in any word
+the first / last characters c1 / c2 of any word
+word w immediately before character c
+character c immediately before word w
+the starting characters c1 and c2 of two con-
+secutive words
+the ending characters c1 and c2 of two con-
+secutive words
+a word of length l with previous word w
+a word of length l with next word w
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</figure>
+<page confidence="0.997989">
+889
+</page>
+<tableCaption confidence="0.997938">
+Table 2: Feature templates for the baseline POS tagger
+</tableCaption>
+<bodyText confidence="0.999846333333333">
+Templates 15 and 16 in Table 2 are inspired by the
+CTBMorph feature templates in Tseng et al. (2005),
+which gave the most accuracy improvement in their
+experiments. Here the category of a character is
+the set of tags seen on the character during train-
+ing. Other morphological features from Tseng et al.
+(2005) are not used because they require extra web
+corpora besides the training data.
+During training, the baseline POS tagger stores
+special word-tag pairs into a tag dictionary (Ratna-
+parkhi, 1996). Such information is used by the de-
+coder to prune unlikely tags. For each word occur-
+ring more than N times in the training data, the de-
+coder can only assign a tag the word has been seen
+with in the training data. This method led to im-
+provement in the decoding speed as well as the out-
+put accuracy for English POS tagging (Ratnaparkhi,
+1996). Besides tags for frequent words, our base-
+line POS tagger also uses the tag dictionary to store
+closed-set tags (Xia, 2000) – those associated only
+with a limited number of Chinese words.
+</bodyText>
+<sectionHeader confidence="0.730696" genericHeader="method">
+3 Joint Segmentation and Tagging Model
+</sectionHeader>
+<bodyText confidence="0.99993">
+In this section, we build a joint word segmentation
+and POS tagging model that uses exactly the same
+source of information as the baseline system, by ap-
+plying the feature templates from the baseline word
+segmentor and POS tagger. No extra knowledge is
+used by the joint model. However, because word
+segmentation and POS tagging are performed simul-
+taneously, POS information participates in word seg-
+mentation.
+</bodyText>
+<subsectionHeader confidence="0.999465">
+3.1 Formulation of the joint model
+</subsectionHeader>
+<bodyText confidence="0.999959">
+We formulate joint word segmentation and POS tag-
+ging as a single problem, which maps a raw Chi-
+nese sentence to a segmented and POS tagged output.
+Given an input sentence x, the output F(x) satisfies:
+</bodyText>
+<equation confidence="0.997543">
+F(x) = arg max Score(y)
+yEGEN(x)
+</equation>
+<bodyText confidence="0.9999052">
+where GEN(x) represents the set of possible outputs
+for x.
+Score(y) is computed by a feature-based linear
+model. Denoting the global feature vector for the
+tagged sentence y with 4b(y), we have:
+</bodyText>
+<equation confidence="0.989258">
+Score(y) = -b(y) · w�
+</equation>
+<bodyText confidence="0.999972058823529">
+where w� is the parameter vector in the model. Each
+element in w� gives a weight to its corresponding el-
+ement in 4b(y), which is the count of a particular
+feature over the whole sentence y. We calculate the
+w� value by supervised learning, using the averaged
+perceptron algorithm (Collins, 2002), given in Fig-
+ure 1. 1
+We take the union of feature templates from the
+baseline segmentor (Table 1) and POS tagger (Ta-
+ble 2) as the feature templates for the joint system.
+All features are treated equally and processed to-
+gether according to the linear model, regardless of
+whether they are from the baseline segmentor or tag-
+ger. In fact, most features from the baseline POS
+tagger, when used in the joint model, represent seg-
+mentation patterns as well. For example, the afore-
+mentioned pattern “number word” + “^”, which is
+</bodyText>
+<footnote confidence="0.548458">
+1In order to provide a comparison for the perceptron algo-
+rithm we also tried SVMstruct (Tsochantaridis et al., 2004) for
+parameter estimation, but this training method was prohibitively
+slow.
+</footnote>
+<figure confidence="0.809369921052632">
+tag t with word w
+tag bigram t1t2
+tag trigram t1t2t3
+tag t followed by word w
+word w followed by tag t
+word w with tag t and previous character c
+word w with tag t and next character c
+tag t on single-character word w in charac-
+ter trigram c1wc2
+tag t on a word starting with char c
+tag t on a word ending with char c
+tag t on a word containing char c (not the
+starting or ending character)
+tag t on a word starting with char c0 and
+containing char c
+tag t on a word ending with char c0 and
+containing char c
+tag t on a word containing repeated char cc
+tag t on a word starting with character cat-
+egory g
+tag t on a word ending with character cate-
+gory g
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+</figure>
+<page confidence="0.836183">
+890
+</page>
+<bodyText confidence="0.742450666666667">
+Inputs: training examples (xi, yi)
+Initialization: set w� = 0
+Algorithm:
+for t = 1..T, i = 1..N
+calculate zi = arg maxyEGEN(xi) Φ(y) - w�
+if zi =� yi
+</bodyText>
+<equation confidence="0.72695">
+w� = w� + Φ(yi) − Φ(zi)
+Outputs: w�
+</equation>
+<figureCaption confidence="0.999918">
+Figure 1: The perceptron learning algorithm
+</figureCaption>
+<bodyText confidence="0.999834">
+useful only for the POS “number word” in the base-
+line tagger, is also an effective indicator of the seg-
+mentation of the two words (especially “^”) in the
+joint model.
+</bodyText>
+<subsectionHeader confidence="0.997781">
+3.2 The decoding algorithm
+</subsectionHeader>
+<bodyText confidence="0.952926784313725">
+One of the main challenges for the joint segmenta-
+tion and POS tagging system is the decoding algo-
+rithm. The speed and accuracy of the decoder is
+important for the perceptron learning algorithm, but
+the system faces a very large search space of com-
+bined candidates. Given the linear model and feature
+templates, exact inference is very hard even with dy-
+namic programming.
+Experiments with the standard beam-search de-
+coder described in (Zhang and Clark, 2007) resulted
+in low accuracy. This beam search algorithm pro-
+cesses an input sentence incrementally. At each
+stage, the incoming character is combined with ex-
+isting partial candidates in all possible ways to gen-
+erate new partial candidates. An agenda is used to
+control the search space, keeping only the B best
+partial candidates ending with the current charac-
+ter. The algorithm is simple and efficient, with a
+linear time complexity of O(BTn), where n is the
+size of input sentence, and T is the size of the tag
+set (T = 1 for pure word segmentation). It worked
+well for word segmentation alone (Zhang and Clark,
+2007), even with an agenda size as small as 8, and
+a simple beam search algorithm also works well for
+POS tagging (Ratnaparkhi, 1996). However, when
+applied to the joint model, it resulted in a reduction
+in segmentation accuracy (compared to the baseline
+segmentor) even with B as large as 1024.
+One possible cause of the poor performance of the
+standard beam search method is the combined nature
+of the candidates in the search space. In the base-
+Input: raw sentence sent – a list of characters
+Variables: candidate sentence item – a list of
+(word, tag) pairs;
+maximum word-length record
+maxlen for each tag;
+the agenda list agendas;
+the tag dictionary tagdict;
+start index for current word;
+end index for current word
+Initialization: agendas[0] = [“”],
+agendas[i] = [] (i! = 0)
+Algorithm:
+for end index = 1 to sent.length:
+foreach tag:
+for start index =
+max(1, end index − maxlen[tag] + 1)
+to end index:
+word = sent[start index..end index]
+if (word, tag) consistent with tagdict:
+for item E agendas[start index − 1]:
+</bodyText>
+<equation confidence="0.70305725">
+item1 = item
+item1.append((word,tag))
+agendas[end index].insert(item1)
+Outputs: agendas[sent.length].best item
+</equation>
+<figureCaption confidence="0.9966705">
+Figure 2: The decoding algorithm for the joint word seg-
+mentor and POS tagger
+</figureCaption>
+<bodyText confidence="0.999800375">
+line POS tagger, candidates in the beam are tagged
+sequences ending with the current word, which can
+be compared directly with each other. However, for
+the joint problem, candidates in the beam are seg-
+mented and tagged sequences up to the current char-
+acter, where the last word can be a complete word or
+a partial word. A problem arises in whether to give
+POS tags to incomplete words. If partial words are
+given POS tags, it is likely that some partial words
+are “justified” as complete words by the current POS
+information. On the other hand, if partial words are
+not given POS tag features, the correct segmentation
+for long words can be lost during partial candidate
+comparison (since many short completed words with
+POS tags are likely to be preferred to a long incom-
+plete word with no POS tag features).2
+</bodyText>
+<footnote confidence="0.98212025">
+2We experimented with both assigning POS features to par-
+tial words and omitting them; the latter method performed better
+but both performed significantly worse than the multiple beam
+search method described below.
+</footnote>
+<page confidence="0.996185">
+891
+</page>
+<bodyText confidence="0.999976730158731">
+Another possible cause is the exponential growth
+in the number of possible candidates with increasing
+sentence size. The number increases from O(Tn)
+for the baseline POS tagger to O(2n−&apos;Tn) for the
+joint system. As a result, for an incremental decod-
+ing algorithm, the number of possible candidates in-
+creases exponentially with the current word or char-
+acter index. In the POS tagging problem, a new in-
+coming word enlarges the number of possible can-
+didates by a factor of T (the size of the tag set).
+For the joint problem, however, the enlarging fac-
+tor becomes 2T with each incoming character. The
+speed of search space expansion is much faster, but
+the number of candidates is still controlled by a sin-
+gle, fixed-size beam at any stage. If we assume
+that the beam is not large enough for all the can-
+didates at at each stage, then, from the newly gen-
+erated candidates, the baseline POS tagger can keep
+1/T for the next processing stage, while the joint
+model can keep only 1/2T, and has to discard the
+rest. Therefore, even when the candidate compar-
+ison standard is ignored, we can still see that the
+chance for the overall best candidate to fall out of
+the beam is largely increased. Since the search space
+growth is exponential, increasing the fixed beam size
+is not effective in solving the problem.
+To solve the above problems, we developed a mul-
+tiple beam search algorithm, which compares candi-
+dates only with complete tagged words, and enables
+the size of the search space to scale with the input
+size. The algorithm is shown in Figure 2. In this
+decoder, an agenda is assigned to each character in
+the input sentence, recording the B best segmented
+and tagged partial candidates ending with the char-
+acter. The input sentence is still processed incremen-
+tally. However, now when a character is processed,
+existing partial candidates ending with any previous
+characters are available. Therefore, the decoder enu-
+merates all possible tagged words ending with the
+current character, and combines each word with the
+partial candidates ending with its previous charac-
+ter. All input characters are processed in the same
+way, and the final output is the best candidate in the
+final agenda. The time complexity of the algorithm
+is O(WTBn), with W being the maximum word
+size, T being the total number of POS tags and n the
+number of characters in the input. It is also linear
+in the input size. Moreover, the decoding algorithm
+gives competent accuracy with a small agenda size
+of B = 16.
+To further limit the search space, two optimiza-
+tions are used. First, the maximum word length
+for each tag is recorded and used by the decoder
+to prune unlikely candidates. Because the major-
+ity of tags only apply to words with length 1 or
+2, this method has a strong effect. Development
+tests showed that it improves the speed significantly,
+while having a very small negative influence on the
+accuracy. Second, like the baseline POS tagger, the
+tag dictionary is used for Chinese closed set tags and
+the tags for frequent words. To words outside the tag
+dictionary, the decoder still tries to assign every pos-
+sible tag.
+</bodyText>
+<subsectionHeader confidence="0.980207">
+3.3 Online learning
+</subsectionHeader>
+<bodyText confidence="0.999966913043478">
+Apart from features, the decoder maintains other
+types of information, including the tag dictionary,
+the word frequency counts used when building the
+tag dictionary, the maximum word lengths by tag,
+and the character categories. The above data can
+be collected by scanning the corpus before training
+starts. However, in both the baseline tagger and the
+joint POS tagger, they are updated incrementally dur-
+ing the perceptron training process, consistent with
+online learning.3
+The online updating of word frequencies, max-
+imum word lengths and character categories is
+straightforward. For the online updating of the tag
+dictionary, however, the decision for frequent words
+must be made dynamically because the word fre-
+quencies keep changing. This is done by caching
+the number of occurrences of the current most fre-
+quent word M, and taking all words currently above
+the threshold M/5000 + 5 as frequent words. 5000
+is a rough figure to control the number of frequent
+words, set according to Zipf’s law. The parameter
+5 is used to force all tags to be enumerated before a
+word is seen more than 5 times.
+</bodyText>
+<sectionHeader confidence="0.99998" genericHeader="method">
+4 Related Work
+</sectionHeader>
+<bodyText confidence="0.9963405">
+Ng and Low (2004) and Shi and Wang (2007) were
+described in the Introduction. Both models reduced
+</bodyText>
+<footnote confidence="0.9779265">
+3We took this approach because we wanted the whole train-
+ing process to be online. However, for comparison purposes,
+we also tried precomputing the above information before train-
+ing and the difference in performance was negligible.
+</footnote>
+<page confidence="0.997577">
+892
+</page>
+<bodyText confidence="0.9998874">
+the large search space by imposing strong restric-
+tions on the form of search candidates. In particu-
+lar, Ng and Low (2004) used character-based POS
+tagging, which prevents some important POS tag-
+ging features such as word + POS tag; Shi and Wang
+(2007) used an N-best reranking approach, which
+limits the influence of POS tagging on segmentation
+to the N-best list. In comparison, our joint model
+does not impose any hard limitations on the inter-
+action between segmentation and POS information.4
+Fast decoding speed is achieved by using a novel
+multiple-beam search algorithm.
+Nakagawa and Uchimoto (2007) proposed a hy-
+brid model for word segmentation and POS tagging
+using an HMM-based approach. Word information is
+used to process known-words, and character infor-
+mation is used for unknown words in a similar way
+to Ng and Low (2004). In comparison, our model
+handles character and word information simultane-
+ously in a single perceptron model.
+</bodyText>
+<sectionHeader confidence="0.999637" genericHeader="evaluation">
+5 Experiments
+</sectionHeader>
+<bodyText confidence="0.999960647058824">
+The Chinese Treebank (CTB) 4 is used for the exper-
+iments. It is separated into two parts: CTB 3 (420K
+characters in 150K words / 10364 sentences) is used
+for the final 10-fold cross validation, and the rest
+(240K characters in 150K words / 4798 sentences)
+is used as training and test data for development.
+The standard F-scores are used to measure both
+the word segmentation accuracy and the overall seg-
+mentation and tagging accuracy, where the overall
+accuracy is TF = 2pr/(p + r), with the precision
+p being the percentage of correctly segmented and
+tagged words in the decoder output, and the recall r
+being the percentage of gold-standard tagged words
+that are correctly identified by the decoder. For di-
+rect comparison with Ng and Low (2004), the POS
+tagging accuracy is also calculated by the percentage
+of correct tags on each character.
+</bodyText>
+<subsectionHeader confidence="0.996782">
+5.1 Development experiments
+</subsectionHeader>
+<bodyText confidence="0.999944666666667">
+The learning curves of the baseline and joint models
+are shown in Figure 3, Figure 4 and Figure 5, respec-
+tively. These curves are used to show the conver-
+</bodyText>
+<footnote confidence="0.9532055">
+4Apart from the beam search algorithm, we do impose some
+minor limitations on the search space by methods such as the tag
+dictionary, but these can be seen as optional pruning methods
+for optimization.
+</footnote>
+<figure confidence="0.943639">
+1 2 3 4 5 6 7 8 9 10
+Number of training iterations
+</figure>
+<figureCaption confidence="0.998636">
+Figure 3: The learning curve of the baseline segmentor
+</figureCaption>
+<figure confidence="0.999114">
+0.9
+0.89
+F-score 0.88
+0.87
+0.86
+1 2 3 4 5 6 7 8 9 10
+Number of training iterations
+</figure>
+<figureCaption confidence="0.999398">
+Figure 4: The learning curve of the baseline tagger
+</figureCaption>
+<figure confidence="0.9893375">
+1 2 3 4 5 6 7 8 9 10
+Number of training iterations
+</figure>
+<figureCaption confidence="0.999975">
+Figure 5: The learning curves of the joint system
+</figureCaption>
+<bodyText confidence="0.999846">
+gence of perceptron and decide the number of train-
+ing iterations for the test. It should be noticed that
+the accuracies from Figure 4 and Figure 5 are not
+comparable because gold-standard segmentation is
+used as the input for the baseline tagger. Accord-
+ing to the figures, the number of training iterations
+</bodyText>
+<figure confidence="0.994637571428571">
+segmentation accuracy
+overall accuracy
+F-score 0.92
+0.91
+0.9
+0.89
+0.88
+F-score 0.92
+0.9
+0.88
+0.86
+0.84
+0.82
+0.8
+</figure>
+<page confidence="0.996782">
+893
+</page>
+<table confidence="0.999236">
+Tag Seg NN NR VV AD JJ CD
+NN 20.47 – 0.78 4.80 0.67 2.49 0.04
+NR 5.95 3.61 – 0.19 0.04 0.07 0
+VV 12.13 6.51 0.11 – 0.93 0.56 0.04
+AD 3.24 0.30 0 0.71 – 0.33 0.22
+JJ 3.09 0.93 0.15 0.26 0.26 – 0.04
+CD 1.08 0.04 0 0 0.07 0 –
+</table>
+<tableCaption confidence="0.999955">
+Table 3: Error analysis for the joint model
+</tableCaption>
+<bodyText confidence="0.999493108108108">
+for the baseline segmentor, POS tagger, and the joint
+system are set to 8, 6, and 7, respectively for the re-
+maining experiments.
+There are many factors which can influence the
+accuracy of the joint model. Here we consider the
+special character category features and the effect of
+the tag dictionary. The character category features
+(templates 15 and 16 in Table 2) represent a Chinese
+character by all the tags associated with the charac-
+ter in the training data. They have been shown to im-
+prove the accuracy of a Chinese POS tagger (Tseng
+et al., 2005). In the joint model, these features also
+represent segmentation information, since they con-
+cern the starting and ending characters of a word.
+Development tests showed that the overall tagging
+F-score of the joint model increased from 84.54% to
+84.93% using the character category features. In the
+development test, the use of the tag dictionary im-
+proves the decoding speed of the joint model, reduc-
+ing the decoding time from 416 seconds to 256 sec-
+onds. The overall tagging accuracy also increased
+slightly, consistent with observations from the pure
+POS tagger.
+The error analysis for the development test is
+shown in Table 3. Here an error is counted when
+a word in the standard output is not produced by the
+decoder, due to incorrect segmentation or tag assign-
+ment. Statistics about the six most frequently mis-
+taken tags are shown in the table, where each row
+presents the analysis of one tag from the standard
+output, and each column gives a wrongly assigned
+value. The column “Seg” represents segmentation
+errors. Each figure in the table shows the percentage
+of the corresponding error from all the errors.
+It can be seen from the table that the NN-VV and
+VV-NN mistakes were the most commonly made by
+the decoder, while the NR-NN mistakes are also fre-
+</bodyText>
+<table confidence="0.999245307692308">
+Baseline Joint
+# SF TF TA SF TF TA
+1 96.98 92.91 94.14 97.21 93.46 94.66
+2 97.16 93.20 94.34 97.62 93.85 94.79
+3 95.02 89.53 91.28 95.94 90.86 92.38
+4 95.51 90.84 92.55 95.92 91.60 93.31
+5 95.49 90.91 92.57 96.06 91.72 93.25
+6 93.50 87.33 89.87 94.56 88.83 91.14
+7 94.48 89.44 91.61 95.30 90.51 92.41
+8 93.58 88.41 90.93 95.12 90.30 92.32
+9 93.92 89.15 91.35 94.79 90.33 92.45
+10 96.31 91.58 93.01 96.45 91.96 93.45
+Av. 95.20 90.33 92.17 95.90 91.34 93.02
+</table>
+<tableCaption confidence="0.9165685">
+Table 4: The accuracies by 10-fold cross validation
+SF – segmentation F-score,
+TF – overall F-score,
+TA – tagging accuracy by character.
+</tableCaption>
+<bodyText confidence="0.999969">
+quent. These three types of errors significantly out-
+number the rest, together contributing 14.92% of all
+the errors. Moreover, the most commonly mistaken
+tags are NN and VV, while among the most frequent
+tags in the corpus, PU, DEG and M had compara-
+tively less errors. Lastly, segmentation errors con-
+tribute around half (51.47%) of all the errors.
+</bodyText>
+<subsectionHeader confidence="0.999749">
+5.2 Test results
+</subsectionHeader>
+<bodyText confidence="0.999984157894737">
+10-fold cross validation is performed to test the ac-
+curacy of the joint word segmentor and POS tagger,
+and to make comparisons with existing models in the
+literature. Following Ng and Low (2004), we parti-
+tion the sentences in CTB 3, ordered by sentence ID,
+into 10 groups evenly. In the nth test, the nth group
+is used as the testing data.
+Table 4 shows the detailed results for the cross
+validation tests, each row representing one test. As
+can be seen from the table, the joint model outper-
+forms the baseline system in each test.
+Table 5 shows the overall accuracies of the base-
+line and joint systems, and compares them to the rel-
+evant models in the literature. The accuracy of each
+model is shown in a row, where “Ng” represents the
+models from Ng and Low (2004) and “Shi” repre-
+sents the models from Shi and Wang (2007). Each
+accuracy measure is shown in a column, including
+the segmentation F-score (SF), the overall tagging
+</bodyText>
+<page confidence="0.995373">
+894
+</page>
+<table confidence="0.999399571428571">
+Model 5F TF TA
+Baseline+ (Ng) 95.1 91.7
+Joint+ (Ng) 95.2 91.9
+Baseline+* (Shi) 95.85 91.67 –
+Joint+* (Shi) 96.05 91.86 –
+Baseline (ours) 95.20 90.33 92.17
+Joint (ours) 95.90 91.34 93.02
+</table>
+<tableCaption confidence="0.9934225">
+Table 5: The comparison of overall accuracies by 10-fold
+cross validation using CTB
+</tableCaption>
+<table confidence="0.5629915">
++ – knowledge about sepcial characters,
+* – knowledge from semantic net outside CTB.
+</table>
+<bodyText confidence="0.99989234375">
+F-score (TF) and the tagging accuracy by characters
+(TA). As can be seen from the table, our joint model
+achieved the largest improvement over the baseline,
+reducing the segmentation error by 14.58% and the
+overall tagging error by 12.18%.
+The overall tagging accuracy of our joint model
+was comparable to but less than the joint model of
+Shi and Wang (2007). Despite the higher accuracy
+improvement from the baseline, the joint system did
+not give higher overall accuracy. One likely reason
+is that Shi and Wang (2007) included knowledge
+about special characters and semantic knowledge
+from web corpora (which may explain the higher
+baseline accuracy), while our system is completely
+data-driven. However, the comparison is indirect be-
+cause our partitions of the CTB corpus are different.
+Shi and Wang (2007) also chunked the sentences be-
+fore doing 10-fold cross validation, but used an un-
+even split. We chose to follow Ng and Low (2004)
+and split the sentences evenly to facilitate further
+comparison.
+Compared with Ng and Low (2004), our baseline
+model gave slightly better accuracy, consistent with
+our previous observations about the word segmen-
+tors (Zhang and Clark, 2007). Due to the large ac-
+curacy gain from the baseline, our joint model per-
+formed much better.
+In summary, when compared with existing joint
+word segmentation and POS tagging systems in the
+literature, our proposed model achieved the best ac-
+curacy boost from the cascaded baseline, and com-
+petent overall accuracy.
+</bodyText>
+<sectionHeader confidence="0.995636" genericHeader="conclusions">
+6 Conclusion and Future Work
+</sectionHeader>
+<bodyText confidence="0.999976342105263">
+We proposed a joint Chinese word segmentation and
+POS tagging model, which achieved a considerable
+reduction in error rate compared to a baseline two-
+stage system.
+We used a single linear model for combined word
+segmentation and POS tagging, and chose the gen-
+eralized perceptron algorithm for joint training. and
+beam search for efficient decoding. However, the
+application of beam search was far from trivial be-
+cause of the size of the combined search space. Mo-
+tivated by the question of what are the compara-
+ble partial hypotheses in the space, we developed
+a novel multiple beam search decoder which effec-
+tively explores the large search space. Similar tech-
+niques can potentially be applied to other problems
+involving joint inference in NLP.
+Other choices are available for the decoding of
+a joint linear model, such as exact inference with
+dynamic programming, provided that the range of
+features allows efficient processing. The baseline
+feature templates for Chinese segmentation and POS
+tagging, when added together, makes exact infer-
+ence for the proposed joint model very hard. How-
+ever, the accuracy loss from the beam decoder, as
+well as alternative decoding algorithms, are worth
+further exploration.
+The joint system takes features only from the
+baseline segmentor and the baseline POS tagger to
+allow a fair comparison. There may be additional
+features that are particularly useful to the joint sys-
+tem. Open features, such as knowledge of numbers
+and European letters, and relationships from seman-
+tic networks (Shi and Wang, 2007), have been re-
+ported to improve the accuracy of segmentation and
+POS tagging. Therefore, given the flexibility of the
+feature-based linear model, an obvious next step is
+the study of open features in the joint segmentor and
+POS tagger.
+</bodyText>
+<sectionHeader confidence="0.99871" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.9979906">
+We thank Hwee-Tou Ng and Mengqiu Wang for
+their helpful discussions and sharing of experimen-
+tal data, and the anonymous reviewers for their sug-
+gestions. This work is supported by the ORS and
+Clarendon Fund.
+</bodyText>
+<page confidence="0.998408">
+895
+</page>
+<sectionHeader confidence="0.998324" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999496118644068">
+Michael Collins. 2002. Discriminative training meth-
+ods for hidden Markov models: Theory and experi-
+ments with perceptron algorithms. In Proceedings of
+the EMNLP conference, pages 1–8, Philadelphia, PA.
+Hal Daum´e III and Daniel Marcu. 2005. Learning as
+search optimization: Approximate large margin meth-
+ods for structured prediction. In Proceedings of the
+ICML Conference, pages 169–176, Bonn, Germany.
+Jenny Rose Finkel, Christopher D. Manning, and An-
+drew Y. Ng. 2006. Solving the problem of cascading
+errors: Approximate Bayesian inference for linguistic
+annotation pipelines. In Proceedings of the EMNLP
+Conference, pages 618–626, Sydney, Australia.
+Tetsuji Nakagawa and Kiyotaka Uchimoto. 2007. A
+hybrid approach to word segmentation and pos tag-
+ging. In Proceedings of ACL Demo and Poster Ses-
+sion, pages 217–220, Prague, Czech Republic.
+Hwee Tou Ng and Jin Kiat Low. 2004. Chinese
+part-of-speech tagging: One-at-a-time or all-at-once?
+Word-based or character-based? In Proceedings of
+the EMNLP Conference, pages 277–284, Barcelona,
+Spain.
+Adwait Ratnaparkhi. 1996. A maximum entropy model
+for part-of-speech tagging. In Proceedings of the
+EMNLP Conference, pages 133–142, Philadelphia,
+PA.
+Murat Saraclar and Brian Roark. 2005. Joint discrimi-
+native language modeling and utterance classification.
+In Proceedings of the ICASSP Conference, volume 1,
+Philadelphia, USA.
+Yanxin Shi and Mengqiu Wang. 2007. A dual-layer CRF
+based joint decoding method for cascade segmentation
+and labelling tasks. In Proceedings of the IJCAI Con-
+ference, Hyderabad, India.
+Nobuyuki Shimizu and Andrew Haas. 2006. Exact de-
+coding for jointly labeling and chunking sequences. In
+Proceedings of the COLING/ACL Conference, Poster
+Sessions, Sydney, Australia.
+Charles Sutton, Khashayar Rohanimanesh, and Andrew
+McCallum. 2004. Dynamic conditional random
+fields: Factorized probabilistic models for labeling
+and segmenting sequence data. In Proceedings of the
+ICML Conference, Banff, Canada.
+Huihsin Tseng, Daniel Jurafsky, and Christopher Man-
+ning. 2005. Morphological features help POS tagging
+of unknown words across language varieties. In Pro-
+ceedings of the Fourth SIGHAN Workshop, Jeju Island,
+Korea.
+I. Tsochantaridis, T. Hofmann, T. Joachims, and Y. Altun.
+2004. Support vector machine learning for interdepen-
+dent and structured output spaces. In Proceedings of
+the ICML Conference, Banff, Canada.
+Fei Xia. 2000. The part-of-speech tagging guidelines for
+the Chinese Treebank (3.0). IRCS Report, University
+of Pennsylvania.
+Yue Zhang and Stephen Clark. 2007. Chinese segmen-
+tation with a word-based perceptron algorithm. In
+Proceedings of the ACL Conference, pages 840–847,
+Prague, Czech Republic.
+</reference>
+<page confidence="0.999013">
+896
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.823803">
+<title confidence="0.996946">Word Segmentation and using a Single Perceptron</title>
+<author confidence="0.976331">Zhang Clark</author>
+<affiliation confidence="0.999997">Oxford University Computing Laboratory</affiliation>
+<address confidence="0.931954">Wolfson Building, Parks Road Oxford OX1 3QD, UK</address>
+<abstract confidence="0.998578458333334">Chinese word segmentation is a preliminary step. To avoid error propagation and improve segmentation by utilizing segmentation and tagging can be performed simultaneously. A challenge for this joint approach is the large combined search space, which makes efficient decoding very hard. Recent research has explored integration of segmentation and tagging, by decoding under restricted versions of the full combined search space. In this paper, propose a joint segmentation and tagging model that does not impose any hard constraints on the interaction between word and Fast decoding is achieved by using a novel multiple-beam search algorithm. The system uses a discriminative statistical model, trained using the generalized perceptron algorithm. The joint model gives an error reduction in segmentation accuracy of an error reduction in tagging acof compared to the traditional pipeline approach.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>Discriminative training methods for hidden Markov models: Theory and experiments with perceptron algorithms.</title>
+<date>2002</date>
+<booktitle>In Proceedings of the EMNLP conference,</booktitle>
+<pages>1--8</pages>
+<location>Philadelphia, PA.</location>
+<contexts>
+<context position="4843" citStr="Collins, 2002" startWordPosition="768" endWordPosition="769">cted by reranking: POS information is used to improve segmentation only for the N segmentor outputs. In this paper, we propose a novel joint model for Chinese word segmentation and POS tagging, which does not limiting the interaction between segmentation and POS information in reducing the combined search space. Instead, a novel multiple beam search algorithm is used to do decoding efficiently. Candidate ranking is based on a discriminative joint model, with features being extracted from segmented words and POS tags simultaneously. The training is performed by a single generalized perceptron (Collins, 2002). In experiments with the Chinese Treebank data, the joint model gave an error reduction of 14.6% in segmentation accuracy and 12.2% in the overall segmentation and tagging accuracy, compared to the traditional pipeline approach. In addition, the overall results are comparable to the best systems in the literature, which exploit knowledge outside the training data, even though our system is fully data-driven. Different methods have been proposed to reduce error propagation between pipelined tasks, both in general (Sutton et al., 2004; Daum´e III and Marcu, 2005; Finkel et al., 2006) and for sp</context>
+<context position="6569" citStr="Collins (2002)" startWordPosition="1046" endWordPosition="1047">previous work (Zhang and Clark, 2007) and the perceptron POS tagging model from Collins (2002). We use baseline system to refer to the system which performs segmentation first, followed by POS tagging (using the single-best segmentation); baseline segmentor to refer to the segmentor from (Zhang and Clark, 2007) which performs segmentation only; and baseline POStagger to refer to the Collins tagger which performs POS tagging only (given segmentation). The features used by the baseline segmentor are shown in Table 1. The features used by the POS tagger, some of which are different to those from Collins (2002) and are specific to Chinese, are shown in Table 2. The word segmentation features are extracted from word bigrams, capturing word, word length and character information in the context. The word length features are normalized, with those more than 15 being treated as 15. The POS tagging features are based on contextual information from the tag trigram, as well as the neighboring three-word window. To reduce overfitting and increase the decoding speed, templates 4, 5, 6 and 7 only include words with less than 3 characters. Like the baseline segmentor, the baseline tagger also normalizes word le</context>
+<context position="10058" citStr="Collins, 2002" startWordPosition="1662" endWordPosition="1663">tagged output. Given an input sentence x, the output F(x) satisfies: F(x) = arg max Score(y) yEGEN(x) where GEN(x) represents the set of possible outputs for x. Score(y) is computed by a feature-based linear model. Denoting the global feature vector for the tagged sentence y with 4b(y), we have: Score(y) = -b(y) · w� where w� is the parameter vector in the model. Each element in w� gives a weight to its corresponding element in 4b(y), which is the count of a particular feature over the whole sentence y. We calculate the w� value by supervised learning, using the averaged perceptron algorithm (Collins, 2002), given in Figure 1. 1 We take the union of feature templates from the baseline segmentor (Table 1) and POS tagger (Table 2) as the feature templates for the joint system. All features are treated equally and processed together according to the linear model, regardless of whether they are from the baseline segmentor or tagger. In fact, most features from the baseline POS tagger, when used in the joint model, represent segmentation patterns as well. For example, the aforementioned pattern “number word” + “^”, which is 1In order to provide a comparison for the perceptron algorithm we also tried </context>
+</contexts>
+<marker>Collins, 2002</marker>
+<rawString>Michael Collins. 2002. Discriminative training methods for hidden Markov models: Theory and experiments with perceptron algorithms. In Proceedings of the EMNLP conference, pages 1–8, Philadelphia, PA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hal Daum´e</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>Learning as search optimization: Approximate large margin methods for structured prediction.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the ICML Conference,</booktitle>
+<pages>169--176</pages>
+<location>Bonn, Germany.</location>
+<marker>Daum´e, Marcu, 2005</marker>
+<rawString>Hal Daum´e III and Daniel Marcu. 2005. Learning as search optimization: Approximate large margin methods for structured prediction. In Proceedings of the ICML Conference, pages 169–176, Bonn, Germany.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jenny Rose Finkel</author>
+<author>Christopher D Manning</author>
+<author>Andrew Y Ng</author>
+</authors>
+<title>Solving the problem of cascading errors: Approximate Bayesian inference for linguistic annotation pipelines.</title>
+<date>2006</date>
+<booktitle>In Proceedings of the EMNLP Conference,</booktitle>
+<pages>618--626</pages>
+<location>Sydney, Australia.</location>
+<contexts>
+<context position="5432" citStr="Finkel et al., 2006" startWordPosition="860" endWordPosition="863">ized perceptron (Collins, 2002). In experiments with the Chinese Treebank data, the joint model gave an error reduction of 14.6% in segmentation accuracy and 12.2% in the overall segmentation and tagging accuracy, compared to the traditional pipeline approach. In addition, the overall results are comparable to the best systems in the literature, which exploit knowledge outside the training data, even though our system is fully data-driven. Different methods have been proposed to reduce error propagation between pipelined tasks, both in general (Sutton et al., 2004; Daum´e III and Marcu, 2005; Finkel et al., 2006) and for specific problems such as language modeling and utterance classification (Saraclar and Roark, 2005) and labeling and chunking (Shimizu and Haas, 2006). Though our model is built specifically for Chinese word segmentation and POS tagging, the idea of using the perceptron model to solve multiple tasks simultaneously can be generalized to other tasks. Table 1: Feature templates for the baseline segmentor 2 The Baseline System We built a two-stage baseline system, using the perceptron segmentation model from our previous work (Zhang and Clark, 2007) and the perceptron POS tagging model fr</context>
+</contexts>
+<marker>Finkel, Manning, Ng, 2006</marker>
+<rawString>Jenny Rose Finkel, Christopher D. Manning, and Andrew Y. Ng. 2006. Solving the problem of cascading errors: Approximate Bayesian inference for linguistic annotation pipelines. In Proceedings of the EMNLP Conference, pages 618–626, Sydney, Australia.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tetsuji Nakagawa</author>
+<author>Kiyotaka Uchimoto</author>
+</authors>
+<title>A hybrid approach to word segmentation and pos tagging.</title>
+<date>2007</date>
+<booktitle>In Proceedings of ACL Demo and Poster Session,</booktitle>
+<pages>217--220</pages>
+<location>Prague, Czech Republic.</location>
+<contexts>
+<context position="20372" citStr="Nakagawa and Uchimoto (2007)" startWordPosition="3452" endWordPosition="3455">ance was negligible. 892 the large search space by imposing strong restrictions on the form of search candidates. In particular, Ng and Low (2004) used character-based POS tagging, which prevents some important POS tagging features such as word + POS tag; Shi and Wang (2007) used an N-best reranking approach, which limits the influence of POS tagging on segmentation to the N-best list. In comparison, our joint model does not impose any hard limitations on the interaction between segmentation and POS information.4 Fast decoding speed is achieved by using a novel multiple-beam search algorithm. Nakagawa and Uchimoto (2007) proposed a hybrid model for word segmentation and POS tagging using an HMM-based approach. Word information is used to process known-words, and character information is used for unknown words in a similar way to Ng and Low (2004). In comparison, our model handles character and word information simultaneously in a single perceptron model. 5 Experiments The Chinese Treebank (CTB) 4 is used for the experiments. It is separated into two parts: CTB 3 (420K characters in 150K words / 10364 sentences) is used for the final 10-fold cross validation, and the rest (240K characters in 150K words / 4798 </context>
+</contexts>
+<marker>Nakagawa, Uchimoto, 2007</marker>
+<rawString>Tetsuji Nakagawa and Kiyotaka Uchimoto. 2007. A hybrid approach to word segmentation and pos tagging. In Proceedings of ACL Demo and Poster Session, pages 217–220, Prague, Czech Republic.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hwee Tou Ng</author>
+<author>Jin Kiat Low</author>
+</authors>
+<title>Chinese part-of-speech tagging: One-at-a-time or all-at-once? Word-based or character-based?</title>
+<date>2004</date>
+<booktitle>In Proceedings of the EMNLP Conference,</booktitle>
+<pages>277--284</pages>
+<location>Barcelona,</location>
+<contexts>
+<context position="2975" citStr="Ng and Low (2004)" startWordPosition="473" endWordPosition="476">d chooses the overall best output. A major challenge for such a joint system is the large search space faced by the decoder. For a sentence with n characters, the number of possible output sequences is O(2n−1 · Tn), where T is the size of the tag set. Due to the nature of the combined candidate items, decoding can be inefficient even with dynamic programming. Recent research on Chinese POS tagging has started to investigate joint segmentation and tagging, reporting accuracy improvements over the pipeline approach. Various decoding approaches have been used to reduce the combined search space. Ng and Low (2004) mapped the joint segmentation and POS tagging task into a single character sequence tagging problem. Two types of tags are assigned to each character to represent its segmentation and POS. For example, the tag “b NN” indicates a character at the beginning of a noun. Using this method, POS features are allowed to interact with segmentation. 888 Proceedings ofACL-08: HLT, pages 888–896, Columbus, Ohio, USA, June 2008. c�2008 Association for Computational Linguistics Since tagging is restricted to characters, the search space is reduced to O((4T)&apos;), and beam search decoding is effective with a s</context>
+<context position="19453" citStr="Ng and Low (2004)" startWordPosition="3304" endWordPosition="3307"> maximum word lengths and character categories is straightforward. For the online updating of the tag dictionary, however, the decision for frequent words must be made dynamically because the word frequencies keep changing. This is done by caching the number of occurrences of the current most frequent word M, and taking all words currently above the threshold M/5000 + 5 as frequent words. 5000 is a rough figure to control the number of frequent words, set according to Zipf’s law. The parameter 5 is used to force all tags to be enumerated before a word is seen more than 5 times. 4 Related Work Ng and Low (2004) and Shi and Wang (2007) were described in the Introduction. Both models reduced 3We took this approach because we wanted the whole training process to be online. However, for comparison purposes, we also tried precomputing the above information before training and the difference in performance was negligible. 892 the large search space by imposing strong restrictions on the form of search candidates. In particular, Ng and Low (2004) used character-based POS tagging, which prevents some important POS tagging features such as word + POS tag; Shi and Wang (2007) used an N-best reranking approach</context>
+<context position="21474" citStr="Ng and Low (2004)" startWordPosition="3639" endWordPosition="3642">0364 sentences) is used for the final 10-fold cross validation, and the rest (240K characters in 150K words / 4798 sentences) is used as training and test data for development. The standard F-scores are used to measure both the word segmentation accuracy and the overall segmentation and tagging accuracy, where the overall accuracy is TF = 2pr/(p + r), with the precision p being the percentage of correctly segmented and tagged words in the decoder output, and the recall r being the percentage of gold-standard tagged words that are correctly identified by the decoder. For direct comparison with Ng and Low (2004), the POS tagging accuracy is also calculated by the percentage of correct tags on each character. 5.1 Development experiments The learning curves of the baseline and joint models are shown in Figure 3, Figure 4 and Figure 5, respectively. These curves are used to show the conver4Apart from the beam search algorithm, we do impose some minor limitations on the search space by methods such as the tag dictionary, but these can be seen as optional pruning methods for optimization. 1 2 3 4 5 6 7 8 9 10 Number of training iterations Figure 3: The learning curve of the baseline segmentor 0.9 0.89 F-s</context>
+<context position="25950" citStr="Ng and Low (2004)" startWordPosition="4443" endWordPosition="4446">TF – overall F-score, TA – tagging accuracy by character. quent. These three types of errors significantly outnumber the rest, together contributing 14.92% of all the errors. Moreover, the most commonly mistaken tags are NN and VV, while among the most frequent tags in the corpus, PU, DEG and M had comparatively less errors. Lastly, segmentation errors contribute around half (51.47%) of all the errors. 5.2 Test results 10-fold cross validation is performed to test the accuracy of the joint word segmentor and POS tagger, and to make comparisons with existing models in the literature. Following Ng and Low (2004), we partition the sentences in CTB 3, ordered by sentence ID, into 10 groups evenly. In the nth test, the nth group is used as the testing data. Table 4 shows the detailed results for the cross validation tests, each row representing one test. As can be seen from the table, the joint model outperforms the baseline system in each test. Table 5 shows the overall accuracies of the baseline and joint systems, and compares them to the relevant models in the literature. The accuracy of each model is shown in a row, where “Ng” represents the models from Ng and Low (2004) and “Shi” represents the mod</context>
+<context position="27982" citStr="Ng and Low (2004)" startWordPosition="4791" endWordPosition="4794">he joint model of Shi and Wang (2007). Despite the higher accuracy improvement from the baseline, the joint system did not give higher overall accuracy. One likely reason is that Shi and Wang (2007) included knowledge about special characters and semantic knowledge from web corpora (which may explain the higher baseline accuracy), while our system is completely data-driven. However, the comparison is indirect because our partitions of the CTB corpus are different. Shi and Wang (2007) also chunked the sentences before doing 10-fold cross validation, but used an uneven split. We chose to follow Ng and Low (2004) and split the sentences evenly to facilitate further comparison. Compared with Ng and Low (2004), our baseline model gave slightly better accuracy, consistent with our previous observations about the word segmentors (Zhang and Clark, 2007). Due to the large accuracy gain from the baseline, our joint model performed much better. In summary, when compared with existing joint word segmentation and POS tagging systems in the literature, our proposed model achieved the best accuracy boost from the cascaded baseline, and competent overall accuracy. 6 Conclusion and Future Work We proposed a joint C</context>
+</contexts>
+<marker>Ng, Low, 2004</marker>
+<rawString>Hwee Tou Ng and Jin Kiat Low. 2004. Chinese part-of-speech tagging: One-at-a-time or all-at-once? Word-based or character-based? In Proceedings of the EMNLP Conference, pages 277–284, Barcelona, Spain.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adwait Ratnaparkhi</author>
+</authors>
+<title>A maximum entropy model for part-of-speech tagging.</title>
+<date>1996</date>
+<booktitle>In Proceedings of the EMNLP Conference,</booktitle>
+<pages>133--142</pages>
+<location>Philadelphia, PA.</location>
+<contexts>
+<context position="8300" citStr="Ratnaparkhi, 1996" startWordPosition="1355" endWordPosition="1357">ength l with next word w 1 2 3 4 5 6 7 8 9 10 11 12 13 14 889 Table 2: Feature templates for the baseline POS tagger Templates 15 and 16 in Table 2 are inspired by the CTBMorph feature templates in Tseng et al. (2005), which gave the most accuracy improvement in their experiments. Here the category of a character is the set of tags seen on the character during training. Other morphological features from Tseng et al. (2005) are not used because they require extra web corpora besides the training data. During training, the baseline POS tagger stores special word-tag pairs into a tag dictionary (Ratnaparkhi, 1996). Such information is used by the decoder to prune unlikely tags. For each word occurring more than N times in the training data, the decoder can only assign a tag the word has been seen with in the training data. This method led to improvement in the decoding speed as well as the output accuracy for English POS tagging (Ratnaparkhi, 1996). Besides tags for frequent words, our baseline POS tagger also uses the tag dictionary to store closed-set tags (Xia, 2000) – those associated only with a limited number of Chinese words. 3 Joint Segmentation and Tagging Model In this section, we build a joi</context>
+<context position="13093" citStr="Ratnaparkhi, 1996" startWordPosition="2227" endWordPosition="2228">haracter is combined with existing partial candidates in all possible ways to generate new partial candidates. An agenda is used to control the search space, keeping only the B best partial candidates ending with the current character. The algorithm is simple and efficient, with a linear time complexity of O(BTn), where n is the size of input sentence, and T is the size of the tag set (T = 1 for pure word segmentation). It worked well for word segmentation alone (Zhang and Clark, 2007), even with an agenda size as small as 8, and a simple beam search algorithm also works well for POS tagging (Ratnaparkhi, 1996). However, when applied to the joint model, it resulted in a reduction in segmentation accuracy (compared to the baseline segmentor) even with B as large as 1024. One possible cause of the poor performance of the standard beam search method is the combined nature of the candidates in the search space. In the baseInput: raw sentence sent – a list of characters Variables: candidate sentence item – a list of (word, tag) pairs; maximum word-length record maxlen for each tag; the agenda list agendas; the tag dictionary tagdict; start index for current word; end index for current word Initialization</context>
+</contexts>
+<marker>Ratnaparkhi, 1996</marker>
+<rawString>Adwait Ratnaparkhi. 1996. A maximum entropy model for part-of-speech tagging. In Proceedings of the EMNLP Conference, pages 133–142, Philadelphia, PA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Murat Saraclar</author>
+<author>Brian Roark</author>
+</authors>
+<title>Joint discriminative language modeling and utterance classification.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the ICASSP Conference,</booktitle>
+<volume>1</volume>
+<location>Philadelphia, USA.</location>
+<contexts>
+<context position="5540" citStr="Saraclar and Roark, 2005" startWordPosition="876" endWordPosition="879"> error reduction of 14.6% in segmentation accuracy and 12.2% in the overall segmentation and tagging accuracy, compared to the traditional pipeline approach. In addition, the overall results are comparable to the best systems in the literature, which exploit knowledge outside the training data, even though our system is fully data-driven. Different methods have been proposed to reduce error propagation between pipelined tasks, both in general (Sutton et al., 2004; Daum´e III and Marcu, 2005; Finkel et al., 2006) and for specific problems such as language modeling and utterance classification (Saraclar and Roark, 2005) and labeling and chunking (Shimizu and Haas, 2006). Though our model is built specifically for Chinese word segmentation and POS tagging, the idea of using the perceptron model to solve multiple tasks simultaneously can be generalized to other tasks. Table 1: Feature templates for the baseline segmentor 2 The Baseline System We built a two-stage baseline system, using the perceptron segmentation model from our previous work (Zhang and Clark, 2007) and the perceptron POS tagging model from Collins (2002). We use baseline system to refer to the system which performs segmentation first, followed</context>
+</contexts>
+<marker>Saraclar, Roark, 2005</marker>
+<rawString>Murat Saraclar and Brian Roark. 2005. Joint discriminative language modeling and utterance classification. In Proceedings of the ICASSP Conference, volume 1, Philadelphia, USA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yanxin Shi</author>
+<author>Mengqiu Wang</author>
+</authors>
+<title>A dual-layer CRF based joint decoding method for cascade segmentation and labelling tasks.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the IJCAI Conference,</booktitle>
+<location>Hyderabad, India.</location>
+<contexts>
+<context position="3807" citStr="Shi and Wang (2007)" startWordPosition="605" endWordPosition="608"> NN” indicates a character at the beginning of a noun. Using this method, POS features are allowed to interact with segmentation. 888 Proceedings ofACL-08: HLT, pages 888–896, Columbus, Ohio, USA, June 2008. c�2008 Association for Computational Linguistics Since tagging is restricted to characters, the search space is reduced to O((4T)&apos;), and beam search decoding is effective with a small beam size. However, the disadvantage of this model is the difficulty in incorporating whole word information into POS tagging. For example, the standard “word + POS tag” feature is not explicitly applicable. Shi and Wang (2007) introduced POS information to segmentation by reranking. N-best segmentation outputs are passed to a separately-trained POS tagger, and the best output is selected using the overall POSsegmentation probability score. In this system, the decoding for word segmentation and POS tagging are still performed separately, and exact inference for both is possible. However, the interaction between POS and segmentation is restricted by reranking: POS information is used to improve segmentation only for the N segmentor outputs. In this paper, we propose a novel joint model for Chinese word segmentation a</context>
+<context position="19477" citStr="Shi and Wang (2007)" startWordPosition="3309" endWordPosition="3312">and character categories is straightforward. For the online updating of the tag dictionary, however, the decision for frequent words must be made dynamically because the word frequencies keep changing. This is done by caching the number of occurrences of the current most frequent word M, and taking all words currently above the threshold M/5000 + 5 as frequent words. 5000 is a rough figure to control the number of frequent words, set according to Zipf’s law. The parameter 5 is used to force all tags to be enumerated before a word is seen more than 5 times. 4 Related Work Ng and Low (2004) and Shi and Wang (2007) were described in the Introduction. Both models reduced 3We took this approach because we wanted the whole training process to be online. However, for comparison purposes, we also tried precomputing the above information before training and the difference in performance was negligible. 892 the large search space by imposing strong restrictions on the form of search candidates. In particular, Ng and Low (2004) used character-based POS tagging, which prevents some important POS tagging features such as word + POS tag; Shi and Wang (2007) used an N-best reranking approach, which limits the influ</context>
+<context position="26578" citStr="Shi and Wang (2007)" startWordPosition="4561" endWordPosition="4564">ition the sentences in CTB 3, ordered by sentence ID, into 10 groups evenly. In the nth test, the nth group is used as the testing data. Table 4 shows the detailed results for the cross validation tests, each row representing one test. As can be seen from the table, the joint model outperforms the baseline system in each test. Table 5 shows the overall accuracies of the baseline and joint systems, and compares them to the relevant models in the literature. The accuracy of each model is shown in a row, where “Ng” represents the models from Ng and Low (2004) and “Shi” represents the models from Shi and Wang (2007). Each accuracy measure is shown in a column, including the segmentation F-score (SF), the overall tagging 894 Model 5F TF TA Baseline+ (Ng) 95.1 91.7 Joint+ (Ng) 95.2 91.9 Baseline+* (Shi) 95.85 91.67 – Joint+* (Shi) 96.05 91.86 – Baseline (ours) 95.20 90.33 92.17 Joint (ours) 95.90 91.34 93.02 Table 5: The comparison of overall accuracies by 10-fold cross validation using CTB + – knowledge about sepcial characters, * – knowledge from semantic net outside CTB. F-score (TF) and the tagging accuracy by characters (TA). As can be seen from the table, our joint model achieved the largest improvem</context>
+<context position="27853" citStr="Shi and Wang (2007)" startWordPosition="4767" endWordPosition="4770">y 14.58% and the overall tagging error by 12.18%. The overall tagging accuracy of our joint model was comparable to but less than the joint model of Shi and Wang (2007). Despite the higher accuracy improvement from the baseline, the joint system did not give higher overall accuracy. One likely reason is that Shi and Wang (2007) included knowledge about special characters and semantic knowledge from web corpora (which may explain the higher baseline accuracy), while our system is completely data-driven. However, the comparison is indirect because our partitions of the CTB corpus are different. Shi and Wang (2007) also chunked the sentences before doing 10-fold cross validation, but used an uneven split. We chose to follow Ng and Low (2004) and split the sentences evenly to facilitate further comparison. Compared with Ng and Low (2004), our baseline model gave slightly better accuracy, consistent with our previous observations about the word segmentors (Zhang and Clark, 2007). Due to the large accuracy gain from the baseline, our joint model performed much better. In summary, when compared with existing joint word segmentation and POS tagging systems in the literature, our proposed model achieved the b</context>
+</contexts>
+<marker>Shi, Wang, 2007</marker>
+<rawString>Yanxin Shi and Mengqiu Wang. 2007. A dual-layer CRF based joint decoding method for cascade segmentation and labelling tasks. In Proceedings of the IJCAI Conference, Hyderabad, India.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Nobuyuki Shimizu</author>
+<author>Andrew Haas</author>
+</authors>
+<title>Exact decoding for jointly labeling and chunking sequences.</title>
+<date>2006</date>
+<booktitle>In Proceedings of the COLING/ACL Conference,</booktitle>
+<location>Poster Sessions, Sydney, Australia.</location>
+<contexts>
+<context position="5591" citStr="Shimizu and Haas, 2006" startWordPosition="884" endWordPosition="887">d 12.2% in the overall segmentation and tagging accuracy, compared to the traditional pipeline approach. In addition, the overall results are comparable to the best systems in the literature, which exploit knowledge outside the training data, even though our system is fully data-driven. Different methods have been proposed to reduce error propagation between pipelined tasks, both in general (Sutton et al., 2004; Daum´e III and Marcu, 2005; Finkel et al., 2006) and for specific problems such as language modeling and utterance classification (Saraclar and Roark, 2005) and labeling and chunking (Shimizu and Haas, 2006). Though our model is built specifically for Chinese word segmentation and POS tagging, the idea of using the perceptron model to solve multiple tasks simultaneously can be generalized to other tasks. Table 1: Feature templates for the baseline segmentor 2 The Baseline System We built a two-stage baseline system, using the perceptron segmentation model from our previous work (Zhang and Clark, 2007) and the perceptron POS tagging model from Collins (2002). We use baseline system to refer to the system which performs segmentation first, followed by POS tagging (using the single-best segmentation</context>
+</contexts>
+<marker>Shimizu, Haas, 2006</marker>
+<rawString>Nobuyuki Shimizu and Andrew Haas. 2006. Exact decoding for jointly labeling and chunking sequences. In Proceedings of the COLING/ACL Conference, Poster Sessions, Sydney, Australia.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Charles Sutton</author>
+<author>Khashayar Rohanimanesh</author>
+<author>Andrew McCallum</author>
+</authors>
+<title>Dynamic conditional random fields: Factorized probabilistic models for labeling and segmenting sequence data.</title>
+<date>2004</date>
+<booktitle>In Proceedings of the ICML Conference,</booktitle>
+<location>Banff, Canada.</location>
+<contexts>
+<context position="5382" citStr="Sutton et al., 2004" startWordPosition="851" endWordPosition="854">ly. The training is performed by a single generalized perceptron (Collins, 2002). In experiments with the Chinese Treebank data, the joint model gave an error reduction of 14.6% in segmentation accuracy and 12.2% in the overall segmentation and tagging accuracy, compared to the traditional pipeline approach. In addition, the overall results are comparable to the best systems in the literature, which exploit knowledge outside the training data, even though our system is fully data-driven. Different methods have been proposed to reduce error propagation between pipelined tasks, both in general (Sutton et al., 2004; Daum´e III and Marcu, 2005; Finkel et al., 2006) and for specific problems such as language modeling and utterance classification (Saraclar and Roark, 2005) and labeling and chunking (Shimizu and Haas, 2006). Though our model is built specifically for Chinese word segmentation and POS tagging, the idea of using the perceptron model to solve multiple tasks simultaneously can be generalized to other tasks. Table 1: Feature templates for the baseline segmentor 2 The Baseline System We built a two-stage baseline system, using the perceptron segmentation model from our previous work (Zhang and Cl</context>
+</contexts>
+<marker>Sutton, Rohanimanesh, McCallum, 2004</marker>
+<rawString>Charles Sutton, Khashayar Rohanimanesh, and Andrew McCallum. 2004. Dynamic conditional random fields: Factorized probabilistic models for labeling and segmenting sequence data. In Proceedings of the ICML Conference, Banff, Canada.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Huihsin Tseng</author>
+<author>Daniel Jurafsky</author>
+<author>Christopher Manning</author>
+</authors>
+<title>Morphological features help POS tagging of unknown words across language varieties.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the Fourth SIGHAN Workshop,</booktitle>
+<location>Jeju Island,</location>
+<contexts>
+<context position="7899" citStr="Tseng et al. (2005)" startWordPosition="1289" endWordPosition="1292">ord of length l with ending character c space-separated characters c1 and c2 character bigram c1c2 in any word the first / last characters c1 / c2 of any word word w immediately before character c character c immediately before word w the starting characters c1 and c2 of two consecutive words the ending characters c1 and c2 of two consecutive words a word of length l with previous word w a word of length l with next word w 1 2 3 4 5 6 7 8 9 10 11 12 13 14 889 Table 2: Feature templates for the baseline POS tagger Templates 15 and 16 in Table 2 are inspired by the CTBMorph feature templates in Tseng et al. (2005), which gave the most accuracy improvement in their experiments. Here the category of a character is the set of tags seen on the character during training. Other morphological features from Tseng et al. (2005) are not used because they require extra web corpora besides the training data. During training, the baseline POS tagger stores special word-tag pairs into a tag dictionary (Ratnaparkhi, 1996). Such information is used by the decoder to prune unlikely tags. For each word occurring more than N times in the training data, the decoder can only assign a tag the word has been seen with in the </context>
+<context position="23540" citStr="Tseng et al., 2005" startWordPosition="4028" endWordPosition="4031">1.08 0.04 0 0 0.07 0 – Table 3: Error analysis for the joint model for the baseline segmentor, POS tagger, and the joint system are set to 8, 6, and 7, respectively for the remaining experiments. There are many factors which can influence the accuracy of the joint model. Here we consider the special character category features and the effect of the tag dictionary. The character category features (templates 15 and 16 in Table 2) represent a Chinese character by all the tags associated with the character in the training data. They have been shown to improve the accuracy of a Chinese POS tagger (Tseng et al., 2005). In the joint model, these features also represent segmentation information, since they concern the starting and ending characters of a word. Development tests showed that the overall tagging F-score of the joint model increased from 84.54% to 84.93% using the character category features. In the development test, the use of the tag dictionary improves the decoding speed of the joint model, reducing the decoding time from 416 seconds to 256 seconds. The overall tagging accuracy also increased slightly, consistent with observations from the pure POS tagger. The error analysis for the developmen</context>
+</contexts>
+<marker>Tseng, Jurafsky, Manning, 2005</marker>
+<rawString>Huihsin Tseng, Daniel Jurafsky, and Christopher Manning. 2005. Morphological features help POS tagging of unknown words across language varieties. In Proceedings of the Fourth SIGHAN Workshop, Jeju Island, Korea.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Tsochantaridis</author>
+<author>T Hofmann</author>
+<author>T Joachims</author>
+<author>Y Altun</author>
+</authors>
+<title>Support vector machine learning for interdependent and structured output spaces.</title>
+<date>2004</date>
+<booktitle>In Proceedings of the ICML Conference,</booktitle>
+<location>Banff, Canada.</location>
+<contexts>
+<context position="10697" citStr="Tsochantaridis et al., 2004" startWordPosition="1771" endWordPosition="1774">Figure 1. 1 We take the union of feature templates from the baseline segmentor (Table 1) and POS tagger (Table 2) as the feature templates for the joint system. All features are treated equally and processed together according to the linear model, regardless of whether they are from the baseline segmentor or tagger. In fact, most features from the baseline POS tagger, when used in the joint model, represent segmentation patterns as well. For example, the aforementioned pattern “number word” + “^”, which is 1In order to provide a comparison for the perceptron algorithm we also tried SVMstruct (Tsochantaridis et al., 2004) for parameter estimation, but this training method was prohibitively slow. tag t with word w tag bigram t1t2 tag trigram t1t2t3 tag t followed by word w word w followed by tag t word w with tag t and previous character c word w with tag t and next character c tag t on single-character word w in character trigram c1wc2 tag t on a word starting with char c tag t on a word ending with char c tag t on a word containing char c (not the starting or ending character) tag t on a word starting with char c0 and containing char c tag t on a word ending with char c0 and containing char c tag t on a word </context>
+</contexts>
+<marker>Tsochantaridis, Hofmann, Joachims, Altun, 2004</marker>
+<rawString>I. Tsochantaridis, T. Hofmann, T. Joachims, and Y. Altun. 2004. Support vector machine learning for interdependent and structured output spaces. In Proceedings of the ICML Conference, Banff, Canada.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Fei Xia</author>
+</authors>
+<title>The part-of-speech tagging guidelines for the Chinese Treebank (3.0). IRCS Report,</title>
+<date>2000</date>
+<institution>University of Pennsylvania.</institution>
+<contexts>
+<context position="8765" citStr="Xia, 2000" startWordPosition="1443" endWordPosition="1444">rpora besides the training data. During training, the baseline POS tagger stores special word-tag pairs into a tag dictionary (Ratnaparkhi, 1996). Such information is used by the decoder to prune unlikely tags. For each word occurring more than N times in the training data, the decoder can only assign a tag the word has been seen with in the training data. This method led to improvement in the decoding speed as well as the output accuracy for English POS tagging (Ratnaparkhi, 1996). Besides tags for frequent words, our baseline POS tagger also uses the tag dictionary to store closed-set tags (Xia, 2000) – those associated only with a limited number of Chinese words. 3 Joint Segmentation and Tagging Model In this section, we build a joint word segmentation and POS tagging model that uses exactly the same source of information as the baseline system, by applying the feature templates from the baseline word segmentor and POS tagger. No extra knowledge is used by the joint model. However, because word segmentation and POS tagging are performed simultaneously, POS information participates in word segmentation. 3.1 Formulation of the joint model We formulate joint word segmentation and POS tagging</context>
+</contexts>
+<marker>Xia, 2000</marker>
+<rawString>Fei Xia. 2000. The part-of-speech tagging guidelines for the Chinese Treebank (3.0). IRCS Report, University of Pennsylvania.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yue Zhang</author>
+<author>Stephen Clark</author>
+</authors>
+<title>Chinese segmentation with a word-based perceptron algorithm.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the ACL Conference,</booktitle>
+<pages>840--847</pages>
+<location>Prague, Czech Republic.</location>
+<contexts>
+<context position="5992" citStr="Zhang and Clark, 2007" startWordPosition="949" endWordPosition="952">et al., 2004; Daum´e III and Marcu, 2005; Finkel et al., 2006) and for specific problems such as language modeling and utterance classification (Saraclar and Roark, 2005) and labeling and chunking (Shimizu and Haas, 2006). Though our model is built specifically for Chinese word segmentation and POS tagging, the idea of using the perceptron model to solve multiple tasks simultaneously can be generalized to other tasks. Table 1: Feature templates for the baseline segmentor 2 The Baseline System We built a two-stage baseline system, using the perceptron segmentation model from our previous work (Zhang and Clark, 2007) and the perceptron POS tagging model from Collins (2002). We use baseline system to refer to the system which performs segmentation first, followed by POS tagging (using the single-best segmentation); baseline segmentor to refer to the segmentor from (Zhang and Clark, 2007) which performs segmentation only; and baseline POStagger to refer to the Collins tagger which performs POS tagging only (given segmentation). The features used by the baseline segmentor are shown in Table 1. The features used by the POS tagger, some of which are different to those from Collins (2002) and are specific to Ch</context>
+<context position="12349" citStr="Zhang and Clark, 2007" startWordPosition="2095" endWordPosition="2098">er word” in the baseline tagger, is also an effective indicator of the segmentation of the two words (especially “^”) in the joint model. 3.2 The decoding algorithm One of the main challenges for the joint segmentation and POS tagging system is the decoding algorithm. The speed and accuracy of the decoder is important for the perceptron learning algorithm, but the system faces a very large search space of combined candidates. Given the linear model and feature templates, exact inference is very hard even with dynamic programming. Experiments with the standard beam-search decoder described in (Zhang and Clark, 2007) resulted in low accuracy. This beam search algorithm processes an input sentence incrementally. At each stage, the incoming character is combined with existing partial candidates in all possible ways to generate new partial candidates. An agenda is used to control the search space, keeping only the B best partial candidates ending with the current character. The algorithm is simple and efficient, with a linear time complexity of O(BTn), where n is the size of input sentence, and T is the size of the tag set (T = 1 for pure word segmentation). It worked well for word segmentation alone (Zhang </context>
+<context position="28222" citStr="Zhang and Clark, 2007" startWordPosition="4827" endWordPosition="4830">racters and semantic knowledge from web corpora (which may explain the higher baseline accuracy), while our system is completely data-driven. However, the comparison is indirect because our partitions of the CTB corpus are different. Shi and Wang (2007) also chunked the sentences before doing 10-fold cross validation, but used an uneven split. We chose to follow Ng and Low (2004) and split the sentences evenly to facilitate further comparison. Compared with Ng and Low (2004), our baseline model gave slightly better accuracy, consistent with our previous observations about the word segmentors (Zhang and Clark, 2007). Due to the large accuracy gain from the baseline, our joint model performed much better. In summary, when compared with existing joint word segmentation and POS tagging systems in the literature, our proposed model achieved the best accuracy boost from the cascaded baseline, and competent overall accuracy. 6 Conclusion and Future Work We proposed a joint Chinese word segmentation and POS tagging model, which achieved a considerable reduction in error rate compared to a baseline twostage system. We used a single linear model for combined word segmentation and POS tagging, and chose the genera</context>
+</contexts>
+<marker>Zhang, Clark, 2007</marker>
+<rawString>Yue Zhang and Stephen Clark. 2007. Chinese segmentation with a word-based perceptron algorithm. In Proceedings of the ACL Conference, pages 840–847, Prague, Czech Republic.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

@@ -1,0 +1,1267 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000768">
+<title confidence="0.961038">
+It’s a Contradiction—No, it’s Not:
+A Case Study using Functional Relations
+</title>
+<author confidence="0.988276">
+Alan Ritter, Doug Downey, Stephen Soderland and Oren Etzioni
+</author>
+<affiliation confidence="0.982284333333333">
+Turing Center
+Department of Computer Science and Engineering
+University of Washington
+</affiliation>
+<address confidence="0.984901">
+Box 352350
+Seattle, WA 98195, USA
+</address>
+<email confidence="0.999082">
+faritter,ddowney,soderlan,etzionil@cs.washington.edu
+</email>
+<sectionHeader confidence="0.998318" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<subsectionHeader confidence="0.774525">
+Contradiction Detection (CD) in text is a
+</subsectionHeader>
+<bodyText confidence="0.999298529411765">
+difficult NLP task. We investigate CD
+over functions (e.g., BornIn(Person)=Place),
+and present a domain-independent algorithm
+that automatically discovers phrases denoting
+functions with high precision. Previous work
+on CD has investigated hand-chosen sentence
+pairs. In contrast, we automatically harvested
+from the Web pairs of sentences that appear
+contradictory, but were surprised to find that
+most pairs are in fact consistent. For example,
+“Mozart was born in Salzburg” does not con-
+tradict “Mozart was born in Austria” despite
+the functional nature of the phrase “was born
+in”. We show that background knowledge
+about meronyms (e.g., Salzburg is in Austria),
+synonyms, functions, and more is essential for
+success in the CD task.
+</bodyText>
+<sectionHeader confidence="0.989413" genericHeader="categories and subject descriptors">
+1 Introduction and Motivation
+</sectionHeader>
+<bodyText confidence="0.9999425">
+Detecting contradictory statements is an important
+and challenging NLP task with a wide range of
+potential applications including analysis of politi-
+cal discourse, of scientific literature, and more (de
+Marneffe et al., 2008; Condoravdi et al., 2003;
+Harabagiu et al., 2006). De Marneffe et al. present a
+model of CD that defines the task, analyzes different
+types of contradictions, and reports on a CD system.
+They report 23% precision and 19% recall at detect-
+ing contradictions in the RTE-3 data set (Voorhees,
+2008). Although RTE-3 contains a wide variety of
+contradictions, it does not reflect the prevalence of
+seeming contradictions and the paucity of genuine
+contradictions, which we have found in our corpus.
+</bodyText>
+<page confidence="0.975265">
+11
+</page>
+<subsectionHeader confidence="0.980205">
+1.1 Contradictions and World Knowledge
+</subsectionHeader>
+<bodyText confidence="0.999203807692308">
+Our paper is motivated in part by de Marneffe et al.’s
+work, but with some important differences. First,
+we introduce a simple logical foundation for the CD
+task, which suggests that extensive world knowl-
+edge is essential for building a domain-independent
+CD system. Second, we automatically generate a
+large corpus of apparent contradictions found in ar-
+bitrary Web text. We show that most of these appar-
+ent contradictions are actually consistent statements
+due to meronyms (Alan Turing was born in London
+and in England), synonyms (George Bush is mar-
+ried to both Mrs. Bush and Laura Bush), hypernyms
+(Mozart died of both renal failure and kidney dis-
+ease), and reference ambiguity (one John Smith was
+born in 1997 and a different John Smith in 1883).
+Next, we show how background knowledge enables
+a CD system to discard seeming contradictions and
+focus on genuine ones.
+De Marneffe et al. introduced a typology of con-
+tradiction in text, but focused primarily on contra-
+dictions that can be detected from linguistic evi-
+dence (e.g. negation, antonymy, and structural or
+lexical disagreements). We extend their analysis to
+a class of contradictions that can only be detected
+utilizing background knowledge. Consider for ex-
+ample the following sentences:
+</bodyText>
+<listItem confidence="0.994695">
+1) “Mozart was born in Salzburg.”
+2) “Mozart was born in Vienna.”
+3) “Mozart visited Salzburg.”
+4) “Mozart visited Vienna.”
+</listItem>
+<bodyText confidence="0.994759666666667">
+Sentences 1 &amp; 2 are contradictory, but 3 &amp; 4 are
+not. Why is that? The distinction is not syntactic.
+Rather, sentences 1 and 2 are contradictory because
+</bodyText>
+<note confidence="0.816445">
+Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 11–20,
+Honolulu, October 2008. c�2008 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.999949863636364">
+the relation expressed by the phrase “was born in”
+can be characterized here as a function from peo-
+ple’s names to their unique birthplaces. In contrast,
+“visited” does not denote a functional relation.1
+We cannot assume that a CD system knows, in
+advance, all the functional relations that might ap-
+pear in a corpus. Thus, a central challenge for a
+function-based CD system is to determine which re-
+lations are functional based on a corpus. Intuitively,
+we might expect that “functional phrases” such as
+“was born in” would typically map person names
+to unique place names, making function detection
+easy. But, in fact, function detection is surprisingly
+difficult because name ambiguity (e.g., John Smith),
+common nouns (e.g., “dad” or “mom”), definite de-
+scriptions (e.g., “the president”), and other linguistic
+phenomena can mask functions in text. For example,
+the two sentences “John Smith was born in 1997.”
+and “John Smith was born in 1883.” can be viewed
+as either evidence that “was born in” does not de-
+note a function or, alternatively, that “John Smith”
+is ambiguous.
+</bodyText>
+<subsectionHeader confidence="0.995778">
+1.2 A CD System Based on Functions
+</subsectionHeader>
+<bodyText confidence="0.999834190476191">
+We report on the AUCONTRAIRE CD system, which
+addresses each of the above challenges. First, AU-
+CONTRAIRE identifies “functional phrases” statis-
+tically (Section 3). Second, AUCONTRAIRE uses
+these phrases to automatically create a large cor-
+pus of apparent contradictions (Section 4.2). Fi-
+nally, AUCONTRAIRE sifts through this corpus to
+find genuine contradictions using knowledge about
+synonymy, meronymy, argument types, and ambi-
+guity (Section 4.3).
+Instead of analyzing sentences directly, AUCON-
+TRAIRE relies on the TEXTRUNNER Open Informa-
+tion Extraction system (Banko et al., 2007; Banko
+and Etzioni, 2008) to map each sentence to one or
+more tuples that represent the entities in the sen-
+tences and the relationships between them (e.g.,
+was born in(Mozart,Salzburg)). Using extracted tu-
+ples greatly simplifies the CD task, because nu-
+merous syntactic problems (e.g., anaphora, rela-
+tive clauses) and semantic challenges (e.g., quantifi-
+cation, counterfactuals, temporal qualification) are
+</bodyText>
+<footnote confidence="0.992694333333333">
+1Although we focus on function-based CD in our case study,
+we believe that our observations apply to other types of CD as
+well.
+</footnote>
+<bodyText confidence="0.9760458">
+delegated to TEXTRUNNER or simply ignored. Nev-
+ertheless, extracted tuples are a convenient approxi-
+mation of sentence content, which enables us to fo-
+cus on function detection and function-based CD.
+Our contributions are the following:
+</bodyText>
+<listItem confidence="0.988171571428571">
+• We present a novel model of the Contradiction
+Detection (CD) task, which offers a simple log-
+ical foundation for the task and emphasizes the
+central role of background knowledge.
+• We introduce and evaluate a new EM-style al-
+gorithm for detecting whether phrases denote
+functional relations and whether nouns (e.g.,
+“dad”) are ambiguous, which enables a CD sys-
+tem to identify functions in arbitrary domains.
+• We automatically generate a corpus of seem-
+ing contradictions from Web text, and report
+on a set of experiments over this corpus, which
+provide a baseline for future work on statistical
+function identification and CD. 2
+</listItem>
+<sectionHeader confidence="0.539974" genericHeader="method">
+2 A Logical Foundation for CD
+</sectionHeader>
+<bodyText confidence="0.9996445">
+On what basis can a CD system conclude that two
+statements T and H are contradictory? Logically,
+contradiction holds when T |= ¬H. As de Marneffe
+et al. point out, this occurs when T and H contain
+antonyms, negation, or other lexical elements that
+suggest that T and H are directly contradictory. But
+other types of contradictions can only be detected
+with the help of a body of background knowledge
+K: In these cases, T and H alone are mutually con-
+sistent. That is,
+</bodyText>
+<equation confidence="0.980528">
+T |=\ ¬H ∧ H |=\ ¬T
+</equation>
+<bodyText confidence="0.9874405">
+A contradiction between T and H arises only in
+the context of K. That is:
+</bodyText>
+<equation confidence="0.971281">
+((K ∧ T) |= ¬H) ∨ ((K ∧ H) |= ¬T)
+</equation>
+<bodyText confidence="0.999789166666667">
+Consider the example of Mozart’s birthplace in
+the introduction. To detect a contradiction, a CD
+system must know that A) “Mozart” refers to the
+same entity in both sentences, that B) “was born in”
+denotes a functional relation, and that C) Vienna and
+Salzburg are inconsistent locations.
+</bodyText>
+<footnote confidence="0.995783">
+2The corpus is available at http://www.cs.
+washington.edu/research/aucontraire/
+</footnote>
+<page confidence="0.998852">
+12
+</page>
+<bodyText confidence="0.999368333333333">
+Of course, world knowledge, and reasoning about
+text, are often uncertain, which leads us to associate
+probabilities with a CD system’s conclusions. Nev-
+ertheless, the knowledge base K is essential for CD.
+We now turn to a probabilistic model that helps
+us simultaneously estimate the functionality of re-
+lations (B in the above example) and ambiguity of
+argument values (A above). Section 4 describes the
+remaining components of AUCONTRAIRE.
+</bodyText>
+<subsectionHeader confidence="0.537277">
+3 Detecting Functionality and Ambiguity
+</subsectionHeader>
+<bodyText confidence="0.988739704545455">
+This section introduces a formal model for comput-
+ing the probability that a phrase denotes a function
+based on a set of extracted tuples. An extracted tuple
+takes the form R(x, y) where (roughly) x is the sub-
+ject of a sentence, y is the object, and R is a phrase
+denoting the relationship between them. If the re-
+lation denoted by R is functional, then typically the
+object y is a function of the subject x. Thus, our dis-
+cussion focuses on this possibility, though the anal-
+ysis is easily extended to the symmetric case.
+Logically, a relation R is functional in a vari-
+able x if it maps it to a unique variable y:
+Vx, y1, y2 R(x, y1) ∧ R(x, y2) ==&gt;- y1 = y2. Thus,
+given a large random sample of ground instances of
+R, we could detect with high confidence whether R
+is functional. In text, the situation is far more com-
+plex due to ambiguity, polysemy, synonymy, and
+other linguistic phenomena. Deciding whether R is
+functional becomes a probabilistic assessment based
+on aggregated textual evidence.
+The main evidence that a relation R(x, y) is func-
+tional comes from the distribution of y values for
+a given x value. If R denotes a function and x is
+unambiguous, then we expect the extractions to be
+predominantly a single y value, with a few outliers
+due to noise. We aggregate the evidence that R is
+locally functional for a particular x value to assess
+whether R is globally functional for all x.
+We refer to a set of extractions with the same
+relation R and argument x as a contradiction set
+R(x, ·). Figure 1 shows three example contradic-
+tion sets. Each example illustrates a situation com-
+monly found in our data. Example A in Figure 1
+shows strong evidence for a functional relation. 66
+out of 70 TEXTRUNNER extractions for was born in
+(Mozart, PLACE) have the same y value. An am-
+biguous x argument, however, can make a func-
+tional relation appear non-functional. Example B
+depicts a distribution of y values that appears less
+functional due to the fact that “John Adams” refers
+to multiple, distinct real-world individuals with that
+name. Finally, example C exhibits evidence for a
+non-functional relation.
+A. was born in(Mozart, PLACE):
+</bodyText>
+<equation confidence="0.5926676">
+Salzburg(66), Germany(3), Vienna(1)
+B. was born in(John Adams, PLACE):
+Braintree(12), Quincy(10), Worcester(8)
+C. lived in(Mozart, PLACE):
+Vienna(20), Prague(13), Salzburg(5)
+</equation>
+<figureCaption confidence="0.9677035">
+Figure 1: Functional relations such as example A have a
+different distribution of y values than non-functional rela-
+tions such as C. However, an ambiguous x argument as in
+B, can make a functional relation appear non-functional.
+</figureCaption>
+<subsectionHeader confidence="0.927703">
+3.1 Formal Model of Functions in Text
+</subsectionHeader>
+<bodyText confidence="0.994730285714286">
+To decide whether R is functional in x for all x,
+we first consider how to detect whether R is lo-
+cally functional for a particular value of x. The local
+functionality of R with respect to x is the probabil-
+ity that R is functional estimated solely on evidence
+from the distribution of y values in a contradiction
+set R(x, ·).
+To decide the probability that R is a function, we
+define global functionality as the average local func-
+tionality score for each x, weighted by the probabil-
+ity that x is unambiguous. Below, we outline an EM-
+style algorithm that alternately estimates the proba-
+bility that R is functional and the probability that x
+is ambiguous.
+Let Rx* indicate the event that the relation R is
+locally functional for the argument x, and that x is
+locally unambiguous for R. Also, let D indicate
+the set of observed tuples, and define DR(x,·) as the
+multi-set containing the frequencies for extractions
+of the form R(x, ·). For example the distribution of
+extractions from Figure 1 for example A is
+</bodyText>
+<subsubsectionHeader confidence="0.767533">
+Dwas born in(Mozart,·) = {66, 3, 11.
+</subsubsectionHeader>
+<bodyText confidence="0.999822">
+Let BfR be the probability that R(x,·) is locally
+functional for a random x, and let Of be the vector
+of these parameters across all relations R. Likewise,
+0 xrepresents the probability that x is locally unam-
+biguous for random R, and O� the vector for all x.
+</bodyText>
+<page confidence="0.994505">
+13
+</page>
+<bodyText confidence="0.997368">
+We wish to determine the maximum a pos-
+teriori (MAP) functionality and ambiguity pa-
+rameters given the observed data D, that is
+argmaxpf ,pu P(Θf, Θu|D). By Bayes Rule:
+</bodyText>
+<equation confidence="0.995532">
+P(Θf,Θu|D) = P(D|Θf,Θu)P(Θf,Θu) (1)
+P(D)
+</equation>
+<bodyText confidence="0.999851">
+We outline a generative model for the data,
+P(D|Θf, Θu). Let us assume that the event R∗x de-
+pends only on θfR and θux, and further assume that
+given these two parameters, local ambiguity and lo-
+cal functionality are conditionally independent. We
+obtain the following expression for the probability
+of R∗x given the parameters:
+</bodyText>
+<equation confidence="0.877102">
+P(R∗x|Θf, Θu) = θfRθu x
+</equation>
+<bodyText confidence="0.982786382352941">
+We assume each set of data DR(x,·) is gener-
+ated independently of all other data and parameters,
+given R∗x. From this and the above we have:
+These independence assumptions allow us to ex-
+press P(D|Θf, Θu) in terms of distributions over
+DR(x,·) given whether or not R∗ x holds. We use the
+URNS model as described in (Downey et al., 2005)
+to estimate these probabilities based on binomial
+distributions. In the single-urn URNS model that we
+utilize, the extraction process is modeled as draws of
+labeled balls from an urn, where the labels are either
+correct extractions or errors, and different labels can
+be repeated on varying numbers of balls in the urn.
+Let k = max DR(x,·), and let n = E DR(x,·);
+we will approximate the distribution over DR(x,·)
+in terms of k and n. If R(x, ·) is locally func-
+tional and unambiguous, there is exactly one cor-
+rect extraction label in the urn (potentially repeated
+multiple times). Because the probability of correct-
+ness tends to increase with extraction frequency, we
+make the simplifying assumption that the most fre-
+quently extracted element is correct.3 In this case, k
+is the number of correct extractions, which by the
+3As this assumption is invalid when there is not a unique
+maximal element, we default to the prior P(R∗�) in that case.
+URNS model has a binomial distribution with pa-
+rameters n and p, where p is the precision of the ex-
+traction process. If R(x, ·) is not locally functional
+and unambiguous, then we expect k to typically take
+on smaller values. Empirically, the underlying fre-
+quency of the most frequent element in the ¬R∗x case
+tends to follow a Beta distribution.
+Under the model, the probability of the evidence
+given R∗x is:
+</bodyText>
+<equation confidence="0.9927062">
+n�
+P(DR(x,·)|R∗ x) ≈ P(k, n|R∗ x) = pk(1− p)n−k
+k
+(3)
+B(αf,βf)Γ(αf + βf + n)
+</equation>
+<bodyText confidence="0.999991333333333">
+where n is the sum over DR(x,·), Γ is the Gamma
+function and B is the Beta function. αf and βf are
+the parameters of the Beta distribution for the ¬R∗x
+case. These parameters and the prior distributions
+are estimated empirically, based on a sample of the
+data set of relations described in Section 5.1.
+</bodyText>
+<subsectionHeader confidence="0.999945">
+3.2 Estimating Functionality and Ambiguity
+</subsectionHeader>
+<bodyText confidence="0.999973368421053">
+Substituting Equation 3 into Equation 2 and apply-
+ing an appropriate prior gives the probability of pa-
+rameters Θf and Θu given the observed data D.
+However, Equation 2 contains a large product of
+sums—with two independent vectors of coefficients,
+Θf and Θu—making it difficult to optimize analyti-
+cally.
+If we knew which arguments were ambiguous,
+we would ignore them in computing the function-
+ality of a relation. Likewise, if we knew which rela-
+tions were non-functional, we would ignore them in
+computing the ambiguity of an argument. Instead,
+we initialize the Θf and Θu arrays randomly, and
+then execute an algorithm similar to Expectation-
+Maximization (EM) (Dempster et al., 1977) to arrive
+at a high-probability setting of the parameters.
+Note that if Θu is fixed, we can compute the ex-
+pected fraction of locally unambiguous arguments x
+for which R is locally functional, using DR(x0,·) and
+</bodyText>
+<equation confidence="0.9069767">
+P(D|Θf, Θu) = fj ( P(DR(x,·)|R∗x)θfRθux
+R,x
+�
++P(DR(x,·)|¬R∗ x)(1 − θfRθu x) (2)
+And the probability of the evidence given ¬R∗x is:
+P(DR(x,·)|¬R∗x) ≈ P(k, n|¬R∗x)
+= n 1 0k+«f −1(1−p0)n+jf −1−k
+(k) f0 B(αf,βf) dp
+�n �Γ(n − k + βf)Γ(αf + k)
+k
+</equation>
+<page confidence="0.985342">
+14
+</page>
+<bodyText confidence="0.998323">
+Equation 3. Likewise, for fixed Of, for any given
+x we can compute the expected fraction of locally
+functional relations R that are locally unambiguous
+for x.
+Specifically, we repeat until convergence:
+</bodyText>
+<listItem confidence="0.99518">
+1. Set BfR = sR Ex P(Rx-IDR(x ·))Oxu for all R.
+2. Set Bu = &apos; ER P(Rx*�DR(x ·))BfR for all x.
+</listItem>
+<bodyText confidence="0.999550764705882">
+In both steps above, the sums are taken over only
+those x or R for which DR(x,·) is non-empty. Also,
+the normalizer sR = Ex Bu x and likewise sx =
+ER BfR.
+As in standard EM, we iteratively update our pa-
+rameter values based on an expectation computed
+over the unknown variables. However, we alter-
+nately optimize two disjoint sets of parameters (the
+functionality and ambiguity parameters), rather than
+just a single set of parameters as in standard EM.
+Investigating the optimality guarantees and conver-
+gence properties of our algorithm is an item of future
+work.
+By iteratively setting the parameters to the expec-
+tations in steps 1 and 2, we arrive at a good setting
+of the parameters. Section 5.2 reports on the perfor-
+mance of this algorithm in practice.
+</bodyText>
+<sectionHeader confidence="0.99058" genericHeader="method">
+4 System Overview
+</sectionHeader>
+<bodyText confidence="0.955631857142857">
+AUCONTRAIRE identifies phrases denoting func-
+tional relations and utilizes these to find contradic-
+tory assertions in a massive, open-domain corpus of
+text.
+AUCONTRAIRE begins by finding extractions of
+the form R(x, y), and identifies a set of relations
+R that have a high probability of being functional.
+Next, AUCONTRAIRE identifies contradiction sets
+of the form R(x, ·). In practice, most contradiction
+sets turned out to consist overwhelmingly of seem-
+ing contradictions—assertions that do not actually
+contradict each other for a variety of reasons that
+we enumerate in section 4.3. Thus, a major chal-
+lenge for AUCONTRAIRE is to tease apart which
+pairs of assertions in R(x, ·) represent genuine con-
+tradictions.
+Here are the main components of AUCONTRAIRE
+as illustrated in Figure 2:
+Extractor: Create a set of extracted assertions £
+from a large corpus of Web pages or other docu-
+ments. Each extraction R(x, y) has a probability p
+</bodyText>
+<figureCaption confidence="0.998841">
+Figure 2: AUCONTRAIRE architecture
+</figureCaption>
+<bodyText confidence="0.993954583333333">
+of being correct.
+Function Learner: Discover a set of functional re-
+lations F from among the relations in £. Assign to
+each relation in F a probability pf that it is func-
+tional.
+Contradiction Detector: Query £ for assertions
+with a relation R in F, and identify sets C of po-
+tentially contradictory assertions. Filter out seeming
+contradictions in C by reasoning about synonymy,
+meronymy, argument types, and argument ambigu-
+ity. Assign to each potential contradiction a proba-
+bility pc that it is a genuine contradiction.
+</bodyText>
+<subsectionHeader confidence="0.998906">
+4.1 Extracting Factual Assertions
+</subsectionHeader>
+<bodyText confidence="0.99810125">
+AUCONTRAIRE needs to explore a large set of
+factual assertions, since genuine contradictions are
+quite rare (see Section 5). We used a set of extrac-
+tions £ from the Open Information Extraction sys-
+tem, TEXTRUNNER (Banko et al., 2007), which was
+run on a set of 117 million Web pages.
+TEXTRUNNER does not require a pre-defined set
+of relations, but instead uses shallow linguistic anal-
+ysis and a domain-independent model to identify
+phrases from the text that serve as relations and
+phrases that serve as arguments to that relation.
+TEXTRUNNER creates a set of extractions in a sin-
+gle pass over the Web page collection and provides
+an index to query the vast set of extractions.
+Although its extractions are noisy, TEXTRUNNER
+provides a probability that the extractions are cor-
+</bodyText>
+<page confidence="0.995172">
+15
+</page>
+<bodyText confidence="0.9992935">
+rect, based in part on corroboration of facts from
+different Web pages (Downey et al., 2005).
+</bodyText>
+<subsectionHeader confidence="0.996187">
+4.2 Finding Potential Contradictions
+</subsectionHeader>
+<bodyText confidence="0.9999505">
+The next step of AUCONTRAIRE is to find contra-
+diction sets in £.
+We used the methods described in Section 3 to
+estimate the functionality of the most frequent rela-
+tions in £. For each relation R that AUCONTRAIRE
+has judged to be functional, we identify contradic-
+tion sets R(x, •), where a relation R and domain ar-
+gument x have multiple range arguments y.
+</bodyText>
+<subsectionHeader confidence="0.999283">
+4.3 Handling Seeming Contradictions
+</subsectionHeader>
+<bodyText confidence="0.998665546666667">
+For a variety of reasons, a pair of extractions
+R(x, y1) and R(x, y2) may not be actually contra-
+dictory. The following is a list of the major sources
+of false positives—pairs of extractions that are not
+genuine contradictions, and how they are handled
+by AUCONTRAIRE. The features indicative of each
+condition are combined using Logistic Regression,
+in order to estimate the probability that a given pair,
+{R(x, y1), R(x, y2)} is a genuine contradiction.
+Synonyms: The set of potential contradictions
+died from(Mozart,•) may contain assertions that
+Mozart died from renal failure and that he died from
+kidney failure. These are distinct values of y, but
+do not contradict each other, as the two terms are
+synonyms. AUCONTRAIRE uses a variety of knowl-
+edge sources to handle synonyms. WordNet is a re-
+liable source of synonyms, particularly for common
+nouns, but has limited recall. AUCONTRAIRE also
+utilizes synonyms generated by RESOLVER (Yates
+and Etzioni, 2007)— a system that identifies syn-
+onyms from TEXTRUNNER extractions. Addition-
+ally, AUCONTRAIRE uses edit-distance and token-
+based string similarity (Cohen et al., 2003) between
+apparently contradictory values of y to identify syn-
+onyms.
+Meronyms: For some relations, there is no con-
+tradiction when y1 and y2 share a meronym,
+i.e. “part of” relation. For example, in the set
+born in(Mozart,•) there is no contradiction be-
+tween the y values “Salzburg” and “Austria”, but
+“Salzburg” conflicts with “Vienna”. Although this
+is only true in cases where y occurs in an up-
+ward monotone context (MacCartney and Manning,
+2007), in practice genuine contradictions between
+y-values sharing a meronym relationship are ex-
+tremely rare. We therefore simply assigned contra-
+dictions between meronyms a probability close to
+zero. We used the Tipster Gazetteer4 and WordNet
+to identify meronyms, both of which have high pre-
+cision but low coverage.
+Argument Typing: Two y values are not contra-
+dictory if they are of different argument types. For
+example, the relation born in can take a date or a
+location for the y value. While a person can be
+born in only one year and in only one city, a per-
+son can be born in both a year and a city. To avoid
+such false positives, AUCONTRAIRE uses a sim-
+ple named-entity tagger5 in combination with large
+dictionaries of person and location names to as-
+sign high-level types (person, location, date, other)
+to each argument. AUCONTRAIRE filters out ex-
+tractions from a contradiction set that do not have
+matching argument types.
+Ambiguity: As pointed out in Section 3, false con-
+tradictions arise when a single x value refers to mul-
+tiple real-world entities. For example, if the con-
+tradiction set born in(John Sutherland, •) includes
+birth years of both 1827 and 1878, is one of these a
+mistake, or do we have a grandfather and grandson
+with the same name? AUCONTRAIRE computes the
+probability that an x value is unambiguous as part
+of its Function Learner (see Section 3). An x value
+can be identified as ambiguous if its distribution of
+y values is non-functional for multiple functional re-
+lations.
+If a pair of extractions, {R(x, y1), R(x, y2)}, does
+not fall into any of the above categories and R is
+functional, then it is likely that the sentences under-
+lying the extractions are indeed contradictory. We
+combined the various knowledge sources described
+above using Logistic Regression, and used 10-fold
+cross-validation to automatically tune the weights
+associated with each knowledge source. In addi-
+tion, the learning algorithm also utilizes the follow-
+ing features:
+</bodyText>
+<listItem confidence="0.9997915">
+• Global functionality of the relation, BR
+• Global unambiguity of x, 0
+</listItem>
+<footnote confidence="0.9993815">
+4http://crl.nmsu.edu/cgi-bin/Tools/CLR/
+clrcat
+5http://search.cpan.org/˜simon/
+Lingua-EN-NamedEntity-1.1/NamedEntity.pm
+</footnote>
+<page confidence="0.996209">
+16
+</page>
+<listItem confidence="0.9985148">
+• Local functionality of R(x, ·)
+• String similarity (a combination of token-based
+similarity and edit-distance) between y1 and y2
+• The argument types (person, location, date, or
+other)
+</listItem>
+<bodyText confidence="0.982365666666667">
+The learned model is then used to estimate how
+likely a potential contradiction {R(x, y1), R(x, y2)}
+is to be genuine.
+</bodyText>
+<sectionHeader confidence="0.981877" genericHeader="method">
+5 Experimental Results
+</sectionHeader>
+<bodyText confidence="0.999925">
+We evaluated several aspects of AUCONTRAIRE:
+its ability to detect functional relations and to de-
+tect ambiguous arguments (Section 5.2); its preci-
+sion and recall in contradiction detection (Section
+5.3); and the contribution of AUCONTRAIRE’s key
+knowledge sources (Section 5.4).
+</bodyText>
+<subsectionHeader confidence="0.995894">
+5.1 Data Set
+</subsectionHeader>
+<bodyText confidence="0.999976323529412">
+To evaluate AUCONTRAIRE we used TEXTRUN-
+NER’s extractions from a corpus of 117 million Web
+pages. We restricted our data set to the 1,000 most
+frequent relations, in part to keep the experiments
+tractable and also to ensure sufficient statistical sup-
+port for identifying functional relations.
+We labeled each relation as functional or not,
+and computed an estimate of the probability it is
+functional as described in section 3.2. Section 5.2
+presents the results of the Function Learner on this
+set of relations. We took the top 2% (20 relations)
+as F, the set of functional relations in our exper-
+iments. Out of these, 75% are indeed functional.
+Some examples include: was born in, died in, and
+was founded by.
+There were 1.2 million extractions for all thou-
+sand relations, and about 20,000 extractions in 6,000
+contradiction sets for all relations in F.
+We hand-tagged 10% of the contradiction sets
+R(x, ·) where R E F, discarding any sets with over
+20 distinct y values since the x argument for that
+set is almost certainly ambiguous. This resulted in a
+data set of 567 contradiction sets containing a total
+of 2,564 extractions and 8,844 potentially contradic-
+tory pairs of extractions.
+We labeled each of these 8,844 pairs as contradic-
+tory or not. In each case, we inspected the original
+sentences, and if the distinction was unclear, con-
+sulted the original source Web pages, Wikipedia ar-
+ticles, and Web search engine results.
+In our data set, genuine contradictions over func-
+tional relations are surprisingly rare. We found only
+110 genuine contradictions in the hand-tagged sam-
+ple, only 1.2% of the potential contradiction pairs.
+</bodyText>
+<subsectionHeader confidence="0.999941">
+5.2 Detecting Functionality and Ambiguity
+</subsectionHeader>
+<bodyText confidence="0.999985238095238">
+We ran AUCONTRAIRE’s EM algorithm on the
+thousand most frequent relations. Performance con-
+verged after 5 iterations resulting in estimates of the
+probability that each relation is functional and each
+x argument is unambiguous. We used these proba-
+bilities to generate the precision-recall curves shown
+in Figure 3.
+The graph on the left shows results for function-
+ality, while the graph on the right shows precision at
+finding unambiguous arguments. The solid lines are
+results after 5 iterations of EM, and the dashed lines
+are from computing functionality or ambiguity with-
+out EM (i.e. assuming uniform values of O� when
+computing Of and vice versa). The EM algorithm
+improved results for both functionality and ambigu-
+ity, increasing area under curve (AUC) by 19% for
+functionality and by 31% for ambiguity.
+Of course, the ultimate test of how well AUCON-
+TRAIRE can identify functional relations is how well
+the Contradiction Detector performs on automati-
+cally identified functional relations.
+</bodyText>
+<subsectionHeader confidence="0.998102">
+5.3 Detecting Contradictions
+</subsectionHeader>
+<bodyText confidence="0.999737">
+We conducted experiments to evaluate how well
+AUCONTRAIRE distinguishes genuine contradic-
+tions from false positives.
+The bold line in Figure 4 depicts AUCONTRAIRE
+performance on the distribution of contradictions
+and seeming contradictions found in actual Web
+data. The dashed line shows the performance of AU-
+CONTRAIRE on an artificially “balanced” data set
+that we constructed to contain 50% genuine contra-
+dictions and 50% seeming ones.
+Previous research in CD presented results on
+manually selected data sets with a relatively bal-
+anced mix of positive and negative instances. As
+Figure 4 suggests, this is a much easier problem than
+CD “in the wild”. The data gathered from the Web
+is badly skewed, containing only 1.2% genuine con-
+tradictions.
+</bodyText>
+<page confidence="0.989814">
+17
+</page>
+<figure confidence="0.997333357142857">
+Functionality
+Recall
+Ambiguity
+Recall
+0.0 0.2 0.4 0.6 0.8 1.0
+Precision
+0.0 0.2 0.4 0.6 0.8 1.0
+AuContraire
+No Iteration
+0.0 0.2 0.4 0.6 0.8 1.0
+Precision
+0.0 0.2 0.4 0.6 0.8 1.0
+AuContraire
+No Iteration
+</figure>
+<figureCaption confidence="0.884166">
+Figure 3: After 5 iterations of EM, AUCONTRAIRE achieves a 19% boost to area under the precision-recall curve
+(AUC) for functionality detection, and a 31% boost to AUC for ambiguity detection.
+</figureCaption>
+<figure confidence="0.822077">
+Recall
+</figure>
+<figureCaption confidence="0.9926826">
+Figure 4: Performance of AUCONTRAIRE at distinguish-
+ing genuine contradictions from false positives. The bold
+line is results on the actual distribution of data from the
+Web. The dashed line is from a data set constructed to
+have 50% positive and 50% negative instances.
+</figureCaption>
+<subsectionHeader confidence="0.998904">
+5.4 Contribution of Knowledge Sources
+</subsectionHeader>
+<bodyText confidence="0.99994792">
+We carried out an ablation study to quantify how
+much each knowledge source contributes to AU-
+CONTRAIRE’s performance. Since most of the
+knowledge sources do not apply to numeric argu-
+ment values, we excluded the extractions where y
+is a number in this study. As shown in Figure 5,
+performance of AUCONTRAIRE degrades with no
+knowledge of synonyms (NS), with no knowledge
+of meronyms (NM), and especially without argu-
+ment typing (NT). Conversely, improvements to any
+of these three components would likely improve the
+performance of AUCONTRAIRE.
+The relatively small drop in performance from
+no meronyms does not indicate that meronyms are
+not essential to our task, only that our knowledge
+sources for meronyms were not as useful as we
+hoped. The Tipster Gazetteer has surprisingly low
+coverage for our data set. It contains only 41% of
+the y values that are locations. Many of these are
+matches on a different location with the same name,
+which results in incorrect meronym information. We
+estimate that a gazetteer with complete coverage
+would increase area under the curve by approxi-
+mately 40% compared to a system with meronyms
+from the Tipster Gazetteer and WordNet.
+</bodyText>
+<figure confidence="0.4837075">
+Percentage AUC
+AuContraire NS NM NT
+</figure>
+<figureCaption confidence="0.7634">
+Figure 5: Area under the precision-recall curve for the
+</figureCaption>
+<bodyText confidence="0.898071333333333">
+full AUCONTRAIRE and for AUCONTRAIRE with knowl-
+edge removed. NS has no synonym knowledge; NM has
+no meronym knowledge; NT has no argument typing.
+To analyze the errors made by AUCONTRAIRE,
+we hand-labeled all false-positives at the point of
+maximum F-score: 29% Recall and 48% Precision.
+</bodyText>
+<figure confidence="0.9985825">
+0.0 0.2 0.4 0.6 0.8 1.0
+Precision
+0.0 0.2 0.4 0.6 0.8 1.0
+Web Distribution
+Balanced Data
+0 20 40 60 80 100
+</figure>
+<page confidence="0.990238">
+18
+</page>
+<bodyText confidence="0.998171363636364">
+Figure 6 reveals the central importance of world
+knowledge for the CD task. About half of the errors
+(49%) are due to ambiguous x-arguments, which we
+found to be one of the most persistent obstacles to
+discovering genuine contradictions. A sizable por-
+tion is due to missing meronyms (34%) and missing
+synonyms (14%), suggesting that lexical resources
+with broader coverage than WordNet and the Tipster
+Gazetteer would substantially improve performance.
+Surprisingly, only 3% are due to errors in the extrac-
+tion process.
+</bodyText>
+<figureCaption confidence="0.997586">
+Figure 6: Sources of errors in contradiction detection.
+</figureCaption>
+<bodyText confidence="0.9999668">
+All of our experimental results are based on the
+automatically discovered set of functions F. We
+would expect AUCONTRAIRE’s performance to im-
+prove substantially if it were given a large set of
+functional relations as input.
+</bodyText>
+<sectionHeader confidence="0.999966" genericHeader="evaluation">
+6 Related Work
+</sectionHeader>
+<bodyText confidence="0.999234081081081">
+Condoravdi et al. (2003) first proposed contradiction
+detection as an important NLP task, and Harabagiu
+et al. (2006) were the first to report results on con-
+tradiction detection using negation, although their
+evaluation corpus was a balanced data set built
+by manually negating entailments in a data set
+from the Recognizing Textual Entailment confer-
+ences (RTE) (Dagan et al., 2005). De Marneffe et
+al. (2008) reported experimental results on a contra-
+diction corpus created by annotating the RTE data
+sets.
+RTE-3 included an optional task, requiring sys-
+tems to make a 3-way distinction: {entails, contra-
+dicts, neither} (Voorhees, 2008). The average per-
+formance for contradictions on the RTE-3 was preci-
+sion 0.11 at recall 0.12, and the best system had pre-
+cision 0.23 at recall 0.19. We did not run AUCON-
+TRAIRE on the RTE data sets because they contained
+relatively few of the “functional contradictions” that
+AUCONTRAIRE tackles. On our Web-based data
+sets, we achieved a precision of 0.62 at recall 0.19,
+and precision 0.92 at recall 0.51 on the balanced data
+set. Of course, comparisons across very different
+data sets are not meaningful, but merely serve to un-
+derscore the difficulty of the CD task.
+In contrast to previous work, AUCONTRAIRE is
+the first to do CD on data automatically extracted
+from the Web. This is a much harder problem than
+using an artificially balanced data set, as shown in
+Figure 4.
+Automatic discovery of functional relations has
+been addressed in the database literature as Func-
+tional Dependency Mining (Huhtala et al., 1999;
+Yao and Hamilton, 2008). This focuses on dis-
+covering functional relationships between sets of at-
+tributes, and does not address the ambiguity inherent
+in natural language.
+</bodyText>
+<sectionHeader confidence="0.997608" genericHeader="conclusions">
+7 Conclusions and Future Work
+</sectionHeader>
+<bodyText confidence="0.999988947368421">
+We have described a case study of contradiction de-
+tection (CD) based on functional relations. In this
+context, we introduced and evaluated the AUCON-
+TRAIRE system and its novel EM-style algorithm
+for determining whether an arbitrary phrase is func-
+tional. We also created a unique “natural” data set
+of seeming contradictions based on sentences drawn
+from a Web corpus, which we make available to the
+research community.
+We have drawn two key lessons from our case
+study. First, many seeming contradictions (approx-
+imately 99% in our experiments) are not genuine
+contradictions. Thus, the CD task may be much
+harder on natural data than on RTE data as sug-
+gested by Figure 4. Second, extensive background
+knowledge is necessary to tease apart seeming con-
+tradictions from genuine ones. We believe that these
+lessons are broadly applicable, but verification of
+this claim is a topic for future work.
+</bodyText>
+<sectionHeader confidence="0.997642" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.9985812">
+This research was supported in part by NSF grants
+IIS-0535284 and IIS-0312988, ONR grant N00014-
+08-1-0431 as well as gifts from the Utilika Founda-
+tion and Google, and was carried out at the Univer-
+sity of Washington’s Turing Center.
+</bodyText>
+<figure confidence="0.99349175">
+Missing Meronyms (34%)
+Missing Synonyms (14%)
+Extraction Errors (3%)
+Ambiguity (49%)
+</figure>
+<page confidence="0.990425">
+19
+</page>
+<sectionHeader confidence="0.992821" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999509857142857">
+M. Banko and O. Etzioni. 2008. The tradeoffs between
+traditional and open relation extraction. In Proceed-
+ings of ACL.
+M. Banko, M. Cafarella, S. Soderland, M. Broadhead,
+and O. Etzioni. 2007. Open information extraction
+from the Web. In Procs. of IJCAI.
+W.W. Cohen, P. Ravikumar, and S.E. Fienberg. 2003.
+A comparison of string distance metrics for name-
+matching tasks. In IIWeb.
+Cleo Condoravdi, Dick Crouch, Valeria de Paiva, Rein-
+hard Stolle, and Daniel G. Bobrow. 2003. Entailment,
+intensionality and text understanding. In Proceedings
+of the HLT-NAACL 2003 workshop on Text meaning,
+pages 38–45, Morristown, NJ, USA. Association for
+Computational Linguistics.
+I. Dagan, O. Glickman, and B. Magnini. 2005. The
+PASCAL Recognising Textual Entailment Challenge.
+Proceedings of the PASCAL Challenges Workshop on
+Recognising Textual Entailment, pages 1–8.
+Marie-Catherine de Marneffe, Anna Rafferty, and
+Christopher D. Manning. 2008. Finding contradic-
+tions in text. In ACL 2008.
+A.P. Dempster, N.M. Laird, and D.B. Rubin. 1977. Max-
+imum likelihood from incomplete data via the EM al-
+gorithm. Journal of the Royal Statistical Society Se-
+ries B, 39(1):1–38.
+D. Downey, O. Etzioni, and S. Soderland. 2005. A Prob-
+abilistic Model of Redundancy in Information Extrac-
+tion. In Procs. of IJCAI.
+Sanda Harabagiu, Andrew Hickl, and Finley Lacatusu.
+2006. Negation, contrast and contradiction in text pro-
+cessing. In AAAI.
+Yk¨a Huhtala, Juha K¨arkk¨ainen, Pasi Porkka, and Hannu
+Toivonen. 1999. TANE: An efficient algorithm for
+discovering functional and approximate dependencies.
+The Computer Journal, 42(2):100–111.
+B. MacCartney and C.D. Manning. 2007. Natural Logic
+for Textual Inference. In Workshop on Textual Entail-
+ment and Paraphrasing.
+Ellen M. Voorhees. 2008. Contradictions and justifica-
+tions: Extensions to the textual entailment task. In
+Proceedings of ACL-08: HLT, pages 63–71, Colum-
+bus, Ohio, June. Association for Computational Lin-
+guistics.
+Hong Yao and Howard J. Hamilton. 2008. Mining func-
+tional dependencies from data. Data Min. Knowl. Dis-
+cov., 16(2):197–219.
+A. Yates and O. Etzioni. 2007. Unsupervised resolution
+of objects and relations on the Web. In Procs. of HLT.
+</reference>
+<page confidence="0.994867">
+20
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.331155">
+<title confidence="0.999519">It’s a Contradiction—No, it’s Not: A Case Study using Functional Relations</title>
+<author confidence="0.997067">Alan Ritter</author>
+<author confidence="0.997067">Doug Downey</author>
+<author confidence="0.997067">Stephen Soderland</author>
+<author confidence="0.997067">Oren</author>
+<email confidence="0.428431">Turing</email>
+<affiliation confidence="0.999812">Department of Computer Science and University of</affiliation>
+<address confidence="0.933348">Box Seattle, WA 98195,</address>
+<email confidence="0.99989">faritter,ddowney,soderlan,etzionil@cs.washington.edu</email>
+<abstract confidence="0.992268578947368">Contradiction Detection (CD) in text is a difficult NLP task. We investigate functions BornIn(Person)=Place), and present a domain-independent algorithm that automatically discovers phrases denoting functions with high precision. Previous work on CD has investigated hand-chosen sentence pairs. In contrast, we automatically harvested the Web pairs of sentences that contradictory, but were surprised to find that most pairs are in fact consistent. For example, was born in Salzburg” does contradict “Mozart was born in Austria” despite the functional nature of the phrase “was born in”. We show that background knowledge meronyms Salzburg is in Austria), synonyms, functions, and more is essential for success in the CD task.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>M Banko</author>
+<author>O Etzioni</author>
+</authors>
+<title>The tradeoffs between traditional and open relation extraction.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL.</booktitle>
+<contexts>
+<context position="5305" citStr="Banko and Etzioni, 2008" startWordPosition="817" endWordPosition="820">sed on Functions We report on the AUCONTRAIRE CD system, which addresses each of the above challenges. First, AUCONTRAIRE identifies “functional phrases” statistically (Section 3). Second, AUCONTRAIRE uses these phrases to automatically create a large corpus of apparent contradictions (Section 4.2). Finally, AUCONTRAIRE sifts through this corpus to find genuine contradictions using knowledge about synonymy, meronymy, argument types, and ambiguity (Section 4.3). Instead of analyzing sentences directly, AUCONTRAIRE relies on the TEXTRUNNER Open Information Extraction system (Banko et al., 2007; Banko and Etzioni, 2008) to map each sentence to one or more tuples that represent the entities in the sentences and the relationships between them (e.g., was born in(Mozart,Salzburg)). Using extracted tuples greatly simplifies the CD task, because numerous syntactic problems (e.g., anaphora, relative clauses) and semantic challenges (e.g., quantification, counterfactuals, temporal qualification) are 1Although we focus on function-based CD in our case study, we believe that our observations apply to other types of CD as well. delegated to TEXTRUNNER or simply ignored. Nevertheless, extracted tuples are a convenient a</context>
+</contexts>
+<marker>Banko, Etzioni, 2008</marker>
+<rawString>M. Banko and O. Etzioni. 2008. The tradeoffs between traditional and open relation extraction. In Proceedings of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Banko</author>
+<author>M Cafarella</author>
+<author>S Soderland</author>
+<author>M Broadhead</author>
+<author>O Etzioni</author>
+</authors>
+<title>Open information extraction from the Web. In Procs. of IJCAI.</title>
+<date>2007</date>
+<contexts>
+<context position="5279" citStr="Banko et al., 2007" startWordPosition="813" endWordPosition="816">. 1.2 A CD System Based on Functions We report on the AUCONTRAIRE CD system, which addresses each of the above challenges. First, AUCONTRAIRE identifies “functional phrases” statistically (Section 3). Second, AUCONTRAIRE uses these phrases to automatically create a large corpus of apparent contradictions (Section 4.2). Finally, AUCONTRAIRE sifts through this corpus to find genuine contradictions using knowledge about synonymy, meronymy, argument types, and ambiguity (Section 4.3). Instead of analyzing sentences directly, AUCONTRAIRE relies on the TEXTRUNNER Open Information Extraction system (Banko et al., 2007; Banko and Etzioni, 2008) to map each sentence to one or more tuples that represent the entities in the sentences and the relationships between them (e.g., was born in(Mozart,Salzburg)). Using extracted tuples greatly simplifies the CD task, because numerous syntactic problems (e.g., anaphora, relative clauses) and semantic challenges (e.g., quantification, counterfactuals, temporal qualification) are 1Although we focus on function-based CD in our case study, we believe that our observations apply to other types of CD as well. delegated to TEXTRUNNER or simply ignored. Nevertheless, extracted</context>
+<context position="18669" citStr="Banko et al., 2007" startWordPosition="3095" endWordPosition="3098">unctional. Contradiction Detector: Query £ for assertions with a relation R in F, and identify sets C of potentially contradictory assertions. Filter out seeming contradictions in C by reasoning about synonymy, meronymy, argument types, and argument ambiguity. Assign to each potential contradiction a probability pc that it is a genuine contradiction. 4.1 Extracting Factual Assertions AUCONTRAIRE needs to explore a large set of factual assertions, since genuine contradictions are quite rare (see Section 5). We used a set of extractions £ from the Open Information Extraction system, TEXTRUNNER (Banko et al., 2007), which was run on a set of 117 million Web pages. TEXTRUNNER does not require a pre-defined set of relations, but instead uses shallow linguistic analysis and a domain-independent model to identify phrases from the text that serve as relations and phrases that serve as arguments to that relation. TEXTRUNNER creates a set of extractions in a single pass over the Web page collection and provides an index to query the vast set of extractions. Although its extractions are noisy, TEXTRUNNER provides a probability that the extractions are cor15 rect, based in part on corroboration of facts from dif</context>
+</contexts>
+<marker>Banko, Cafarella, Soderland, Broadhead, Etzioni, 2007</marker>
+<rawString>M. Banko, M. Cafarella, S. Soderland, M. Broadhead, and O. Etzioni. 2007. Open information extraction from the Web. In Procs. of IJCAI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W W Cohen</author>
+<author>P Ravikumar</author>
+<author>S E Fienberg</author>
+</authors>
+<title>A comparison of string distance metrics for namematching tasks.</title>
+<date>2003</date>
+<booktitle>In IIWeb.</booktitle>
+<contexts>
+<context position="20862" citStr="Cohen et al., 2003" startWordPosition="3454" endWordPosition="3457">from(Mozart,•) may contain assertions that Mozart died from renal failure and that he died from kidney failure. These are distinct values of y, but do not contradict each other, as the two terms are synonyms. AUCONTRAIRE uses a variety of knowledge sources to handle synonyms. WordNet is a reliable source of synonyms, particularly for common nouns, but has limited recall. AUCONTRAIRE also utilizes synonyms generated by RESOLVER (Yates and Etzioni, 2007)— a system that identifies synonyms from TEXTRUNNER extractions. Additionally, AUCONTRAIRE uses edit-distance and tokenbased string similarity (Cohen et al., 2003) between apparently contradictory values of y to identify synonyms. Meronyms: For some relations, there is no contradiction when y1 and y2 share a meronym, i.e. “part of” relation. For example, in the set born in(Mozart,•) there is no contradiction between the y values “Salzburg” and “Austria”, but “Salzburg” conflicts with “Vienna”. Although this is only true in cases where y occurs in an upward monotone context (MacCartney and Manning, 2007), in practice genuine contradictions between y-values sharing a meronym relationship are extremely rare. We therefore simply assigned contradictions betw</context>
+</contexts>
+<marker>Cohen, Ravikumar, Fienberg, 2003</marker>
+<rawString>W.W. Cohen, P. Ravikumar, and S.E. Fienberg. 2003. A comparison of string distance metrics for namematching tasks. In IIWeb.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Cleo Condoravdi</author>
+<author>Dick Crouch</author>
+<author>Valeria de Paiva</author>
+<author>Reinhard Stolle</author>
+<author>Daniel G Bobrow</author>
+</authors>
+<title>Entailment, intensionality and text understanding.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the HLT-NAACL 2003 workshop on Text meaning,</booktitle>
+<pages>38--45</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Morristown, NJ, USA.</location>
+<marker>Condoravdi, Crouch, de Paiva, Stolle, Bobrow, 2003</marker>
+<rawString>Cleo Condoravdi, Dick Crouch, Valeria de Paiva, Reinhard Stolle, and Daniel G. Bobrow. 2003. Entailment, intensionality and text understanding. In Proceedings of the HLT-NAACL 2003 workshop on Text meaning, pages 38–45, Morristown, NJ, USA. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Dagan</author>
+<author>O Glickman</author>
+<author>B Magnini</author>
+</authors>
+<title>The PASCAL Recognising Textual Entailment Challenge.</title>
+<date>2005</date>
+<booktitle>Proceedings of the PASCAL Challenges Workshop on Recognising Textual Entailment,</booktitle>
+<pages>1--8</pages>
+<contexts>
+<context position="31111" citStr="Dagan et al., 2005" startWordPosition="5110" endWordPosition="5113">l of our experimental results are based on the automatically discovered set of functions F. We would expect AUCONTRAIRE’s performance to improve substantially if it were given a large set of functional relations as input. 6 Related Work Condoravdi et al. (2003) first proposed contradiction detection as an important NLP task, and Harabagiu et al. (2006) were the first to report results on contradiction detection using negation, although their evaluation corpus was a balanced data set built by manually negating entailments in a data set from the Recognizing Textual Entailment conferences (RTE) (Dagan et al., 2005). De Marneffe et al. (2008) reported experimental results on a contradiction corpus created by annotating the RTE data sets. RTE-3 included an optional task, requiring systems to make a 3-way distinction: {entails, contradicts, neither} (Voorhees, 2008). The average performance for contradictions on the RTE-3 was precision 0.11 at recall 0.12, and the best system had precision 0.23 at recall 0.19. We did not run AUCONTRAIRE on the RTE data sets because they contained relatively few of the “functional contradictions” that AUCONTRAIRE tackles. On our Web-based data sets, we achieved a precision </context>
+</contexts>
+<marker>Dagan, Glickman, Magnini, 2005</marker>
+<rawString>I. Dagan, O. Glickman, and B. Magnini. 2005. The PASCAL Recognising Textual Entailment Challenge. Proceedings of the PASCAL Challenges Workshop on Recognising Textual Entailment, pages 1–8.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Marie-Catherine de Marneffe</author>
+<author>Anna Rafferty</author>
+<author>Christopher D Manning</author>
+</authors>
+<title>Finding contradictions in text.</title>
+<date>2008</date>
+<booktitle>In ACL</booktitle>
+<marker>de Marneffe, Rafferty, Manning, 2008</marker>
+<rawString>Marie-Catherine de Marneffe, Anna Rafferty, and Christopher D. Manning. 2008. Finding contradictions in text. In ACL 2008.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A P Dempster</author>
+<author>N M Laird</author>
+<author>D B Rubin</author>
+</authors>
+<title>Maximum likelihood from incomplete data via the EM algorithm.</title>
+<date>1977</date>
+<journal>Journal of the Royal Statistical Society Series B,</journal>
+<volume>39</volume>
+<issue>1</issue>
+<contexts>
+<context position="15389" citStr="Dempster et al., 1977" startWordPosition="2540" endWordPosition="2543">ropriate prior gives the probability of parameters Θf and Θu given the observed data D. However, Equation 2 contains a large product of sums—with two independent vectors of coefficients, Θf and Θu—making it difficult to optimize analytically. If we knew which arguments were ambiguous, we would ignore them in computing the functionality of a relation. Likewise, if we knew which relations were non-functional, we would ignore them in computing the ambiguity of an argument. Instead, we initialize the Θf and Θu arrays randomly, and then execute an algorithm similar to ExpectationMaximization (EM) (Dempster et al., 1977) to arrive at a high-probability setting of the parameters. Note that if Θu is fixed, we can compute the expected fraction of locally unambiguous arguments x for which R is locally functional, using DR(x0,·) and P(D|Θf, Θu) = fj ( P(DR(x,·)|R∗x)θfRθux R,x � +P(DR(x,·)|¬R∗ x)(1 − θfRθu x) (2) And the probability of the evidence given ¬R∗x is: P(DR(x,·)|¬R∗x) ≈ P(k, n|¬R∗x) = n 1 0k+«f −1(1−p0)n+jf −1−k (k) f0 B(αf,βf) dp �n �Γ(n − k + βf)Γ(αf + k) k 14 Equation 3. Likewise, for fixed Of, for any given x we can compute the expected fraction of locally functional relations R that are locally unam</context>
+</contexts>
+<marker>Dempster, Laird, Rubin, 1977</marker>
+<rawString>A.P. Dempster, N.M. Laird, and D.B. Rubin. 1977. Maximum likelihood from incomplete data via the EM algorithm. Journal of the Royal Statistical Society Series B, 39(1):1–38.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Downey</author>
+<author>O Etzioni</author>
+<author>S Soderland</author>
+</authors>
+<title>A Probabilistic Model of Redundancy in Information Extraction.</title>
+<date>2005</date>
+<booktitle>In Procs. of IJCAI.</booktitle>
+<contexts>
+<context position="12933" citStr="Downey et al., 2005" startWordPosition="2119" endWordPosition="2122">assume that the event R∗x depends only on θfR and θux, and further assume that given these two parameters, local ambiguity and local functionality are conditionally independent. We obtain the following expression for the probability of R∗x given the parameters: P(R∗x|Θf, Θu) = θfRθu x We assume each set of data DR(x,·) is generated independently of all other data and parameters, given R∗x. From this and the above we have: These independence assumptions allow us to express P(D|Θf, Θu) in terms of distributions over DR(x,·) given whether or not R∗ x holds. We use the URNS model as described in (Downey et al., 2005) to estimate these probabilities based on binomial distributions. In the single-urn URNS model that we utilize, the extraction process is modeled as draws of labeled balls from an urn, where the labels are either correct extractions or errors, and different labels can be repeated on varying numbers of balls in the urn. Let k = max DR(x,·), and let n = E DR(x,·); we will approximate the distribution over DR(x,·) in terms of k and n. If R(x, ·) is locally functional and unambiguous, there is exactly one correct extraction label in the urn (potentially repeated multiple times). Because the probab</context>
+<context position="19307" citStr="Downey et al., 2005" startWordPosition="3203" endWordPosition="3206"> a set of 117 million Web pages. TEXTRUNNER does not require a pre-defined set of relations, but instead uses shallow linguistic analysis and a domain-independent model to identify phrases from the text that serve as relations and phrases that serve as arguments to that relation. TEXTRUNNER creates a set of extractions in a single pass over the Web page collection and provides an index to query the vast set of extractions. Although its extractions are noisy, TEXTRUNNER provides a probability that the extractions are cor15 rect, based in part on corroboration of facts from different Web pages (Downey et al., 2005). 4.2 Finding Potential Contradictions The next step of AUCONTRAIRE is to find contradiction sets in £. We used the methods described in Section 3 to estimate the functionality of the most frequent relations in £. For each relation R that AUCONTRAIRE has judged to be functional, we identify contradiction sets R(x, •), where a relation R and domain argument x have multiple range arguments y. 4.3 Handling Seeming Contradictions For a variety of reasons, a pair of extractions R(x, y1) and R(x, y2) may not be actually contradictory. The following is a list of the major sources of false positives—p</context>
+</contexts>
+<marker>Downey, Etzioni, Soderland, 2005</marker>
+<rawString>D. Downey, O. Etzioni, and S. Soderland. 2005. A Probabilistic Model of Redundancy in Information Extraction. In Procs. of IJCAI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Sanda Harabagiu</author>
+<author>Andrew Hickl</author>
+<author>Finley Lacatusu</author>
+</authors>
+<title>Negation, contrast and contradiction in text processing.</title>
+<date>2006</date>
+<booktitle>In AAAI.</booktitle>
+<contexts>
+<context position="1400" citStr="Harabagiu et al., 2006" startWordPosition="196" endWordPosition="199">fact consistent. For example, “Mozart was born in Salzburg” does not contradict “Mozart was born in Austria” despite the functional nature of the phrase “was born in”. We show that background knowledge about meronyms (e.g., Salzburg is in Austria), synonyms, functions, and more is essential for success in the CD task. 1 Introduction and Motivation Detecting contradictory statements is an important and challenging NLP task with a wide range of potential applications including analysis of political discourse, of scientific literature, and more (de Marneffe et al., 2008; Condoravdi et al., 2003; Harabagiu et al., 2006). De Marneffe et al. present a model of CD that defines the task, analyzes different types of contradictions, and reports on a CD system. They report 23% precision and 19% recall at detecting contradictions in the RTE-3 data set (Voorhees, 2008). Although RTE-3 contains a wide variety of contradictions, it does not reflect the prevalence of seeming contradictions and the paucity of genuine contradictions, which we have found in our corpus. 11 1.1 Contradictions and World Knowledge Our paper is motivated in part by de Marneffe et al.’s work, but with some important differences. First, we introd</context>
+<context position="30846" citStr="Harabagiu et al. (2006)" startWordPosition="5068" endWordPosition="5071"> (14%), suggesting that lexical resources with broader coverage than WordNet and the Tipster Gazetteer would substantially improve performance. Surprisingly, only 3% are due to errors in the extraction process. Figure 6: Sources of errors in contradiction detection. All of our experimental results are based on the automatically discovered set of functions F. We would expect AUCONTRAIRE’s performance to improve substantially if it were given a large set of functional relations as input. 6 Related Work Condoravdi et al. (2003) first proposed contradiction detection as an important NLP task, and Harabagiu et al. (2006) were the first to report results on contradiction detection using negation, although their evaluation corpus was a balanced data set built by manually negating entailments in a data set from the Recognizing Textual Entailment conferences (RTE) (Dagan et al., 2005). De Marneffe et al. (2008) reported experimental results on a contradiction corpus created by annotating the RTE data sets. RTE-3 included an optional task, requiring systems to make a 3-way distinction: {entails, contradicts, neither} (Voorhees, 2008). The average performance for contradictions on the RTE-3 was precision 0.11 at re</context>
+</contexts>
+<marker>Harabagiu, Hickl, Lacatusu, 2006</marker>
+<rawString>Sanda Harabagiu, Andrew Hickl, and Finley Lacatusu. 2006. Negation, contrast and contradiction in text processing. In AAAI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yk¨a Huhtala</author>
+<author>Juha K¨arkk¨ainen</author>
+<author>Pasi Porkka</author>
+<author>Hannu Toivonen</author>
+</authors>
+<title>TANE: An efficient algorithm for discovering functional and approximate dependencies.</title>
+<date>1999</date>
+<journal>The Computer Journal,</journal>
+<volume>42</volume>
+<issue>2</issue>
+<marker>Huhtala, K¨arkk¨ainen, Porkka, Toivonen, 1999</marker>
+<rawString>Yk¨a Huhtala, Juha K¨arkk¨ainen, Pasi Porkka, and Hannu Toivonen. 1999. TANE: An efficient algorithm for discovering functional and approximate dependencies. The Computer Journal, 42(2):100–111.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B MacCartney</author>
+<author>C D Manning</author>
+</authors>
+<title>Natural Logic for Textual Inference.</title>
+<date>2007</date>
+<booktitle>In Workshop on Textual Entailment and Paraphrasing.</booktitle>
+<contexts>
+<context position="21309" citStr="MacCartney and Manning, 2007" startWordPosition="3528" endWordPosition="3531"> and Etzioni, 2007)— a system that identifies synonyms from TEXTRUNNER extractions. Additionally, AUCONTRAIRE uses edit-distance and tokenbased string similarity (Cohen et al., 2003) between apparently contradictory values of y to identify synonyms. Meronyms: For some relations, there is no contradiction when y1 and y2 share a meronym, i.e. “part of” relation. For example, in the set born in(Mozart,•) there is no contradiction between the y values “Salzburg” and “Austria”, but “Salzburg” conflicts with “Vienna”. Although this is only true in cases where y occurs in an upward monotone context (MacCartney and Manning, 2007), in practice genuine contradictions between y-values sharing a meronym relationship are extremely rare. We therefore simply assigned contradictions between meronyms a probability close to zero. We used the Tipster Gazetteer4 and WordNet to identify meronyms, both of which have high precision but low coverage. Argument Typing: Two y values are not contradictory if they are of different argument types. For example, the relation born in can take a date or a location for the y value. While a person can be born in only one year and in only one city, a person can be born in both a year and a city. </context>
+</contexts>
+<marker>MacCartney, Manning, 2007</marker>
+<rawString>B. MacCartney and C.D. Manning. 2007. Natural Logic for Textual Inference. In Workshop on Textual Entailment and Paraphrasing.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ellen M Voorhees</author>
+</authors>
+<title>Contradictions and justifications: Extensions to the textual entailment task.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL-08: HLT,</booktitle>
+<pages>63--71</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Columbus, Ohio,</location>
+<contexts>
+<context position="1645" citStr="Voorhees, 2008" startWordPosition="240" endWordPosition="241">nyms, functions, and more is essential for success in the CD task. 1 Introduction and Motivation Detecting contradictory statements is an important and challenging NLP task with a wide range of potential applications including analysis of political discourse, of scientific literature, and more (de Marneffe et al., 2008; Condoravdi et al., 2003; Harabagiu et al., 2006). De Marneffe et al. present a model of CD that defines the task, analyzes different types of contradictions, and reports on a CD system. They report 23% precision and 19% recall at detecting contradictions in the RTE-3 data set (Voorhees, 2008). Although RTE-3 contains a wide variety of contradictions, it does not reflect the prevalence of seeming contradictions and the paucity of genuine contradictions, which we have found in our corpus. 11 1.1 Contradictions and World Knowledge Our paper is motivated in part by de Marneffe et al.’s work, but with some important differences. First, we introduce a simple logical foundation for the CD task, which suggests that extensive world knowledge is essential for building a domain-independent CD system. Second, we automatically generate a large corpus of apparent contradictions found in arbitra</context>
+<context position="31364" citStr="Voorhees, 2008" startWordPosition="5151" endWordPosition="5152">003) first proposed contradiction detection as an important NLP task, and Harabagiu et al. (2006) were the first to report results on contradiction detection using negation, although their evaluation corpus was a balanced data set built by manually negating entailments in a data set from the Recognizing Textual Entailment conferences (RTE) (Dagan et al., 2005). De Marneffe et al. (2008) reported experimental results on a contradiction corpus created by annotating the RTE data sets. RTE-3 included an optional task, requiring systems to make a 3-way distinction: {entails, contradicts, neither} (Voorhees, 2008). The average performance for contradictions on the RTE-3 was precision 0.11 at recall 0.12, and the best system had precision 0.23 at recall 0.19. We did not run AUCONTRAIRE on the RTE data sets because they contained relatively few of the “functional contradictions” that AUCONTRAIRE tackles. On our Web-based data sets, we achieved a precision of 0.62 at recall 0.19, and precision 0.92 at recall 0.51 on the balanced data set. Of course, comparisons across very different data sets are not meaningful, but merely serve to underscore the difficulty of the CD task. In contrast to previous work, AU</context>
+</contexts>
+<marker>Voorhees, 2008</marker>
+<rawString>Ellen M. Voorhees. 2008. Contradictions and justifications: Extensions to the textual entailment task. In Proceedings of ACL-08: HLT, pages 63–71, Columbus, Ohio, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hong Yao</author>
+<author>Howard J Hamilton</author>
+</authors>
+<title>Mining functional dependencies from data.</title>
+<date>2008</date>
+<journal>Data Min. Knowl. Discov.,</journal>
+<volume>16</volume>
+<issue>2</issue>
+<contexts>
+<context position="32308" citStr="Yao and Hamilton, 2008" startWordPosition="5309" endWordPosition="5312">, we achieved a precision of 0.62 at recall 0.19, and precision 0.92 at recall 0.51 on the balanced data set. Of course, comparisons across very different data sets are not meaningful, but merely serve to underscore the difficulty of the CD task. In contrast to previous work, AUCONTRAIRE is the first to do CD on data automatically extracted from the Web. This is a much harder problem than using an artificially balanced data set, as shown in Figure 4. Automatic discovery of functional relations has been addressed in the database literature as Functional Dependency Mining (Huhtala et al., 1999; Yao and Hamilton, 2008). This focuses on discovering functional relationships between sets of attributes, and does not address the ambiguity inherent in natural language. 7 Conclusions and Future Work We have described a case study of contradiction detection (CD) based on functional relations. In this context, we introduced and evaluated the AUCONTRAIRE system and its novel EM-style algorithm for determining whether an arbitrary phrase is functional. We also created a unique “natural” data set of seeming contradictions based on sentences drawn from a Web corpus, which we make available to the research community. We </context>
+</contexts>
+<marker>Yao, Hamilton, 2008</marker>
+<rawString>Hong Yao and Howard J. Hamilton. 2008. Mining functional dependencies from data. Data Min. Knowl. Discov., 16(2):197–219.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Yates</author>
+<author>O Etzioni</author>
+</authors>
+<title>Unsupervised resolution of objects and relations on the Web. In Procs. of HLT.</title>
+<date>2007</date>
+<contexts>
+<context position="20699" citStr="Yates and Etzioni, 2007" startWordPosition="3431" endWordPosition="3434">Regression, in order to estimate the probability that a given pair, {R(x, y1), R(x, y2)} is a genuine contradiction. Synonyms: The set of potential contradictions died from(Mozart,•) may contain assertions that Mozart died from renal failure and that he died from kidney failure. These are distinct values of y, but do not contradict each other, as the two terms are synonyms. AUCONTRAIRE uses a variety of knowledge sources to handle synonyms. WordNet is a reliable source of synonyms, particularly for common nouns, but has limited recall. AUCONTRAIRE also utilizes synonyms generated by RESOLVER (Yates and Etzioni, 2007)— a system that identifies synonyms from TEXTRUNNER extractions. Additionally, AUCONTRAIRE uses edit-distance and tokenbased string similarity (Cohen et al., 2003) between apparently contradictory values of y to identify synonyms. Meronyms: For some relations, there is no contradiction when y1 and y2 share a meronym, i.e. “part of” relation. For example, in the set born in(Mozart,•) there is no contradiction between the y values “Salzburg” and “Austria”, but “Salzburg” conflicts with “Vienna”. Although this is only true in cases where y occurs in an upward monotone context (MacCartney and Mann</context>
+</contexts>
+<marker>Yates, Etzioni, 2007</marker>
+<rawString>A. Yates and O. Etzioni. 2007. Unsupervised resolution of objects and relations on the Web. In Procs. of HLT.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

@@ -1,0 +1,1358 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.076391">
+<title confidence="0.990465">
+SimSem: Fast Approximate String Matching in Relation to Semantic
+Category Disambiguation
+</title>
+<author confidence="0.746963">
+Pontus Stenetorp*t Sampo Pyysalo* and Jun’ichi Tsujii$
+</author>
+<affiliation confidence="0.793234">
+* Tsujii Laboratory, Department of Computer Science, The University of Tokyo, Tokyo, Japan
+t Aizawa Laboratory, Department of Computer Science, The University of Tokyo, Tokyo, Japan
+t Microsoft Research Asia, Beijing, People’s Republic of China
+</affiliation>
+<email confidence="0.994189">
+{pontus,smp}@is.s.u-tokyo.ac.jp
+jtsujii@microsoft.com
+</email>
+<sectionHeader confidence="0.99559" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999760586206897">
+In this study we investigate the merits of
+fast approximate string matching to address
+challenges relating to spelling variants and to
+utilise large-scale lexical resources for seman-
+tic class disambiguation. We integrate string
+matching results into machine learning-based
+disambiguation through the use of a novel set
+of features that represent the distance of a
+given textual span to the closest match in each
+of a collection of lexical resources. We col-
+lect lexical resources for a multitude of se-
+mantic categories from a variety of biomedi-
+cal domain sources. The combined resources,
+containing more than twenty million lexical
+items, are queried using a recently proposed
+fast and efficient approximate string match-
+ing algorithm that allows us to query large
+resources without severely impacting system
+performance. We evaluate our results on six
+corpora representing a variety of disambigua-
+tion tasks. While the integration of approxi-
+mate string matching features is shown to sub-
+stantially improve performance on one corpus,
+results are modest or negative for others. We
+suggest possible explanations and future re-
+search directions. Our lexical resources and
+implementation are made freely available for
+research purposes at: http://github.com/ninjin/
+simsem
+</bodyText>
+<sectionHeader confidence="0.999336" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999949315789474">
+The use of dictionaries for boosting performance has
+become commonplace for Named Entity Recogni-
+tion (NER) systems (Torii et al., 2009; Ratinov and
+Roth, 2009). In particular, dictionaries can give an
+initial improvement when little or no training data
+is available. However, no dictionary is perfect, and
+all resources lack certain spelling variants and lag
+behind current vocabulary usage and thus are un-
+able to cover the intended domain in full. Further,
+due to varying dictionary curation and corpus anno-
+tation guidelines, the definition of what constitutes
+a semantic category is highly unlikely to precisely
+match for any two specific resources (Wang et al.,
+2009). Ideally, for applying a lexical resource to an
+entity recognition or disambiguation task to serve as
+a definition of a semantic category there would be
+a precise match between the definitions of the lexi-
+cal resource and target domain, but this is seldom or
+never the case.
+Most previous work studying the use of dictionary
+resources in entity mention-related tasks has focused
+on single-class NER, in particular this is true for
+BioNLP where it has mainly concerned the detec-
+tion of proteins. These efforts include Tsuruoka and
+Tsujii (2003), utilising dictionaries for protein de-
+tection by considering each dictionary entry using a
+novel distance measure, and Sasaki et al. (2008), ap-
+plying dictionaries to restrain the contexts in which
+proteins appear in text. In this work, we do not
+consider entity mention detection, but instead focus
+solely on the related task of disambiguating the se-
+mantic category for a given continuous sequence of
+characters (a textual span), doing so we side-step the
+issue of boundary detection in favour of focusing on
+novel aspects of semantic category disambiguation.
+Also, we are yet to see a high-performing multi-class
+biomedical NER system, this motivates our desire to
+include multiple semantic categories.
+</bodyText>
+<page confidence="0.981593">
+136
+</page>
+<note confidence="0.8973145">
+Proceedings of the 2011 Workshop on Biomedical Natural Language Processing, ACL-HLT 2011, pages 136–145,
+Portland, Oregon, USA, June 23-24, 2011. c�2011 Association for Computational Linguistics
+</note>
+<sectionHeader confidence="0.99069" genericHeader="introduction">
+2 Methods
+</sectionHeader>
+<bodyText confidence="0.999816">
+In this section we introduce our approach and the
+structure of our system.
+</bodyText>
+<subsectionHeader confidence="0.904956">
+2.1 SimSem
+</subsectionHeader>
+<bodyText confidence="0.999975387096774">
+Many large-scale language resources are available
+for the biomedical domain, including collections
+of domain-specific lexical items (Ashburner et al.,
+2000; Bodenreider, 2004; Rebholz-Schuhmann et
+al., 2010). These resources present obvious opportu-
+nities for semantic class disambiguation. However,
+in order to apply them efficiently, one must be able
+to query the resources taking into consideration both
+lexical variations in dictionary entries compared to
+real-world usage and the speed of look-ups.
+We can argue that each resource offers a differ-
+ent view of what constitutes a particular semantic
+category. While these views will not fully overlap
+between resources even for the same semantic cate-
+gory, we can expect a certain degree of agreement.
+When learning to disambiguate between semantic
+categories, a machine learning algorithm could be
+expected to learn to identify a specific semantic cat-
+egory from the similarity between textual spans an-
+notated for the category and entries in a related lex-
+ical resource. For example, if we observe the text
+“Carbonic anhydrase IV” marked as PROTEIN and
+have an entry for “Carbonic anhydrase 4” in a lexical
+resource, a machine learning method can learn to as-
+sociate the resource with the PROTEIN category (at
+specific similarity thresholds) despite syntactic dif-
+ferences.
+In this study, we aim to construct such a system
+and to demonstrate that it outperforms strict string
+matching approaches. We refer to our system as
+SimSem, as in “Similarity” and “Semantic”.
+</bodyText>
+<subsectionHeader confidence="0.999288">
+2.2 SimString
+</subsectionHeader>
+<bodyText confidence="0.975838125">
+SimString1 is a software library utilising the CP-
+Merge algorithm (Okazaki and Tsujii, 2010) to en-
+able fast approximate string matching. The software
+makes it possible to find matches in a collection with
+over ten million entries using cosine similarity and
+a similarity threshold of 0.7 in approximately 1 mil-
+lisecond with modest modern hardware. This makes
+it useful for querying a large collection of strings to
+</bodyText>
+<footnote confidence="0.943301">
+1http://www.chokkan.org/software/simstring/
+</footnote>
+<bodyText confidence="0.999908909090909">
+find entries which may differ from the query string
+only superficially and may still be members of the
+same semantic category.
+As an example, if we construct a SimString
+database using an American English wordlist2 and
+query it using the cosine measure and a threshold of
+0.7. For the query “reviewer” SimString would re-
+turn the following eight entries: review, viewer, pre-
+view, reviewer, unreviewed, televiewer, and review-
+eress. We can observe that most of the retrieved en-
+tries share some semantic similarity with the query.
+</bodyText>
+<subsectionHeader confidence="0.998626">
+2.3 Machine Learning
+</subsectionHeader>
+<bodyText confidence="0.999954064516129">
+For the machine learning component of our system
+we use the L2-regularised logistic regression im-
+plementation of the LIBLINEAR3 software library
+(Fan et al., 2008). We do not normalise our feature
+vectors and optimise our models’ penalty parameter
+using k-fold cross-validation on the training data. In
+order to give a fair representation of the performance
+of other systems, we use a rich set of features that are
+widely applied for NER (See Table 1).
+Our novel SimString features are generated as fol-
+lows. We query each SimString database using the
+cosine measure with a sliding similarity threshold,
+starting at 1.0 and ending at 0.7, lowering the thresh-
+old by 0.1 per query. If a query is matched, we gen-
+erate a feature unique for that database and thresh-
+old, we also generate the same feature for each step
+from the current threshold to the cut-off of 0.7 (a
+match at e.g. 0.9 similarity also implies matches at
+0.8 and 0.7).
+The cut-off is motivated by the fact that very
+low thresholds introduces a large degree of noise.
+For example, for our American English wordlist
+the query “rejection” using threshold 0.1 and the
+cosine measure will return 13,455 results, among
+them “questionableness” which only have a single
+sequence “ion” in common.
+It is worthwhile to note that during our prelimi-
+nary experiments we failed to establish a consistent
+benefit from contextual features across our develop-
+ment sets. Thus, contextual features are not included
+in our feature set and instead our study focuses only
+</bodyText>
+<footnote confidence="0.996254333333333">
+2/usr/share/dict/web2 under FreeBSD 8.1-RELEASE, based
+on Webster’s Second International dictionary from 1934
+3We used version 1.7 of LIBLINEAR for our experiments
+</footnote>
+<page confidence="0.991292">
+137
+</page>
+<table confidence="0.999957346153846">
+Feature Type Input Value(s)
+Text Text Flu Flu
+Lower-cased Text DNA dna
+Prefixes: sizes 3 to 5 Text bull bul, .. .
+Suffixes: sizes 3 to 5 Text bull ull, .. .
+Stem (Porter, 1993) Text performing perform
+Is a pair of digits Bool 42 True
+Is four digits Bool 4711 True
+Letters and digits Bool C4 True
+Digits and hyphens Bool 9-12 True
+Digits and slashes Bool 1/2 True
+Digits and colons Bool 3,1 True
+Digits and dots Bool 3.14 True
+Upper-case and dots Bool M.C. True
+Initial upper-case Bool Pigeon True
+Only upper-case Bool PMID True
+Only lower-case Bool pure True
+Only digits Bool 131072 True
+Only non-alpha-num Bool #*$! True
+Contains upper-case Bool gAwn True
+Contains lower-case Bool After True
+Contains digits Bool B52 True
+Contains non-alpha-num Bool B52;s True
+Date regular expression4 Bool 1989-01-30 True
+Pattern Text 1B-zz 0A-aa
+Collapsed Pattern Text 1B-zz 0A-a
+</table>
+<tableCaption confidence="0.999689">
+Table 1: Basic features used for classification
+</tableCaption>
+<bodyText confidence="0.99960375">
+the features that are generated solely from the tex-
+tual span which has been annotated with a semantic
+category (span-internal features) and the comparison
+of approximate and strict string matching.
+</bodyText>
+<sectionHeader confidence="0.998999" genericHeader="method">
+3 Resources
+</sectionHeader>
+<bodyText confidence="0.999530666666667">
+This section introduces and discusses the prepro-
+cessing and statistics of the lexical and corpus re-
+sources used in our experiments.
+</bodyText>
+<subsectionHeader confidence="0.999555">
+3.1 Lexical Resources
+</subsectionHeader>
+<bodyText confidence="0.999950875">
+To generate a multitude of SimString databases cov-
+ering a wide array of semantic categories we employ
+several freely available lexical resources (Table 2).
+The choice of lexical resources was initially made
+with the aim to cover commonly annotated domain
+semantic categories: the CHEBI and CHEMICAL
+subsets of JOCHEM for chemicals, LINNAEUS for
+species, Entrez Gene and SHI for proteins. We then
+</bodyText>
+<footnote confidence="0.921999">
+4A simple regular expression matching dates:
+ˆ(19|20)\d\d[- /.](0[1-9]|1[012])[- /.](0[1-9]|[12][0-9]|3[01])$
+from http://www.regular-expressions.info/dates.html
+</footnote>
+<bodyText confidence="0.999957541666667">
+expanded the selection based on error analysis to in-
+crease our coverage of a wider array of semantic cat-
+egories present in our development data.
+We used the GO version from March 2011, ex-
+tracting all non-obsolete terms from the ontology
+and separating them into the three GO subontolo-
+gies: biological process (BP), cellular component
+(CC) and molecular function (MF). We then created
+an additional three resources by extracting all exact
+synonyms for each entry. Lastly, we expanded these
+six resources into twelve resources by applying the
+GO term variant generation technique described by
+Beisswanger et al. (2008).
+UMLS, a collection of various resources, contain
+135 semantic categories (e.g. Body Location or Re-
+gion and Inorganic Chemical) which we use to cre-
+ate a database for each category.
+For Entrez Gene we extracted all entries for the
+following types: gene locus, protein name, protein
+description, nomenclature symbol and nomenclature
+fullname, creating a SimString database for each.
+This leaves some parts of Entrez Gene unutilised,
+but we deemed these categories to be sufficient for
+our experiments.
+The Turku Event Corpus is a resource created by
+applying an automated event extraction system on
+the full release of PubMed from 2009. As a pre-
+condition for the event extraction system to operate,
+protein name recognition is necessary; for this cor-
+pus, NER has been performed by the corpus curators
+using the BANNER (Leaman and Gonzalez, 2008)
+NER system trained on GENETAG (Tanabe et al.,
+2005). We created a database (PROT) containing
+all protein annotations, extracted all event triggers
+(TRIG) and created a database for each of the event
+types covered by the event extraction system.
+For the AZDC corpus, we extracted each anno-
+tated textual span since the corpus covers only a sin-
+gle semantic category. Similarly, the LINNAEUS
+dictionary was converted into a single database since
+it covers the single category “species”.
+Table 3 contains the statistics per dictionary re-
+source and the number of SimString databases cre-
+ated for each resource. Due to space requirements
+we leave out the full details for GO BP, GO CC,
+GO MF, UMLS, Entrez Gene and TURKU TRIG,
+and instead give the total entries for all the databases
+generated from these resources.
+</bodyText>
+<page confidence="0.98183">
+138
+</page>
+<table confidence="0.999941272727273">
+Name Abbreviation Semantic Categories Publication
+Gene Ontology GO Multiple Ashburner et al. (2000)
+Protein Information Resource PIR Proteins Wu et al. (2003)
+Unified Medical Language System UMLS Multiple Bodenreider (2004)
+Entrez Gene – Proteins Maglott et al. (2005)
+Automatically generated dictionary SHI Proteins Shi and Campagne (2005)
+Jochem JOCHEM Multiple Hettne et al. (2009)
+Turku Event Corpus TURKU Proteins and biomolecular events Bj¨orne et al. (2010)
+Arizona Disease Corpus AZDC Diseases Chowdhury and Lavelli (2010)
+LINNAEUS Dictionary LINNAEUS Species Gerner et al. (2010)
+Webster’s International Dictionary WID Multiple –
+</table>
+<tableCaption confidence="0.653377">
+Table 2: Lexical resources gathered for our experiments
+</tableCaption>
+<table confidence="0.9971615625">
+Resource Unique Entries Databases
+GO BP 67,411 4
+GO CC 5,993 4
+GO MF 55,595 4
+PIR 691,577 1
+UMLS 5,902,707 135
+Entrez Gene 3,602,757 5
+SHI 61,676 1
+CHEBI 187,993 1
+CHEMICAL 1,527,751 1
+TURKU PROT 4,745,825 1
+TURKU TRIG 130,139 10
+AZDC 1,195 1
+LINNAEUS 3,119,005 1
+WID 235,802 1
+Total: 20, 335, 426 170
+</table>
+<tableCaption confidence="0.999791">
+Table 3: Statistics per dictionary resource
+</tableCaption>
+<subsectionHeader confidence="0.994383">
+3.2 Corpora
+</subsectionHeader>
+<bodyText confidence="0.999982957446808">
+To evaluate our approach we need a variety of cor-
+pora annotated with multiple semantic categories.
+For this purpose we selected the six corpora listed
+in Table 4.
+The majority of our corpora are available in the
+common stand-off style format introduced for the
+BioNLP 2009 Shared Task (BioNLP’09 ST) (Kim
+et al., 2009). The remaining two, NLPBA and
+CALBC CII, were converted into the BioNLP’09 ST
+format so that we could process all resources in the
+same manner for our experimental set-up.
+In addition to physical entity annotations, the
+GREC, EPI, ID and GENIA corpora incorporate
+event trigger annotations (e.g. Gene Regulatory
+Event (GRE) for GREC). These trigger expressions
+carry with them a specific semantic type (e.g. “in-
+teract” can carry the semantic type BINDING for
+GENIA), allowing us to enrich the data sets with
+additional semantic categories by including these
+types in our dataset as distinct semantic categories.
+This gave us the following increase in semantic cat-
+egories: GREC one, EPI 15, ID ten, GENIA nine.
+The original GREC corpus contains an exception-
+ally wide array of semantic categories. While this
+is desirable for evaluating the performance of our
+approach under different task settings, the sparsity
+of the data is a considerable problem; the majority
+of categories do not permit stable evaluation as they
+have only a handful of annotations each. To alleviate
+this problem we used the five ontologies defined in
+the GREC annotation guidelines5, collapsing the an-
+notations into five semantic super categories to cre-
+ate a resource we refer to as Super GREC. This pre-
+processing conforms with how the categories were
+used when annotating the GREC corpus (Thompson
+et al., 2009). This resource contains sufficient anno-
+tations for each semantic category to enable evalua-
+tion on a category-by-category basis. Also, for the
+purpose of our experiments we removed all “SPAN”
+type annotations since they themselves carry no se-
+mantic information (cf. GREC annotation guide-
+lines).
+CALBC CII contains 75,000 documents, which
+is more than enough for our experiments. In order
+to maintain balance in size between the resources in
+our experiments, we sampled a random 5,000 docu-
+ments and used these as our CALBC CII dataset.
+</bodyText>
+<footnote confidence="0.990993">
+5http://www.nactem.ac.uk/download.php?target=GREC/
+Event annotation guidelines.pdf
+</footnote>
+<page confidence="0.984371">
+139
+</page>
+<table confidence="0.981204285714286">
+Name Abbreviation Publication
+BioNLP/NLPBA 2004 Shared Task Corpus NLPBA Kim et al. (2004)
+Gene Regulation Event Corpus GREC Thompson et al. (2009)
+Collaborative Annotation of a Large Biomedical Corpus CALBC CII Rebholz-Schuhmann et al. (2010)
+Epigenetics and Post-Translational Modifications EPI Ohta et al. (2011)
+Infectious Diseases Corpus ID Pyysalo et al. (2011)
+Genia Event Corpus GENIA Kim et al. (2011)
+</table>
+<tableCaption confidence="0.99986">
+Table 4: Corpora used for evaluation
+</tableCaption>
+<subsectionHeader confidence="0.999749">
+3.3 Corpus Statistics
+</subsectionHeader>
+<bodyText confidence="0.999946666666667">
+In this section we present statistics for each of our
+datasets. For resources with a limited number of se-
+mantic categories we use pie charts to illustrate their
+distribution (Figure 1). For the other corpora we use
+tables to illustrate this. Tables for the corpora for
+which pie charts are given has been left out due to
+space requirements.
+The NLPBA corpus (Figure 1a) with 59,601 to-
+kens annotated, covers five semantic categories, with
+a clear majority of protein annotations. While
+NLPBA contains several semantic categories, they
+are closely related, which is expected to pose chal-
+lenges for disambiguation. This holds in particular
+for proteins, DNA and RNA, which commonly share
+names.
+Our collapsed version of GREC, Super GREC
+(see Figure 1b), contains 6,777 annotated tokens and
+covers a total of six semantic categories: Regulatory
+Event (GRE), nucleic acids, proteins, processes, liv-
+ing system and experimental. GREC is an interest-
+ing resource in that its classes are relatively distinct
+and four of them are evenly distributed.
+CALBC CII is balanced among its annotated cat-
+egories, as illustrated in Figure 1c. The 6,433 to-
+kens annotated are of the types: proteins and genes
+(PRGE), species (SPE), disorders (DISO) and chem-
+icals and drugs (CHED). We note that we have in-
+troduced lexical resources covering each of these
+classes (Section 3.1).
+For the BioNLP’11 ST resources EPI (Table 5),
+GENIA (Figure 1d and contains 27,246 annotated
+tokens) and ID (Table 6), we observe a very skewed
+distribution due to our decision to include event
+types as distinct classes; The dominating class for
+all the datasets are proteins. For several of these
+categories, learning accurate disambiguation is ex-
+</bodyText>
+<table confidence="0.999336578947369">
+Type Ratio Annotations
+Acetylation 2.3% 294
+Catalysis 1.4% 186
+DNA demethylation 0.1% 18
+DNA methylation 2.3% 301
+Deacetylation 0.3% 43
+Deglycosylation 0.2% 26
+Dehydroxylation 0.0% 1
+Demethylation 0.1% 12
+Dephosphorylation 0.0% 3
+Deubiquitination 0.1% 13
+Entity 6.6% 853
+Glycosylation 2.3% 295
+Hydroxylation 0.9% 116
+Methylation 2.5% 319
+Phosphorylation 0.9% 112
+Protein 77.7% 10,094
+Ubiquitination 2.3% 297
+Total: 12,983
+</table>
+<tableCaption confidence="0.99956">
+Table 5: Semantic categories in EPI
+</tableCaption>
+<bodyText confidence="0.999796125">
+pected to be very challenging if not impossible due
+to sparsity: For example, Dehydroxylation in EPI
+has a single annotation.
+ID is of particular interest since it contains a con-
+siderable amount of annotations for more than one
+physical entity category, including in addition to
+protein also organism and a minor amount of chem-
+ical annotations.
+</bodyText>
+<sectionHeader confidence="0.999737" genericHeader="method">
+4 Experiments
+</sectionHeader>
+<bodyText confidence="0.9998535">
+In this section we introduce our experimental set-up
+and discuss the outcome of our experiments.
+</bodyText>
+<subsectionHeader confidence="0.930519">
+4.1 Experimental Set-up
+</subsectionHeader>
+<bodyText confidence="0.999548">
+To ensure that our results are not biased by over-
+fitting on a specific set of data, all data sets were
+separated into training, development and test sets.
+</bodyText>
+<page confidence="0.980891">
+140
+</page>
+<figure confidence="0.998475">
+(a) NLPBA
+</figure>
+<figureCaption confidence="0.999988">
+Figure 1: Semantic category distributions
+</figureCaption>
+<bodyText confidence="0.998922714285714">
+NLPBA defines only a training and test set, GREC
+and CALBC CII are provided as resources and lack
+any given division, and for the BioNLP’11 ST data
+the test sets are not distributed. Thus, we combined
+all the available data for each dataset and separated
+the documents into fixed sets with the following ra-
+tios: 1/2 training, 1/4 development and 1/4 test.
+</bodyText>
+<table confidence="0.999476111111111">
+Type Ratio Annotations
+Binding 1.0% 102
+Chemical 6.8% 725
+Entity 0.4% 43
+Gene expression 3.3% 347
+Localization 0.3% 36
+Negative regulation 1.6% 165
+Organism 25.5% 2,699
+Phosphorylation 0.5% 54
+Positive regulation 2.5% 270
+Process 8.0% 843
+Protein 43.1% 4,567
+Protein catabolism 0.0% 5
+Regulation 1.8% 188
+Regulon-operon 1.1% 121
+Transcription 0.4% 47
+Two-component-system 3.7% 387
+Total: 10,599
+</table>
+<tableCaption confidence="0.998824">
+Table 6: Semantic categories in ID
+</tableCaption>
+<bodyText confidence="0.999973294117647">
+We use a total of six classifiers for our experi-
+ments. First, a naive baseline (Naive): a majority
+class voter with a memory based on the exact text
+of the textual span. The remaining five are ma-
+chine learning classifiers trained using five differ-
+ent feature sets: gazetteer features constituting strict
+string matching towards our SimString databases
+(Gazetteer), SimString features generated from our
+SimString databases (SimString), the span internal
+features listed in Table 1 (Internal), the span inter-
+nal and gazetteer features (Internal-Gazetteer) and
+the span internal and SimString features (Internal-
+SimString).
+We evaluate performance using simple instance-
+level accuracy (correct classifications / all classifica-
+tions). Results are represented as learning curves for
+each data set.
+</bodyText>
+<subsectionHeader confidence="0.75953">
+4.2 Results
+</subsectionHeader>
+<bodyText confidence="0.999658714285714">
+From our experiments we find that – not surpris-
+ingly – the performance of the Naive, Gazetteer and
+SimString classifiers alone is comparatively weak.
+Their performance is illustrated in Figure 2. We can
+briefly summarize the results for these methods by
+noting that the SimString classifier outperforms the
+Gazetteer by a large margin for every dataset.6 From
+</bodyText>
+<footnote confidence="0.9511865">
+6Due to space restrictions we do not include further analysis
+or charts.
+</footnote>
+<figure confidence="0.998790333333333">
+(b) Super GREC
+(c) CALBC CII
+(d) GENIA
+</figure>
+<page confidence="0.854744">
+141
+</page>
+<figureCaption confidence="0.998406333333333">
+Figure 2: SimString, Gazetteer and Naive for ID Figure 4: Learning curve for GENIA
+Figure 3: Learning curve for NLPBA
+Figure 5: Learning curve for ID
+</figureCaption>
+<bodyText confidence="0.999784">
+here onwards we focus on the performance of the In-
+ternal classifier in combination with Gazetteer and
+SimString features.
+For NLPBA (Figure 3), GENIA (Figure 4) and ID
+(Figure 5) our experiments show no clear systematic
+benefit from either SimString or Gazetteer features.
+For Super GREC (Figure 6) and EPI (Figure 7)
+classifiers with Gazetteer and SimString features
+consistently outperform the Internal classifier, and
+the SimString classifier further shows some benefit
+over Gazetteer for EPI.
+The only dataset for which we see a clear benefit
+from SimString features over Gazetteer and Internal
+is for CALBC CII (Figure 8).
+</bodyText>
+<sectionHeader confidence="0.989919" genericHeader="conclusions">
+5 Discussion and Conclusions
+</sectionHeader>
+<bodyText confidence="0.9999325">
+While we expected to see clear benefits from both
+using Gazetteers and SimString features, our exper-
+iments returned negative results for the majority of
+the corpora. For NLPBA, GENIA and ID we are
+aware that most of the instances are either proteins
+or belong to event trigger classes for which we may
+not have had adequate lexical resources for disam-
+biguation. By contrast, for Super GREC there are
+several distinct classes for which we expected lex-
+ical resources to have fair coverage for SimString
+and Gazetteer features. While an advantage over In-
+ternal was observed for Super GREC, SimString fea-
+tures showed no benefit over Gazetteer features. The
+methods exhibited the expected result on only one of
+the six corpora, CALBC CII, where there is a clear
+advantage for Gazetteer over Internal and a further
+clear advantage for SimString over Gazetteer.
+Disappointingly, we did not succeed in establish-
+ing a clear improvement for more than one of the six
+corpora. Although we have not been successful in
+</bodyText>
+<page confidence="0.995968">
+142
+</page>
+<figureCaption confidence="0.999998">
+Figure 6: Learning curve for Super GREC
+Figure 8: Learning curve for CALBC CII
+Figure 7: Learning curve for EPI
+</figureCaption>
+<bodyText confidence="0.99998505882353">
+proving our initial hypothesis we argue that our re-
+sults calls for further study due to several concerns
+raised by the results remaining unanswered. It may
+be that our notion of distance to lexical resource en-
+tries is too naive. A possible future direction would
+be to compare the query string to retrieved results us-
+ing a method similar to that of Tsuruoka and Tsujii
+(2003). This would enable us to retain the advantage
+of fast approximate string matching, thus being able
+to utilise larger lexical resources than if we were to
+calculate sophisticated alignments for each lexical
+entry.
+Study of the confusion matrices revealed that
+some event categories such as negative regulation,
+positive regulation and regulation for ID are com-
+monly confused by the classifiers. Adding addi-
+tional resources or contextual features may alleviate
+these problems.
+To conclude, we have found a limited advantage
+but failed to establish a clear, systematic benefit
+from approximate string matching for semantic class
+disambiguation. However, we have demonstrated
+that approximate string matching can be used to gen-
+erate novel features for classifiers and allow for the
+utilisation of large scale lexical resources in new and
+potentially interesting ways. It is our hope that by
+making our findings, resources and implementation
+available we can help the BioNLP community to
+reach a deeper understanding of how best to incor-
+porate our proposed features for semantic category
+disambiguation and related tasks.
+Our system and collection of resources are freely
+available for research purposes at http://github.com/
+ninjin/simsem
+</bodyText>
+<sectionHeader confidence="0.994949" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.999095071428571">
+The authors would like to thank Dietrich Rebholz-
+Schuhmann and the CALBC organisers for allowing
+us the use of their data. and Jari Bj¨orne for answer-
+ing questions regarding the Turku Event Corpus. We
+would also like to thank the anonymous reviewers
+and Luke McCrohon for their insightful and exten-
+sive feedback, which has considerably helped us to
+improve this work. Lastly the first author would
+like to thank Makoto Miwa and Jun Hatori for their
+timely and helpful advice on machine learning meth-
+ods.
+This work was supported by the Swedish Royal
+Academy of Sciences and by Grant-in-Aid for Spe-
+cially Promoted Research (MEXT, Japan).
+</bodyText>
+<page confidence="0.998795">
+143
+</page>
+<sectionHeader confidence="0.990248" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999841288461539">
+M. Ashburner, C.A. Ball, J.A. Blake, D. Botstein, H. But-
+ler, J.M. Cherry, A.P. Davis, K. Dolinski, S.S. Dwight,
+J.T. Eppig, et al. 2000. Gene ontology: tool for the
+unification of biology. The Gene Ontology Consor-
+tium. Nature genetics, 25(1):25.
+E. Beisswanger, M. Poprat, and U. Hahn. 2008. Lexical
+Properties of OBO Ontology Class Names and Syn-
+onyms. In 3rd International Symposium on Semantic
+Mining in Biomedicine.
+J. Bj¨orne, F. Ginter, S. Pyysalo, J. Tsujii, and
+T. Salakoski. 2010. Scaling up biomedical event ex-
+traction to the entire PubMed. In Proceedings of the
+2010 Workshop on Biomedical Natural Language Pro-
+cessing, pages 28–36. Association for Computational
+Linguistics.
+O Bodenreider. 2004. The unified medical language sys-
+tem (umls): integrating biomedical terminology. Nu-
+cleic Acids Research, 32:D267–D270.
+M.F.M. Chowdhury and A. Lavelli. 2010. Disease Men-
+tion Recognition with Specific Features. ACL 2010,
+page 83.
+Rong-En Fan, Kai-Wei Chang, Cho-Jui Hsieh, Xiang-Rui
+Wang, and Chih-Jen Lin. 2008. LIBLINEAR: A li-
+brary for large linear classification. Journal of Ma-
+chine Learning Research, 9:1871–1874.
+M. Gerner, G. Nenadic, and C.M. Bergman. 2010.
+LINNAEUS: A species name identification system for
+biomedical literature. BMC bioinformatics, 11(1):85.
+K.M. Hettne, R.H. Stierum, M.J. Schuemie, P.J.M. Hen-
+driksen, B.J.A. Schijvenaars, E.M. Mulligen, J. Klein-
+jans, and J.A. Kors. 2009. A dictionary to identify
+small molecules and drugs in free text. Bioinformat-
+ics, 25(22):2983.
+Jin-Dong Kim, Tomoko Ohta, Yoshimasa Tsuruoka,
+Yuka Tateisi, and Nigel Collier. 2004. Introduction
+to the bio-entity recognition task at JNLPBA. In Pro-
+ceedings of the International Joint Workshop on Nat-
+ural Language Processing in Biomedicine and its Ap-
+plications (JNLPBA), pages 70–75.
+Jin-Dong Kim, Tomoko Ohta, Sampo Pyysalo, Yoshi-
+nobu Kano, and Jun’ichi Tsujii. 2009. Overview
+of BioNLP’09 Shared Task on Event Extraction.
+In Proceedings of Natural Language Processing in
+Biomedicine (BioNLP) NAACL 2009 Workshop, pages
+1–9.
+Jin-Dong Kim, Yue Wang, Toshihasi Takagi, and Aki-
+nori Yonezawa. 2011. Overview of genia event
+task in bionlp shared task 2011. In Proceedings of
+the BioNLP 2011 Workshop Companion Volume for
+Shared Task, Portland, Oregon, June. Association for
+Computational Linguistics.
+R. Leaman and G. Gonzalez. 2008. BANNER: an exe-
+cutable survey of advances in biomedical named entity
+recognition. In Pacific Symposium on Biocomputing,
+volume 13, pages 652–663. Citeseer.
+D. Maglott, J. Ostell, K.D. Pruitt, and T. Tatusova. 2005.
+Entrez Gene: gene-centered information at NCBI. Nu-
+cleic Acids Research, 33(suppl 1):D54.
+Tomoko Ohta, Sampo Pyysalo, and Jun’ichi Tsujii. 2011.
+Overview of the Epigenetics and Post-translational
+Modifications (EPI) task of BioNLP Shared Task
+2011. In Proceedings of the BioNLP 2011 Workshop
+Companion Volume for Shared Task, Portland, Oregon,
+June. Association for Computational Linguistics.
+Naoaki Okazaki and Jun’ichi Tsujii. 2010. Simple and
+efficient algorithm for approximate dictionary match-
+ing. In Proceedings of the 23rd International Con-
+ference on Computational Linguistics (Coling 2010),
+pages 851–859, Beijing, China, August.
+M.F. Porter. 1993. An algorithm for suffix stripping.
+Program: electronic library and information systems,
+14(3):130–137.
+Sampo Pyysalo, Tomoko Ohta, Rafal Rak, Dan Sul-
+livan, Chunhong Mao, Chunxia Wang, Bruno So-
+bral, Jun’ichi Tsujii, and Sophia Ananiadou. 2011.
+Overview of the Infectious Diseases (ID) task of
+BioNLP Shared Task 2011. In Proceedings of
+the BioNLP 2011 Workshop Companion Volume for
+Shared Task, Portland, Oregon, June. Association for
+Computational Linguistics.
+L. Ratinov and D. Roth. 2009. Design challenges and
+misconceptions in named entity recognition. In Pro-
+ceedings of the Thirteenth Conference on Computa-
+tional Natural Language Learning, pages 147–155.
+Association for Computational Linguistics.
+D. Rebholz-Schuhmann, A.J.J. Yepes, E.M. Van Mul-
+ligen, N. Kang, J. Kors, D. Milward, P. Corbett,
+E. Buyko, E. Beisswanger, and U. Hahn. 2010.
+CALBC silver standard corpus. Journal of bioinfor-
+matics and computational biology, 8(1):163–179.
+Y. Sasaki, Y. Tsuruoka, J. McNaught, and S. Ananiadou.
+2008. How to make the most of NE dictionaries in
+statistical NER. BMC bioinformatics, 9(Suppl 11):S5.
+L. Shi and F. Campagne. 2005. Building a protein name
+dictionary from full text: a machine learning term ex-
+traction approach. BMC bioinformatics, 6(1):88.
+L. Tanabe, N. Xie, L. Thom, W. Matten, and W.J.
+Wilbur. 2005. GENETAG: a tagged corpus for
+gene/protein named entity recognition. BMC bioinfor-
+matics, 6(Suppl 1):S3.
+P. Thompson, S.A. Iqbal, J. McNaught, and S. Anani-
+adou. 2009. Construction of an annotated corpus
+to support biomedical information extraction. BMC
+bioinformatics, 10(1):349.
+</reference>
+<page confidence="0.987026">
+144
+</page>
+<reference confidence="0.999115823529412">
+M. Torii, Z. Hu, C.H. Wu, and H. Liu. 2009. BioTagger-
+GM: a gene/protein name recognition system. Jour-
+nal of the American Medical Informatics Association,
+16(2):247.
+Y. Tsuruoka and J. Tsujii. 2003. Boosting precision and
+recall of dictionary-based protein name recognition.
+In Proceedings of the ACL 2003 workshop on Natural
+language processing in biomedicine-Volume 13, pages
+41–48. Association for Computational Linguistics.
+Yue Wang, Jin-Dong Kim, Rune Saetre, Sampo Pyysalo,
+and Jun’ichi Tsujii. 2009. Investigating heteroge-
+neous protein annotations toward cross-corpora uti-
+lization. BMCBioinformatics, 10(1):403.
+C.H. Wu, L.S.L. Yeh, H. Huang, L. Arminski, J. Castro-
+Alvear, Y. Chen, Z. Hu, P. Kourtesis, R.S. Ledley, B.E.
+Suzek, et al. 2003. The protein information resource.
+Nucleic Acids Research, 31(1):345.
+</reference>
+<page confidence="0.998798">
+145
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.446166">
+<title confidence="0.9960615">SimSem: Fast Approximate String Matching in Relation to Category Disambiguation</title>
+<author confidence="0.970243">Jun’ichi</author>
+<affiliation confidence="0.834945">Laboratory, Department of Computer Science, The University of Tokyo, Tokyo, Laboratory, Department of Computer Science, The University of Tokyo, Tokyo,</affiliation>
+<address confidence="0.952698">Research Asia, Beijing, People’s Republic of</address>
+<email confidence="0.99945">jtsujii@microsoft.com</email>
+<abstract confidence="0.996022551724138">In this study we investigate the merits of fast approximate string matching to address challenges relating to spelling variants and to utilise large-scale lexical resources for semantic class disambiguation. We integrate string matching results into machine learning-based disambiguation through the use of a novel set of features that represent the distance of a given textual span to the closest match in each of a collection of lexical resources. We collect lexical resources for a multitude of semantic categories from a variety of biomedical domain sources. The combined resources, containing more than twenty million lexical items, are queried using a recently proposed fast and efficient approximate string matching algorithm that allows us to query large resources without severely impacting system performance. We evaluate our results on six corpora representing a variety of disambiguation tasks. While the integration of approximate string matching features is shown to substantially improve performance on one corpus, results are modest or negative for others. We suggest possible explanations and future research directions. Our lexical resources and implementation are made freely available for research purposes at: http://github.com/ninjin/</abstract>
+<intro confidence="0.811392">simsem</intro>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>M Ashburner</author>
+<author>C A Ball</author>
+<author>J A Blake</author>
+<author>D Botstein</author>
+<author>H Butler</author>
+<author>J M Cherry</author>
+<author>A P Davis</author>
+<author>K Dolinski</author>
+<author>S S Dwight</author>
+<author>J T Eppig</author>
+</authors>
+<title>Gene ontology: tool for the unification of biology. The Gene Ontology Consortium. Nature genetics,</title>
+<date>2000</date>
+<pages>25--1</pages>
+<contexts>
+<context position="4099" citStr="Ashburner et al., 2000" startWordPosition="609" endWordPosition="612">ic category disambiguation. Also, we are yet to see a high-performing multi-class biomedical NER system, this motivates our desire to include multiple semantic categories. 136 Proceedings of the 2011 Workshop on Biomedical Natural Language Processing, ACL-HLT 2011, pages 136–145, Portland, Oregon, USA, June 23-24, 2011. c�2011 Association for Computational Linguistics 2 Methods In this section we introduce our approach and the structure of our system. 2.1 SimSem Many large-scale language resources are available for the biomedical domain, including collections of domain-specific lexical items (Ashburner et al., 2000; Bodenreider, 2004; Rebholz-Schuhmann et al., 2010). These resources present obvious opportunities for semantic class disambiguation. However, in order to apply them efficiently, one must be able to query the resources taking into consideration both lexical variations in dictionary entries compared to real-world usage and the speed of look-ups. We can argue that each resource offers a different view of what constitutes a particular semantic category. While these views will not fully overlap between resources even for the same semantic category, we can expect a certain degree of agreement. Whe</context>
+<context position="12433" citStr="Ashburner et al. (2000)" startWordPosition="1920" endWordPosition="1923">tated textual span since the corpus covers only a single semantic category. Similarly, the LINNAEUS dictionary was converted into a single database since it covers the single category “species”. Table 3 contains the statistics per dictionary resource and the number of SimString databases created for each resource. Due to space requirements we leave out the full details for GO BP, GO CC, GO MF, UMLS, Entrez Gene and TURKU TRIG, and instead give the total entries for all the databases generated from these resources. 138 Name Abbreviation Semantic Categories Publication Gene Ontology GO Multiple Ashburner et al. (2000) Protein Information Resource PIR Proteins Wu et al. (2003) Unified Medical Language System UMLS Multiple Bodenreider (2004) Entrez Gene – Proteins Maglott et al. (2005) Automatically generated dictionary SHI Proteins Shi and Campagne (2005) Jochem JOCHEM Multiple Hettne et al. (2009) Turku Event Corpus TURKU Proteins and biomolecular events Bj¨orne et al. (2010) Arizona Disease Corpus AZDC Diseases Chowdhury and Lavelli (2010) LINNAEUS Dictionary LINNAEUS Species Gerner et al. (2010) Webster’s International Dictionary WID Multiple – Table 2: Lexical resources gathered for our experiments Reso</context>
+</contexts>
+<marker>Ashburner, Ball, Blake, Botstein, Butler, Cherry, Davis, Dolinski, Dwight, Eppig, 2000</marker>
+<rawString>M. Ashburner, C.A. Ball, J.A. Blake, D. Botstein, H. Butler, J.M. Cherry, A.P. Davis, K. Dolinski, S.S. Dwight, J.T. Eppig, et al. 2000. Gene ontology: tool for the unification of biology. The Gene Ontology Consortium. Nature genetics, 25(1):25.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Beisswanger</author>
+<author>M Poprat</author>
+<author>U Hahn</author>
+</authors>
+<date>2008</date>
+<booktitle>Lexical Properties of OBO Ontology Class Names and Synonyms. In 3rd International Symposium on Semantic Mining in Biomedicine.</booktitle>
+<contexts>
+<context position="10677" citStr="Beisswanger et al. (2008)" startWordPosition="1637" endWordPosition="1640">tes.html expanded the selection based on error analysis to increase our coverage of a wider array of semantic categories present in our development data. We used the GO version from March 2011, extracting all non-obsolete terms from the ontology and separating them into the three GO subontologies: biological process (BP), cellular component (CC) and molecular function (MF). We then created an additional three resources by extracting all exact synonyms for each entry. Lastly, we expanded these six resources into twelve resources by applying the GO term variant generation technique described by Beisswanger et al. (2008). UMLS, a collection of various resources, contain 135 semantic categories (e.g. Body Location or Region and Inorganic Chemical) which we use to create a database for each category. For Entrez Gene we extracted all entries for the following types: gene locus, protein name, protein description, nomenclature symbol and nomenclature fullname, creating a SimString database for each. This leaves some parts of Entrez Gene unutilised, but we deemed these categories to be sufficient for our experiments. The Turku Event Corpus is a resource created by applying an automated event extraction system on th</context>
+</contexts>
+<marker>Beisswanger, Poprat, Hahn, 2008</marker>
+<rawString>E. Beisswanger, M. Poprat, and U. Hahn. 2008. Lexical Properties of OBO Ontology Class Names and Synonyms. In 3rd International Symposium on Semantic Mining in Biomedicine.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Bj¨orne</author>
+<author>F Ginter</author>
+<author>S Pyysalo</author>
+<author>J Tsujii</author>
+<author>T Salakoski</author>
+</authors>
+<title>Scaling up biomedical event extraction to the entire PubMed.</title>
+<date>2010</date>
+<booktitle>In Proceedings of the 2010 Workshop on Biomedical Natural Language Processing,</booktitle>
+<pages>28--36</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<marker>Bj¨orne, Ginter, Pyysalo, Tsujii, Salakoski, 2010</marker>
+<rawString>J. Bj¨orne, F. Ginter, S. Pyysalo, J. Tsujii, and T. Salakoski. 2010. Scaling up biomedical event extraction to the entire PubMed. In Proceedings of the 2010 Workshop on Biomedical Natural Language Processing, pages 28–36. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Bodenreider</author>
+</authors>
+<title>The unified medical language system (umls): integrating biomedical terminology.</title>
+<date>2004</date>
+<journal>Nucleic Acids Research,</journal>
+<pages>32--267</pages>
+<contexts>
+<context position="4118" citStr="Bodenreider, 2004" startWordPosition="613" endWordPosition="614">on. Also, we are yet to see a high-performing multi-class biomedical NER system, this motivates our desire to include multiple semantic categories. 136 Proceedings of the 2011 Workshop on Biomedical Natural Language Processing, ACL-HLT 2011, pages 136–145, Portland, Oregon, USA, June 23-24, 2011. c�2011 Association for Computational Linguistics 2 Methods In this section we introduce our approach and the structure of our system. 2.1 SimSem Many large-scale language resources are available for the biomedical domain, including collections of domain-specific lexical items (Ashburner et al., 2000; Bodenreider, 2004; Rebholz-Schuhmann et al., 2010). These resources present obvious opportunities for semantic class disambiguation. However, in order to apply them efficiently, one must be able to query the resources taking into consideration both lexical variations in dictionary entries compared to real-world usage and the speed of look-ups. We can argue that each resource offers a different view of what constitutes a particular semantic category. While these views will not fully overlap between resources even for the same semantic category, we can expect a certain degree of agreement. When learning to disam</context>
+<context position="12557" citStr="Bodenreider (2004)" startWordPosition="1939" endWordPosition="1940"> a single database since it covers the single category “species”. Table 3 contains the statistics per dictionary resource and the number of SimString databases created for each resource. Due to space requirements we leave out the full details for GO BP, GO CC, GO MF, UMLS, Entrez Gene and TURKU TRIG, and instead give the total entries for all the databases generated from these resources. 138 Name Abbreviation Semantic Categories Publication Gene Ontology GO Multiple Ashburner et al. (2000) Protein Information Resource PIR Proteins Wu et al. (2003) Unified Medical Language System UMLS Multiple Bodenreider (2004) Entrez Gene – Proteins Maglott et al. (2005) Automatically generated dictionary SHI Proteins Shi and Campagne (2005) Jochem JOCHEM Multiple Hettne et al. (2009) Turku Event Corpus TURKU Proteins and biomolecular events Bj¨orne et al. (2010) Arizona Disease Corpus AZDC Diseases Chowdhury and Lavelli (2010) LINNAEUS Dictionary LINNAEUS Species Gerner et al. (2010) Webster’s International Dictionary WID Multiple – Table 2: Lexical resources gathered for our experiments Resource Unique Entries Databases GO BP 67,411 4 GO CC 5,993 4 GO MF 55,595 4 PIR 691,577 1 UMLS 5,902,707 135 Entrez Gene 3,602</context>
+</contexts>
+<marker>Bodenreider, 2004</marker>
+<rawString>O Bodenreider. 2004. The unified medical language system (umls): integrating biomedical terminology. Nucleic Acids Research, 32:D267–D270.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M F M Chowdhury</author>
+<author>A Lavelli</author>
+</authors>
+<title>Disease Mention Recognition with Specific Features.</title>
+<date>2010</date>
+<booktitle>ACL 2010,</booktitle>
+<pages>83</pages>
+<contexts>
+<context position="12864" citStr="Chowdhury and Lavelli (2010)" startWordPosition="1982" endWordPosition="1985">RIG, and instead give the total entries for all the databases generated from these resources. 138 Name Abbreviation Semantic Categories Publication Gene Ontology GO Multiple Ashburner et al. (2000) Protein Information Resource PIR Proteins Wu et al. (2003) Unified Medical Language System UMLS Multiple Bodenreider (2004) Entrez Gene – Proteins Maglott et al. (2005) Automatically generated dictionary SHI Proteins Shi and Campagne (2005) Jochem JOCHEM Multiple Hettne et al. (2009) Turku Event Corpus TURKU Proteins and biomolecular events Bj¨orne et al. (2010) Arizona Disease Corpus AZDC Diseases Chowdhury and Lavelli (2010) LINNAEUS Dictionary LINNAEUS Species Gerner et al. (2010) Webster’s International Dictionary WID Multiple – Table 2: Lexical resources gathered for our experiments Resource Unique Entries Databases GO BP 67,411 4 GO CC 5,993 4 GO MF 55,595 4 PIR 691,577 1 UMLS 5,902,707 135 Entrez Gene 3,602,757 5 SHI 61,676 1 CHEBI 187,993 1 CHEMICAL 1,527,751 1 TURKU PROT 4,745,825 1 TURKU TRIG 130,139 10 AZDC 1,195 1 LINNAEUS 3,119,005 1 WID 235,802 1 Total: 20, 335, 426 170 Table 3: Statistics per dictionary resource 3.2 Corpora To evaluate our approach we need a variety of corpora annotated with multiple</context>
+</contexts>
+<marker>Chowdhury, Lavelli, 2010</marker>
+<rawString>M.F.M. Chowdhury and A. Lavelli. 2010. Disease Mention Recognition with Specific Features. ACL 2010, page 83.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Rong-En Fan</author>
+<author>Kai-Wei Chang</author>
+<author>Cho-Jui Hsieh</author>
+<author>Xiang-Rui Wang</author>
+<author>Chih-Jen Lin</author>
+</authors>
+<title>LIBLINEAR: A library for large linear classification.</title>
+<date>2008</date>
+<journal>Journal of Machine Learning Research,</journal>
+<pages>9--1871</pages>
+<contexts>
+<context position="6640" citStr="Fan et al., 2008" startWordPosition="1006" endWordPosition="1009">s of the same semantic category. As an example, if we construct a SimString database using an American English wordlist2 and query it using the cosine measure and a threshold of 0.7. For the query “reviewer” SimString would return the following eight entries: review, viewer, preview, reviewer, unreviewed, televiewer, and revieweress. We can observe that most of the retrieved entries share some semantic similarity with the query. 2.3 Machine Learning For the machine learning component of our system we use the L2-regularised logistic regression implementation of the LIBLINEAR3 software library (Fan et al., 2008). We do not normalise our feature vectors and optimise our models’ penalty parameter using k-fold cross-validation on the training data. In order to give a fair representation of the performance of other systems, we use a rich set of features that are widely applied for NER (See Table 1). Our novel SimString features are generated as follows. We query each SimString database using the cosine measure with a sliding similarity threshold, starting at 1.0 and ending at 0.7, lowering the threshold by 0.1 per query. If a query is matched, we generate a feature unique for that database and threshold,</context>
+</contexts>
+<marker>Fan, Chang, Hsieh, Wang, Lin, 2008</marker>
+<rawString>Rong-En Fan, Kai-Wei Chang, Cho-Jui Hsieh, Xiang-Rui Wang, and Chih-Jen Lin. 2008. LIBLINEAR: A library for large linear classification. Journal of Machine Learning Research, 9:1871–1874.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Gerner</author>
+<author>G Nenadic</author>
+<author>C M Bergman</author>
+</authors>
+<title>LINNAEUS: A species name identification system for biomedical literature.</title>
+<date>2010</date>
+<journal>BMC bioinformatics,</journal>
+<volume>11</volume>
+<issue>1</issue>
+<contexts>
+<context position="12922" citStr="Gerner et al. (2010)" startWordPosition="1990" endWordPosition="1993">rated from these resources. 138 Name Abbreviation Semantic Categories Publication Gene Ontology GO Multiple Ashburner et al. (2000) Protein Information Resource PIR Proteins Wu et al. (2003) Unified Medical Language System UMLS Multiple Bodenreider (2004) Entrez Gene – Proteins Maglott et al. (2005) Automatically generated dictionary SHI Proteins Shi and Campagne (2005) Jochem JOCHEM Multiple Hettne et al. (2009) Turku Event Corpus TURKU Proteins and biomolecular events Bj¨orne et al. (2010) Arizona Disease Corpus AZDC Diseases Chowdhury and Lavelli (2010) LINNAEUS Dictionary LINNAEUS Species Gerner et al. (2010) Webster’s International Dictionary WID Multiple – Table 2: Lexical resources gathered for our experiments Resource Unique Entries Databases GO BP 67,411 4 GO CC 5,993 4 GO MF 55,595 4 PIR 691,577 1 UMLS 5,902,707 135 Entrez Gene 3,602,757 5 SHI 61,676 1 CHEBI 187,993 1 CHEMICAL 1,527,751 1 TURKU PROT 4,745,825 1 TURKU TRIG 130,139 10 AZDC 1,195 1 LINNAEUS 3,119,005 1 WID 235,802 1 Total: 20, 335, 426 170 Table 3: Statistics per dictionary resource 3.2 Corpora To evaluate our approach we need a variety of corpora annotated with multiple semantic categories. For this purpose we selected the six</context>
+</contexts>
+<marker>Gerner, Nenadic, Bergman, 2010</marker>
+<rawString>M. Gerner, G. Nenadic, and C.M. Bergman. 2010. LINNAEUS: A species name identification system for biomedical literature. BMC bioinformatics, 11(1):85.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K M Hettne</author>
+<author>R H Stierum</author>
+<author>M J Schuemie</author>
+<author>P J M Hendriksen</author>
+<author>B J A Schijvenaars</author>
+<author>E M Mulligen</author>
+<author>J Kleinjans</author>
+<author>J A Kors</author>
+</authors>
+<title>A dictionary to identify small molecules and drugs in free text.</title>
+<date>2009</date>
+<journal>Bioinformatics,</journal>
+<volume>25</volume>
+<issue>22</issue>
+<contexts>
+<context position="12718" citStr="Hettne et al. (2009)" startWordPosition="1961" endWordPosition="1964"> created for each resource. Due to space requirements we leave out the full details for GO BP, GO CC, GO MF, UMLS, Entrez Gene and TURKU TRIG, and instead give the total entries for all the databases generated from these resources. 138 Name Abbreviation Semantic Categories Publication Gene Ontology GO Multiple Ashburner et al. (2000) Protein Information Resource PIR Proteins Wu et al. (2003) Unified Medical Language System UMLS Multiple Bodenreider (2004) Entrez Gene – Proteins Maglott et al. (2005) Automatically generated dictionary SHI Proteins Shi and Campagne (2005) Jochem JOCHEM Multiple Hettne et al. (2009) Turku Event Corpus TURKU Proteins and biomolecular events Bj¨orne et al. (2010) Arizona Disease Corpus AZDC Diseases Chowdhury and Lavelli (2010) LINNAEUS Dictionary LINNAEUS Species Gerner et al. (2010) Webster’s International Dictionary WID Multiple – Table 2: Lexical resources gathered for our experiments Resource Unique Entries Databases GO BP 67,411 4 GO CC 5,993 4 GO MF 55,595 4 PIR 691,577 1 UMLS 5,902,707 135 Entrez Gene 3,602,757 5 SHI 61,676 1 CHEBI 187,993 1 CHEMICAL 1,527,751 1 TURKU PROT 4,745,825 1 TURKU TRIG 130,139 10 AZDC 1,195 1 LINNAEUS 3,119,005 1 WID 235,802 1 Total: 20, </context>
+</contexts>
+<marker>Hettne, Stierum, Schuemie, Hendriksen, Schijvenaars, Mulligen, Kleinjans, Kors, 2009</marker>
+<rawString>K.M. Hettne, R.H. Stierum, M.J. Schuemie, P.J.M. Hendriksen, B.J.A. Schijvenaars, E.M. Mulligen, J. Kleinjans, and J.A. Kors. 2009. A dictionary to identify small molecules and drugs in free text. Bioinformatics, 25(22):2983.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jin-Dong Kim</author>
+<author>Tomoko Ohta</author>
+<author>Yoshimasa Tsuruoka</author>
+<author>Yuka Tateisi</author>
+<author>Nigel Collier</author>
+</authors>
+<title>Introduction to the bio-entity recognition task at JNLPBA.</title>
+<date>2004</date>
+<booktitle>In Proceedings of the International Joint Workshop on Natural Language Processing in Biomedicine and its Applications (JNLPBA),</booktitle>
+<pages>70--75</pages>
+<contexts>
+<context position="15802" citStr="Kim et al. (2004)" startWordPosition="2449" endWordPosition="2452"> on a category-by-category basis. Also, for the purpose of our experiments we removed all “SPAN” type annotations since they themselves carry no semantic information (cf. GREC annotation guidelines). CALBC CII contains 75,000 documents, which is more than enough for our experiments. In order to maintain balance in size between the resources in our experiments, we sampled a random 5,000 documents and used these as our CALBC CII dataset. 5http://www.nactem.ac.uk/download.php?target=GREC/ Event annotation guidelines.pdf 139 Name Abbreviation Publication BioNLP/NLPBA 2004 Shared Task Corpus NLPBA Kim et al. (2004) Gene Regulation Event Corpus GREC Thompson et al. (2009) Collaborative Annotation of a Large Biomedical Corpus CALBC CII Rebholz-Schuhmann et al. (2010) Epigenetics and Post-Translational Modifications EPI Ohta et al. (2011) Infectious Diseases Corpus ID Pyysalo et al. (2011) Genia Event Corpus GENIA Kim et al. (2011) Table 4: Corpora used for evaluation 3.3 Corpus Statistics In this section we present statistics for each of our datasets. For resources with a limited number of semantic categories we use pie charts to illustrate their distribution (Figure 1). For the other corpora we use table</context>
+</contexts>
+<marker>Kim, Ohta, Tsuruoka, Tateisi, Collier, 2004</marker>
+<rawString>Jin-Dong Kim, Tomoko Ohta, Yoshimasa Tsuruoka, Yuka Tateisi, and Nigel Collier. 2004. Introduction to the bio-entity recognition task at JNLPBA. In Proceedings of the International Joint Workshop on Natural Language Processing in Biomedicine and its Applications (JNLPBA), pages 70–75.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jin-Dong Kim</author>
+<author>Tomoko Ohta</author>
+<author>Sampo Pyysalo</author>
+<author>Yoshinobu Kano</author>
+<author>Jun’ichi Tsujii</author>
+</authors>
+<title>Overview of BioNLP’09 Shared Task on Event Extraction.</title>
+<date>2009</date>
+<booktitle>In Proceedings of Natural Language Processing in Biomedicine (BioNLP) NAACL 2009 Workshop,</booktitle>
+<pages>1--9</pages>
+<contexts>
+<context position="13705" citStr="Kim et al., 2009" startWordPosition="2123" endWordPosition="2126">3 4 GO MF 55,595 4 PIR 691,577 1 UMLS 5,902,707 135 Entrez Gene 3,602,757 5 SHI 61,676 1 CHEBI 187,993 1 CHEMICAL 1,527,751 1 TURKU PROT 4,745,825 1 TURKU TRIG 130,139 10 AZDC 1,195 1 LINNAEUS 3,119,005 1 WID 235,802 1 Total: 20, 335, 426 170 Table 3: Statistics per dictionary resource 3.2 Corpora To evaluate our approach we need a variety of corpora annotated with multiple semantic categories. For this purpose we selected the six corpora listed in Table 4. The majority of our corpora are available in the common stand-off style format introduced for the BioNLP 2009 Shared Task (BioNLP’09 ST) (Kim et al., 2009). The remaining two, NLPBA and CALBC CII, were converted into the BioNLP’09 ST format so that we could process all resources in the same manner for our experimental set-up. In addition to physical entity annotations, the GREC, EPI, ID and GENIA corpora incorporate event trigger annotations (e.g. Gene Regulatory Event (GRE) for GREC). These trigger expressions carry with them a specific semantic type (e.g. “interact” can carry the semantic type BINDING for GENIA), allowing us to enrich the data sets with additional semantic categories by including these types in our dataset as distinct semantic</context>
+</contexts>
+<marker>Kim, Ohta, Pyysalo, Kano, Tsujii, 2009</marker>
+<rawString>Jin-Dong Kim, Tomoko Ohta, Sampo Pyysalo, Yoshinobu Kano, and Jun’ichi Tsujii. 2009. Overview of BioNLP’09 Shared Task on Event Extraction. In Proceedings of Natural Language Processing in Biomedicine (BioNLP) NAACL 2009 Workshop, pages 1–9.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jin-Dong Kim</author>
+<author>Yue Wang</author>
+<author>Toshihasi Takagi</author>
+<author>Akinori Yonezawa</author>
+</authors>
+<title>Overview of genia event task in bionlp shared task 2011.</title>
+<date>2011</date>
+<booktitle>In Proceedings of the BioNLP 2011 Workshop Companion Volume for Shared Task,</booktitle>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Portland, Oregon,</location>
+<contexts>
+<context position="16122" citStr="Kim et al. (2011)" startWordPosition="2496" endWordPosition="2499"> between the resources in our experiments, we sampled a random 5,000 documents and used these as our CALBC CII dataset. 5http://www.nactem.ac.uk/download.php?target=GREC/ Event annotation guidelines.pdf 139 Name Abbreviation Publication BioNLP/NLPBA 2004 Shared Task Corpus NLPBA Kim et al. (2004) Gene Regulation Event Corpus GREC Thompson et al. (2009) Collaborative Annotation of a Large Biomedical Corpus CALBC CII Rebholz-Schuhmann et al. (2010) Epigenetics and Post-Translational Modifications EPI Ohta et al. (2011) Infectious Diseases Corpus ID Pyysalo et al. (2011) Genia Event Corpus GENIA Kim et al. (2011) Table 4: Corpora used for evaluation 3.3 Corpus Statistics In this section we present statistics for each of our datasets. For resources with a limited number of semantic categories we use pie charts to illustrate their distribution (Figure 1). For the other corpora we use tables to illustrate this. Tables for the corpora for which pie charts are given has been left out due to space requirements. The NLPBA corpus (Figure 1a) with 59,601 tokens annotated, covers five semantic categories, with a clear majority of protein annotations. While NLPBA contains several semantic categories, they are cl</context>
+</contexts>
+<marker>Kim, Wang, Takagi, Yonezawa, 2011</marker>
+<rawString>Jin-Dong Kim, Yue Wang, Toshihasi Takagi, and Akinori Yonezawa. 2011. Overview of genia event task in bionlp shared task 2011. In Proceedings of the BioNLP 2011 Workshop Companion Volume for Shared Task, Portland, Oregon, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Leaman</author>
+<author>G Gonzalez</author>
+</authors>
+<title>BANNER: an executable survey of advances in biomedical named entity recognition.</title>
+<date>2008</date>
+<booktitle>In Pacific Symposium on Biocomputing,</booktitle>
+<volume>13</volume>
+<pages>652--663</pages>
+<publisher>Citeseer.</publisher>
+<contexts>
+<context position="11521" citStr="Leaman and Gonzalez, 2008" startWordPosition="1772" endWordPosition="1775">ries for the following types: gene locus, protein name, protein description, nomenclature symbol and nomenclature fullname, creating a SimString database for each. This leaves some parts of Entrez Gene unutilised, but we deemed these categories to be sufficient for our experiments. The Turku Event Corpus is a resource created by applying an automated event extraction system on the full release of PubMed from 2009. As a precondition for the event extraction system to operate, protein name recognition is necessary; for this corpus, NER has been performed by the corpus curators using the BANNER (Leaman and Gonzalez, 2008) NER system trained on GENETAG (Tanabe et al., 2005). We created a database (PROT) containing all protein annotations, extracted all event triggers (TRIG) and created a database for each of the event types covered by the event extraction system. For the AZDC corpus, we extracted each annotated textual span since the corpus covers only a single semantic category. Similarly, the LINNAEUS dictionary was converted into a single database since it covers the single category “species”. Table 3 contains the statistics per dictionary resource and the number of SimString databases created for each resou</context>
+</contexts>
+<marker>Leaman, Gonzalez, 2008</marker>
+<rawString>R. Leaman and G. Gonzalez. 2008. BANNER: an executable survey of advances in biomedical named entity recognition. In Pacific Symposium on Biocomputing, volume 13, pages 652–663. Citeseer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Maglott</author>
+<author>J Ostell</author>
+<author>K D Pruitt</author>
+<author>T Tatusova</author>
+</authors>
+<title>Entrez Gene: gene-centered information at NCBI.</title>
+<date>2005</date>
+<journal>Nucleic Acids Research,</journal>
+<volume>33</volume>
+<pages>1--54</pages>
+<contexts>
+<context position="12602" citStr="Maglott et al. (2005)" startWordPosition="1945" endWordPosition="1948">gle category “species”. Table 3 contains the statistics per dictionary resource and the number of SimString databases created for each resource. Due to space requirements we leave out the full details for GO BP, GO CC, GO MF, UMLS, Entrez Gene and TURKU TRIG, and instead give the total entries for all the databases generated from these resources. 138 Name Abbreviation Semantic Categories Publication Gene Ontology GO Multiple Ashburner et al. (2000) Protein Information Resource PIR Proteins Wu et al. (2003) Unified Medical Language System UMLS Multiple Bodenreider (2004) Entrez Gene – Proteins Maglott et al. (2005) Automatically generated dictionary SHI Proteins Shi and Campagne (2005) Jochem JOCHEM Multiple Hettne et al. (2009) Turku Event Corpus TURKU Proteins and biomolecular events Bj¨orne et al. (2010) Arizona Disease Corpus AZDC Diseases Chowdhury and Lavelli (2010) LINNAEUS Dictionary LINNAEUS Species Gerner et al. (2010) Webster’s International Dictionary WID Multiple – Table 2: Lexical resources gathered for our experiments Resource Unique Entries Databases GO BP 67,411 4 GO CC 5,993 4 GO MF 55,595 4 PIR 691,577 1 UMLS 5,902,707 135 Entrez Gene 3,602,757 5 SHI 61,676 1 CHEBI 187,993 1 CHEMICAL </context>
+</contexts>
+<marker>Maglott, Ostell, Pruitt, Tatusova, 2005</marker>
+<rawString>D. Maglott, J. Ostell, K.D. Pruitt, and T. Tatusova. 2005. Entrez Gene: gene-centered information at NCBI. Nucleic Acids Research, 33(suppl 1):D54.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tomoko Ohta</author>
+<author>Sampo Pyysalo</author>
+<author>Jun’ichi Tsujii</author>
+</authors>
+<title>Overview of the Epigenetics and Post-translational Modifications (EPI) task of BioNLP Shared Task</title>
+<date>2011</date>
+<booktitle>In Proceedings of the BioNLP 2011 Workshop Companion Volume for Shared Task,</booktitle>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Portland, Oregon,</location>
+<contexts>
+<context position="16027" citStr="Ohta et al. (2011)" startWordPosition="2480" endWordPosition="2483">0 documents, which is more than enough for our experiments. In order to maintain balance in size between the resources in our experiments, we sampled a random 5,000 documents and used these as our CALBC CII dataset. 5http://www.nactem.ac.uk/download.php?target=GREC/ Event annotation guidelines.pdf 139 Name Abbreviation Publication BioNLP/NLPBA 2004 Shared Task Corpus NLPBA Kim et al. (2004) Gene Regulation Event Corpus GREC Thompson et al. (2009) Collaborative Annotation of a Large Biomedical Corpus CALBC CII Rebholz-Schuhmann et al. (2010) Epigenetics and Post-Translational Modifications EPI Ohta et al. (2011) Infectious Diseases Corpus ID Pyysalo et al. (2011) Genia Event Corpus GENIA Kim et al. (2011) Table 4: Corpora used for evaluation 3.3 Corpus Statistics In this section we present statistics for each of our datasets. For resources with a limited number of semantic categories we use pie charts to illustrate their distribution (Figure 1). For the other corpora we use tables to illustrate this. Tables for the corpora for which pie charts are given has been left out due to space requirements. The NLPBA corpus (Figure 1a) with 59,601 tokens annotated, covers five semantic categories, with a clear</context>
+</contexts>
+<marker>Ohta, Pyysalo, Tsujii, 2011</marker>
+<rawString>Tomoko Ohta, Sampo Pyysalo, and Jun’ichi Tsujii. 2011. Overview of the Epigenetics and Post-translational Modifications (EPI) task of BioNLP Shared Task 2011. In Proceedings of the BioNLP 2011 Workshop Companion Volume for Shared Task, Portland, Oregon, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Naoaki Okazaki</author>
+<author>Jun’ichi Tsujii</author>
+</authors>
+<title>Simple and efficient algorithm for approximate dictionary matching.</title>
+<date>2010</date>
+<booktitle>In Proceedings of the 23rd International Conference on Computational Linguistics (Coling</booktitle>
+<pages>851--859</pages>
+<location>Beijing, China,</location>
+<contexts>
+<context position="5562" citStr="Okazaki and Tsujii, 2010" startWordPosition="838" endWordPosition="841"> related lexical resource. For example, if we observe the text “Carbonic anhydrase IV” marked as PROTEIN and have an entry for “Carbonic anhydrase 4” in a lexical resource, a machine learning method can learn to associate the resource with the PROTEIN category (at specific similarity thresholds) despite syntactic differences. In this study, we aim to construct such a system and to demonstrate that it outperforms strict string matching approaches. We refer to our system as SimSem, as in “Similarity” and “Semantic”. 2.2 SimString SimString1 is a software library utilising the CPMerge algorithm (Okazaki and Tsujii, 2010) to enable fast approximate string matching. The software makes it possible to find matches in a collection with over ten million entries using cosine similarity and a similarity threshold of 0.7 in approximately 1 millisecond with modest modern hardware. This makes it useful for querying a large collection of strings to 1http://www.chokkan.org/software/simstring/ find entries which may differ from the query string only superficially and may still be members of the same semantic category. As an example, if we construct a SimString database using an American English wordlist2 and query it using</context>
+</contexts>
+<marker>Okazaki, Tsujii, 2010</marker>
+<rawString>Naoaki Okazaki and Jun’ichi Tsujii. 2010. Simple and efficient algorithm for approximate dictionary matching. In Proceedings of the 23rd International Conference on Computational Linguistics (Coling 2010), pages 851–859, Beijing, China, August.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M F Porter</author>
+</authors>
+<title>An algorithm for suffix stripping. Program: electronic library and information systems,</title>
+<date>1993</date>
+<pages>14--3</pages>
+<contexts>
+<context position="8331" citStr="Porter, 1993" startWordPosition="1292" endWordPosition="1293"> common. It is worthwhile to note that during our preliminary experiments we failed to establish a consistent benefit from contextual features across our development sets. Thus, contextual features are not included in our feature set and instead our study focuses only 2/usr/share/dict/web2 under FreeBSD 8.1-RELEASE, based on Webster’s Second International dictionary from 1934 3We used version 1.7 of LIBLINEAR for our experiments 137 Feature Type Input Value(s) Text Text Flu Flu Lower-cased Text DNA dna Prefixes: sizes 3 to 5 Text bull bul, .. . Suffixes: sizes 3 to 5 Text bull ull, .. . Stem (Porter, 1993) Text performing perform Is a pair of digits Bool 42 True Is four digits Bool 4711 True Letters and digits Bool C4 True Digits and hyphens Bool 9-12 True Digits and slashes Bool 1/2 True Digits and colons Bool 3,1 True Digits and dots Bool 3.14 True Upper-case and dots Bool M.C. True Initial upper-case Bool Pigeon True Only upper-case Bool PMID True Only lower-case Bool pure True Only digits Bool 131072 True Only non-alpha-num Bool #*$! True Contains upper-case Bool gAwn True Contains lower-case Bool After True Contains digits Bool B52 True Contains non-alpha-num Bool B52;s True Date regular e</context>
+</contexts>
+<marker>Porter, 1993</marker>
+<rawString>M.F. Porter. 1993. An algorithm for suffix stripping. Program: electronic library and information systems, 14(3):130–137.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Sampo Pyysalo</author>
+<author>Tomoko Ohta</author>
+<author>Rafal Rak</author>
+<author>Dan Sullivan</author>
+<author>Chunhong Mao</author>
+<author>Chunxia Wang</author>
+<author>Bruno Sobral</author>
+<author>Jun’ichi Tsujii</author>
+<author>Sophia Ananiadou</author>
+</authors>
+<title>Overview of the Infectious Diseases (ID) task of BioNLP Shared Task</title>
+<date>2011</date>
+<booktitle>In Proceedings of the BioNLP 2011 Workshop Companion Volume for Shared Task,</booktitle>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Portland, Oregon,</location>
+<contexts>
+<context position="16079" citStr="Pyysalo et al. (2011)" startWordPosition="2488" endWordPosition="2491">periments. In order to maintain balance in size between the resources in our experiments, we sampled a random 5,000 documents and used these as our CALBC CII dataset. 5http://www.nactem.ac.uk/download.php?target=GREC/ Event annotation guidelines.pdf 139 Name Abbreviation Publication BioNLP/NLPBA 2004 Shared Task Corpus NLPBA Kim et al. (2004) Gene Regulation Event Corpus GREC Thompson et al. (2009) Collaborative Annotation of a Large Biomedical Corpus CALBC CII Rebholz-Schuhmann et al. (2010) Epigenetics and Post-Translational Modifications EPI Ohta et al. (2011) Infectious Diseases Corpus ID Pyysalo et al. (2011) Genia Event Corpus GENIA Kim et al. (2011) Table 4: Corpora used for evaluation 3.3 Corpus Statistics In this section we present statistics for each of our datasets. For resources with a limited number of semantic categories we use pie charts to illustrate their distribution (Figure 1). For the other corpora we use tables to illustrate this. Tables for the corpora for which pie charts are given has been left out due to space requirements. The NLPBA corpus (Figure 1a) with 59,601 tokens annotated, covers five semantic categories, with a clear majority of protein annotations. While NLPBA contai</context>
+</contexts>
+<marker>Pyysalo, Ohta, Rak, Sullivan, Mao, Wang, Sobral, Tsujii, Ananiadou, 2011</marker>
+<rawString>Sampo Pyysalo, Tomoko Ohta, Rafal Rak, Dan Sullivan, Chunhong Mao, Chunxia Wang, Bruno Sobral, Jun’ichi Tsujii, and Sophia Ananiadou. 2011. Overview of the Infectious Diseases (ID) task of BioNLP Shared Task 2011. In Proceedings of the BioNLP 2011 Workshop Companion Volume for Shared Task, Portland, Oregon, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Ratinov</author>
+<author>D Roth</author>
+</authors>
+<title>Design challenges and misconceptions in named entity recognition.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the Thirteenth Conference on Computational Natural Language Learning,</booktitle>
+<pages>147--155</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="1890" citStr="Ratinov and Roth, 2009" startWordPosition="268" endWordPosition="271">nce. We evaluate our results on six corpora representing a variety of disambiguation tasks. While the integration of approximate string matching features is shown to substantially improve performance on one corpus, results are modest or negative for others. We suggest possible explanations and future research directions. Our lexical resources and implementation are made freely available for research purposes at: http://github.com/ninjin/ simsem 1 Introduction The use of dictionaries for boosting performance has become commonplace for Named Entity Recognition (NER) systems (Torii et al., 2009; Ratinov and Roth, 2009). In particular, dictionaries can give an initial improvement when little or no training data is available. However, no dictionary is perfect, and all resources lack certain spelling variants and lag behind current vocabulary usage and thus are unable to cover the intended domain in full. Further, due to varying dictionary curation and corpus annotation guidelines, the definition of what constitutes a semantic category is highly unlikely to precisely match for any two specific resources (Wang et al., 2009). Ideally, for applying a lexical resource to an entity recognition or disambiguation tas</context>
+</contexts>
+<marker>Ratinov, Roth, 2009</marker>
+<rawString>L. Ratinov and D. Roth. 2009. Design challenges and misconceptions in named entity recognition. In Proceedings of the Thirteenth Conference on Computational Natural Language Learning, pages 147–155. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Rebholz-Schuhmann</author>
+<author>A J J Yepes</author>
+<author>E M Van Mulligen</author>
+<author>N Kang</author>
+<author>J Kors</author>
+<author>D Milward</author>
+<author>P Corbett</author>
+<author>E Buyko</author>
+<author>E Beisswanger</author>
+<author>U Hahn</author>
+</authors>
+<title>CALBC silver standard corpus. Journal of bioinformatics and computational biology,</title>
+<date>2010</date>
+<pages>8--1</pages>
+<marker>Rebholz-Schuhmann, Yepes, Van Mulligen, Kang, Kors, Milward, Corbett, Buyko, Beisswanger, Hahn, 2010</marker>
+<rawString>D. Rebholz-Schuhmann, A.J.J. Yepes, E.M. Van Mulligen, N. Kang, J. Kors, D. Milward, P. Corbett, E. Buyko, E. Beisswanger, and U. Hahn. 2010. CALBC silver standard corpus. Journal of bioinformatics and computational biology, 8(1):163–179.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Sasaki</author>
+<author>Y Tsuruoka</author>
+<author>J McNaught</author>
+<author>S Ananiadou</author>
+</authors>
+<title>How to make the most of NE dictionaries in statistical NER. BMC bioinformatics, 9(Suppl 11):S5.</title>
+<date>2008</date>
+<contexts>
+<context position="3084" citStr="Sasaki et al. (2008)" startWordPosition="458" endWordPosition="461">tion or disambiguation task to serve as a definition of a semantic category there would be a precise match between the definitions of the lexical resource and target domain, but this is seldom or never the case. Most previous work studying the use of dictionary resources in entity mention-related tasks has focused on single-class NER, in particular this is true for BioNLP where it has mainly concerned the detection of proteins. These efforts include Tsuruoka and Tsujii (2003), utilising dictionaries for protein detection by considering each dictionary entry using a novel distance measure, and Sasaki et al. (2008), applying dictionaries to restrain the contexts in which proteins appear in text. In this work, we do not consider entity mention detection, but instead focus solely on the related task of disambiguating the semantic category for a given continuous sequence of characters (a textual span), doing so we side-step the issue of boundary detection in favour of focusing on novel aspects of semantic category disambiguation. Also, we are yet to see a high-performing multi-class biomedical NER system, this motivates our desire to include multiple semantic categories. 136 Proceedings of the 2011 Worksho</context>
+</contexts>
+<marker>Sasaki, Tsuruoka, McNaught, Ananiadou, 2008</marker>
+<rawString>Y. Sasaki, Y. Tsuruoka, J. McNaught, and S. Ananiadou. 2008. How to make the most of NE dictionaries in statistical NER. BMC bioinformatics, 9(Suppl 11):S5.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Shi</author>
+<author>F Campagne</author>
+</authors>
+<title>Building a protein name dictionary from full text: a machine learning term extraction approach.</title>
+<date>2005</date>
+<journal>BMC bioinformatics,</journal>
+<volume>6</volume>
+<issue>1</issue>
+<contexts>
+<context position="12674" citStr="Shi and Campagne (2005)" startWordPosition="1954" endWordPosition="1957"> resource and the number of SimString databases created for each resource. Due to space requirements we leave out the full details for GO BP, GO CC, GO MF, UMLS, Entrez Gene and TURKU TRIG, and instead give the total entries for all the databases generated from these resources. 138 Name Abbreviation Semantic Categories Publication Gene Ontology GO Multiple Ashburner et al. (2000) Protein Information Resource PIR Proteins Wu et al. (2003) Unified Medical Language System UMLS Multiple Bodenreider (2004) Entrez Gene – Proteins Maglott et al. (2005) Automatically generated dictionary SHI Proteins Shi and Campagne (2005) Jochem JOCHEM Multiple Hettne et al. (2009) Turku Event Corpus TURKU Proteins and biomolecular events Bj¨orne et al. (2010) Arizona Disease Corpus AZDC Diseases Chowdhury and Lavelli (2010) LINNAEUS Dictionary LINNAEUS Species Gerner et al. (2010) Webster’s International Dictionary WID Multiple – Table 2: Lexical resources gathered for our experiments Resource Unique Entries Databases GO BP 67,411 4 GO CC 5,993 4 GO MF 55,595 4 PIR 691,577 1 UMLS 5,902,707 135 Entrez Gene 3,602,757 5 SHI 61,676 1 CHEBI 187,993 1 CHEMICAL 1,527,751 1 TURKU PROT 4,745,825 1 TURKU TRIG 130,139 10 AZDC 1,195 1 LI</context>
+</contexts>
+<marker>Shi, Campagne, 2005</marker>
+<rawString>L. Shi and F. Campagne. 2005. Building a protein name dictionary from full text: a machine learning term extraction approach. BMC bioinformatics, 6(1):88.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Tanabe</author>
+<author>N Xie</author>
+<author>L Thom</author>
+<author>W Matten</author>
+<author>W J Wilbur</author>
+</authors>
+<title>GENETAG: a tagged corpus for gene/protein named entity recognition. BMC bioinformatics, 6(Suppl 1):S3.</title>
+<date>2005</date>
+<contexts>
+<context position="11573" citStr="Tanabe et al., 2005" startWordPosition="1781" endWordPosition="1784">otein description, nomenclature symbol and nomenclature fullname, creating a SimString database for each. This leaves some parts of Entrez Gene unutilised, but we deemed these categories to be sufficient for our experiments. The Turku Event Corpus is a resource created by applying an automated event extraction system on the full release of PubMed from 2009. As a precondition for the event extraction system to operate, protein name recognition is necessary; for this corpus, NER has been performed by the corpus curators using the BANNER (Leaman and Gonzalez, 2008) NER system trained on GENETAG (Tanabe et al., 2005). We created a database (PROT) containing all protein annotations, extracted all event triggers (TRIG) and created a database for each of the event types covered by the event extraction system. For the AZDC corpus, we extracted each annotated textual span since the corpus covers only a single semantic category. Similarly, the LINNAEUS dictionary was converted into a single database since it covers the single category “species”. Table 3 contains the statistics per dictionary resource and the number of SimString databases created for each resource. Due to space requirements we leave out the full</context>
+</contexts>
+<marker>Tanabe, Xie, Thom, Matten, Wilbur, 2005</marker>
+<rawString>L. Tanabe, N. Xie, L. Thom, W. Matten, and W.J. Wilbur. 2005. GENETAG: a tagged corpus for gene/protein named entity recognition. BMC bioinformatics, 6(Suppl 1):S3.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Thompson</author>
+<author>S A Iqbal</author>
+<author>J McNaught</author>
+<author>S Ananiadou</author>
+</authors>
+<title>Construction of an annotated corpus to support biomedical information extraction.</title>
+<date>2009</date>
+<journal>BMC bioinformatics,</journal>
+<volume>10</volume>
+<issue>1</issue>
+<contexts>
+<context position="15090" citStr="Thompson et al., 2009" startWordPosition="2346" endWordPosition="2349">ide array of semantic categories. While this is desirable for evaluating the performance of our approach under different task settings, the sparsity of the data is a considerable problem; the majority of categories do not permit stable evaluation as they have only a handful of annotations each. To alleviate this problem we used the five ontologies defined in the GREC annotation guidelines5, collapsing the annotations into five semantic super categories to create a resource we refer to as Super GREC. This preprocessing conforms with how the categories were used when annotating the GREC corpus (Thompson et al., 2009). This resource contains sufficient annotations for each semantic category to enable evaluation on a category-by-category basis. Also, for the purpose of our experiments we removed all “SPAN” type annotations since they themselves carry no semantic information (cf. GREC annotation guidelines). CALBC CII contains 75,000 documents, which is more than enough for our experiments. In order to maintain balance in size between the resources in our experiments, we sampled a random 5,000 documents and used these as our CALBC CII dataset. 5http://www.nactem.ac.uk/download.php?target=GREC/ Event annotati</context>
+</contexts>
+<marker>Thompson, Iqbal, McNaught, Ananiadou, 2009</marker>
+<rawString>P. Thompson, S.A. Iqbal, J. McNaught, and S. Ananiadou. 2009. Construction of an annotated corpus to support biomedical information extraction. BMC bioinformatics, 10(1):349.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Torii</author>
+<author>Z Hu</author>
+<author>C H Wu</author>
+<author>H Liu</author>
+</authors>
+<title>BioTaggerGM: a gene/protein name recognition system.</title>
+<date>2009</date>
+<journal>Journal of the American Medical Informatics Association,</journal>
+<volume>16</volume>
+<issue>2</issue>
+<contexts>
+<context position="1865" citStr="Torii et al., 2009" startWordPosition="264" endWordPosition="267">ting system performance. We evaluate our results on six corpora representing a variety of disambiguation tasks. While the integration of approximate string matching features is shown to substantially improve performance on one corpus, results are modest or negative for others. We suggest possible explanations and future research directions. Our lexical resources and implementation are made freely available for research purposes at: http://github.com/ninjin/ simsem 1 Introduction The use of dictionaries for boosting performance has become commonplace for Named Entity Recognition (NER) systems (Torii et al., 2009; Ratinov and Roth, 2009). In particular, dictionaries can give an initial improvement when little or no training data is available. However, no dictionary is perfect, and all resources lack certain spelling variants and lag behind current vocabulary usage and thus are unable to cover the intended domain in full. Further, due to varying dictionary curation and corpus annotation guidelines, the definition of what constitutes a semantic category is highly unlikely to precisely match for any two specific resources (Wang et al., 2009). Ideally, for applying a lexical resource to an entity recognit</context>
+</contexts>
+<marker>Torii, Hu, Wu, Liu, 2009</marker>
+<rawString>M. Torii, Z. Hu, C.H. Wu, and H. Liu. 2009. BioTaggerGM: a gene/protein name recognition system. Journal of the American Medical Informatics Association, 16(2):247.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Tsuruoka</author>
+<author>J Tsujii</author>
+</authors>
+<title>Boosting precision and recall of dictionary-based protein name recognition.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the ACL 2003 workshop on Natural language processing in biomedicine-Volume 13,</booktitle>
+<pages>41--48</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="2944" citStr="Tsuruoka and Tsujii (2003)" startWordPosition="437" endWordPosition="440">ghly unlikely to precisely match for any two specific resources (Wang et al., 2009). Ideally, for applying a lexical resource to an entity recognition or disambiguation task to serve as a definition of a semantic category there would be a precise match between the definitions of the lexical resource and target domain, but this is seldom or never the case. Most previous work studying the use of dictionary resources in entity mention-related tasks has focused on single-class NER, in particular this is true for BioNLP where it has mainly concerned the detection of proteins. These efforts include Tsuruoka and Tsujii (2003), utilising dictionaries for protein detection by considering each dictionary entry using a novel distance measure, and Sasaki et al. (2008), applying dictionaries to restrain the contexts in which proteins appear in text. In this work, we do not consider entity mention detection, but instead focus solely on the related task of disambiguating the semantic category for a given continuous sequence of characters (a textual span), doing so we side-step the issue of boundary detection in favour of focusing on novel aspects of semantic category disambiguation. Also, we are yet to see a high-performi</context>
+<context position="23402" citStr="Tsuruoka and Tsujii (2003)" startWordPosition="3659" endWordPosition="3662">, we did not succeed in establishing a clear improvement for more than one of the six corpora. Although we have not been successful in 142 Figure 6: Learning curve for Super GREC Figure 8: Learning curve for CALBC CII Figure 7: Learning curve for EPI proving our initial hypothesis we argue that our results calls for further study due to several concerns raised by the results remaining unanswered. It may be that our notion of distance to lexical resource entries is too naive. A possible future direction would be to compare the query string to retrieved results using a method similar to that of Tsuruoka and Tsujii (2003). This would enable us to retain the advantage of fast approximate string matching, thus being able to utilise larger lexical resources than if we were to calculate sophisticated alignments for each lexical entry. Study of the confusion matrices revealed that some event categories such as negative regulation, positive regulation and regulation for ID are commonly confused by the classifiers. Adding additional resources or contextual features may alleviate these problems. To conclude, we have found a limited advantage but failed to establish a clear, systematic benefit from approximate string m</context>
+</contexts>
+<marker>Tsuruoka, Tsujii, 2003</marker>
+<rawString>Y. Tsuruoka and J. Tsujii. 2003. Boosting precision and recall of dictionary-based protein name recognition. In Proceedings of the ACL 2003 workshop on Natural language processing in biomedicine-Volume 13, pages 41–48. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yue Wang</author>
+<author>Jin-Dong Kim</author>
+</authors>
+<title>Rune Saetre, Sampo Pyysalo, and Jun’ichi Tsujii.</title>
+<date>2009</date>
+<journal>BMCBioinformatics,</journal>
+<volume>10</volume>
+<issue>1</issue>
+<marker>Wang, Kim, 2009</marker>
+<rawString>Yue Wang, Jin-Dong Kim, Rune Saetre, Sampo Pyysalo, and Jun’ichi Tsujii. 2009. Investigating heterogeneous protein annotations toward cross-corpora utilization. BMCBioinformatics, 10(1):403.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C H Wu</author>
+<author>L S L Yeh</author>
+<author>H Huang</author>
+<author>L Arminski</author>
+<author>J CastroAlvear</author>
+<author>Y Chen</author>
+<author>Z Hu</author>
+<author>P Kourtesis</author>
+<author>R S Ledley</author>
+<author>B E Suzek</author>
+</authors>
+<title>The protein information resource.</title>
+<date>2003</date>
+<journal>Nucleic Acids Research,</journal>
+<volume>31</volume>
+<issue>1</issue>
+<contexts>
+<context position="12492" citStr="Wu et al. (2003)" startWordPosition="1929" endWordPosition="1932">category. Similarly, the LINNAEUS dictionary was converted into a single database since it covers the single category “species”. Table 3 contains the statistics per dictionary resource and the number of SimString databases created for each resource. Due to space requirements we leave out the full details for GO BP, GO CC, GO MF, UMLS, Entrez Gene and TURKU TRIG, and instead give the total entries for all the databases generated from these resources. 138 Name Abbreviation Semantic Categories Publication Gene Ontology GO Multiple Ashburner et al. (2000) Protein Information Resource PIR Proteins Wu et al. (2003) Unified Medical Language System UMLS Multiple Bodenreider (2004) Entrez Gene – Proteins Maglott et al. (2005) Automatically generated dictionary SHI Proteins Shi and Campagne (2005) Jochem JOCHEM Multiple Hettne et al. (2009) Turku Event Corpus TURKU Proteins and biomolecular events Bj¨orne et al. (2010) Arizona Disease Corpus AZDC Diseases Chowdhury and Lavelli (2010) LINNAEUS Dictionary LINNAEUS Species Gerner et al. (2010) Webster’s International Dictionary WID Multiple – Table 2: Lexical resources gathered for our experiments Resource Unique Entries Databases GO BP 67,411 4 GO CC 5,993 4 </context>
+</contexts>
+<marker>Wu, Yeh, Huang, Arminski, CastroAlvear, Chen, Hu, Kourtesis, Ledley, Suzek, 2003</marker>
+<rawString>C.H. Wu, L.S.L. Yeh, H. Huang, L. Arminski, J. CastroAlvear, Y. Chen, Z. Hu, P. Kourtesis, R.S. Ledley, B.E. Suzek, et al. 2003. The protein information resource. Nucleic Acids Research, 31(1):345.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

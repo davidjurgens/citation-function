@@ -1,0 +1,1630 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.009736">
+<title confidence="0.98423">
+Discriminative Learning of Selectional Preference from Unlabeled Text
+</title>
+<author confidence="0.99872">
+Shane Bergsma Dekang Lin Randy Goebel
+</author>
+<affiliation confidence="0.997475">
+Department of Computing Science Google, Inc. Department of Computing Science
+University of Alberta 1600 Amphitheatre Parkway University of Alberta
+</affiliation>
+<address confidence="0.759249">
+Edmonton, Alberta Mountain View Edmonton, Alberta
+Canada, T6G 2E8 California, 94301 Canada, T6G 2E8
+</address>
+<email confidence="0.999305">
+bergsma@cs.ualberta.ca lindek@google.com goebel@cs.ualberta.ca
+</email>
+<sectionHeader confidence="0.995645" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999899764705882">
+We present a discriminative method for learn-
+ing selectional preferences from unlabeled
+text. Positive examples are taken from ob-
+served predicate-argument pairs, while nega-
+tives are constructed from unobserved combi-
+nations. We train a Support Vector Machine
+classifier to distinguish the positive from the
+negative instances. We show how to parti-
+tion the examples for efficient training with
+57 thousand features and 6.5 million training
+instances. The model outperforms other re-
+cent approaches, achieving excellent correla-
+tion with human plausibility judgments. Com-
+pared to Mutual Information, it identifies 66%
+more verb-object pairs in unseen text, and re-
+solves 37% more pronouns correctly in a pro-
+noun resolution experiment.
+</bodyText>
+<sectionHeader confidence="0.998993" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999886266666667">
+Selectional preferences (SPs) tell us which argu-
+ments are plausible for a particular predicate. For
+example, Table 2 (Section 4.4) lists plausible and
+implausible direct objects (arguments) for particu-
+lar verbs (predicates). SPs can help resolve syntac-
+tic, word sense, and reference ambiguity (Clark and
+Weir, 2002), and so gathering them has received a
+lot of attention in the NLP community.
+One way to determine SPs is from co-occurrences
+of predicates and arguments in text. Unfortunately,
+no matter how much text we use, many acceptable
+pairs will be missing. Bikel (2004) found that only
+1.49% of the bilexical dependencies considered by
+Collins’ parser during decoding were observed dur-
+ing training. In our parsed corpus (Section 4.1),
+</bodyText>
+<page confidence="0.982693">
+59
+</page>
+<bodyText confidence="0.999985882352941">
+for example, we find eat with nachos, burritos, and
+tacos, but not with the equally tasty quesadillas,
+chimichangas, or tostadas. Rather than solely re-
+lying on co-occurrence counts, we would like to use
+them to generalize to unseen pairs.
+In particular, we would like to exploit a number
+of arbitrary and potentially overlapping properties
+of predicates and arguments when we assign SPs.
+We do this by representing these properties as fea-
+tures in a linear classifier, and training the weights
+using discriminative learning. Positive examples
+are taken from observed predicate-argument pairs,
+while pseudo-negatives are constructed from unob-
+served combinations. We train a Support Vector Ma-
+chine (SVM) classifier to distinguish the positives
+from the negatives. We refer to our model’s scores
+as Discriminative Selectional Preference (DSP). By
+creating training vectors automatically, DSP enjoys
+all the advantages of supervised learning, but with-
+out the need for manual annotation of examples.
+We evaluate DSP on the task of assigning verb-
+object selectional preference. We encode a noun’s
+textual distribution as feature information. The
+learned feature weights are linguistically interesting,
+yielding high-quality similar-word lists as latent in-
+formation. Despite its representational power, DSP
+scales to real-world data sizes: examples are parti-
+tioned by predicate, and a separate SVM is trained
+for each partition. This allows us to efficiently learn
+with over 57 thousand features and 6.5 million ex-
+amples. DSP outperforms recently proposed alterna-
+tives in a range of experiments, and better correlates
+with human plausibility judgments. It also shows
+strong gains over a Mutual Information-based co-
+</bodyText>
+<note confidence="0.8208285">
+Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 59–68,
+Honolulu, October 2008. c�2008 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.972534333333333">
+occurrence model on two tasks: identifying objects
+of verbs in an unseen corpus and finding pronominal
+antecedents in coreference data.
+</bodyText>
+<sectionHeader confidence="0.999251" genericHeader="related work">
+2 Related Work
+</sectionHeader>
+<bodyText confidence="0.999922476190476">
+Most approaches to SPs generalize from observed
+predicate-argument pairs to semantically similar
+ones by modeling the semantic class of the argu-
+ment, following Resnik (1996). For example, we
+might have a class Mexican Food and learn that the
+entire class is suitable for eating. Usually, the classes
+are from WordNet (Miller et al., 1990), although
+they can also be inferred from clustering (Rooth et
+al., 1999). Brockmann and Lapata (2003) compare
+a number of WordNet-based approaches, including
+Resnik (1996), Li and Abe (1998), and Clark and
+Weir (2002), and found that the more sophisticated
+class-based approaches do not always outperform
+simple frequency-based models.
+Another line of research generalizes using simi-
+lar words. Suppose we are calculating the proba-
+bility of a particular noun, n, occurring as the ob-
+ject argument of a given verbal predicate, v. Let
+Pr(n|v) be the empirical maximum-likelihood esti-
+mate from observed text. Dagan et al. (1999) define
+the similarity-weighted probability, PrSIM, to be:
+</bodyText>
+<equation confidence="0.9846695">
+�PrSIM(n|v) � Sim(v′, v)Pr(n|v′) (1)
+v′∈SIMS(v)
+</equation>
+<bodyText confidence="0.9999485">
+where Sim(v′, v) returns a real-valued similarity be-
+tween two verbs v′ and v (normalized over all pair
+similarities in the sum). In contrast, Erk (2007)
+generalizes by substituting similar arguments, while
+Wang et al. (2005) use the cross-product of simi-
+lar pairs. One key issue is how to define the set
+of similar words, SIMS(w). Erk (2007) compared a
+number of techniques for creating similar-word sets
+and found that both the Jaccard coefficient and Lin
+(1998a)’s information-theoretic metric work best.
+Similarity-smoothed models are simple to compute,
+potentially adaptable to new domains, and require
+no manually-compiled resources such as WordNet.
+Selectional Preferences have also been a recent
+focus of researchers investigating the learning of
+paraphrases and inference rules (Pantel et al., 2007;
+Roberto et al., 2007). Inferences such as “[X wins
+Y] ⇒ [X plays Y]” are only valid for certain argu-
+ments X and Y. We follow Pantel et al. (2007) in us-
+ing automatically-extracted semantic classes to help
+characterize plausible arguments.
+Discriminative techniques are widely used in NLP
+and have been applied to the related tasks of word
+prediction and language modeling. Even-Zohar and
+Roth (2000) use a classifier to predict the most likely
+word to fill a position in a sentence (in their ex-
+periments: a verb) from a set of candidates (sets
+of verbs), by inspecting the context of the target
+token (e.g., the presence or absence of a particu-
+lar nearby word in the sentence). This approach
+can therefore learn which specific arguments occur
+with a particular predicate. In comparison, our fea-
+tures are second-order: we learn what kinds of argu-
+ments occur with a predicate by encoding features
+of the arguments. Recent distributed and latent-
+variable models also represent words with feature
+vectors (Bengio et al., 2003; Blitzer et al., 2005).
+Many of these approaches learn both the feature
+weights and the feature representation. Vectors must
+be kept low-dimensional for tractability, while learn-
+ing and inference on larger scales is impractical. By
+partitioning our examples by predicate, we can effi-
+ciently use high-dimensional, sparse vectors.
+Our technique of generating negative examples
+is similar to the approach of Okanohara and Tsujii
+(2007). They learn a classifier to disambiguate ac-
+tual sentences from pseudo-negative examples sam-
+pled from an N-gram language model. Smith and
+Eisner (2005) also automatically generate negative
+examples. They perturb their input sequence (e.g.
+the sentence word order) to create a neighborhood of
+implicit negative evidence. We create negatives by
+substitution rather than perturbation, and use corpus-
+wide statistics to choose our negative instances.
+</bodyText>
+<sectionHeader confidence="0.999706" genericHeader="method">
+3 Methodology
+</sectionHeader>
+<subsectionHeader confidence="0.999971">
+3.1 Creating Examples
+</subsectionHeader>
+<bodyText confidence="0.99979625">
+To learn a discriminative model of selectional pref-
+erence, we create positive and negative training ex-
+amples automatically from raw text. To create the
+positives, we automatically parse a large corpus, and
+then extract the predicate-argument pairs that have
+a statistical association in this data. We measure
+this association using pointwise Mutual Information
+(MI) (Church and Hanks, 1990). The MI between a
+</bodyText>
+<page confidence="0.980004">
+60
+</page>
+<bodyText confidence="0.787286">
+verb predicate, v, and its object argument, n, is:
+</bodyText>
+<equation confidence="0.994063">
+Pr(v, n) Pr(n|v)
+MI(v, n) =log Pr(v)Pr(n) =log Pr(n) (2)
+</equation>
+<bodyText confidence="0.999799646153847">
+If MI&gt;0, the probability v and n occur together is
+greater than if they were independently distributed.
+We create sets of positive and negative examples
+separately for each predicate, v. First, we extract all
+pairs where MI(v, n)&gt;T as positives. For each pos-
+itive, we create pseudo-negative examples, (v, n′),
+by pairing v with a new argument, n′, that either has
+MI below the threshold or did not occur with v in the
+corpus. We require each negative n′ to have a similar
+frequency to its corresponding n. This prevents our
+learning algorithm from focusing on any accidental
+frequency-based bias. We mix in K negatives for
+each positive, sampling without replacement to cre-
+ate all the negatives for a particular predicate. For
+each v, 1
+K�1 of its examples will be positive. The
+threshold T represents a trade-off between capturing
+a large number of positive pairs and ensuring these
+pairs have good association. Similarly, K is a trade-
+off between the number of examples and the com-
+putational efficiency. Ultimately, these parameters
+should be optimized for task performance.
+Of course, some negatives will actually be plau-
+sible arguments that were unobserved due to sparse-
+ness. Fortunately, modern discriminative methods
+like soft-margin SVMs can learn in the face of label
+error by allowing slack, subject to a tunable regular-
+ization penalty (Cortes and Vapnik, 1995).
+If MI is a sparse and imperfect model of SP, what
+can DSP gain by training on MI’s scores? We can
+regard DSP as learning a view of SP that is or-
+thogonal to MI, in a co-training sense (Blum and
+Mitchell, 1998). MI labels the data based solely
+on co-occurrence; DSP uses these labels to iden-
+tify other regularities – ones that extend beyond co-
+occurring words. For example, many instances of
+n where MI(eat, n)&gt;T also have MI(buy, n)&gt;T and
+MI(cook, n)&gt;T. Also, compared to other nouns,
+a disproportionate number of eat-nouns are lower-
+case, single-token words, and they rarely contain
+digits, hyphens, or begin with a human first name
+like Bob. DSP encodes these interdependent prop-
+erties as features in a linear classifier. This classi-
+fier can score any noun as a plausible argument of
+eat if indicative features are present; MI can only
+assign high plausibility to observed (eat,n) pairs.
+Similarity-smoothed models can make use of the
+regularities across similar verbs, but not the finer-
+grained string- and token-based features.
+Our training examples are similar to the data cre-
+ated for pseudodisambiguation, the usual evalua-
+tion task for SP models (Erk, 2007; Keller and La-
+pata, 2003; Rooth et al., 1999). This data con-
+sists of triples (v, n, n′) where v, n is a predicate-
+argument pair observed in the corpus and v, n′ has
+not been observed. The models score correctly
+if they rank observed (and thus plausible) argu-
+ments above corresponding unobserved (and thus
+likely implausible) ones. We refer to this as Pair-
+wise Disambiguation. Unlike this task, we classify
+each predicate-argument pair independently as plau-
+sible/implausible. We also use MI rather than fre-
+quency to define the positive pairs, ensuring that the
+positive pairs truly have a statistical association, and
+are not simply the result of parser error or noise.1
+</bodyText>
+<subsectionHeader confidence="0.994985">
+3.2 Partitioning for Efficient Training
+</subsectionHeader>
+<bodyText confidence="0.964774538461538">
+After creating our positive and negative training
+pairs, we must select a feature representation for our
+examples. Let 4) be a mapping from a predicate-
+argument pair (v, n) to a feature vector, 4) :
+(v, n) —* (O1...Ok). Predictions are made based
+on a weighted combination of the features, y =
+A · 4)(v, n), where A is our learned weight vector.
+We can make training significantly more efficient
+by using a special form of attribute-value features.
+Let every feature Oi be of the form Oi(v, n) = (v =
+v� n f(n)). That is, every feature is an intersection of
+the occurrence of a particular predicate, v, and some
+feature of the argument f(n). For example, a fea-
+ture for a verb-object pair might be, “the verb is eat
+and the object is lower-case.” In this representation,
+features for one predicate will be completely inde-
+pendent from those for every other predicate. Thus
+rather than a single training procedure, we can actu-
+ally partition the examples by predicate, and train a
+1For a fixed verb, MI is proportional to Keller and Lapata
+(2003)’s conditional probability scores for pseudodisambigua-
+tion of (v, n, n′) triples: Pr(v|n) = Pr(v, n)/Pr(n), which was
+shown to be a better measure of association than co-occurrence
+frequency f(v, n). Normalizing by Pr(v) (yielding MI) allows
+us to use a constant threshold across all verbs. MI was also
+recently used for inference-rule SPs by Pantel et al. (2007).
+</bodyText>
+<page confidence="0.996144">
+61
+</page>
+<bodyText confidence="0.999991285714286">
+classifier for each predicate independently. The pre-
+diction becomes yv = Av · 4)v(n), where Av are the
+learned weights corresponding to predicate v and all
+features 4)v(n)=f(n) depend on the argument only.
+Some predicate partitions may have insufficient
+examples for training. Also, a predicate may oc-
+cur in test data that was unseen during training. To
+handle these instances, we decided to cluster low-
+frequency predicates. In our experiments assigning
+SP to verb-object pairs, we cluster all verbs that have
+less than 250 positive examples, using clusters gen-
+erated by the CBC algorithm (Pantel and Lin, 2002).
+For example, the low-frequency verbs incarcerate,
+parole, and court-martial are all mapped to the same
+partition, while more-frequent verbs like arrest and
+execute each have their own partition. About 5.5%
+of examples are clustered, corresponding to 30% of
+the 7367 total verbs. 40% of verbs (but only 0.6% of
+examples) were not in any CBC cluster; these were
+mapped to a single backoff partition.
+The parameters for each partition, Av, can be
+trained with any supervised learning technique. We
+use SVM (Section 4.1) because it is effective in simi-
+lar high-dimensional, sparse-vector settings, and has
+an efficient implementation (Joachims, 1999). In
+SVM, the sign of yv gives the classification. We can
+also use the scalar yv as our DSP score (i.e. the posi-
+tive distance from the separating SVM hyperplane).
+</bodyText>
+<subsectionHeader confidence="0.967924">
+3.3 Features
+</subsectionHeader>
+<bodyText confidence="0.9997575">
+This section details our argument features, f(n), for
+assigning verb-object selectional preference. For a
+verb predicate (or partition) v and object argument
+n, the form of our classifier is yv = Ei Avi fi(n).
+</bodyText>
+<subsectionHeader confidence="0.790635">
+3.3.1 Verb co-occurrence
+</subsectionHeader>
+<bodyText confidence="0.9999904">
+We provide features for the empirical probability
+of the noun occurring as the object argument of other
+verbs, Pr(n|v′). If we were to only use these features
+(indexing the feature weights by each verb v′), the
+form of our classifier would be:
+</bodyText>
+<equation confidence="0.955664">
+�yv = Avv′Pr(n|v′) (3)
+v′
+</equation>
+<bodyText confidence="0.999983">
+Note the similarity between Equation (3) and Equa-
+tion (1). Now the feature weights, Avv′, take the role
+of the similarity function, Sim(v′, v). Unlike Equa-
+tion (1), however, these weights are not set by an
+external similarity algorithm, but are optimized to
+discriminate the positive and negative training ex-
+amples. We need not restrict ourselves to a short list
+of similar verbs; we include Probj(n|v′) features for
+every verb that occurs more than 10 times in our cor-
+pus. Avv′ may be positive or negative, depending on
+the relation between v′ and v. We also include fea-
+tures for the probability of the noun occurring as the
+subject of other verbs, Prs,,bj(n|v′). For example,
+nouns that can be the object of eat will also occur as
+the subject of taste and contain. Other contexts, such
+as adjectival and nominal predicates, could also aid
+the prediction, but have not yet been investigated.
+The advantage of tuning similarity to the appli-
+cation of interest has been shown previously by
+Weeds and Weir (2005). They optimize a few meta-
+parameters separately for the tasks of thesaurus gen-
+eration and pseudodisambiguation. Our approach,
+on the other hand, discriminatively sets millions of
+individual similarity values. Like Weeds and Weir
+(2005), our similarity values are asymmetric.
+</bodyText>
+<subsectionHeader confidence="0.931703">
+3.3.2 String-based
+</subsectionHeader>
+<bodyText confidence="0.9999913">
+We include several simple character-based fea-
+tures of the noun string: the number of tokens, the
+case, and whether it contains digits, hyphens, an
+apostrophe, or other punctuation. We also include a
+feature for the first and last token, and fire indicator
+features if any token in the noun occurs on in-house
+lists of given names, family names, cities, provinces,
+countries, corporations, languages, etc. We also fire
+a feature if a token is a corporate designation (like
+inc. or ltd.) or a human one (like Mr. or Sheik).
+</bodyText>
+<subsectionHeader confidence="0.860318">
+3.3.3 Semantic classes
+</subsectionHeader>
+<bodyText confidence="0.990143083333333">
+Motivated by previous SP models that make use
+of semantic classes, we generated word clusters us-
+ing CBC (Pantel and Lin, 2002) on a 10 GB corpus,
+giving 3620 clusters. If a noun belongs in a cluster,
+a corresponding feature fires. If a noun is in none of
+the clusters, a no-class feature fires.
+As an example, CBC cluster 1891 contains:
+sidewalk, driveway, roadway, footpath,
+bridge, highway, road, runway, street, alley,
+path, Interstate, ...
+In our training data, we have examples like widen
+highway, widen road and widen motorway. If we
+</bodyText>
+<page confidence="0.996321">
+62
+</page>
+<bodyText confidence="0.999931875">
+see that we can widen a highway, we learn that we
+can also widen a sidewalk, bridge, runway, etc.
+We also made use of the person-name/instance
+pairs automatically extracted by Fleischman et al.
+(2003).2 This data provides counts for pairs such
+as “Edwin Moses, hurdler” and “William Farley, in-
+dustrialist.” We have features for all concepts and
+therefore learn their association with each verb.
+</bodyText>
+<sectionHeader confidence="0.998051" genericHeader="evaluation">
+4 Experiments and Results
+</sectionHeader>
+<subsectionHeader confidence="0.997421">
+4.1 Set up
+</subsectionHeader>
+<bodyText confidence="0.999988171428572">
+We parsed the 3 GB AQUAINT corpus (Voorhees,
+2002) using Minipar (Lin, 1998b), and collected
+verb-object and verb-subject frequencies, building
+an empirical MI model from this data. Verbs and
+nouns were converted to their (possibly multi-token)
+root, and string case was preserved. Passive sub-
+jects (the car was bought) were converted to objects
+(bought car). We set the MI-threshold, T, to be 0,
+and the negative-to-positive ratio, K, to be 2.
+Numerous previous pseudodisambiguation evalu-
+ations only include arguments that occur between 30
+and 3000 times (Erk, 2007; Keller and Lapata, 2003;
+Rooth et al., 1999). Presumably the lower bound is
+to help ensure the negative argument is unobserved
+because it is unsuitable, not because of data sparse-
+ness. We wish to use our model on arguments of
+any frequency, including those that never occurred
+in the training corpus (and therefore have empty co-
+occurrence features (Section 3.3.1)). We proceed as
+follows: first, we exclude pairs whenever the noun
+occurs less than 3 times in our corpus, removing
+many misspellings and other noun noise. Next, we
+omit verb co-occurrence features for nouns that oc-
+cur less than 10 times, and instead fire a low-count
+feature. When we move to a new corpus, previously-
+unseen nouns are treated like these low-count train-
+ing nouns.
+This processing results in a set of 6.8 million
+pairs, divided into 2318 partitions (192 of which
+are verb clusters (Section 3.2)). For each parti-
+tion, we take 95% of the examples for training,
+2.5% for development and 2.5% for a final unseen
+test set. We provide full results for two models:
+DSP,oo, which only uses the verb co-occurrence fea-
+tures, and DSPall which uses all the features men-
+</bodyText>
+<footnote confidence="0.990693">
+2Available at http://www.mit.edu/˜mbf/instances.txt.gz
+</footnote>
+<bodyText confidence="0.999722">
+tioned in Section 3.3. Feature values are normalized
+within each feature type. We train our (linear kernel)
+discriminative models using SVMl�ght (Joachims,
+1999) on each partition, but set meta-parameters C
+(regularization) and j (cost of positive vs. nega-
+tive misclassifications: max at j=2) on the macro-
+averaged score across all development partitions.
+Note that we can not use the development set to op-
+timize T and K because the development examples
+are obtained after setting these values.
+</bodyText>
+<subsectionHeader confidence="0.97857">
+4.2 Feature weights
+</subsectionHeader>
+<bodyText confidence="0.997306666666667">
+It is interesting to inspect the feature weights re-
+turned by our system. In particular, the weights
+on the verb co-occurrence features (Section 3.3.1)
+provide a high-quality, argument-specific similarity-
+ranking of other verb contexts. The DSP parameters
+for eat, for example, place high weight on features
+like Pr(nlbraise), Pr(nlration), and Pr(nlgarnish).
+Lin (1998a)’s similar word list for eat misses these
+but includes sleep (ranked 6) and sit (ranked 14), be-
+cause these have similar subjects to eat. Discrimina-
+tive, context-specific training seems to yield a bet-
+ter set of similar predicates, e.g. the highest-ranked
+contexts for DSP„oo, on the verb join,3
+lead 1.42, rejoin 1.39, form 1.34, belong to
+1.31, found 1.31, quit 1.29, guide 1.19, induct
+1.19, launch (subj) 1.18, work at 1.14
+give a better SIMS(join) for Equation (1) than the
+top similarities returned by (Lin, 1998a):
+participate 0.164, lead 0.150, return to 0.148,
+say 0.143, rejoin 0.142, sign 0.142, meet
+0.142, include 0.141, leave 0.140, work 0.137
+Other features are also weighted intuitively. Note
+that case is a strong indicator for some arguments,
+for example the weight on being lower-case is high
+for become (0.972) and eat (0.505), but highly nega-
+tive for accuse (-0.675) and embroil (-0.573) which
+often take names of people and organizations.
+</bodyText>
+<subsectionHeader confidence="0.99531">
+4.3 Pseudodisambiguation
+</subsectionHeader>
+<bodyText confidence="0.9989125">
+We first evaluate DSP on disambiguating posi-
+tives from pseudo-negatives, comparing to recently-
+</bodyText>
+<footnote confidence="0.938218333333333">
+3Which all correspond to nouns occurring in the object po-
+sition of the verb (e.g. Probj(n|lead)), except “launch (subj)”
+which corresponds to Pr3ubj(n|launch).
+</footnote>
+<page confidence="0.997312">
+63
+</page>
+<table confidence="0.998264428571429">
+System MacroAvg MicroAvg F Pairwise
+P R F P R Acc Cov
+Dagan et al. (1999) 0.36 0.90 0.51 0.68 0.92 0.78 0.58 0.98
+Erk (2007) 0.49 0.66 0.56 0.70 0.82 0.76 0.72 0.83
+Keller and Lapata (2003) 0.72 0.34 0.46 0.80 0.50 0.62 0.80 0.57
+DSPcooc 0.53 0.72 0.61 0.73 0.94 0.82 0.77 1.00
+DSPall 0.60 0.71 0.65 0.77 0.90 0.83 0.81 1.00
+</table>
+<tableCaption confidence="0.9948815">
+Table 1: Pseudodisambiguation results averaged across each example (MacroAvg), weighted by word frequency (Mi-
+croAvg), plus coverage and accuracy of pairwise competition (Pairwise).
+</tableCaption>
+<bodyText confidence="0.999613833333333">
+proposed systems that also require no manually-
+compiled resources like WordNet. We convert Da-
+gan et al. (1999)’s similarity-smoothed probability
+to MI by replacing the empirical Pr(nlv) in Equa-
+tion (2) with the smoothed PrSIM from Equation (1).
+We also test an MI model inspired by Erk (2007):
+</bodyText>
+<equation confidence="0.97308">
+�MISIM(n, v) = log Sim(n′, n) Pr(v, n′)
+n′∈SIMS(n) Pr(v)Pr(n′)
+</equation>
+<bodyText confidence="0.911405476190477">
+We gather similar words using Lin (1998a), mining
+similar verbs from a comparable-sized parsed cor-
+pus, and collecting similar nouns from a broader 10
+GB corpus of English text.4
+We also use Keller and Lapata (2003)’s approach
+to obtaining web-counts. Rather than mining parse
+trees, this technique retrieves counts for the pattern
+“V Det N” in raw online text, where V is any in-
+flection of the verb, Det is the, a, or the empty
+string, and N is the singular or plural form of the
+noun. We compute a web-based MI by collecting
+Pr(n, v), Pr(n), and Pr(v) using all inflections, ex-
+cept we only use the root form of the noun. Rather
+than using a search engine, we obtain counts from
+the Google Web 5-gram Corpus.5
+All systems are thresholded at zero to make a clas-
+sification. Unlike DSP, the comparison systems may
+4For both the similar-noun and similar-verb smoothing, we
+only smooth over similar pairs that occurred in the corpus.
+While averaging over all similar pairs tends to underestimate
+the probability, averaging over only the observed pairs tends to
+overestimate it. We tested both and adopt the latter because it
+resulted in better performance on our development set.
+5Available from the LDC as LDC2006T13. This collection
+was generated from approximately 1 trillion tokens of online
+text. Unfortunately, tokens appearing less than 200 times have
+been mapped to the (UNK) symbol, and only N-grams appear-
+ing more than 40 times are included. Unlike results from search
+engines, however, experiments with this corpus are replicable.
+not be able to provide a score for each example.
+The similarity-smoothed examples will be undefined
+if SIMS(w) is empty. Also, the Keller and Lapata
+(2003) approach will be undefined if the pair is un-
+observed on the web. As a reasonable default for
+these cases, we assign them a negative decision.
+We evaluate disambiguation using precision (P),
+recall (R), and their harmonic mean, F-Score (F).
+Table 1 gives the results of our comparison. In the
+MacroAvg results, we weight each example equally.
+For MicroAvg, we weight each example by the fre-
+quency of the noun. To more directly compare with
+previous work, we also reproduced Pairwise Disam-
+biguation by randomly pairing each positive with
+one of the negatives and then evaluating each system
+by the percentage it ranks correctly (Acc). For the
+comparison approaches, if one score is undefined,
+we choose the other one. If both are undefined, we
+abstain from a decision. Coverage (Cov) is the per-
+cent of pairs where a decision was made.6
+Our simple system with only verb co-occurrence
+features, DSPcooc, outperforms all comparison ap-
+proaches. Using the richer feature set in DSPall
+results in a statistically significant gain in perfor-
+mance, up to an F-Score of 0.65 and a pairwise
+disambiguation accuracy of 0.81.7 DSPall has both
+broader coverage and better accuracy than all com-
+peting approaches. In the remainder of the experi-
+ments, we use DSPall and refer to it simply as DSP.
+Some errors are because of plausible but unseen
+arguments being used as test-set pseudo-negatives.
+For example, for the verb damage, DSP’s three most
+high-scoring false positives are the nouns jetliner,
+carpet, and gear. While none occur with damage in
+</bodyText>
+<footnote confidence="0.997284666666667">
+6I.e. we use the “half coverage” condition from Erk (2007).
+7The differences between DSPall and all comparison sys-
+tems are statistically significant (McNemar’s test, p&lt;0.01).
+</footnote>
+<page confidence="0.997749">
+64
+</page>
+<figure confidence="0.9833715">
+10 100 1000 10000 100000 1e+06
+Noun Frequency
+</figure>
+<figureCaption confidence="0.999942">
+Figure 1: Disambiguation results by noun frequency.
+</figureCaption>
+<bodyText confidence="0.992494571428571">
+our corpus, all intuitively satisfy the verb’s SPs.
+MacroAvg performance is worse than MicroAvg
+because all systems perform better on frequent
+nouns. When we plot F-Score by noun frequency
+(Figure 1), we see that DSP outperforms comparison
+approaches across all frequencies, but achieves its
+biggest gains on the low-frequency nouns. A richer
+feature set allows DSP to make correct inferences on
+examples that provide minimal co-occurrence data.
+These are also the examples for which we would ex-
+pect co-occurrence models like MI to fail.
+As a further experiment, we re-trained DSP but
+with only the string-based features removed. Overall
+macro-averaged F-score dropped from 0.65 to 0.64
+(a statistically significant reduction in performance).
+The system scored nearly identically to DSP on the
+high-frequency nouns, but performed roughly 15%
+worse on the nouns that occurred less than ten times.
+This shows that the string-based features are impor-
+tant for selectional preference, and particularly help-
+ful for low-frequency nouns.
+</bodyText>
+<subsectionHeader confidence="0.999527">
+4.4 Human Plausibility
+</subsectionHeader>
+<bodyText confidence="0.999458875">
+Table 2 compares some of our systems on data used
+by Resnik (1996) (also Appendix 2 in Holmes et al.
+(1989)). The plausibility of these pairs was initially
+judged based on the experimenters’ intuitions, and
+later confirmed in a human experiment. We include
+the scores of Resnik’s system, and note that its errors
+were attributed to sense ambiguity and other limi-
+tations of class-based approaches (Resnik, 1996).8
+</bodyText>
+<footnote confidence="0.9771715">
+8For example, warn-engine scores highly because engines
+are in the class entity, and physical entities (e.g. people) are
+often objects of warn. Unlike DSP, Resnik’s approach cannot
+learn that for warn, “the property of being a person is more
+</footnote>
+<table confidence="0.9988434">
+Seen Criteria Unseen Verb-Object Freq.
+All = 1 = 2 = 3 &gt; 3
+MI &gt; 0 0.44 0.33 0.57 0.70 0.82
+Freq. &gt; 0 0.57 0.45 0.76 0.89 0.96
+DSP &gt; 0 0.73 0.69 0.80 0.85 0.88
+</table>
+<tableCaption confidence="0.998816">
+Table 3: Recall on identification of Verb-Object pairs
+from an unseen corpus (divided by pair frequency).
+</tableCaption>
+<bodyText confidence="0.99814275">
+The other comparison approaches also make a num-
+ber of mistakes, which can often be traced to a mis-
+guided choice of similar word to smooth with.
+We also compare to our empirical MI model,
+trained on our parsed corpus. Although Resnik
+(1996) reported that 10 of the 16 plausible pairs did
+not occur in his training corpus, all of them occurred
+in ours and hence MI gives very reasonable scores
+on the plausible objects. It has no statistics, however,
+for many of the implausible ones. DSP can make
+finer decisions than MI, recognizing that “warning
+an engine” is more absurd than “judging a climate.”
+</bodyText>
+<subsectionHeader confidence="0.997665">
+4.5 Unseen Verb-Object Identification
+</subsectionHeader>
+<bodyText confidence="0.99904975">
+We next compare MI and DSP on a much larger set
+of plausible examples, and also test how well the
+models generalize across data sets. We took the MI
+and DSP systems trained on AQUAINT and asked
+them to rate observed (and thus likely plausible)
+verb-object pairs taken from an unseen corpus. We
+extracted the pairs by parsing the San Jose Mercury
+News (SJM) section of the TIPSTER corpus (Har-
+man, 1992). Each unique verb-object pair is a single
+instance in this evaluation.
+Table 3 gives recall across all pairs (All) and
+grouped by pair-frequency in the unseen corpus (1,
+2, 3, &gt;3). DSP accepts far more pairs than MI
+(73% vs. 44%), even far more than a system that
+accepts any previously observed verb-object combi-
+nation as plausible (57%). Recall is higher on more
+frequent verb-object pairs, but 70% of the pairs oc-
+curred only once in the corpus. Even if we smooth
+MI by smoothing Pr(n|v) in Equation 2 using modi-
+fied KN-smoothing (Chen and Goodman, 1998), the
+recall of MI&gt;0 on SJM only increases from 44.1%
+to 44.9%, still far below DSP. Frequency-based
+models have fundamentally low coverage. As fur-
+important than the property of being an entity” (Resnik, 1996).
+</bodyText>
+<figure confidence="0.996733846153846">
+DSPall
+Erk (2007)
+Keller and Lapata (2003)
+F-Score 0.9
+0.8
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+0.1
+0
+</figure>
+<page confidence="0.997722">
+65
+</page>
+<table confidence="0.999847117647059">
+Verb Plaus./Implaus. Resnik Dagan et al. Erk MI DSP
+see friend/method 5.79/-0.01 0.20/1.40* 0.46/-0.07 1.11/-0.57 0.98/0.02
+read article/fashion 6.80/-0.20 3.00/0.11 3.80/1.90 4.00/— 2.12/-0.65
+find label/fever 1.10/0.22 1.50/2.20* 0.59/0.01 0.42/0.07 1.61/0.81
+hear story/issue 1.89/1.89* 0.66/1.50* 2.00/2.60* 2.99/-1.03 1.66/0.67
+write letter/market 7.26/0.00 2.50/-0.43 3.60/-0.24 5.06/-4.12 3.08/-1.31
+urge daughter/contrast 1.14/1.86* 0.14/1.60* 1.10/3.60* -0.95/— -0.34/-0.62
+warn driver/engine 4.73/3.61 1.20/0.05 2.30/0.62 2.87/— 2.00/-0.99
+judge contest/climate 1.30/0.28 1.50/1.90* 1.70/1.70* 3.90/— 1.00/0.51
+teach language/distance 1.87/1.86 2.50/1.30 3.60/2.70 3.53/— 1.86/0.19
+show sample/travel 1.44/0.41 1.60/0.14 0.40/-0.82 0.53/-0.49 1.00/-0.83
+expect visit/mouth 0.59/5.93* 1.40/1.50* 1.40/0.37 1.05/-0.65 1.44/-0.15
+answer request/tragedy 4.49/3.88 2.70/1.50 3.10/-0.64 2.93/— 1.00/0.01
+recognize author/pocket 0.50/0.50* 0.03/0.37* 0.77/1.30* 0.48/— 1.00/0.00
+repeat comment/journal 1.23/1.23* 2.30/1.40 2.90/— 2.59/— 1.00/-0.48
+understand concept/session 1.52/1.51 2.70/0.25 2.00/-0.28 3.96/— 2.23/-0.46
+remember reply/smoke 1.31/0.20 2.10/1.20 0.54/2.60* 1.13/-0.06 1.00/-0.42
+</table>
+<tableCaption confidence="0.9856515">
+Table 2: Selectional ratings for plausible/implausible direct objects (Holmes et al., 1989). Mistakes are marked with
+an asterisk (*), undefined scores are marked with a dash (—). Only DSP is completely defined and completely correct.
+</tableCaption>
+<figure confidence="0.97757">
+0 0.2 0.4 0.6 0.8 1
+Recall
+</figure>
+<figureCaption confidence="0.999493">
+Figure 2: Pronoun resolution precision-recall on MUC.
+</figureCaption>
+<bodyText confidence="0.99968625">
+ther evidence, if we build a model of MI on the SJM
+corpus and use it in our pseudodisambiguation ex-
+periment (Section 4.3), MI&gt;0 gets a MacroAvg pre-
+cision of 86% but a MacroAvg recall of only 12%.9
+</bodyText>
+<subsectionHeader confidence="0.996579">
+4.6 Pronoun Resolution
+</subsectionHeader>
+<bodyText confidence="0.998150088235294">
+Finally, we evaluate DSP on a common application
+of selectional preferences: choosing the correct an-
+tecedent for pronouns in text (Dagan and Itai, 1990;
+Kehler et al., 2004). We study the cases where a
+9Recall that even the Keller and Lapata (2003) system, built
+on the world’s largest corpus, achieves only 34% recall (Table 1)
+(with only 48% of positives and 27% of all pairs previously
+observed, but see Footnote 5).
+pronoun is the direct object of a verb predicate, v. A
+pronoun’s antecedent must obey v’s selectional pref-
+erences. If we have a better model of SP, we should
+be able to better select pronoun antecedents.
+We parsed the MUC-7 (1997) coreference corpus
+and extracted all pronouns in a direct object rela-
+tion. For each pronoun, p, modified by a verb, v, we
+extracted all preceding nouns within the current or
+previous sentence. Thirty-nine anaphoric pronouns
+had an antecedent in this window and are used in
+the evaluation. For each p, let N(p)+ by the set of
+preceding nouns coreferent with p, and let N(p)−
+be the remaining non-coreferent nouns. We take
+all (v, n+) where n+ ∈ N(p)+ as positive, and all
+other pairs (v, n−), n− ∈ N(p)− as negative.
+We compare MI and DSP on this set, classifying
+every (v, n) with MI&gt;T (or DSP&gt;T) as positive.
+By varying T, we get a precision-recall curve (Fig-
+ure 2). Precision is low because, of course, there
+are many nouns that satisfy the predicate’s SPs that
+are not coreferent. DSP&gt;0 has both a higher recall
+and higher precision than accepting every pair pre-
+viously seen in text (the right-most point on MI&gt;T).
+The DSP&gt;T system achieves higher precision than
+MI&gt;T for points where recall is greater than 60%
+(where MI&lt;0). Interestingly, the recall of MI&gt;0 is
+</bodyText>
+<figure confidence="0.999629785714286">
+Interpolated Precision
+0.8
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+0.1
+0
+DSP&gt;T
+MI&gt;T
+DSP&gt;0
+MI&gt;0
+</figure>
+<page confidence="0.638117">
+66
+</page>
+<table confidence="0.97095225">
+System Acc
+Most-Recent Noun 17.9%
+Maximum MI 28.2%
+Maximum DSP 38.5%
+</table>
+<tableCaption confidence="0.998301">
+Table 4: Pronoun resolution accuracy on nouns in current
+or previous sentence in MUC.
+</tableCaption>
+<bodyText confidence="0.9999554">
+higher here than it is for general verb-objects (Sec-
+tion 4.5). On the subset of pairs with strong empir-
+ical association (MI&gt;0), MI generally outperforms
+DSP at equivalent recall values.
+We next compare MI and DSP as stand-alone pro-
+noun resolution systems (Table 4). As a standard
+baseline, for each pronoun, we choose the most
+recent noun in text as the pronoun’s antecedent,
+achieving 17.9% resolution accuracy. This baseline
+is quite low because many of the most-recent nouns
+are subjects of the pronoun’s verb phrase, and there-
+fore resolution violates syntactic coreference con-
+straints. If instead we choose the previous noun with
+the highest MI as antecedent, we get an accuracy of
+28.2%, while choosing the previous noun with the
+highest DSP achieves 38.5%. DSP resolves 37%
+more pronouns correctly than MI. We leave as fu-
+ture work a full-scale pronoun resolution system that
+incorporates both MI and DSP as backed-off, inter-
+polated, or separate semantic features.
+</bodyText>
+<sectionHeader confidence="0.998178" genericHeader="conclusions">
+5 Conclusions and Future Work
+</sectionHeader>
+<bodyText confidence="0.999993918918919">
+We have presented a simple, effective model of se-
+lectional preference based on discriminative train-
+ing. Supervised techniques typically achieve higher
+performance than unsupervised models, and we du-
+plicate these gains with DSP. Here, however, these
+gains come at no additional labeling cost, as train-
+ing examples are generated automatically from un-
+labeled text. DSP allows an arbitrary combination of
+features, including verb co-occurrence features that
+yield high-quality similar-word lists as latent output.
+This work only scratches the surface of possible fea-
+ture mining; information from WordNet relations,
+Wikipedia categories, or parallel corpora could also
+provide valuable clues to SP. Also, if any other sys-
+tem were to exceed DSP’s performance, it could also
+be included as one of DSP’s features.
+It would be interesting to expand our co-
+occurrence features, including co-occurrence counts
+across more grammatical relations and using counts
+from external, unparsed corpora like the world wide
+web. We could also reverse the role of noun and verb
+in our training, having verb-specific features and
+discriminating separately for each argument noun.
+The latent information would then be lists of similar
+nouns.
+Finally, note that while we focused on word-word
+co-occurrences, sense-sense SPs can also be learned
+with our algorithm. If our training corpus was sense-
+labeled, we could run our algorithm over the senses
+rather than the words. The resulting model would
+then require sense-tagged input if it were to be used
+within an application like parsing or coreference res-
+olution. Also, like other models of SP, our technique
+can also be used for sense disambiguations: the
+weightings on our semantic class features indicate,
+for a particular noun, which of its senses (classes) is
+most compatible with each verb.
+</bodyText>
+<sectionHeader confidence="0.997316" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.9966315">
+We gratefully acknowledge support from the Natu-
+ral Sciences and Engineering Research Council of
+Canada, the Alberta Ingenuity Fund, and the Alberta
+Informatics Circle of Research Excellence.
+</bodyText>
+<sectionHeader confidence="0.999016" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999901476190476">
+Yoshua Bengio, R´ejean Ducharme, Pascal Vincent, and
+Christian Janvin. 2003. A neural probabilistic lan-
+guage model. Journal ofMachine Learning Research,
+3:1137–1155.
+Daniel M. Bikel. 2004. Intricacies of Collins’ parsing
+model. Computational Linguistics, 30(4):479–511.
+John Blitzer, Amir Globerson, and Fernando Pereira.
+2005. Distributed latent variable models of lexical co-
+occurrences. In AISTATS.
+Avrim Blum and Tom Mitchell. 1998. Combining la-
+beled and unlabeled data with co-training. In Proceed-
+ings of COLT, pages 92–100.
+Carsten Brockmann and Mirella Lapata. 2003. Evalu-
+ating and combining approaches to selectional prefer-
+ence acquisition. In EACL, pages 27–34.
+Stanley F. Chen and Joshua Goodman. 1998. An empir-
+ical study of smoothing techniques for language mod-
+eling. TR-10-98, Harvard University.
+Kenneth Ward Church and Patrick Hanks. 1990. Word
+association norms, mutual information, and lexicogra-
+phy. Computational Linguistics, 16(1):22–29.
+</reference>
+<page confidence="0.988347">
+67
+</page>
+<reference confidence="0.99994505952381">
+Stephen Clark and David Weir. 2002. Class-based prob-
+ability estimation using a semantic hierarchy. Compu-
+tational Linguistics, 28(2):187–206.
+Corinna Cortes and Vladimir Vapnik. 1995. Support-
+vector networks. Machine Learning, 20(3):273–297.
+Ido Dagan and Alan Itai. 1990. Automatic processing of
+large corpora for the resolution of anaphora references.
+In COLING, volume 3, pages 330–332.
+Ido Dagan, Lillian Lee, and Fernando C. N. Pereira.
+1999. Similarity-based models of word cooccurrence
+probabilities. Machine Learning, 34(1-3):43–69.
+Katrin Erk. 2007. A simple, similarity-based model for
+selectional preference. In ACL, pages 216–223.
+Yair Even-Zohar and Dan Roth. 2000. A classification
+approach to word prediction. In NAACL, pages 124–
+131.
+Michael Fleischman, Eduard Hovy, and Abdessamad
+Echihabi. 2003. Offline strategies for online question
+answering: answering questions before they are asked.
+In ACL, pages 1–7.
+Donna Harman. 1992. The DARPA TIPSTER project.
+ACM SIGIR Forum, 26(2):26–28.
+Virginia M. Holmes, Laurie Stowe, and Linda Cupples.
+1989. Lexical expectations in parsing complement-
+verb sentences. Journal of Memory and Language,
+28:668–689.
+Thorsten Joachims. 1999. Making large-scale Support
+Vector Machine learning practical. In B. Sch¨olkopf
+and C. Burges, editors, Advances in Kernel Methods:
+Support Vector Machines, pages 169–184. MIT-Press.
+Andrew Kehler, Douglas Appelt, Lara Taylor, and Alek-
+sandr Simma. 2004. The (non)utility of predicate-
+argument frequencies for pronoun interpretation. In
+HLT/NAACL, pages 289–296.
+Frank Keller and Mirella Lapata. 2003. Using the web to
+obtain frequencies for unseen bigrams. Computational
+Linguistics, 29(3):459–484.
+Hang Li and Naoki Abe. 1998. Generalizing case frames
+using a thesaurus and the MDL principle. Computa-
+tional Linguistics, 24(2):217–244.
+Dekang Lin. 1998a. Automatic retrieval and clustering
+of similar words. In COLING-ACL, pages 768–773.
+Dekang Lin. 1998b. Dependency-based evaluation of
+MINIPAR. In LREC Workshop on the Evaluation of
+Parsing Systems.
+George A. Miller, Richard Beckwith, Christiane Fell-
+baum, Derek Gross, and Katherine J. Miller. 1990.
+Introduction to WordNet: an on-line lexical database.
+International Journal ofLexicography, 3(4):235–244.
+MUC-7. 1997. Coreference task definition (v3.0, 13 Jul
+97). In Proceedings of the Seventh Message Under-
+standing Conference (MUC-7).
+Daisuke Okanohara and Jun’ichi Tsujii. 2007. A
+discriminative language model with pseudo-negative
+samples. In ACL, pages 73–80.
+Patrick Pantel and Dekang Lin. 2002. Discovering word
+senses from text. In KDD, pages 613–619.
+Patrick Pantel, Rahul Bhagat, Bonaventura Coppola,
+Timothy Chklovski, and Eduard Hovy. 2007. ISP:
+Learning inferential selectional preferences. In
+NAACL-HLT, pages 564–571.
+Philip Resnik. 1996. Selectional constraints: An
+information-theoretic model and its computational re-
+alization. Cognition, 61:127–159.
+Basili Roberto, Diego De Cao, Paolo Marocco, and
+Marco Pennacchiotti. 2007. Learning selectional
+preferences for entailment or paraphrasing rules. In
+RANLP.
+Mats Rooth, Stefan Riezler, Detlef Prescher, Glenn Car-
+roll, and Franz Beil. 1999. Inducing a semantically
+annotated lexicon via EM-based clustering. In ACL,
+pages 104–111.
+Noah A. Smith and Jason Eisner. 2005. Contrastive esti-
+mation: training log-linear models on unlabeled data.
+In ACL, pages 354–362.
+Ellen Voorhees. 2002. Overview of the TREC 2002
+question answering track. In Proceedings of the
+Eleventh Text REtrieval Conference (TREC).
+Qin Iris Wang, Dale Schuurmans, and Dekang Lin. 2005.
+Strictly lexical dependency parsing. In International
+Workshop on Parsing Technologies, pages 152–159.
+Julie Weeds and David Weir. 2005. Co-occurrence re-
+trieval: a flexible framework for lexical distributional
+similarity. Computational Linguistics, 31(4):439–475.
+</reference>
+<page confidence="0.999447">
+68
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.850095">
+<title confidence="0.999067">Discriminative Learning of Selectional Preference from Unlabeled Text</title>
+<author confidence="0.999993">Shane Bergsma Dekang Lin Randy Goebel</author>
+<affiliation confidence="0.9997575">Department of Computing Science Google, Inc. Department of Computing Science University of Alberta 1600 Amphitheatre Parkway University of Alberta</affiliation>
+<address confidence="0.9458985">Edmonton, Alberta Mountain View Edmonton, Alberta Canada, T6G 2E8 California, 94301 Canada, T6G 2E8</address>
+<email confidence="0.982915">bergsma@cs.ualberta.calindek@google.comgoebel@cs.ualberta.ca</email>
+<abstract confidence="0.998263555555555">We present a discriminative method for learning selectional preferences from unlabeled text. Positive examples are taken from observed predicate-argument pairs, while negatives are constructed from unobserved combinations. We train a Support Vector Machine classifier to distinguish the positive from the negative instances. We show how to partition the examples for efficient training with 57 thousand features and 6.5 million training instances. The model outperforms other recent approaches, achieving excellent correlation with human plausibility judgments. Compared to Mutual Information, it identifies 66% more verb-object pairs in unseen text, and resolves 37% more pronouns correctly in a pronoun resolution experiment.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Yoshua Bengio</author>
+<author>R´ejean Ducharme</author>
+<author>Pascal Vincent</author>
+<author>Christian Janvin</author>
+</authors>
+<title>A neural probabilistic language model.</title>
+<date>2003</date>
+<journal>Journal ofMachine Learning Research,</journal>
+<pages>3--1137</pages>
+<contexts>
+<context position="6841" citStr="Bengio et al., 2003" startWordPosition="1030" endWordPosition="1033">se a classifier to predict the most likely word to fill a position in a sentence (in their experiments: a verb) from a set of candidates (sets of verbs), by inspecting the context of the target token (e.g., the presence or absence of a particular nearby word in the sentence). This approach can therefore learn which specific arguments occur with a particular predicate. In comparison, our features are second-order: we learn what kinds of arguments occur with a predicate by encoding features of the arguments. Recent distributed and latentvariable models also represent words with feature vectors (Bengio et al., 2003; Blitzer et al., 2005). Many of these approaches learn both the feature weights and the feature representation. Vectors must be kept low-dimensional for tractability, while learning and inference on larger scales is impractical. By partitioning our examples by predicate, we can efficiently use high-dimensional, sparse vectors. Our technique of generating negative examples is similar to the approach of Okanohara and Tsujii (2007). They learn a classifier to disambiguate actual sentences from pseudo-negative examples sampled from an N-gram language model. Smith and Eisner (2005) also automatica</context>
+</contexts>
+<marker>Bengio, Ducharme, Vincent, Janvin, 2003</marker>
+<rawString>Yoshua Bengio, R´ejean Ducharme, Pascal Vincent, and Christian Janvin. 2003. A neural probabilistic language model. Journal ofMachine Learning Research, 3:1137–1155.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Daniel M Bikel</author>
+</authors>
+<date>2004</date>
+<journal>Intricacies of Collins’ parsing model. Computational Linguistics,</journal>
+<volume>30</volume>
+<issue>4</issue>
+<contexts>
+<context position="1746" citStr="Bikel (2004)" startWordPosition="250" endWordPosition="251">solution experiment. 1 Introduction Selectional preferences (SPs) tell us which arguments are plausible for a particular predicate. For example, Table 2 (Section 4.4) lists plausible and implausible direct objects (arguments) for particular verbs (predicates). SPs can help resolve syntactic, word sense, and reference ambiguity (Clark and Weir, 2002), and so gathering them has received a lot of attention in the NLP community. One way to determine SPs is from co-occurrences of predicates and arguments in text. Unfortunately, no matter how much text we use, many acceptable pairs will be missing. Bikel (2004) found that only 1.49% of the bilexical dependencies considered by Collins’ parser during decoding were observed during training. In our parsed corpus (Section 4.1), 59 for example, we find eat with nachos, burritos, and tacos, but not with the equally tasty quesadillas, chimichangas, or tostadas. Rather than solely relying on co-occurrence counts, we would like to use them to generalize to unseen pairs. In particular, we would like to exploit a number of arbitrary and potentially overlapping properties of predicates and arguments when we assign SPs. We do this by representing these properties</context>
+</contexts>
+<marker>Bikel, 2004</marker>
+<rawString>Daniel M. Bikel. 2004. Intricacies of Collins’ parsing model. Computational Linguistics, 30(4):479–511.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>John Blitzer</author>
+<author>Amir Globerson</author>
+<author>Fernando Pereira</author>
+</authors>
+<title>Distributed latent variable models of lexical cooccurrences.</title>
+<date>2005</date>
+<booktitle>In AISTATS.</booktitle>
+<contexts>
+<context position="6864" citStr="Blitzer et al., 2005" startWordPosition="1034" endWordPosition="1037">edict the most likely word to fill a position in a sentence (in their experiments: a verb) from a set of candidates (sets of verbs), by inspecting the context of the target token (e.g., the presence or absence of a particular nearby word in the sentence). This approach can therefore learn which specific arguments occur with a particular predicate. In comparison, our features are second-order: we learn what kinds of arguments occur with a predicate by encoding features of the arguments. Recent distributed and latentvariable models also represent words with feature vectors (Bengio et al., 2003; Blitzer et al., 2005). Many of these approaches learn both the feature weights and the feature representation. Vectors must be kept low-dimensional for tractability, while learning and inference on larger scales is impractical. By partitioning our examples by predicate, we can efficiently use high-dimensional, sparse vectors. Our technique of generating negative examples is similar to the approach of Okanohara and Tsujii (2007). They learn a classifier to disambiguate actual sentences from pseudo-negative examples sampled from an N-gram language model. Smith and Eisner (2005) also automatically generate negative e</context>
+</contexts>
+<marker>Blitzer, Globerson, Pereira, 2005</marker>
+<rawString>John Blitzer, Amir Globerson, and Fernando Pereira. 2005. Distributed latent variable models of lexical cooccurrences. In AISTATS.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Avrim Blum</author>
+<author>Tom Mitchell</author>
+</authors>
+<title>Combining labeled and unlabeled data with co-training.</title>
+<date>1998</date>
+<booktitle>In Proceedings of COLT,</booktitle>
+<pages>92--100</pages>
+<contexts>
+<context position="9855" citStr="Blum and Mitchell, 1998" startWordPosition="1512" endWordPosition="1515">ber of examples and the computational efficiency. Ultimately, these parameters should be optimized for task performance. Of course, some negatives will actually be plausible arguments that were unobserved due to sparseness. Fortunately, modern discriminative methods like soft-margin SVMs can learn in the face of label error by allowing slack, subject to a tunable regularization penalty (Cortes and Vapnik, 1995). If MI is a sparse and imperfect model of SP, what can DSP gain by training on MI’s scores? We can regard DSP as learning a view of SP that is orthogonal to MI, in a co-training sense (Blum and Mitchell, 1998). MI labels the data based solely on co-occurrence; DSP uses these labels to identify other regularities – ones that extend beyond cooccurring words. For example, many instances of n where MI(eat, n)&gt;T also have MI(buy, n)&gt;T and MI(cook, n)&gt;T. Also, compared to other nouns, a disproportionate number of eat-nouns are lowercase, single-token words, and they rarely contain digits, hyphens, or begin with a human first name like Bob. DSP encodes these interdependent properties as features in a linear classifier. This classifier can score any noun as a plausible argument of eat if indicative feature</context>
+</contexts>
+<marker>Blum, Mitchell, 1998</marker>
+<rawString>Avrim Blum and Tom Mitchell. 1998. Combining labeled and unlabeled data with co-training. In Proceedings of COLT, pages 92–100.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Carsten Brockmann</author>
+<author>Mirella Lapata</author>
+</authors>
+<title>Evaluating and combining approaches to selectional preference acquisition.</title>
+<date>2003</date>
+<booktitle>In EACL,</booktitle>
+<pages>27--34</pages>
+<contexts>
+<context position="4385" citStr="Brockmann and Lapata (2003)" startWordPosition="643" endWordPosition="646">ation for Computational Linguistics occurrence model on two tasks: identifying objects of verbs in an unseen corpus and finding pronominal antecedents in coreference data. 2 Related Work Most approaches to SPs generalize from observed predicate-argument pairs to semantically similar ones by modeling the semantic class of the argument, following Resnik (1996). For example, we might have a class Mexican Food and learn that the entire class is suitable for eating. Usually, the classes are from WordNet (Miller et al., 1990), although they can also be inferred from clustering (Rooth et al., 1999). Brockmann and Lapata (2003) compare a number of WordNet-based approaches, including Resnik (1996), Li and Abe (1998), and Clark and Weir (2002), and found that the more sophisticated class-based approaches do not always outperform simple frequency-based models. Another line of research generalizes using similar words. Suppose we are calculating the probability of a particular noun, n, occurring as the object argument of a given verbal predicate, v. Let Pr(n|v) be the empirical maximum-likelihood estimate from observed text. Dagan et al. (1999) define the similarity-weighted probability, PrSIM, to be: �PrSIM(n|v) � Sim(v</context>
+</contexts>
+<marker>Brockmann, Lapata, 2003</marker>
+<rawString>Carsten Brockmann and Mirella Lapata. 2003. Evaluating and combining approaches to selectional preference acquisition. In EACL, pages 27–34.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stanley F Chen</author>
+<author>Joshua Goodman</author>
+</authors>
+<title>An empirical study of smoothing techniques for language modeling. TR-10-98,</title>
+<date>1998</date>
+<institution>Harvard University.</institution>
+<contexts>
+<context position="29499" citStr="Chen and Goodman, 1998" startWordPosition="4738" endWordPosition="4741">se Mercury News (SJM) section of the TIPSTER corpus (Harman, 1992). Each unique verb-object pair is a single instance in this evaluation. Table 3 gives recall across all pairs (All) and grouped by pair-frequency in the unseen corpus (1, 2, 3, &gt;3). DSP accepts far more pairs than MI (73% vs. 44%), even far more than a system that accepts any previously observed verb-object combination as plausible (57%). Recall is higher on more frequent verb-object pairs, but 70% of the pairs occurred only once in the corpus. Even if we smooth MI by smoothing Pr(n|v) in Equation 2 using modified KN-smoothing (Chen and Goodman, 1998), the recall of MI&gt;0 on SJM only increases from 44.1% to 44.9%, still far below DSP. Frequency-based models have fundamentally low coverage. As furimportant than the property of being an entity” (Resnik, 1996). DSPall Erk (2007) Keller and Lapata (2003) F-Score 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0 65 Verb Plaus./Implaus. Resnik Dagan et al. Erk MI DSP see friend/method 5.79/-0.01 0.20/1.40* 0.46/-0.07 1.11/-0.57 0.98/0.02 read article/fashion 6.80/-0.20 3.00/0.11 3.80/1.90 4.00/— 2.12/-0.65 find label/fever 1.10/0.22 1.50/2.20* 0.59/0.01 0.42/0.07 1.61/0.81 hear story/issue 1.89/1.89* 0.66/1.</context>
+</contexts>
+<marker>Chen, Goodman, 1998</marker>
+<rawString>Stanley F. Chen and Joshua Goodman. 1998. An empirical study of smoothing techniques for language modeling. TR-10-98, Harvard University.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kenneth Ward Church</author>
+<author>Patrick Hanks</author>
+</authors>
+<title>Word association norms, mutual information, and lexicography.</title>
+<date>1990</date>
+<journal>Computational Linguistics,</journal>
+<volume>16</volume>
+<issue>1</issue>
+<contexts>
+<context position="8146" citStr="Church and Hanks, 1990" startWordPosition="1221" endWordPosition="1224">ce word order) to create a neighborhood of implicit negative evidence. We create negatives by substitution rather than perturbation, and use corpuswide statistics to choose our negative instances. 3 Methodology 3.1 Creating Examples To learn a discriminative model of selectional preference, we create positive and negative training examples automatically from raw text. To create the positives, we automatically parse a large corpus, and then extract the predicate-argument pairs that have a statistical association in this data. We measure this association using pointwise Mutual Information (MI) (Church and Hanks, 1990). The MI between a 60 verb predicate, v, and its object argument, n, is: Pr(v, n) Pr(n|v) MI(v, n) =log Pr(v)Pr(n) =log Pr(n) (2) If MI&gt;0, the probability v and n occur together is greater than if they were independently distributed. We create sets of positive and negative examples separately for each predicate, v. First, we extract all pairs where MI(v, n)&gt;T as positives. For each positive, we create pseudo-negative examples, (v, n′), by pairing v with a new argument, n′, that either has MI below the threshold or did not occur with v in the corpus. We require each negative n′ to have a simila</context>
+</contexts>
+<marker>Church, Hanks, 1990</marker>
+<rawString>Kenneth Ward Church and Patrick Hanks. 1990. Word association norms, mutual information, and lexicography. Computational Linguistics, 16(1):22–29.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stephen Clark</author>
+<author>David Weir</author>
+</authors>
+<title>Class-based probability estimation using a semantic hierarchy.</title>
+<date>2002</date>
+<journal>Computational Linguistics,</journal>
+<volume>28</volume>
+<issue>2</issue>
+<contexts>
+<context position="1485" citStr="Clark and Weir, 2002" startWordPosition="204" endWordPosition="207">instances. The model outperforms other recent approaches, achieving excellent correlation with human plausibility judgments. Compared to Mutual Information, it identifies 66% more verb-object pairs in unseen text, and resolves 37% more pronouns correctly in a pronoun resolution experiment. 1 Introduction Selectional preferences (SPs) tell us which arguments are plausible for a particular predicate. For example, Table 2 (Section 4.4) lists plausible and implausible direct objects (arguments) for particular verbs (predicates). SPs can help resolve syntactic, word sense, and reference ambiguity (Clark and Weir, 2002), and so gathering them has received a lot of attention in the NLP community. One way to determine SPs is from co-occurrences of predicates and arguments in text. Unfortunately, no matter how much text we use, many acceptable pairs will be missing. Bikel (2004) found that only 1.49% of the bilexical dependencies considered by Collins’ parser during decoding were observed during training. In our parsed corpus (Section 4.1), 59 for example, we find eat with nachos, burritos, and tacos, but not with the equally tasty quesadillas, chimichangas, or tostadas. Rather than solely relying on co-occurre</context>
+<context position="4501" citStr="Clark and Weir (2002)" startWordPosition="661" endWordPosition="664">nding pronominal antecedents in coreference data. 2 Related Work Most approaches to SPs generalize from observed predicate-argument pairs to semantically similar ones by modeling the semantic class of the argument, following Resnik (1996). For example, we might have a class Mexican Food and learn that the entire class is suitable for eating. Usually, the classes are from WordNet (Miller et al., 1990), although they can also be inferred from clustering (Rooth et al., 1999). Brockmann and Lapata (2003) compare a number of WordNet-based approaches, including Resnik (1996), Li and Abe (1998), and Clark and Weir (2002), and found that the more sophisticated class-based approaches do not always outperform simple frequency-based models. Another line of research generalizes using similar words. Suppose we are calculating the probability of a particular noun, n, occurring as the object argument of a given verbal predicate, v. Let Pr(n|v) be the empirical maximum-likelihood estimate from observed text. Dagan et al. (1999) define the similarity-weighted probability, PrSIM, to be: �PrSIM(n|v) � Sim(v′, v)Pr(n|v′) (1) v′∈SIMS(v) where Sim(v′, v) returns a real-valued similarity between two verbs v′ and v (normalize</context>
+</contexts>
+<marker>Clark, Weir, 2002</marker>
+<rawString>Stephen Clark and David Weir. 2002. Class-based probability estimation using a semantic hierarchy. Computational Linguistics, 28(2):187–206.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Corinna Cortes</author>
+<author>Vladimir Vapnik</author>
+</authors>
+<title>Supportvector networks.</title>
+<date>1995</date>
+<booktitle>Machine Learning,</booktitle>
+<volume>20</volume>
+<issue>3</issue>
+<contexts>
+<context position="9645" citStr="Cortes and Vapnik, 1995" startWordPosition="1469" endWordPosition="1472">ts examples will be positive. The threshold T represents a trade-off between capturing a large number of positive pairs and ensuring these pairs have good association. Similarly, K is a tradeoff between the number of examples and the computational efficiency. Ultimately, these parameters should be optimized for task performance. Of course, some negatives will actually be plausible arguments that were unobserved due to sparseness. Fortunately, modern discriminative methods like soft-margin SVMs can learn in the face of label error by allowing slack, subject to a tunable regularization penalty (Cortes and Vapnik, 1995). If MI is a sparse and imperfect model of SP, what can DSP gain by training on MI’s scores? We can regard DSP as learning a view of SP that is orthogonal to MI, in a co-training sense (Blum and Mitchell, 1998). MI labels the data based solely on co-occurrence; DSP uses these labels to identify other regularities – ones that extend beyond cooccurring words. For example, many instances of n where MI(eat, n)&gt;T also have MI(buy, n)&gt;T and MI(cook, n)&gt;T. Also, compared to other nouns, a disproportionate number of eat-nouns are lowercase, single-token words, and they rarely contain digits, hyphens, </context>
+</contexts>
+<marker>Cortes, Vapnik, 1995</marker>
+<rawString>Corinna Cortes and Vladimir Vapnik. 1995. Supportvector networks. Machine Learning, 20(3):273–297.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ido Dagan</author>
+<author>Alan Itai</author>
+</authors>
+<title>Automatic processing of large corpora for the resolution of anaphora references.</title>
+<date>1990</date>
+<booktitle>In COLING,</booktitle>
+<volume>3</volume>
+<pages>330--332</pages>
+<contexts>
+<context position="31691" citStr="Dagan and Itai, 1990" startWordPosition="5026" endWordPosition="5029">s (Holmes et al., 1989). Mistakes are marked with an asterisk (*), undefined scores are marked with a dash (—). Only DSP is completely defined and completely correct. 0 0.2 0.4 0.6 0.8 1 Recall Figure 2: Pronoun resolution precision-recall on MUC. ther evidence, if we build a model of MI on the SJM corpus and use it in our pseudodisambiguation experiment (Section 4.3), MI&gt;0 gets a MacroAvg precision of 86% but a MacroAvg recall of only 12%.9 4.6 Pronoun Resolution Finally, we evaluate DSP on a common application of selectional preferences: choosing the correct antecedent for pronouns in text (Dagan and Itai, 1990; Kehler et al., 2004). We study the cases where a 9Recall that even the Keller and Lapata (2003) system, built on the world’s largest corpus, achieves only 34% recall (Table 1) (with only 48% of positives and 27% of all pairs previously observed, but see Footnote 5). pronoun is the direct object of a verb predicate, v. A pronoun’s antecedent must obey v’s selectional preferences. If we have a better model of SP, we should be able to better select pronoun antecedents. We parsed the MUC-7 (1997) coreference corpus and extracted all pronouns in a direct object relation. For each pronoun, p, modi</context>
+</contexts>
+<marker>Dagan, Itai, 1990</marker>
+<rawString>Ido Dagan and Alan Itai. 1990. Automatic processing of large corpora for the resolution of anaphora references. In COLING, volume 3, pages 330–332.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ido Dagan</author>
+<author>Lillian Lee</author>
+<author>Fernando C N Pereira</author>
+</authors>
+<title>Similarity-based models of word cooccurrence probabilities.</title>
+<date>1999</date>
+<booktitle>Machine Learning,</booktitle>
+<pages>34--1</pages>
+<contexts>
+<context position="4907" citStr="Dagan et al. (1999)" startWordPosition="724" endWordPosition="727">hough they can also be inferred from clustering (Rooth et al., 1999). Brockmann and Lapata (2003) compare a number of WordNet-based approaches, including Resnik (1996), Li and Abe (1998), and Clark and Weir (2002), and found that the more sophisticated class-based approaches do not always outperform simple frequency-based models. Another line of research generalizes using similar words. Suppose we are calculating the probability of a particular noun, n, occurring as the object argument of a given verbal predicate, v. Let Pr(n|v) be the empirical maximum-likelihood estimate from observed text. Dagan et al. (1999) define the similarity-weighted probability, PrSIM, to be: �PrSIM(n|v) � Sim(v′, v)Pr(n|v′) (1) v′∈SIMS(v) where Sim(v′, v) returns a real-valued similarity between two verbs v′ and v (normalized over all pair similarities in the sum). In contrast, Erk (2007) generalizes by substituting similar arguments, while Wang et al. (2005) use the cross-product of similar pairs. One key issue is how to define the set of similar words, SIMS(w). Erk (2007) compared a number of techniques for creating similar-word sets and found that both the Jaccard coefficient and Lin (1998a)’s information-theoretic metr</context>
+<context position="21642" citStr="Dagan et al. (1999)" startWordPosition="3436" endWordPosition="3439">ively. Note that case is a strong indicator for some arguments, for example the weight on being lower-case is high for become (0.972) and eat (0.505), but highly negative for accuse (-0.675) and embroil (-0.573) which often take names of people and organizations. 4.3 Pseudodisambiguation We first evaluate DSP on disambiguating positives from pseudo-negatives, comparing to recently3Which all correspond to nouns occurring in the object position of the verb (e.g. Probj(n|lead)), except “launch (subj)” which corresponds to Pr3ubj(n|launch). 63 System MacroAvg MicroAvg F Pairwise P R F P R Acc Cov Dagan et al. (1999) 0.36 0.90 0.51 0.68 0.92 0.78 0.58 0.98 Erk (2007) 0.49 0.66 0.56 0.70 0.82 0.76 0.72 0.83 Keller and Lapata (2003) 0.72 0.34 0.46 0.80 0.50 0.62 0.80 0.57 DSPcooc 0.53 0.72 0.61 0.73 0.94 0.82 0.77 1.00 DSPall 0.60 0.71 0.65 0.77 0.90 0.83 0.81 1.00 Table 1: Pseudodisambiguation results averaged across each example (MacroAvg), weighted by word frequency (MicroAvg), plus coverage and accuracy of pairwise competition (Pairwise). proposed systems that also require no manuallycompiled resources like WordNet. We convert Dagan et al. (1999)’s similarity-smoothed probability to MI by replacing the </context>
+</contexts>
+<marker>Dagan, Lee, Pereira, 1999</marker>
+<rawString>Ido Dagan, Lillian Lee, and Fernando C. N. Pereira. 1999. Similarity-based models of word cooccurrence probabilities. Machine Learning, 34(1-3):43–69.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Katrin Erk</author>
+</authors>
+<title>A simple, similarity-based model for selectional preference. In</title>
+<date>2007</date>
+<booktitle>ACL,</booktitle>
+<pages>216--223</pages>
+<contexts>
+<context position="5166" citStr="Erk (2007)" startWordPosition="765" endWordPosition="766">roaches do not always outperform simple frequency-based models. Another line of research generalizes using similar words. Suppose we are calculating the probability of a particular noun, n, occurring as the object argument of a given verbal predicate, v. Let Pr(n|v) be the empirical maximum-likelihood estimate from observed text. Dagan et al. (1999) define the similarity-weighted probability, PrSIM, to be: �PrSIM(n|v) � Sim(v′, v)Pr(n|v′) (1) v′∈SIMS(v) where Sim(v′, v) returns a real-valued similarity between two verbs v′ and v (normalized over all pair similarities in the sum). In contrast, Erk (2007) generalizes by substituting similar arguments, while Wang et al. (2005) use the cross-product of similar pairs. One key issue is how to define the set of similar words, SIMS(w). Erk (2007) compared a number of techniques for creating similar-word sets and found that both the Jaccard coefficient and Lin (1998a)’s information-theoretic metric work best. Similarity-smoothed models are simple to compute, potentially adaptable to new domains, and require no manually-compiled resources such as WordNet. Selectional Preferences have also been a recent focus of researchers investigating the learning o</context>
+<context position="10805" citStr="Erk, 2007" startWordPosition="1667" endWordPosition="1668"> words, and they rarely contain digits, hyphens, or begin with a human first name like Bob. DSP encodes these interdependent properties as features in a linear classifier. This classifier can score any noun as a plausible argument of eat if indicative features are present; MI can only assign high plausibility to observed (eat,n) pairs. Similarity-smoothed models can make use of the regularities across similar verbs, but not the finergrained string- and token-based features. Our training examples are similar to the data created for pseudodisambiguation, the usual evaluation task for SP models (Erk, 2007; Keller and Lapata, 2003; Rooth et al., 1999). This data consists of triples (v, n, n′) where v, n is a predicateargument pair observed in the corpus and v, n′ has not been observed. The models score correctly if they rank observed (and thus plausible) arguments above corresponding unobserved (and thus likely implausible) ones. We refer to this as Pairwise Disambiguation. Unlike this task, we classify each predicate-argument pair independently as plausible/implausible. We also use MI rather than frequency to define the positive pairs, ensuring that the positive pairs truly have a statistical </context>
+<context position="18253" citStr="Erk, 2007" startWordPosition="2897" endWordPosition="2898">verb. 4 Experiments and Results 4.1 Set up We parsed the 3 GB AQUAINT corpus (Voorhees, 2002) using Minipar (Lin, 1998b), and collected verb-object and verb-subject frequencies, building an empirical MI model from this data. Verbs and nouns were converted to their (possibly multi-token) root, and string case was preserved. Passive subjects (the car was bought) were converted to objects (bought car). We set the MI-threshold, T, to be 0, and the negative-to-positive ratio, K, to be 2. Numerous previous pseudodisambiguation evaluations only include arguments that occur between 30 and 3000 times (Erk, 2007; Keller and Lapata, 2003; Rooth et al., 1999). Presumably the lower bound is to help ensure the negative argument is unobserved because it is unsuitable, not because of data sparseness. We wish to use our model on arguments of any frequency, including those that never occurred in the training corpus (and therefore have empty cooccurrence features (Section 3.3.1)). We proceed as follows: first, we exclude pairs whenever the noun occurs less than 3 times in our corpus, removing many misspellings and other noun noise. Next, we omit verb co-occurrence features for nouns that occur less than 10 ti</context>
+<context position="21693" citStr="Erk (2007)" startWordPosition="3448" endWordPosition="3449">ts, for example the weight on being lower-case is high for become (0.972) and eat (0.505), but highly negative for accuse (-0.675) and embroil (-0.573) which often take names of people and organizations. 4.3 Pseudodisambiguation We first evaluate DSP on disambiguating positives from pseudo-negatives, comparing to recently3Which all correspond to nouns occurring in the object position of the verb (e.g. Probj(n|lead)), except “launch (subj)” which corresponds to Pr3ubj(n|launch). 63 System MacroAvg MicroAvg F Pairwise P R F P R Acc Cov Dagan et al. (1999) 0.36 0.90 0.51 0.68 0.92 0.78 0.58 0.98 Erk (2007) 0.49 0.66 0.56 0.70 0.82 0.76 0.72 0.83 Keller and Lapata (2003) 0.72 0.34 0.46 0.80 0.50 0.62 0.80 0.57 DSPcooc 0.53 0.72 0.61 0.73 0.94 0.82 0.77 1.00 DSPall 0.60 0.71 0.65 0.77 0.90 0.83 0.81 1.00 Table 1: Pseudodisambiguation results averaged across each example (MacroAvg), weighted by word frequency (MicroAvg), plus coverage and accuracy of pairwise competition (Pairwise). proposed systems that also require no manuallycompiled resources like WordNet. We convert Dagan et al. (1999)’s similarity-smoothed probability to MI by replacing the empirical Pr(nlv) in Equation (2) with the smoothed</context>
+<context position="25713" citStr="Erk (2007)" startWordPosition="4112" endWordPosition="4113">esults in a statistically significant gain in performance, up to an F-Score of 0.65 and a pairwise disambiguation accuracy of 0.81.7 DSPall has both broader coverage and better accuracy than all competing approaches. In the remainder of the experiments, we use DSPall and refer to it simply as DSP. Some errors are because of plausible but unseen arguments being used as test-set pseudo-negatives. For example, for the verb damage, DSP’s three most high-scoring false positives are the nouns jetliner, carpet, and gear. While none occur with damage in 6I.e. we use the “half coverage” condition from Erk (2007). 7The differences between DSPall and all comparison systems are statistically significant (McNemar’s test, p&lt;0.01). 64 10 100 1000 10000 100000 1e+06 Noun Frequency Figure 1: Disambiguation results by noun frequency. our corpus, all intuitively satisfy the verb’s SPs. MacroAvg performance is worse than MicroAvg because all systems perform better on frequent nouns. When we plot F-Score by noun frequency (Figure 1), we see that DSP outperforms comparison approaches across all frequencies, but achieves its biggest gains on the low-frequency nouns. A richer feature set allows DSP to make correct </context>
+<context position="29727" citStr="Erk (2007)" startWordPosition="4777" endWordPosition="4778">, &gt;3). DSP accepts far more pairs than MI (73% vs. 44%), even far more than a system that accepts any previously observed verb-object combination as plausible (57%). Recall is higher on more frequent verb-object pairs, but 70% of the pairs occurred only once in the corpus. Even if we smooth MI by smoothing Pr(n|v) in Equation 2 using modified KN-smoothing (Chen and Goodman, 1998), the recall of MI&gt;0 on SJM only increases from 44.1% to 44.9%, still far below DSP. Frequency-based models have fundamentally low coverage. As furimportant than the property of being an entity” (Resnik, 1996). DSPall Erk (2007) Keller and Lapata (2003) F-Score 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0 65 Verb Plaus./Implaus. Resnik Dagan et al. Erk MI DSP see friend/method 5.79/-0.01 0.20/1.40* 0.46/-0.07 1.11/-0.57 0.98/0.02 read article/fashion 6.80/-0.20 3.00/0.11 3.80/1.90 4.00/— 2.12/-0.65 find label/fever 1.10/0.22 1.50/2.20* 0.59/0.01 0.42/0.07 1.61/0.81 hear story/issue 1.89/1.89* 0.66/1.50* 2.00/2.60* 2.99/-1.03 1.66/0.67 write letter/market 7.26/0.00 2.50/-0.43 3.60/-0.24 5.06/-4.12 3.08/-1.31 urge daughter/contrast 1.14/1.86* 0.14/1.60* 1.10/3.60* -0.95/— -0.34/-0.62 warn driver/engine 4.73/3.61 1.20/0.05 2.3</context>
+</contexts>
+<marker>Erk, 2007</marker>
+<rawString>Katrin Erk. 2007. A simple, similarity-based model for selectional preference. In ACL, pages 216–223.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yair Even-Zohar</author>
+<author>Dan Roth</author>
+</authors>
+<title>A classification approach to word prediction.</title>
+<date>2000</date>
+<booktitle>In NAACL,</booktitle>
+<pages>124--131</pages>
+<contexts>
+<context position="6220" citStr="Even-Zohar and Roth (2000)" startWordPosition="925" endWordPosition="928">o new domains, and require no manually-compiled resources such as WordNet. Selectional Preferences have also been a recent focus of researchers investigating the learning of paraphrases and inference rules (Pantel et al., 2007; Roberto et al., 2007). Inferences such as “[X wins Y] ⇒ [X plays Y]” are only valid for certain arguments X and Y. We follow Pantel et al. (2007) in using automatically-extracted semantic classes to help characterize plausible arguments. Discriminative techniques are widely used in NLP and have been applied to the related tasks of word prediction and language modeling. Even-Zohar and Roth (2000) use a classifier to predict the most likely word to fill a position in a sentence (in their experiments: a verb) from a set of candidates (sets of verbs), by inspecting the context of the target token (e.g., the presence or absence of a particular nearby word in the sentence). This approach can therefore learn which specific arguments occur with a particular predicate. In comparison, our features are second-order: we learn what kinds of arguments occur with a predicate by encoding features of the arguments. Recent distributed and latentvariable models also represent words with feature vectors</context>
+</contexts>
+<marker>Even-Zohar, Roth, 2000</marker>
+<rawString>Yair Even-Zohar and Dan Roth. 2000. A classification approach to word prediction. In NAACL, pages 124– 131.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Fleischman</author>
+<author>Eduard Hovy</author>
+<author>Abdessamad Echihabi</author>
+</authors>
+<title>Offline strategies for online question answering: answering questions before they are asked.</title>
+<date>2003</date>
+<booktitle>In ACL,</booktitle>
+<pages>1--7</pages>
+<contexts>
+<context position="17455" citStr="Fleischman et al. (2003)" startWordPosition="2770" endWordPosition="2773">, 2002) on a 10 GB corpus, giving 3620 clusters. If a noun belongs in a cluster, a corresponding feature fires. If a noun is in none of the clusters, a no-class feature fires. As an example, CBC cluster 1891 contains: sidewalk, driveway, roadway, footpath, bridge, highway, road, runway, street, alley, path, Interstate, ... In our training data, we have examples like widen highway, widen road and widen motorway. If we 62 see that we can widen a highway, we learn that we can also widen a sidewalk, bridge, runway, etc. We also made use of the person-name/instance pairs automatically extracted by Fleischman et al. (2003).2 This data provides counts for pairs such as “Edwin Moses, hurdler” and “William Farley, industrialist.” We have features for all concepts and therefore learn their association with each verb. 4 Experiments and Results 4.1 Set up We parsed the 3 GB AQUAINT corpus (Voorhees, 2002) using Minipar (Lin, 1998b), and collected verb-object and verb-subject frequencies, building an empirical MI model from this data. Verbs and nouns were converted to their (possibly multi-token) root, and string case was preserved. Passive subjects (the car was bought) were converted to objects (bought car). We set t</context>
+</contexts>
+<marker>Fleischman, Hovy, Echihabi, 2003</marker>
+<rawString>Michael Fleischman, Eduard Hovy, and Abdessamad Echihabi. 2003. Offline strategies for online question answering: answering questions before they are asked. In ACL, pages 1–7.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Donna Harman</author>
+</authors>
+<title>The DARPA TIPSTER project.</title>
+<date>1992</date>
+<journal>ACM SIGIR Forum,</journal>
+<volume>26</volume>
+<issue>2</issue>
+<contexts>
+<context position="28942" citStr="Harman, 1992" startWordPosition="4642" endWordPosition="4644">no statistics, however, for many of the implausible ones. DSP can make finer decisions than MI, recognizing that “warning an engine” is more absurd than “judging a climate.” 4.5 Unseen Verb-Object Identification We next compare MI and DSP on a much larger set of plausible examples, and also test how well the models generalize across data sets. We took the MI and DSP systems trained on AQUAINT and asked them to rate observed (and thus likely plausible) verb-object pairs taken from an unseen corpus. We extracted the pairs by parsing the San Jose Mercury News (SJM) section of the TIPSTER corpus (Harman, 1992). Each unique verb-object pair is a single instance in this evaluation. Table 3 gives recall across all pairs (All) and grouped by pair-frequency in the unseen corpus (1, 2, 3, &gt;3). DSP accepts far more pairs than MI (73% vs. 44%), even far more than a system that accepts any previously observed verb-object combination as plausible (57%). Recall is higher on more frequent verb-object pairs, but 70% of the pairs occurred only once in the corpus. Even if we smooth MI by smoothing Pr(n|v) in Equation 2 using modified KN-smoothing (Chen and Goodman, 1998), the recall of MI&gt;0 on SJM only increases </context>
+</contexts>
+<marker>Harman, 1992</marker>
+<rawString>Donna Harman. 1992. The DARPA TIPSTER project. ACM SIGIR Forum, 26(2):26–28.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Virginia M Holmes</author>
+<author>Laurie Stowe</author>
+<author>Linda Cupples</author>
+</authors>
+<title>Lexical expectations in parsing complementverb sentences.</title>
+<date>1989</date>
+<journal>Journal of Memory and Language,</journal>
+<pages>28--668</pages>
+<contexts>
+<context position="27091" citStr="Holmes et al. (1989)" startWordPosition="4321" endWordPosition="4324"> a further experiment, we re-trained DSP but with only the string-based features removed. Overall macro-averaged F-score dropped from 0.65 to 0.64 (a statistically significant reduction in performance). The system scored nearly identically to DSP on the high-frequency nouns, but performed roughly 15% worse on the nouns that occurred less than ten times. This shows that the string-based features are important for selectional preference, and particularly helpful for low-frequency nouns. 4.4 Human Plausibility Table 2 compares some of our systems on data used by Resnik (1996) (also Appendix 2 in Holmes et al. (1989)). The plausibility of these pairs was initially judged based on the experimenters’ intuitions, and later confirmed in a human experiment. We include the scores of Resnik’s system, and note that its errors were attributed to sense ambiguity and other limitations of class-based approaches (Resnik, 1996).8 8For example, warn-engine scores highly because engines are in the class entity, and physical entities (e.g. people) are often objects of warn. Unlike DSP, Resnik’s approach cannot learn that for warn, “the property of being a person is more Seen Criteria Unseen Verb-Object Freq. All = 1 = 2 =</context>
+<context position="31094" citStr="Holmes et al., 1989" startWordPosition="4924" endWordPosition="4927">70 3.53/— 1.86/0.19 show sample/travel 1.44/0.41 1.60/0.14 0.40/-0.82 0.53/-0.49 1.00/-0.83 expect visit/mouth 0.59/5.93* 1.40/1.50* 1.40/0.37 1.05/-0.65 1.44/-0.15 answer request/tragedy 4.49/3.88 2.70/1.50 3.10/-0.64 2.93/— 1.00/0.01 recognize author/pocket 0.50/0.50* 0.03/0.37* 0.77/1.30* 0.48/— 1.00/0.00 repeat comment/journal 1.23/1.23* 2.30/1.40 2.90/— 2.59/— 1.00/-0.48 understand concept/session 1.52/1.51 2.70/0.25 2.00/-0.28 3.96/— 2.23/-0.46 remember reply/smoke 1.31/0.20 2.10/1.20 0.54/2.60* 1.13/-0.06 1.00/-0.42 Table 2: Selectional ratings for plausible/implausible direct objects (Holmes et al., 1989). Mistakes are marked with an asterisk (*), undefined scores are marked with a dash (—). Only DSP is completely defined and completely correct. 0 0.2 0.4 0.6 0.8 1 Recall Figure 2: Pronoun resolution precision-recall on MUC. ther evidence, if we build a model of MI on the SJM corpus and use it in our pseudodisambiguation experiment (Section 4.3), MI&gt;0 gets a MacroAvg precision of 86% but a MacroAvg recall of only 12%.9 4.6 Pronoun Resolution Finally, we evaluate DSP on a common application of selectional preferences: choosing the correct antecedent for pronouns in text (Dagan and Itai, 1990; K</context>
+</contexts>
+<marker>Holmes, Stowe, Cupples, 1989</marker>
+<rawString>Virginia M. Holmes, Laurie Stowe, and Linda Cupples. 1989. Lexical expectations in parsing complementverb sentences. Journal of Memory and Language, 28:668–689.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Thorsten Joachims</author>
+</authors>
+<title>Making large-scale Support Vector Machine learning practical.</title>
+<date>1999</date>
+<booktitle>Advances in Kernel Methods: Support Vector Machines,</booktitle>
+<pages>169--184</pages>
+<editor>In B. Sch¨olkopf and C. Burges, editors,</editor>
+<contexts>
+<context position="14183" citStr="Joachims, 1999" startWordPosition="2226" endWordPosition="2227">verbs incarcerate, parole, and court-martial are all mapped to the same partition, while more-frequent verbs like arrest and execute each have their own partition. About 5.5% of examples are clustered, corresponding to 30% of the 7367 total verbs. 40% of verbs (but only 0.6% of examples) were not in any CBC cluster; these were mapped to a single backoff partition. The parameters for each partition, Av, can be trained with any supervised learning technique. We use SVM (Section 4.1) because it is effective in similar high-dimensional, sparse-vector settings, and has an efficient implementation (Joachims, 1999). In SVM, the sign of yv gives the classification. We can also use the scalar yv as our DSP score (i.e. the positive distance from the separating SVM hyperplane). 3.3 Features This section details our argument features, f(n), for assigning verb-object selectional preference. For a verb predicate (or partition) v and object argument n, the form of our classifier is yv = Ei Avi fi(n). 3.3.1 Verb co-occurrence We provide features for the empirical probability of the noun occurring as the object argument of other verbs, Pr(n|v′). If we were to only use these features (indexing the feature weights </context>
+<context position="19606" citStr="Joachims, 1999" startWordPosition="3117" endWordPosition="3118">nouns. This processing results in a set of 6.8 million pairs, divided into 2318 partitions (192 of which are verb clusters (Section 3.2)). For each partition, we take 95% of the examples for training, 2.5% for development and 2.5% for a final unseen test set. We provide full results for two models: DSP,oo, which only uses the verb co-occurrence features, and DSPall which uses all the features men2Available at http://www.mit.edu/˜mbf/instances.txt.gz tioned in Section 3.3. Feature values are normalized within each feature type. We train our (linear kernel) discriminative models using SVMl�ght (Joachims, 1999) on each partition, but set meta-parameters C (regularization) and j (cost of positive vs. negative misclassifications: max at j=2) on the macroaveraged score across all development partitions. Note that we can not use the development set to optimize T and K because the development examples are obtained after setting these values. 4.2 Feature weights It is interesting to inspect the feature weights returned by our system. In particular, the weights on the verb co-occurrence features (Section 3.3.1) provide a high-quality, argument-specific similarityranking of other verb contexts. The DSP para</context>
+</contexts>
+<marker>Joachims, 1999</marker>
+<rawString>Thorsten Joachims. 1999. Making large-scale Support Vector Machine learning practical. In B. Sch¨olkopf and C. Burges, editors, Advances in Kernel Methods: Support Vector Machines, pages 169–184. MIT-Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andrew Kehler</author>
+<author>Douglas Appelt</author>
+<author>Lara Taylor</author>
+<author>Aleksandr Simma</author>
+</authors>
+<title>The (non)utility of predicateargument frequencies for pronoun interpretation. In</title>
+<date>2004</date>
+<booktitle>HLT/NAACL,</booktitle>
+<pages>289--296</pages>
+<contexts>
+<context position="31713" citStr="Kehler et al., 2004" startWordPosition="5030" endWordPosition="5033">). Mistakes are marked with an asterisk (*), undefined scores are marked with a dash (—). Only DSP is completely defined and completely correct. 0 0.2 0.4 0.6 0.8 1 Recall Figure 2: Pronoun resolution precision-recall on MUC. ther evidence, if we build a model of MI on the SJM corpus and use it in our pseudodisambiguation experiment (Section 4.3), MI&gt;0 gets a MacroAvg precision of 86% but a MacroAvg recall of only 12%.9 4.6 Pronoun Resolution Finally, we evaluate DSP on a common application of selectional preferences: choosing the correct antecedent for pronouns in text (Dagan and Itai, 1990; Kehler et al., 2004). We study the cases where a 9Recall that even the Keller and Lapata (2003) system, built on the world’s largest corpus, achieves only 34% recall (Table 1) (with only 48% of positives and 27% of all pairs previously observed, but see Footnote 5). pronoun is the direct object of a verb predicate, v. A pronoun’s antecedent must obey v’s selectional preferences. If we have a better model of SP, we should be able to better select pronoun antecedents. We parsed the MUC-7 (1997) coreference corpus and extracted all pronouns in a direct object relation. For each pronoun, p, modified by a verb, v, we </context>
+</contexts>
+<marker>Kehler, Appelt, Taylor, Simma, 2004</marker>
+<rawString>Andrew Kehler, Douglas Appelt, Lara Taylor, and Aleksandr Simma. 2004. The (non)utility of predicateargument frequencies for pronoun interpretation. In HLT/NAACL, pages 289–296.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Frank Keller</author>
+<author>Mirella Lapata</author>
+</authors>
+<title>Using the web to obtain frequencies for unseen bigrams.</title>
+<date>2003</date>
+<journal>Computational Linguistics,</journal>
+<volume>29</volume>
+<issue>3</issue>
+<contexts>
+<context position="10830" citStr="Keller and Lapata, 2003" startWordPosition="1669" endWordPosition="1673"> they rarely contain digits, hyphens, or begin with a human first name like Bob. DSP encodes these interdependent properties as features in a linear classifier. This classifier can score any noun as a plausible argument of eat if indicative features are present; MI can only assign high plausibility to observed (eat,n) pairs. Similarity-smoothed models can make use of the regularities across similar verbs, but not the finergrained string- and token-based features. Our training examples are similar to the data created for pseudodisambiguation, the usual evaluation task for SP models (Erk, 2007; Keller and Lapata, 2003; Rooth et al., 1999). This data consists of triples (v, n, n′) where v, n is a predicateargument pair observed in the corpus and v, n′ has not been observed. The models score correctly if they rank observed (and thus plausible) arguments above corresponding unobserved (and thus likely implausible) ones. We refer to this as Pairwise Disambiguation. Unlike this task, we classify each predicate-argument pair independently as plausible/implausible. We also use MI rather than frequency to define the positive pairs, ensuring that the positive pairs truly have a statistical association, and are not </context>
+<context position="12556" citStr="Keller and Lapata (2003)" startWordPosition="1967" endWordPosition="1970">m of attribute-value features. Let every feature Oi be of the form Oi(v, n) = (v = v� n f(n)). That is, every feature is an intersection of the occurrence of a particular predicate, v, and some feature of the argument f(n). For example, a feature for a verb-object pair might be, “the verb is eat and the object is lower-case.” In this representation, features for one predicate will be completely independent from those for every other predicate. Thus rather than a single training procedure, we can actually partition the examples by predicate, and train a 1For a fixed verb, MI is proportional to Keller and Lapata (2003)’s conditional probability scores for pseudodisambiguation of (v, n, n′) triples: Pr(v|n) = Pr(v, n)/Pr(n), which was shown to be a better measure of association than co-occurrence frequency f(v, n). Normalizing by Pr(v) (yielding MI) allows us to use a constant threshold across all verbs. MI was also recently used for inference-rule SPs by Pantel et al. (2007). 61 classifier for each predicate independently. The prediction becomes yv = Av · 4)v(n), where Av are the learned weights corresponding to predicate v and all features 4)v(n)=f(n) depend on the argument only. Some predicate partitions </context>
+<context position="18278" citStr="Keller and Lapata, 2003" startWordPosition="2899" endWordPosition="2902">eriments and Results 4.1 Set up We parsed the 3 GB AQUAINT corpus (Voorhees, 2002) using Minipar (Lin, 1998b), and collected verb-object and verb-subject frequencies, building an empirical MI model from this data. Verbs and nouns were converted to their (possibly multi-token) root, and string case was preserved. Passive subjects (the car was bought) were converted to objects (bought car). We set the MI-threshold, T, to be 0, and the negative-to-positive ratio, K, to be 2. Numerous previous pseudodisambiguation evaluations only include arguments that occur between 30 and 3000 times (Erk, 2007; Keller and Lapata, 2003; Rooth et al., 1999). Presumably the lower bound is to help ensure the negative argument is unobserved because it is unsuitable, not because of data sparseness. We wish to use our model on arguments of any frequency, including those that never occurred in the training corpus (and therefore have empty cooccurrence features (Section 3.3.1)). We proceed as follows: first, we exclude pairs whenever the noun occurs less than 3 times in our corpus, removing many misspellings and other noun noise. Next, we omit verb co-occurrence features for nouns that occur less than 10 times, and instead fire a l</context>
+<context position="21758" citStr="Keller and Lapata (2003)" startWordPosition="3458" endWordPosition="3461">igh for become (0.972) and eat (0.505), but highly negative for accuse (-0.675) and embroil (-0.573) which often take names of people and organizations. 4.3 Pseudodisambiguation We first evaluate DSP on disambiguating positives from pseudo-negatives, comparing to recently3Which all correspond to nouns occurring in the object position of the verb (e.g. Probj(n|lead)), except “launch (subj)” which corresponds to Pr3ubj(n|launch). 63 System MacroAvg MicroAvg F Pairwise P R F P R Acc Cov Dagan et al. (1999) 0.36 0.90 0.51 0.68 0.92 0.78 0.58 0.98 Erk (2007) 0.49 0.66 0.56 0.70 0.82 0.76 0.72 0.83 Keller and Lapata (2003) 0.72 0.34 0.46 0.80 0.50 0.62 0.80 0.57 DSPcooc 0.53 0.72 0.61 0.73 0.94 0.82 0.77 1.00 DSPall 0.60 0.71 0.65 0.77 0.90 0.83 0.81 1.00 Table 1: Pseudodisambiguation results averaged across each example (MacroAvg), weighted by word frequency (MicroAvg), plus coverage and accuracy of pairwise competition (Pairwise). proposed systems that also require no manuallycompiled resources like WordNet. We convert Dagan et al. (1999)’s similarity-smoothed probability to MI by replacing the empirical Pr(nlv) in Equation (2) with the smoothed PrSIM from Equation (1). We also test an MI model inspired by Er</context>
+<context position="24123" citStr="Keller and Lapata (2003)" startWordPosition="3847" endWordPosition="3850"> it. We tested both and adopt the latter because it resulted in better performance on our development set. 5Available from the LDC as LDC2006T13. This collection was generated from approximately 1 trillion tokens of online text. Unfortunately, tokens appearing less than 200 times have been mapped to the (UNK) symbol, and only N-grams appearing more than 40 times are included. Unlike results from search engines, however, experiments with this corpus are replicable. not be able to provide a score for each example. The similarity-smoothed examples will be undefined if SIMS(w) is empty. Also, the Keller and Lapata (2003) approach will be undefined if the pair is unobserved on the web. As a reasonable default for these cases, we assign them a negative decision. We evaluate disambiguation using precision (P), recall (R), and their harmonic mean, F-Score (F). Table 1 gives the results of our comparison. In the MacroAvg results, we weight each example equally. For MicroAvg, we weight each example by the frequency of the noun. To more directly compare with previous work, we also reproduced Pairwise Disambiguation by randomly pairing each positive with one of the negatives and then evaluating each system by the per</context>
+<context position="29752" citStr="Keller and Lapata (2003)" startWordPosition="4779" endWordPosition="4782">accepts far more pairs than MI (73% vs. 44%), even far more than a system that accepts any previously observed verb-object combination as plausible (57%). Recall is higher on more frequent verb-object pairs, but 70% of the pairs occurred only once in the corpus. Even if we smooth MI by smoothing Pr(n|v) in Equation 2 using modified KN-smoothing (Chen and Goodman, 1998), the recall of MI&gt;0 on SJM only increases from 44.1% to 44.9%, still far below DSP. Frequency-based models have fundamentally low coverage. As furimportant than the property of being an entity” (Resnik, 1996). DSPall Erk (2007) Keller and Lapata (2003) F-Score 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0 65 Verb Plaus./Implaus. Resnik Dagan et al. Erk MI DSP see friend/method 5.79/-0.01 0.20/1.40* 0.46/-0.07 1.11/-0.57 0.98/0.02 read article/fashion 6.80/-0.20 3.00/0.11 3.80/1.90 4.00/— 2.12/-0.65 find label/fever 1.10/0.22 1.50/2.20* 0.59/0.01 0.42/0.07 1.61/0.81 hear story/issue 1.89/1.89* 0.66/1.50* 2.00/2.60* 2.99/-1.03 1.66/0.67 write letter/market 7.26/0.00 2.50/-0.43 3.60/-0.24 5.06/-4.12 3.08/-1.31 urge daughter/contrast 1.14/1.86* 0.14/1.60* 1.10/3.60* -0.95/— -0.34/-0.62 warn driver/engine 4.73/3.61 1.20/0.05 2.30/0.62 2.87/— 2.00/-0.99 </context>
+<context position="31788" citStr="Keller and Lapata (2003)" startWordPosition="5044" endWordPosition="5047">d with a dash (—). Only DSP is completely defined and completely correct. 0 0.2 0.4 0.6 0.8 1 Recall Figure 2: Pronoun resolution precision-recall on MUC. ther evidence, if we build a model of MI on the SJM corpus and use it in our pseudodisambiguation experiment (Section 4.3), MI&gt;0 gets a MacroAvg precision of 86% but a MacroAvg recall of only 12%.9 4.6 Pronoun Resolution Finally, we evaluate DSP on a common application of selectional preferences: choosing the correct antecedent for pronouns in text (Dagan and Itai, 1990; Kehler et al., 2004). We study the cases where a 9Recall that even the Keller and Lapata (2003) system, built on the world’s largest corpus, achieves only 34% recall (Table 1) (with only 48% of positives and 27% of all pairs previously observed, but see Footnote 5). pronoun is the direct object of a verb predicate, v. A pronoun’s antecedent must obey v’s selectional preferences. If we have a better model of SP, we should be able to better select pronoun antecedents. We parsed the MUC-7 (1997) coreference corpus and extracted all pronouns in a direct object relation. For each pronoun, p, modified by a verb, v, we extracted all preceding nouns within the current or previous sentence. Thir</context>
+</contexts>
+<marker>Keller, Lapata, 2003</marker>
+<rawString>Frank Keller and Mirella Lapata. 2003. Using the web to obtain frequencies for unseen bigrams. Computational Linguistics, 29(3):459–484.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hang Li</author>
+<author>Naoki Abe</author>
+</authors>
+<title>Generalizing case frames using a thesaurus and the MDL principle.</title>
+<date>1998</date>
+<journal>Computational Linguistics,</journal>
+<volume>24</volume>
+<issue>2</issue>
+<contexts>
+<context position="4474" citStr="Li and Abe (1998)" startWordPosition="656" endWordPosition="659">an unseen corpus and finding pronominal antecedents in coreference data. 2 Related Work Most approaches to SPs generalize from observed predicate-argument pairs to semantically similar ones by modeling the semantic class of the argument, following Resnik (1996). For example, we might have a class Mexican Food and learn that the entire class is suitable for eating. Usually, the classes are from WordNet (Miller et al., 1990), although they can also be inferred from clustering (Rooth et al., 1999). Brockmann and Lapata (2003) compare a number of WordNet-based approaches, including Resnik (1996), Li and Abe (1998), and Clark and Weir (2002), and found that the more sophisticated class-based approaches do not always outperform simple frequency-based models. Another line of research generalizes using similar words. Suppose we are calculating the probability of a particular noun, n, occurring as the object argument of a given verbal predicate, v. Let Pr(n|v) be the empirical maximum-likelihood estimate from observed text. Dagan et al. (1999) define the similarity-weighted probability, PrSIM, to be: �PrSIM(n|v) � Sim(v′, v)Pr(n|v′) (1) v′∈SIMS(v) where Sim(v′, v) returns a real-valued similarity between tw</context>
+</contexts>
+<marker>Li, Abe, 1998</marker>
+<rawString>Hang Li and Naoki Abe. 1998. Generalizing case frames using a thesaurus and the MDL principle. Computational Linguistics, 24(2):217–244.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dekang Lin</author>
+</authors>
+<title>Automatic retrieval and clustering of similar words.</title>
+<date>1998</date>
+<booktitle>In COLING-ACL,</booktitle>
+<pages>768--773</pages>
+<contexts>
+<context position="5476" citStr="Lin (1998" startWordPosition="816" endWordPosition="817"> from observed text. Dagan et al. (1999) define the similarity-weighted probability, PrSIM, to be: �PrSIM(n|v) � Sim(v′, v)Pr(n|v′) (1) v′∈SIMS(v) where Sim(v′, v) returns a real-valued similarity between two verbs v′ and v (normalized over all pair similarities in the sum). In contrast, Erk (2007) generalizes by substituting similar arguments, while Wang et al. (2005) use the cross-product of similar pairs. One key issue is how to define the set of similar words, SIMS(w). Erk (2007) compared a number of techniques for creating similar-word sets and found that both the Jaccard coefficient and Lin (1998a)’s information-theoretic metric work best. Similarity-smoothed models are simple to compute, potentially adaptable to new domains, and require no manually-compiled resources such as WordNet. Selectional Preferences have also been a recent focus of researchers investigating the learning of paraphrases and inference rules (Pantel et al., 2007; Roberto et al., 2007). Inferences such as “[X wins Y] ⇒ [X plays Y]” are only valid for certain arguments X and Y. We follow Pantel et al. (2007) in using automatically-extracted semantic classes to help characterize plausible arguments. Discriminative t</context>
+<context position="17762" citStr="Lin, 1998" startWordPosition="2822" endWordPosition="2823">.. In our training data, we have examples like widen highway, widen road and widen motorway. If we 62 see that we can widen a highway, we learn that we can also widen a sidewalk, bridge, runway, etc. We also made use of the person-name/instance pairs automatically extracted by Fleischman et al. (2003).2 This data provides counts for pairs such as “Edwin Moses, hurdler” and “William Farley, industrialist.” We have features for all concepts and therefore learn their association with each verb. 4 Experiments and Results 4.1 Set up We parsed the 3 GB AQUAINT corpus (Voorhees, 2002) using Minipar (Lin, 1998b), and collected verb-object and verb-subject frequencies, building an empirical MI model from this data. Verbs and nouns were converted to their (possibly multi-token) root, and string case was preserved. Passive subjects (the car was bought) were converted to objects (bought car). We set the MI-threshold, T, to be 0, and the negative-to-positive ratio, K, to be 2. Numerous previous pseudodisambiguation evaluations only include arguments that occur between 30 and 3000 times (Erk, 2007; Keller and Lapata, 2003; Rooth et al., 1999). Presumably the lower bound is to help ensure the negative arg</context>
+<context position="20326" citStr="Lin (1998" startWordPosition="3227" endWordPosition="3228">cations: max at j=2) on the macroaveraged score across all development partitions. Note that we can not use the development set to optimize T and K because the development examples are obtained after setting these values. 4.2 Feature weights It is interesting to inspect the feature weights returned by our system. In particular, the weights on the verb co-occurrence features (Section 3.3.1) provide a high-quality, argument-specific similarityranking of other verb contexts. The DSP parameters for eat, for example, place high weight on features like Pr(nlbraise), Pr(nlration), and Pr(nlgarnish). Lin (1998a)’s similar word list for eat misses these but includes sleep (ranked 6) and sit (ranked 14), because these have similar subjects to eat. Discriminative, context-specific training seems to yield a better set of similar predicates, e.g. the highest-ranked contexts for DSP„oo, on the verb join,3 lead 1.42, rejoin 1.39, form 1.34, belong to 1.31, found 1.31, quit 1.29, guide 1.19, induct 1.19, launch (subj) 1.18, work at 1.14 give a better SIMS(join) for Equation (1) than the top similarities returned by (Lin, 1998a): participate 0.164, lead 0.150, return to 0.148, say 0.143, rejoin 0.142, sign </context>
+<context position="22470" citStr="Lin (1998" startWordPosition="3574" endWordPosition="3575">71 0.65 0.77 0.90 0.83 0.81 1.00 Table 1: Pseudodisambiguation results averaged across each example (MacroAvg), weighted by word frequency (MicroAvg), plus coverage and accuracy of pairwise competition (Pairwise). proposed systems that also require no manuallycompiled resources like WordNet. We convert Dagan et al. (1999)’s similarity-smoothed probability to MI by replacing the empirical Pr(nlv) in Equation (2) with the smoothed PrSIM from Equation (1). We also test an MI model inspired by Erk (2007): �MISIM(n, v) = log Sim(n′, n) Pr(v, n′) n′∈SIMS(n) Pr(v)Pr(n′) We gather similar words using Lin (1998a), mining similar verbs from a comparable-sized parsed corpus, and collecting similar nouns from a broader 10 GB corpus of English text.4 We also use Keller and Lapata (2003)’s approach to obtaining web-counts. Rather than mining parse trees, this technique retrieves counts for the pattern “V Det N” in raw online text, where V is any inflection of the verb, Det is the, a, or the empty string, and N is the singular or plural form of the noun. We compute a web-based MI by collecting Pr(n, v), Pr(n), and Pr(v) using all inflections, except we only use the root form of the noun. Rather than using</context>
+</contexts>
+<marker>Lin, 1998</marker>
+<rawString>Dekang Lin. 1998a. Automatic retrieval and clustering of similar words. In COLING-ACL, pages 768–773.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dekang Lin</author>
+</authors>
+<title>Dependency-based evaluation of MINIPAR.</title>
+<date>1998</date>
+<booktitle>In LREC Workshop on the Evaluation of Parsing Systems.</booktitle>
+<contexts>
+<context position="5476" citStr="Lin (1998" startWordPosition="816" endWordPosition="817"> from observed text. Dagan et al. (1999) define the similarity-weighted probability, PrSIM, to be: �PrSIM(n|v) � Sim(v′, v)Pr(n|v′) (1) v′∈SIMS(v) where Sim(v′, v) returns a real-valued similarity between two verbs v′ and v (normalized over all pair similarities in the sum). In contrast, Erk (2007) generalizes by substituting similar arguments, while Wang et al. (2005) use the cross-product of similar pairs. One key issue is how to define the set of similar words, SIMS(w). Erk (2007) compared a number of techniques for creating similar-word sets and found that both the Jaccard coefficient and Lin (1998a)’s information-theoretic metric work best. Similarity-smoothed models are simple to compute, potentially adaptable to new domains, and require no manually-compiled resources such as WordNet. Selectional Preferences have also been a recent focus of researchers investigating the learning of paraphrases and inference rules (Pantel et al., 2007; Roberto et al., 2007). Inferences such as “[X wins Y] ⇒ [X plays Y]” are only valid for certain arguments X and Y. We follow Pantel et al. (2007) in using automatically-extracted semantic classes to help characterize plausible arguments. Discriminative t</context>
+<context position="17762" citStr="Lin, 1998" startWordPosition="2822" endWordPosition="2823">.. In our training data, we have examples like widen highway, widen road and widen motorway. If we 62 see that we can widen a highway, we learn that we can also widen a sidewalk, bridge, runway, etc. We also made use of the person-name/instance pairs automatically extracted by Fleischman et al. (2003).2 This data provides counts for pairs such as “Edwin Moses, hurdler” and “William Farley, industrialist.” We have features for all concepts and therefore learn their association with each verb. 4 Experiments and Results 4.1 Set up We parsed the 3 GB AQUAINT corpus (Voorhees, 2002) using Minipar (Lin, 1998b), and collected verb-object and verb-subject frequencies, building an empirical MI model from this data. Verbs and nouns were converted to their (possibly multi-token) root, and string case was preserved. Passive subjects (the car was bought) were converted to objects (bought car). We set the MI-threshold, T, to be 0, and the negative-to-positive ratio, K, to be 2. Numerous previous pseudodisambiguation evaluations only include arguments that occur between 30 and 3000 times (Erk, 2007; Keller and Lapata, 2003; Rooth et al., 1999). Presumably the lower bound is to help ensure the negative arg</context>
+<context position="20326" citStr="Lin (1998" startWordPosition="3227" endWordPosition="3228">cations: max at j=2) on the macroaveraged score across all development partitions. Note that we can not use the development set to optimize T and K because the development examples are obtained after setting these values. 4.2 Feature weights It is interesting to inspect the feature weights returned by our system. In particular, the weights on the verb co-occurrence features (Section 3.3.1) provide a high-quality, argument-specific similarityranking of other verb contexts. The DSP parameters for eat, for example, place high weight on features like Pr(nlbraise), Pr(nlration), and Pr(nlgarnish). Lin (1998a)’s similar word list for eat misses these but includes sleep (ranked 6) and sit (ranked 14), because these have similar subjects to eat. Discriminative, context-specific training seems to yield a better set of similar predicates, e.g. the highest-ranked contexts for DSP„oo, on the verb join,3 lead 1.42, rejoin 1.39, form 1.34, belong to 1.31, found 1.31, quit 1.29, guide 1.19, induct 1.19, launch (subj) 1.18, work at 1.14 give a better SIMS(join) for Equation (1) than the top similarities returned by (Lin, 1998a): participate 0.164, lead 0.150, return to 0.148, say 0.143, rejoin 0.142, sign </context>
+<context position="22470" citStr="Lin (1998" startWordPosition="3574" endWordPosition="3575">71 0.65 0.77 0.90 0.83 0.81 1.00 Table 1: Pseudodisambiguation results averaged across each example (MacroAvg), weighted by word frequency (MicroAvg), plus coverage and accuracy of pairwise competition (Pairwise). proposed systems that also require no manuallycompiled resources like WordNet. We convert Dagan et al. (1999)’s similarity-smoothed probability to MI by replacing the empirical Pr(nlv) in Equation (2) with the smoothed PrSIM from Equation (1). We also test an MI model inspired by Erk (2007): �MISIM(n, v) = log Sim(n′, n) Pr(v, n′) n′∈SIMS(n) Pr(v)Pr(n′) We gather similar words using Lin (1998a), mining similar verbs from a comparable-sized parsed corpus, and collecting similar nouns from a broader 10 GB corpus of English text.4 We also use Keller and Lapata (2003)’s approach to obtaining web-counts. Rather than mining parse trees, this technique retrieves counts for the pattern “V Det N” in raw online text, where V is any inflection of the verb, Det is the, a, or the empty string, and N is the singular or plural form of the noun. We compute a web-based MI by collecting Pr(n, v), Pr(n), and Pr(v) using all inflections, except we only use the root form of the noun. Rather than using</context>
+</contexts>
+<marker>Lin, 1998</marker>
+<rawString>Dekang Lin. 1998b. Dependency-based evaluation of MINIPAR. In LREC Workshop on the Evaluation of Parsing Systems.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>George A Miller</author>
+<author>Richard Beckwith</author>
+<author>Christiane Fellbaum</author>
+<author>Derek Gross</author>
+<author>Katherine J Miller</author>
+</authors>
+<title>Introduction to WordNet: an on-line lexical database.</title>
+<date>1990</date>
+<journal>International Journal ofLexicography,</journal>
+<pages>3--4</pages>
+<contexts>
+<context position="4283" citStr="Miller et al., 1990" startWordPosition="627" endWordPosition="630">ical Methods in Natural Language Processing, pages 59–68, Honolulu, October 2008. c�2008 Association for Computational Linguistics occurrence model on two tasks: identifying objects of verbs in an unseen corpus and finding pronominal antecedents in coreference data. 2 Related Work Most approaches to SPs generalize from observed predicate-argument pairs to semantically similar ones by modeling the semantic class of the argument, following Resnik (1996). For example, we might have a class Mexican Food and learn that the entire class is suitable for eating. Usually, the classes are from WordNet (Miller et al., 1990), although they can also be inferred from clustering (Rooth et al., 1999). Brockmann and Lapata (2003) compare a number of WordNet-based approaches, including Resnik (1996), Li and Abe (1998), and Clark and Weir (2002), and found that the more sophisticated class-based approaches do not always outperform simple frequency-based models. Another line of research generalizes using similar words. Suppose we are calculating the probability of a particular noun, n, occurring as the object argument of a given verbal predicate, v. Let Pr(n|v) be the empirical maximum-likelihood estimate from observed t</context>
+</contexts>
+<marker>Miller, Beckwith, Fellbaum, Gross, Miller, 1990</marker>
+<rawString>George A. Miller, Richard Beckwith, Christiane Fellbaum, Derek Gross, and Katherine J. Miller. 1990. Introduction to WordNet: an on-line lexical database. International Journal ofLexicography, 3(4):235–244.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>MUC-7</author>
+</authors>
+<title>Coreference task definition (v3.0, 13 Jul 97).</title>
+<date>1997</date>
+<booktitle>In Proceedings of the Seventh Message Understanding Conference (MUC-7).</booktitle>
+<marker>MUC-7, 1997</marker>
+<rawString>MUC-7. 1997. Coreference task definition (v3.0, 13 Jul 97). In Proceedings of the Seventh Message Understanding Conference (MUC-7).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Daisuke Okanohara</author>
+<author>Jun’ichi Tsujii</author>
+</authors>
+<title>A discriminative language model with pseudo-negative samples.</title>
+<date>2007</date>
+<booktitle>In ACL,</booktitle>
+<pages>73--80</pages>
+<contexts>
+<context position="7274" citStr="Okanohara and Tsujii (2007)" startWordPosition="1094" endWordPosition="1097"> what kinds of arguments occur with a predicate by encoding features of the arguments. Recent distributed and latentvariable models also represent words with feature vectors (Bengio et al., 2003; Blitzer et al., 2005). Many of these approaches learn both the feature weights and the feature representation. Vectors must be kept low-dimensional for tractability, while learning and inference on larger scales is impractical. By partitioning our examples by predicate, we can efficiently use high-dimensional, sparse vectors. Our technique of generating negative examples is similar to the approach of Okanohara and Tsujii (2007). They learn a classifier to disambiguate actual sentences from pseudo-negative examples sampled from an N-gram language model. Smith and Eisner (2005) also automatically generate negative examples. They perturb their input sequence (e.g. the sentence word order) to create a neighborhood of implicit negative evidence. We create negatives by substitution rather than perturbation, and use corpuswide statistics to choose our negative instances. 3 Methodology 3.1 Creating Examples To learn a discriminative model of selectional preference, we create positive and negative training examples automatic</context>
+</contexts>
+<marker>Okanohara, Tsujii, 2007</marker>
+<rawString>Daisuke Okanohara and Jun’ichi Tsujii. 2007. A discriminative language model with pseudo-negative samples. In ACL, pages 73–80.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Patrick Pantel</author>
+<author>Dekang Lin</author>
+</authors>
+<title>Discovering word senses from text.</title>
+<date>2002</date>
+<booktitle>In KDD,</booktitle>
+<pages>613--619</pages>
+<contexts>
+<context position="13535" citStr="Pantel and Lin, 2002" startWordPosition="2124" endWordPosition="2127">2007). 61 classifier for each predicate independently. The prediction becomes yv = Av · 4)v(n), where Av are the learned weights corresponding to predicate v and all features 4)v(n)=f(n) depend on the argument only. Some predicate partitions may have insufficient examples for training. Also, a predicate may occur in test data that was unseen during training. To handle these instances, we decided to cluster lowfrequency predicates. In our experiments assigning SP to verb-object pairs, we cluster all verbs that have less than 250 positive examples, using clusters generated by the CBC algorithm (Pantel and Lin, 2002). For example, the low-frequency verbs incarcerate, parole, and court-martial are all mapped to the same partition, while more-frequent verbs like arrest and execute each have their own partition. About 5.5% of examples are clustered, corresponding to 30% of the 7367 total verbs. 40% of verbs (but only 0.6% of examples) were not in any CBC cluster; these were mapped to a single backoff partition. The parameters for each partition, Av, can be trained with any supervised learning technique. We use SVM (Section 4.1) because it is effective in similar high-dimensional, sparse-vector settings, and </context>
+<context position="16838" citStr="Pantel and Lin, 2002" startWordPosition="2666" endWordPosition="2669"> of the noun string: the number of tokens, the case, and whether it contains digits, hyphens, an apostrophe, or other punctuation. We also include a feature for the first and last token, and fire indicator features if any token in the noun occurs on in-house lists of given names, family names, cities, provinces, countries, corporations, languages, etc. We also fire a feature if a token is a corporate designation (like inc. or ltd.) or a human one (like Mr. or Sheik). 3.3.3 Semantic classes Motivated by previous SP models that make use of semantic classes, we generated word clusters using CBC (Pantel and Lin, 2002) on a 10 GB corpus, giving 3620 clusters. If a noun belongs in a cluster, a corresponding feature fires. If a noun is in none of the clusters, a no-class feature fires. As an example, CBC cluster 1891 contains: sidewalk, driveway, roadway, footpath, bridge, highway, road, runway, street, alley, path, Interstate, ... In our training data, we have examples like widen highway, widen road and widen motorway. If we 62 see that we can widen a highway, we learn that we can also widen a sidewalk, bridge, runway, etc. We also made use of the person-name/instance pairs automatically extracted by Fleisch</context>
+</contexts>
+<marker>Pantel, Lin, 2002</marker>
+<rawString>Patrick Pantel and Dekang Lin. 2002. Discovering word senses from text. In KDD, pages 613–619.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Patrick Pantel</author>
+<author>Rahul Bhagat</author>
+<author>Bonaventura Coppola</author>
+<author>Timothy Chklovski</author>
+<author>Eduard Hovy</author>
+</authors>
+<title>ISP: Learning inferential selectional preferences.</title>
+<date>2007</date>
+<booktitle>In NAACL-HLT,</booktitle>
+<pages>564--571</pages>
+<contexts>
+<context position="5820" citStr="Pantel et al., 2007" startWordPosition="859" endWordPosition="862">r arguments, while Wang et al. (2005) use the cross-product of similar pairs. One key issue is how to define the set of similar words, SIMS(w). Erk (2007) compared a number of techniques for creating similar-word sets and found that both the Jaccard coefficient and Lin (1998a)’s information-theoretic metric work best. Similarity-smoothed models are simple to compute, potentially adaptable to new domains, and require no manually-compiled resources such as WordNet. Selectional Preferences have also been a recent focus of researchers investigating the learning of paraphrases and inference rules (Pantel et al., 2007; Roberto et al., 2007). Inferences such as “[X wins Y] ⇒ [X plays Y]” are only valid for certain arguments X and Y. We follow Pantel et al. (2007) in using automatically-extracted semantic classes to help characterize plausible arguments. Discriminative techniques are widely used in NLP and have been applied to the related tasks of word prediction and language modeling. Even-Zohar and Roth (2000) use a classifier to predict the most likely word to fill a position in a sentence (in their experiments: a verb) from a set of candidates (sets of verbs), by inspecting the context of the target toke</context>
+<context position="12919" citStr="Pantel et al. (2007)" startWordPosition="2025" endWordPosition="2028">e predicate will be completely independent from those for every other predicate. Thus rather than a single training procedure, we can actually partition the examples by predicate, and train a 1For a fixed verb, MI is proportional to Keller and Lapata (2003)’s conditional probability scores for pseudodisambiguation of (v, n, n′) triples: Pr(v|n) = Pr(v, n)/Pr(n), which was shown to be a better measure of association than co-occurrence frequency f(v, n). Normalizing by Pr(v) (yielding MI) allows us to use a constant threshold across all verbs. MI was also recently used for inference-rule SPs by Pantel et al. (2007). 61 classifier for each predicate independently. The prediction becomes yv = Av · 4)v(n), where Av are the learned weights corresponding to predicate v and all features 4)v(n)=f(n) depend on the argument only. Some predicate partitions may have insufficient examples for training. Also, a predicate may occur in test data that was unseen during training. To handle these instances, we decided to cluster lowfrequency predicates. In our experiments assigning SP to verb-object pairs, we cluster all verbs that have less than 250 positive examples, using clusters generated by the CBC algorithm (Pante</context>
+</contexts>
+<marker>Pantel, Bhagat, Coppola, Chklovski, Hovy, 2007</marker>
+<rawString>Patrick Pantel, Rahul Bhagat, Bonaventura Coppola, Timothy Chklovski, and Eduard Hovy. 2007. ISP: Learning inferential selectional preferences. In NAACL-HLT, pages 564–571.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Philip Resnik</author>
+</authors>
+<title>Selectional constraints: An information-theoretic model and its computational realization.</title>
+<date>1996</date>
+<journal>Cognition,</journal>
+<pages>61--127</pages>
+<contexts>
+<context position="4118" citStr="Resnik (1996)" startWordPosition="600" endWordPosition="601"> better correlates with human plausibility judgments. It also shows strong gains over a Mutual Information-based coProceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 59–68, Honolulu, October 2008. c�2008 Association for Computational Linguistics occurrence model on two tasks: identifying objects of verbs in an unseen corpus and finding pronominal antecedents in coreference data. 2 Related Work Most approaches to SPs generalize from observed predicate-argument pairs to semantically similar ones by modeling the semantic class of the argument, following Resnik (1996). For example, we might have a class Mexican Food and learn that the entire class is suitable for eating. Usually, the classes are from WordNet (Miller et al., 1990), although they can also be inferred from clustering (Rooth et al., 1999). Brockmann and Lapata (2003) compare a number of WordNet-based approaches, including Resnik (1996), Li and Abe (1998), and Clark and Weir (2002), and found that the more sophisticated class-based approaches do not always outperform simple frequency-based models. Another line of research generalizes using similar words. Suppose we are calculating the probabili</context>
+<context position="27050" citStr="Resnik (1996)" startWordPosition="4315" endWordPosition="4316">urrence models like MI to fail. As a further experiment, we re-trained DSP but with only the string-based features removed. Overall macro-averaged F-score dropped from 0.65 to 0.64 (a statistically significant reduction in performance). The system scored nearly identically to DSP on the high-frequency nouns, but performed roughly 15% worse on the nouns that occurred less than ten times. This shows that the string-based features are important for selectional preference, and particularly helpful for low-frequency nouns. 4.4 Human Plausibility Table 2 compares some of our systems on data used by Resnik (1996) (also Appendix 2 in Holmes et al. (1989)). The plausibility of these pairs was initially judged based on the experimenters’ intuitions, and later confirmed in a human experiment. We include the scores of Resnik’s system, and note that its errors were attributed to sense ambiguity and other limitations of class-based approaches (Resnik, 1996).8 8For example, warn-engine scores highly because engines are in the class entity, and physical entities (e.g. people) are often objects of warn. Unlike DSP, Resnik’s approach cannot learn that for warn, “the property of being a person is more Seen Criter</context>
+<context position="29708" citStr="Resnik, 1996" startWordPosition="4774" endWordPosition="4775">unseen corpus (1, 2, 3, &gt;3). DSP accepts far more pairs than MI (73% vs. 44%), even far more than a system that accepts any previously observed verb-object combination as plausible (57%). Recall is higher on more frequent verb-object pairs, but 70% of the pairs occurred only once in the corpus. Even if we smooth MI by smoothing Pr(n|v) in Equation 2 using modified KN-smoothing (Chen and Goodman, 1998), the recall of MI&gt;0 on SJM only increases from 44.1% to 44.9%, still far below DSP. Frequency-based models have fundamentally low coverage. As furimportant than the property of being an entity” (Resnik, 1996). DSPall Erk (2007) Keller and Lapata (2003) F-Score 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0 65 Verb Plaus./Implaus. Resnik Dagan et al. Erk MI DSP see friend/method 5.79/-0.01 0.20/1.40* 0.46/-0.07 1.11/-0.57 0.98/0.02 read article/fashion 6.80/-0.20 3.00/0.11 3.80/1.90 4.00/— 2.12/-0.65 find label/fever 1.10/0.22 1.50/2.20* 0.59/0.01 0.42/0.07 1.61/0.81 hear story/issue 1.89/1.89* 0.66/1.50* 2.00/2.60* 2.99/-1.03 1.66/0.67 write letter/market 7.26/0.00 2.50/-0.43 3.60/-0.24 5.06/-4.12 3.08/-1.31 urge daughter/contrast 1.14/1.86* 0.14/1.60* 1.10/3.60* -0.95/— -0.34/-0.62 warn driver/engine 4.73</context>
+</contexts>
+<marker>Resnik, 1996</marker>
+<rawString>Philip Resnik. 1996. Selectional constraints: An information-theoretic model and its computational realization. Cognition, 61:127–159.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Basili Roberto</author>
+<author>Diego De Cao</author>
+<author>Paolo Marocco</author>
+<author>Marco Pennacchiotti</author>
+</authors>
+<title>Learning selectional preferences for entailment or paraphrasing rules.</title>
+<date>2007</date>
+<booktitle>In RANLP.</booktitle>
+<marker>Roberto, De Cao, Marocco, Pennacchiotti, 2007</marker>
+<rawString>Basili Roberto, Diego De Cao, Paolo Marocco, and Marco Pennacchiotti. 2007. Learning selectional preferences for entailment or paraphrasing rules. In RANLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mats Rooth</author>
+<author>Stefan Riezler</author>
+<author>Detlef Prescher</author>
+<author>Glenn Carroll</author>
+<author>Franz Beil</author>
+</authors>
+<title>Inducing a semantically annotated lexicon via EM-based clustering.</title>
+<date>1999</date>
+<booktitle>In ACL,</booktitle>
+<pages>104--111</pages>
+<contexts>
+<context position="4356" citStr="Rooth et al., 1999" startWordPosition="639" endWordPosition="642">r 2008. c�2008 Association for Computational Linguistics occurrence model on two tasks: identifying objects of verbs in an unseen corpus and finding pronominal antecedents in coreference data. 2 Related Work Most approaches to SPs generalize from observed predicate-argument pairs to semantically similar ones by modeling the semantic class of the argument, following Resnik (1996). For example, we might have a class Mexican Food and learn that the entire class is suitable for eating. Usually, the classes are from WordNet (Miller et al., 1990), although they can also be inferred from clustering (Rooth et al., 1999). Brockmann and Lapata (2003) compare a number of WordNet-based approaches, including Resnik (1996), Li and Abe (1998), and Clark and Weir (2002), and found that the more sophisticated class-based approaches do not always outperform simple frequency-based models. Another line of research generalizes using similar words. Suppose we are calculating the probability of a particular noun, n, occurring as the object argument of a given verbal predicate, v. Let Pr(n|v) be the empirical maximum-likelihood estimate from observed text. Dagan et al. (1999) define the similarity-weighted probability, PrSI</context>
+<context position="10851" citStr="Rooth et al., 1999" startWordPosition="1674" endWordPosition="1677">ts, hyphens, or begin with a human first name like Bob. DSP encodes these interdependent properties as features in a linear classifier. This classifier can score any noun as a plausible argument of eat if indicative features are present; MI can only assign high plausibility to observed (eat,n) pairs. Similarity-smoothed models can make use of the regularities across similar verbs, but not the finergrained string- and token-based features. Our training examples are similar to the data created for pseudodisambiguation, the usual evaluation task for SP models (Erk, 2007; Keller and Lapata, 2003; Rooth et al., 1999). This data consists of triples (v, n, n′) where v, n is a predicateargument pair observed in the corpus and v, n′ has not been observed. The models score correctly if they rank observed (and thus plausible) arguments above corresponding unobserved (and thus likely implausible) ones. We refer to this as Pairwise Disambiguation. Unlike this task, we classify each predicate-argument pair independently as plausible/implausible. We also use MI rather than frequency to define the positive pairs, ensuring that the positive pairs truly have a statistical association, and are not simply the result of </context>
+<context position="18299" citStr="Rooth et al., 1999" startWordPosition="2903" endWordPosition="2906">Set up We parsed the 3 GB AQUAINT corpus (Voorhees, 2002) using Minipar (Lin, 1998b), and collected verb-object and verb-subject frequencies, building an empirical MI model from this data. Verbs and nouns were converted to their (possibly multi-token) root, and string case was preserved. Passive subjects (the car was bought) were converted to objects (bought car). We set the MI-threshold, T, to be 0, and the negative-to-positive ratio, K, to be 2. Numerous previous pseudodisambiguation evaluations only include arguments that occur between 30 and 3000 times (Erk, 2007; Keller and Lapata, 2003; Rooth et al., 1999). Presumably the lower bound is to help ensure the negative argument is unobserved because it is unsuitable, not because of data sparseness. We wish to use our model on arguments of any frequency, including those that never occurred in the training corpus (and therefore have empty cooccurrence features (Section 3.3.1)). We proceed as follows: first, we exclude pairs whenever the noun occurs less than 3 times in our corpus, removing many misspellings and other noun noise. Next, we omit verb co-occurrence features for nouns that occur less than 10 times, and instead fire a low-count feature. Whe</context>
+</contexts>
+<marker>Rooth, Riezler, Prescher, Carroll, Beil, 1999</marker>
+<rawString>Mats Rooth, Stefan Riezler, Detlef Prescher, Glenn Carroll, and Franz Beil. 1999. Inducing a semantically annotated lexicon via EM-based clustering. In ACL, pages 104–111.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Noah A Smith</author>
+<author>Jason Eisner</author>
+</authors>
+<title>Contrastive estimation: training log-linear models on unlabeled data. In</title>
+<date>2005</date>
+<booktitle>ACL,</booktitle>
+<pages>354--362</pages>
+<contexts>
+<context position="7425" citStr="Smith and Eisner (2005)" startWordPosition="1117" endWordPosition="1120">th feature vectors (Bengio et al., 2003; Blitzer et al., 2005). Many of these approaches learn both the feature weights and the feature representation. Vectors must be kept low-dimensional for tractability, while learning and inference on larger scales is impractical. By partitioning our examples by predicate, we can efficiently use high-dimensional, sparse vectors. Our technique of generating negative examples is similar to the approach of Okanohara and Tsujii (2007). They learn a classifier to disambiguate actual sentences from pseudo-negative examples sampled from an N-gram language model. Smith and Eisner (2005) also automatically generate negative examples. They perturb their input sequence (e.g. the sentence word order) to create a neighborhood of implicit negative evidence. We create negatives by substitution rather than perturbation, and use corpuswide statistics to choose our negative instances. 3 Methodology 3.1 Creating Examples To learn a discriminative model of selectional preference, we create positive and negative training examples automatically from raw text. To create the positives, we automatically parse a large corpus, and then extract the predicate-argument pairs that have a statistic</context>
+</contexts>
+<marker>Smith, Eisner, 2005</marker>
+<rawString>Noah A. Smith and Jason Eisner. 2005. Contrastive estimation: training log-linear models on unlabeled data. In ACL, pages 354–362.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ellen Voorhees</author>
+</authors>
+<title>Overview of the TREC</title>
+<date>2002</date>
+<booktitle>In Proceedings of the Eleventh Text REtrieval Conference (TREC).</booktitle>
+<contexts>
+<context position="17737" citStr="Voorhees, 2002" startWordPosition="2818" endWordPosition="2819">eet, alley, path, Interstate, ... In our training data, we have examples like widen highway, widen road and widen motorway. If we 62 see that we can widen a highway, we learn that we can also widen a sidewalk, bridge, runway, etc. We also made use of the person-name/instance pairs automatically extracted by Fleischman et al. (2003).2 This data provides counts for pairs such as “Edwin Moses, hurdler” and “William Farley, industrialist.” We have features for all concepts and therefore learn their association with each verb. 4 Experiments and Results 4.1 Set up We parsed the 3 GB AQUAINT corpus (Voorhees, 2002) using Minipar (Lin, 1998b), and collected verb-object and verb-subject frequencies, building an empirical MI model from this data. Verbs and nouns were converted to their (possibly multi-token) root, and string case was preserved. Passive subjects (the car was bought) were converted to objects (bought car). We set the MI-threshold, T, to be 0, and the negative-to-positive ratio, K, to be 2. Numerous previous pseudodisambiguation evaluations only include arguments that occur between 30 and 3000 times (Erk, 2007; Keller and Lapata, 2003; Rooth et al., 1999). Presumably the lower bound is to hel</context>
+</contexts>
+<marker>Voorhees, 2002</marker>
+<rawString>Ellen Voorhees. 2002. Overview of the TREC 2002 question answering track. In Proceedings of the Eleventh Text REtrieval Conference (TREC).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Qin Iris Wang</author>
+<author>Dale Schuurmans</author>
+<author>Dekang Lin</author>
+</authors>
+<title>Strictly lexical dependency parsing.</title>
+<date>2005</date>
+<booktitle>In International Workshop on Parsing Technologies,</booktitle>
+<pages>152--159</pages>
+<contexts>
+<context position="5238" citStr="Wang et al. (2005)" startWordPosition="773" endWordPosition="776">Another line of research generalizes using similar words. Suppose we are calculating the probability of a particular noun, n, occurring as the object argument of a given verbal predicate, v. Let Pr(n|v) be the empirical maximum-likelihood estimate from observed text. Dagan et al. (1999) define the similarity-weighted probability, PrSIM, to be: �PrSIM(n|v) � Sim(v′, v)Pr(n|v′) (1) v′∈SIMS(v) where Sim(v′, v) returns a real-valued similarity between two verbs v′ and v (normalized over all pair similarities in the sum). In contrast, Erk (2007) generalizes by substituting similar arguments, while Wang et al. (2005) use the cross-product of similar pairs. One key issue is how to define the set of similar words, SIMS(w). Erk (2007) compared a number of techniques for creating similar-word sets and found that both the Jaccard coefficient and Lin (1998a)’s information-theoretic metric work best. Similarity-smoothed models are simple to compute, potentially adaptable to new domains, and require no manually-compiled resources such as WordNet. Selectional Preferences have also been a recent focus of researchers investigating the learning of paraphrases and inference rules (Pantel et al., 2007; Roberto et al., </context>
+</contexts>
+<marker>Wang, Schuurmans, Lin, 2005</marker>
+<rawString>Qin Iris Wang, Dale Schuurmans, and Dekang Lin. 2005. Strictly lexical dependency parsing. In International Workshop on Parsing Technologies, pages 152–159.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Julie Weeds</author>
+<author>David Weir</author>
+</authors>
+<title>Co-occurrence retrieval: a flexible framework for lexical distributional similarity.</title>
+<date>2005</date>
+<journal>Computational Linguistics,</journal>
+<volume>31</volume>
+<issue>4</issue>
+<contexts>
+<context position="15873" citStr="Weeds and Weir (2005)" startWordPosition="2512" endWordPosition="2515">ude Probj(n|v′) features for every verb that occurs more than 10 times in our corpus. Avv′ may be positive or negative, depending on the relation between v′ and v. We also include features for the probability of the noun occurring as the subject of other verbs, Prs,,bj(n|v′). For example, nouns that can be the object of eat will also occur as the subject of taste and contain. Other contexts, such as adjectival and nominal predicates, could also aid the prediction, but have not yet been investigated. The advantage of tuning similarity to the application of interest has been shown previously by Weeds and Weir (2005). They optimize a few metaparameters separately for the tasks of thesaurus generation and pseudodisambiguation. Our approach, on the other hand, discriminatively sets millions of individual similarity values. Like Weeds and Weir (2005), our similarity values are asymmetric. 3.3.2 String-based We include several simple character-based features of the noun string: the number of tokens, the case, and whether it contains digits, hyphens, an apostrophe, or other punctuation. We also include a feature for the first and last token, and fire indicator features if any token in the noun occurs on in-hou</context>
+</contexts>
+<marker>Weeds, Weir, 2005</marker>
+<rawString>Julie Weeds and David Weir. 2005. Co-occurrence retrieval: a flexible framework for lexical distributional similarity. Computational Linguistics, 31(4):439–475.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

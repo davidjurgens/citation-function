@@ -1,0 +1,1605 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000003">
+<title confidence="0.971026">
+Training dependency parsers by jointly optimizing multiple objectives
+</title>
+<author confidence="0.879688">
+Keith Hall Ryan McDonald Jason Katz-Brown Michael Ringgaard
+</author>
+<affiliation confidence="0.775182">
+Google Research
+</affiliation>
+<email confidence="0.99496">
+{kbhall|ryanmcd|jasonkb|ringgaard}@google.com
+</email>
+<sectionHeader confidence="0.995578" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999757714285714">
+We present an online learning algorithm for
+training parsers which allows for the inclusion
+of multiple objective functions. The primary
+example is the extension of a standard su-
+pervised parsing objective function with addi-
+tional loss-functions, either based on intrinsic
+parsing quality or task-specific extrinsic mea-
+sures of quality. Our empirical results show
+how this approach performs for two depen-
+dency parsing algorithms (graph-based and
+transition-based parsing) and how it achieves
+increased performance on multiple target tasks
+including reordering for machine translation
+and parser adaptation.
+</bodyText>
+<sectionHeader confidence="0.998993" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999977803921569">
+The accuracy and speed of state-of-the-art depen-
+dency parsers has motivated a resumed interest in
+utilizing the output of parsing as an input to many
+downstream natural language processing tasks. This
+includes work on question answering (Wang et al.,
+2007), sentiment analysis (Nakagawa et al., 2010),
+MT reordering (Xu et al., 2009), and many other
+tasks. In most cases, the accuracy of parsers de-
+grades when run on out-of-domain data (Gildea,
+2001; McClosky et al., 2006; Blitzer et al., 2006;
+Petrov et al., 2010). But these accuracies are mea-
+sured with respect to gold-standard out-of-domain
+parse trees. There are few tasks that actually depend
+on the complete parse tree. Furthermore, when eval-
+uated on a downstream task, often the optimal parse
+output has a model score lower than the best parse
+as predicted by the parsing model. While this means
+that we are not properly modeling the downstream
+task in the parsers, it also means that there is some
+information from small task or domain-specific data
+sets which could help direct our search for optimal
+parameters during parser training. The goal being
+not necessarily to obtain better parse performance,
+but to exploit the structure induced from human la-
+beled treebank data while targeting specific extrinsic
+metrics of quality, which can include task specific
+metrics or external weak constraints on the parse
+structure.
+One obvious approach to this problem is to em-
+ploy parser reranking (Collins, 2000). In such a
+setting, an auxiliary reranker is added in a pipeline
+following the parser. The standard setting involves
+training the base parser and applying it to a devel-
+opment set (this is often done in a cross-validated
+jack-knife training framework). The reranker can
+then be trained to optimize for the downstream or
+extrinsic objective. While this will bias the reranker
+towards the target task, it is limited by the oracle
+performance of the original base parser.
+In this paper, we propose a training algorithm for
+statistical dependency parsers (K¨ubler et al., 2009)
+in which a single model is jointly optimized for a
+regular supervised training objective over the tree-
+bank data as well as a task-specific objective – or
+more generally an extrinsic objective – on an ad-
+ditional data set. The case where there are both
+gold-standard trees and a task-specific objective for
+the entire training set is a specific instance of the
+larger problem that we address here. Specifically,
+the algorithm takes the form of an online learner
+where a training instance is selected and the param-
+</bodyText>
+<page confidence="0.962188">
+1489
+</page>
+<note confidence="0.9597145">
+Proceedings of the 2011 Conference on Empirical Methods in Natural Language Processing, pages 1489–1499,
+Edinburgh, Scotland, UK, July 27–31, 2011. c�2011 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.994909565217391">
+eters are optimized based on the objective function Algorithm 1 Structured Perceptron
+associated with the instance (either intrinsic or ex-
+trinsic), thus jointly optimizing multiple objectives.
+An update schedule trades-off the relative impor-
+tance of each objective function. We call our algo-
+rithm augmented-loss training as it optimizes mul-
+tiple losses to augment the traditional supervised
+parser loss.
+There have been a number of efforts to exploit
+weak or external signals of quality to train better pre-
+diction models. This includes work on generalized
+expectation (Mann and McCallum, 2010), posterior
+regularization (Ganchev et al., 2010) and constraint
+driven learning (Chang et al., 2007; Chang et al.,
+2010). The work of Chang et al. (2007) on constraint
+driven learning is perhaps the closest to our frame-
+work and we draw connections to it in Section 5.
+In these studies the typical goal is to use the weak
+signal to improve the structured prediction models
+on the intrinsic evaluation metrics. For our setting
+this would mean using weak application specific sig-
+nals to improve dependency parsing. Though we
+explore such ideas in our experiments, in particular
+for semi-supervised domain adaptation, we are pri-
+marily interested in the case where the weak signal
+is precisely what we wish to optimize, but also de-
+sire the benefit from using both data with annotated
+parse structures and data specific to the task at hand
+to guide parser training.
+In Section 2 we outline the augmented-loss algo-
+rithm and provide a convergence analysis. In Sec-
+tion 3 and 4 we present a set of experiments defin-
+ing diffent augmented losses covering a task-specific
+extrinsic loss (MT reordering), a domain adapta-
+tion loss, and an alternate intrinsic parser loss. In
+all cases we show the augmented-loss framework
+can lead to significant gains in performance. In
+Section 5 we tie our augmented-loss algorithm to
+other frameworks for encoding auxiliary informa-
+tion and/or joint objective optimization.
+2 Methodology
+We present the augmented-loss algorithm in the con-
+text of the structured perceptron. The structured
+perceptron (Algorithm 1) is an on-line learning al-
+gorithm which takes as input: 1) a set of training
+examples di = (xi, yi) consisting of an input sen-
+</bodyText>
+<table confidence="0.9122489375">
+1490
+{Input data sets: D = {dl = (xi, yi) ... dN = (xN, yN)}}
+{Input 0/1 loss: L(Fθ(x), y) = [Fθ(x) =� y ? 1 : 0]}
+{Let: Fθ(x) = arg maxy∈Y 0 · I(y)}
+{Initialize model parameters: 0 = 0}
+repeat
+for i = 1 ... N do
+{Compute structured loss}
+ˆyi = Fθ(xi)
+if L(ˆyi, yi) &gt; 0 then
+{Update model Parameters}
+0 = 0 + I(yi) − I(ˆyi)
+end if
+end for
+until converged
+{Return model 0}
+</table>
+<figureCaption confidence="0.703865387096774">
+tence xi and an output yi; and 2) a loss-function,
+L(ˆy, y), that measures the cost of predicting out-
+put yˆ relative to the gold standard y and is usu-
+ally the 0/1 loss (Collins, 2002). For dependency
+parser training, this set-up consists of input sen-
+tences x and the corresponding gold dependency
+tree y E Yx, where Yx is the space of possible
+parse trees for sentence x. In the perceptron setting,
+Fθ(x) = arg maxy∈Yx θ · Φ(y) where Φ is mapping
+from a parse tree y for sentence x to a high dimen-
+sional feature space. Learning proceeds by predict-
+ing a structured output given the current model, and
+if that structure is incorrect, updating the model: re-
+warding features that fire in the gold-standard Φ(yi),
+and discounting features that fire in the predicted
+output, Φ(ˆyi).
+The structured perceptron, as given in Algo-
+rithm 1, only updates when there is a positive loss,
+meaning that there was a prediction mistake. For
+the moment we will abstract away from details such
+as the precise definition of F(x) and Φ(y). We
+will show in the next section that our augmented-
+loss method is general and can be applied to any de-
+pendency parsing framework that can be trained by
+the perceptron algorithm, such as transition-based
+parsers (Nivre, 2008; Zhang and Clark, 2008) and
+graph-based parsers (McDonald et al., 2005).
+2.1 Augmented-Loss Training
+The augmented-loss training algorithm that we pro-
+pose is based on the structured perceptron; however,
+the augmented-loss training framework is a general
+</figureCaption>
+<bodyText confidence="0.99996225">
+mechanism to incorporate multiple loss functions in
+online learner training. Algorithm 2 is the pseudo-
+code for the augmented-loss structured perceptron
+algorithm. The algorithm is an extension to Algo-
+rithm 1 where there are 1) multiple loss functions
+being evaluated L1, ... , LM; 2) there are multiple
+datasets associated with each of these loss functions
+D1, ... , DM; and 3) there is a schedule for pro-
+cessing examples from each of these datasets, where
+Sched(j, i) is true if the jth loss function should be
+updated on the ith iteration of training. Note that
+for data point dji = (x, y), which is the ith training
+instance of the jth data set, that y does not neces-
+sarily have to be a dependency tree. It can either
+be a task-specific output of interest, a partial tree, or
+even null, in the case where learning will be guided
+strictly by the loss Lj. The training algorithm is ef-
+fectively the same as the perceptron, the primary dif-
+ference is that if Lj is an extrinsic loss, we cannot
+compute the standard updates since we do not nec-
+essarily know the correct parse (the line indicated by
+†). Section 2.2 shows one method for updating the
+parser parameters for extrinsic losses.
+In the experiments in this paper, we only consider
+the case where there are two loss functions: a super-
+vised dependency parsing labeled-attachment loss;
+and an additional loss, examples of which are pre-
+sented in Section 3.
+</bodyText>
+<subsectionHeader confidence="0.985858">
+2.2 Inline Ranker Training
+</subsectionHeader>
+<bodyText confidence="0.9997935">
+In order to make Algorithm 2 more concrete, we
+need a way of defining the loss and resulting pa-
+rameter updates for the case when Lj is not a stan-
+dard supervised parsing loss († from Algorithm 2).
+Assume that we have a cost function C(xi, ˆy, yi)
+which, given a training example (xi, yi) will give a
+score for a parse yˆ ∈ Yxi relative to some output
+yi. While we can compute the score for any parse,
+we are unable to determine the features associated
+with the optimal parse, as yi need not be a parse
+tree. For example, consider a machine translation re-
+ordering system which uses the parse yˆ to reorder the
+words of xi, the optimal reordering being yi. Then
+C(xi, ˆy, yi) is a reordering cost which is large if the
+predicted parse induces a poor reordering of xi.
+We propose a general purpose loss function which
+is based on parser k-best lists. The inline reranker
+uses the currently trained parser model θ to parse
+</bodyText>
+<equation confidence="0.9168957">
+Algorithm 2 Augmented-Loss Perceptron
+{Input data sets}:
+D1 = {d11 = (x11, y11) ... d1N1 = (x1N1, y1N1)},
+. . .
+DM = {dM1 = (xM1 , yM1 ) ... dMNM = (xMNM , yM NM )}
+{Input loss functions: L1 ... LM}
+{Initialize indexes: c1 ... cM = ~0}
+{Initialize model parameters: θ = ~0}
+i = 0
+repeat
+for j = 1 ... M do
+{Check whether to update Lj on iteration i}
+if Sched(j, i) then
+{Compute index of instance – reset if cj ≡ Nj}
+cj = [(cj ≡ Nj) ? 0 : cj + 1]
+{Compute structured loss for instance}
+if Lj is intrinsic loss then
+yˆ = Fθ(xj
+cj )
+if Lj(ˆy, yjcj ) &gt; 0 then
+θ = θ + Φ(yjcj ) − Φ(ˆy) {yjcj is a tree}
+end if
+else if Lj is an extrinsic loss then
+{See Section 2.2}†
+end if
+end if
+end for
+i = i + 1
+until converged
+{Return model θ}
+</equation>
+<bodyText confidence="0.985754615384616">
+the external input, producing a k-best set of parses:
+F k-best
+θ (xi) = {ˆy1, ... , ˆyk}. We can compute the
+cost function C(xi, ˆy, yi) for all yˆ ∈ F k-best
+θ (xi). If
+the 1-best parse, ˆy1, has the lowest cost, then there is
+no lower cost parse in this k-best list. Otherwise, the
+lowest-cost parse in Fk-best
+θ (xi) is taken to be the
+correct output structure yi, and the 1-best parse is
+taken to be an incorrect prediction. We can achieve
+this by substituting the following into Algorithm 2
+at line †.
+</bodyText>
+<equation confidence="0.90812175">
+Algorithm 3 Reranker Loss
+{ˆy1, . . . , ˆyk}= F k-best
+θ (xi)
+τ = minτ C(xjcj, ˆyτ, yjcj) {τ is min const index}
+Lj(ˆy1,yjcj) = C(xj cj, ˆy1,yj cj) − C(xjcj,ˆyτ,yjcj)
+if Lj(ˆy1, yjcj) &gt; 0 then
+θ = θ + d(ˆyτ) − d(ˆy1)
+end if
+</equation>
+<bodyText confidence="0.996739666666667">
+Again the algorithm only updates when there is
+an error – when the 1-best output has a higher cost
+than any other output in the k-best list – resulting
+</bodyText>
+<page confidence="0.952295">
+1491
+</page>
+<bodyText confidence="0.999983964285714">
+in positive Lj. The intuition behind this method is
+that in the presence of only a cost function and a
+k-best list, the parameters will be updated towards
+the parse structure that has the lowest cost, which
+over time will move the parameters of the model to
+a place with low extrinsic loss.
+We exploit this formulation of the general-
+purpose augmented-loss function as it allows one to
+include any extrinsic cost function which is depen-
+dent of parses. The scoring function used does not
+need to be factored, requiring no internal knowledge
+of the function itself. Furthermore, we can apply this
+to any parsing algorithm which can generate k-best
+lists. For each parse, we must retain the features
+associated with the parse (e.g., for transition-based
+parsing, the features associated with the transition
+sequence resulting in the parse).
+There are two significant differences from the in-
+line reranker loss function and standard reranker
+training. First, we are performing this decision per
+example as each data item is processed (this is done
+in the inner loop of the Algorithm 2). Second, the
+feedback function for selecting a parse is based on
+an external objective function. The second point is
+actually true for many minimum-error-rate training
+scenarios, but in those settings the model is updated
+as a post-processing stage (after the base-model is
+trained).
+</bodyText>
+<subsectionHeader confidence="0.999936">
+2.3 Convergence of Inline Ranker Training
+</subsectionHeader>
+<bodyText confidence="0.9509952">
+A training set D is loss-separable with margin γ &gt; 0
+if there exists a vector u with l Iul I = 1 such that
+for all y&apos;, y&apos;&apos; E Yx and (x, y) E D, if L(y&apos;, y) &lt;
+L(y&apos;&apos;, y), then u·`F(y&apos;)−u·`F(y&apos;&apos;) &gt; γ. Furthermore,
+let R &gt; II`F(y) − `F(y&apos;)11, for all y, y&apos;.
+</bodyText>
+<construct confidence="0.970319">
+Assumption 1. Assume training set D is loss-
+separable with margin γ.
+Theorem 1. Given Assumption 1. Let m be the num-
+ber of mistakes made when training the perceptron
+(Algorithm 2) with inline ranker loss (Algorithm 3)
+on D, where a mistake occurs for (x, y) E D with
+parameter vector θ when 1ˆyj E F k-best
+θ (x) where
+</construct>
+<bodyText confidence="0.997551157894737">
+ˆyj =� ˆy1 and L(ˆyj, y) &lt; L(ˆy1, y). If training is run
+indefinitely, then m &lt; R2 γ2.
+Proof. Identical to the standard perceptron proof,
+e.g., Collins (2002), by inserting in loss-separability
+for normal separability.
+Like the original perceptron theorem, this implies
+that the algorithm will converge. However, unlike
+the original theorem, it does not imply that it will
+converge to a parameter vector θ such that for all
+(x, y) E D, if yˆ = arg maxg θ ·`F(ˆy) then L(ˆy, y) =
+0. Even if we assume for every x there exists an out-
+put with zero loss, Theorem 1 still makes no guar-
+antees. Consider a training set with one instance
+(x, y). Now, set k = 2 for the k-best output list and
+let ˆy1, ˆy2, and ˆy3 be the top-3 scoring outputs and
+let L(ˆy1, y) = 1, L(ˆy2, y) = 2 and L(ˆy3, y) = 0.
+In this case, no updates will ever be made and ˆy1
+will remain unchanged even though it doesn’t have
+minimal loss. Consider the following assumption:
+</bodyText>
+<construct confidence="0.7691245">
+Assumption 2. For any parameter vector θ that ex-
+ists during training, either 1) for all (x, y) E D,
+L(ˆy1, y) = 0 (or some optimal minimum loss),
+or 2) there exists at least one (x, y) E D where
+</construct>
+<equation confidence="0.904089">
+1ˆyj E Fk-best
+θ (x) such that L(ˆyj, y) &lt; L(ˆy1, y).
+</equation>
+<bodyText confidence="0.9990775">
+Assumption 2 states that for any θ that exists
+during training, but before convergence, there is at
+least one example in the training data where k is
+large enough to include one output with a lower loss
+when ˆy1 does not have the optimal minimal loss. If
+k = oc, then this is the standard perceptron as it
+guarantees the optimal loss output to be in the k-best
+list. But we are assuming something much weaker
+here, i.e., not that the k-best list will include the min-
+imal loss output, only a single output with a lower
+loss than the current best guess. However, it is strong
+enough to show the following:
+</bodyText>
+<construct confidence="0.766804333333333">
+Theorem 2. Given Assumption 1 and Assumption 2.
+Training the perceptron (Algorithm 2) with inline
+ranker loss (Algorithm 3) on D 1) converges in fi-
+nite time, and 2) produces parameters θ such that
+for all (x, y) E D, if yˆ = arg maxg θ · `F(ˆy) then
+L(ˆy, y) = 0 (or equivalent minimal loss).
+</construct>
+<bodyText confidence="0.994793777777778">
+Proof. It must be the case for all (x, y) E D that
+L(ˆy1, y) = 0 (and ˆy1 is the argmax) after a finite
+amount of time. Otherwise, by Assumption 2, there
+exists some x, such that when it is next processed,
+there would exist an output in the k-best list that
+had a lower loss, which will result in an additional
+mistake. Theorem 1 guarantees that this can not
+continue indefinitely as the number of mistakes is
+bounded.
+</bodyText>
+<page confidence="0.977469">
+1492
+</page>
+<bodyText confidence="0.99998162962963">
+Thus, the perceptron algorithm will converge to
+optimal minimal loss under the assumption that k
+is large enough so that the model can keep improv-
+ing. Note that this does not mean k must be large
+enough to include a zero or minimum loss output,
+just large enough to include a better output than
+the current best hypothesis. Theorem 2, when cou-
+pled with Theorem 1, implies that augmented-loss
+learning will make at most R2/γ2 mistakes at train-
+ing, but does not guarantee the rate at which these
+mistakes will be made, only that convergence is fi-
+nite, providing that the scheduling time (defined by
+Sched()) between seeing the same instance is always
+finite, which is always true in our experiments.
+This analysis does not assume anything about the
+loss L. Every instance (x, y) can use a different loss.
+It is only required that the loss for a specific input-
+output pair is fixed throughout training. Thus, the
+above analysis covers the case where some training
+instances use an extrinsic loss and others an intrin-
+sic parsing loss. This also suggests more efficient
+training methods when extracting the k-best list is
+prohibitive. One can parse with k = 2, 4, 8,16, .. .
+until an k is reached that includes a lower loss parse.
+It may be the case that for most instances a small
+k is required, but the algorithm is doing more work
+unnecessarily if k is large.
+</bodyText>
+<sectionHeader confidence="0.999567" genericHeader="introduction">
+3 Experimental Set-up
+</sectionHeader>
+<subsectionHeader confidence="0.98546">
+3.1 Dependency Parsers
+</subsectionHeader>
+<bodyText confidence="0.970267571428571">
+The augmented-loss framework we present is gen-
+eral in the sense that it can be combined with any
+loss function and any parser, provided the parser can
+be parameterized as a linear classifier, trained with
+the perceptron and is capable of producing a k-best
+list of trees. For our experiments we focus on two
+dependency parsers.
+</bodyText>
+<listItem confidence="0.995931">
+• Transition-based: An implementation of the
+</listItem>
+<bodyText confidence="0.859211277777778">
+transition-based dependency parsing frame-
+work (Nivre, 2008) using an arc-eager transi-
+tion strategy and are trained using the percep-
+tron algorithm as in Zhang and Clark (2008)
+with a beam size of 8. Beams with varying
+sizes can be used to produce k-best lists. The
+features used by all models are: the part-of-
+speech tags of the first four words on the buffer
+and of the top two words on the stack; the word
+identities of the first two words on the buffer
+and of the top word on the stack; the word iden-
+tity of the syntactic head of the top word on the
+stack (if available); dependency arc label iden-
+tities for the top word on the stack, the left and
+rightmost modifier of the top word on the stack,
+and the left most modifier of the first word in
+the buffer (if available). All feature conjunc-
+tions are included.
+</bodyText>
+<listItem confidence="0.99431">
+• Graph-based: An implementation of graph-
+</listItem>
+<bodyText confidence="0.856943666666667">
+based parsing algorithms with an arc-factored
+parameterization (McDonald et al., 2005). We
+use the non-projective k-best MST algorithm to
+generate k-best lists (Hall, 2007), where k = 8
+for the experiments in this paper. The graph-
+based parser features used in the experiments
+in this paper are defined over a word, wi at po-
+sition i; the head of this word wρ(i) where ρ(i)
+provides the index of the head word; and part-
+of-speech tags of these words ti. We use the
+following set of features similar to McDonald
+et al. (2005):
+</bodyText>
+<equation confidence="0.901041785714286">
+isolated features: wi, ti, wρ(i), tρ(i)
+word-tag pairs: (wi, ti); (wρ(i), tρ(i))
+word-head pairs: (wi, wρ(i)), (ti, tρ(i))
+word-head-tag triples: (tρ(i), wi, ti)
+(wρ(i), wi, ti)
+(wρ(i), tρ(i), ti)
+(wρ(i), tρ(i), wi)
+tag-neighbourhood: (tρ(i), tρ(i)+1, ti−1, ti)
+(tρ(i), tρ(i)+1, ti+1, ti)
+(tρ(i), tρ(i)−1, ti−1, ti)
+(tρ(i), tρ(i)−1, ti+1, ti)
+between features: ∀j i &lt; j &lt; p(i)  ||p(i) &lt; j &lt; i
+(tρ(i), tj, ti)
+arc-direction/length : (i − ρ(i) &gt; 0, |i − ρ(i)|)
+</equation>
+<subsectionHeader confidence="0.998321">
+3.2 Data and Tasks
+</subsectionHeader>
+<bodyText confidence="0.9999022">
+In the next section, we present a set of scoring func-
+tions that can be used in the inline reranker loss
+framework, resulting in a new augmented-loss for
+each one. Augmented-loss learning is then applied
+to target a downstream task using the loss functions
+to measure gains. We show empirical results for two
+extrinsic loss-functions (optimizing for the down-
+stream task): machine translation and domain adap-
+tation; and for one intrinsic loss-function: an arc-
+length parsing score. For some experiments we also
+</bodyText>
+<page confidence="0.794543">
+1493
+</page>
+<table confidence="0.998053555555555">
+Exact Reorder
+35.29 76.49
+38.71 78.19
+39.02 78.39
+39.58 78.67
+25.71 69.84
+28.99 72.23
+29.99 72.88
+30.03 73.15
+</table>
+<bodyText confidence="0.999692571428571">
+measure the standard intrinsic parser metrics unla-
+beled attachment score (UAS) and labeled attach-
+ment score (LAS) (Buchholz and Marsi, 2006).
+In terms of treebank data, the primary training
+corpus is the Penn Wall Street Journal Treebank
+(PTB) (Marcus et al., 1993). We also make use
+of the Brown corpus, and the Question Treebank
+(QTB) (Judge et al., 2006). For PTB and Brown
+we use standard training/development/testing splits
+of the data. For the QTB we split the data into
+three sections: 2000 training, 1000 development,
+and 1000 test. All treebanks are converted to de-
+pendency format using the Stanford converter v1.6
+(de Marneffe et al., 2006).
+</bodyText>
+<sectionHeader confidence="0.999908" genericHeader="background">
+4 Experiments
+</sectionHeader>
+<subsectionHeader confidence="0.993009">
+4.1 Machine Translation Reordering Score
+</subsectionHeader>
+<bodyText confidence="0.9997106875">
+As alluded to in Section 2.2, we use a reordering-
+based loss function to improve word order in a ma-
+chine translation system. In particular, we use a sys-
+tem of source-side reordering rules which, given a
+parse of the source sentence, will reorder the sen-
+tence into a target-side order (Collins et al., 2005).
+In our experiments we work with a set of English-
+Japanese reordering rules1 and gold reorderings
+based on human generated correct reordering of an
+aligned target sentences. We use a reordering score
+based on the reordering penalty from the METEOR
+scoring metric. Though we could have used a fur-
+ther downstream measure like BLEU, METEOR has
+also been shown to directly correlate with translation
+quality (Banerjee and Lavie, 2005) and is simpler to
+measure.
+</bodyText>
+<equation confidence="0.994103">
+reorder-score = 1 −
+# chunks − 1
+# unigrams matched − 1
+reorder-cost = 1 − reorder-score
+</equation>
+<bodyText confidence="0.999835625">
+All reordering augmented-loss experiments are
+run with the same treebank data as the baseline
+(the training portions of PTB, Brown, and QTB).
+The extrinsic reordering training data consists of
+10930 examples of English sentences and their cor-
+rect Japanese word-order. We evaluate our results on
+an evaluation set of 6338 examples of similarly cre-
+ated reordering data. The reordering cost, evaluation
+</bodyText>
+<footnote confidence="0.721278">
+1Our rules are similar to those from Xu et al. (2009).
+</footnote>
+<equation confidence="0.807245875">
+trans–PTB + Brown + QTB
+trans–0.5xaug.-loss
+trans–1.0xaug.-loss
+trans–2.0xaug.-loss
+graph–PTB + Brown + QTB
+graph–0.5x aug.-loss
+graph–1.0xaug.-loss
+graph–2.0xaug.-loss
+</equation>
+<tableCaption confidence="0.912635">
+Table 1: Reordering scores for parser-based reordering
+</tableCaption>
+<figureCaption confidence="0.485201857142857">
+(English-to-Japanese). Exact is the number of correctly
+reordered sentences. All models use the same treebank-
+data (PTB, QTB, and the Brown corpus). Results for
+three augmented-loss schedules are shown: 0.5 where for
+every two treebank updates we make one augmented-loss
+update, 1 is a 1-to-1 mix, and 2 is where we make twice
+as many augmented-loss updates as treebank updates.
+</figureCaption>
+<bodyText confidence="0.999883846153846">
+criteria and data used in our experiments are based
+on the work of Talbot et al. (2011).
+Table 1 shows the results of using the reordering
+cost as an augmented-loss to the standard treebank
+objective function. Results are presented as mea-
+sured by the reordering score as well as a coarse
+exact-match score (the number of sentences which
+would have correct word-order given the parse and
+the fixed reordering rules). We see continued im-
+provements as we adjust the schedule to process the
+extrinsic loss more frequently, the best result being
+when we make two augmented-loss updates for ev-
+ery one treebank-based loss update.
+</bodyText>
+<subsectionHeader confidence="0.997298">
+4.2 Semi-supervised domain adaptation
+</subsectionHeader>
+<bodyText confidence="0.999988785714286">
+Another application of the augmented-loss frame-
+work is to improve parser domain portability in the
+presence of partially labeled data. Consider, for ex-
+ample, the case of questions. Petrov et al. (2010)
+observed that dependency parsers tend to do quite
+poorly when parsing questions due to their lim-
+ited exposure to them in the news corpora from
+the PennTreebank. Table 2 shows the accuracy
+of two parsers (LAS, UAS and the F1 of the root
+dependency attachment) on the QuestionBank test
+data. The first is a parser trained on the standard
+training sections of the PennTreebank (PTB) and
+the second is a parser trained on the training por-
+tion of the QuestionBank (QTB). Results for both
+</bodyText>
+<page confidence="0.991967">
+1494
+</page>
+<table confidence="0.994434285714286">
+LAS UAS Root-F1
+67.97 73.52 47.60
+84.59 89.59 91.06
+76.27 86.42 83.41
+65.27 72.72 43.10
+82.73 87.44 91.58
+72.82 80.68 86.26
+</table>
+<tableCaption confidence="0.747140285714286">
+Table 2: Domain adaptation results. Table shows (for
+both transition and graph-based parsers) the labeled ac-
+curacy score (LAS), unlabeled accuracy score (UAS)
+and Root-F1 for parsers trained on the PTB and QTB
+and tested on the QTB. The augmented-loss parsers are
+trained on the PTB but with a partial tree loss on QTB
+that considers only root dependencies.
+</tableCaption>
+<bodyText confidence="0.9999002">
+transition-based parsers and graph-based parsers are
+given. Clearly there is significant drop in accu-
+racy for a parser trained on the PTB. For example,
+the transition-based PTB parser achieves a LAS of
+67.97% relative to 84.59% for the parser trained on
+the QTB.
+We consider the situation where it is possible to
+ask annotators a single question about the target do-
+main that is relatively easy to answer. The question
+should be posed so that the resulting answer pro-
+duces a partially labeled dependency tree. Root-F1
+scores from Table 2 suggest that one simple ques-
+tion is “what is the main verb of this sentence?” for
+sentences that are questions. In most cases this task
+is straight-forward and will result in a single depen-
+dency, that from the root to the main verb of the sen-
+tence. We feel this is a realistic partial labeled train-
+ing setting where it would be possible to quickly col-
+lect a significant amount of data.
+To test whether such weak information can signif-
+icantly improve the parsing of questions, we trained
+an augmented-loss parser using the training set of
+the QTB stripped of all dependencies except the de-
+pendency from the root to the main verb of the sen-
+tence. In other words, for each sentence, the parser
+may only observe a single dependency at training
+from the QTB – the dependency to the main verb.
+Our augmented-loss function in this case is a simple
+binary function: 0 if a parse has the correct root de-
+pendency and 1 if it does not. Thus, the algorithm
+will select the first parse in the k-best list that has the
+correct root as the proxy to a gold standard parse.2
+The last row in each section of Table 2 shows the
+results for this augmented-loss system when weight-
+ing both losses equally during training. By simply
+having the main verb annotated in each sentence –
+the sentences from the training portion of the QTB
+– the parser can eliminate half of the errors of the
+original parser. This is reflected by both the Root-
+F1 as well as LAS/UAS. It is important to point out
+that these improvements are not limited to simply
+better root predictions. Due to the fact that parsing
+algorithms make many parsing decisions jointly at
+test time, all such decisions influence each other and
+improvements are seen across the board. For exam-
+ple, the transition-based PTB parser has an F1 score
+of 41.22% for verb subjects (nsubj), whereas the
+augmented-loss parser has an F1 of 73.52%. Clearly
+improving just a single (and simple to annotate) de-
+pendency leads to general parser improvements.
+</bodyText>
+<subsectionHeader confidence="0.9995">
+4.3 Average Arc Length Score
+</subsectionHeader>
+<bodyText confidence="0.999571857142857">
+The augmented-loss framework can be used to in-
+corporate multiple treebank-based loss functions as
+well. Labeled attachment score is used as our base
+model loss function. In this set of experiments we
+consider adding an additional loss function which
+weights the lengths of correct and incorrect arcs, the
+average (labeled) arc-length score:
+</bodyText>
+<equation confidence="0.9193015">
+ALS = �i δ(ˆρi, ρi)(i − ρi)
+Ei(i − ρi)
+</equation>
+<bodyText confidence="0.999797">
+For each word of the sentence we compute the dis-
+tance between the word’s position i and the posi-
+tion of the words head ρi. The arc-length score is
+the summed length of all those with correct head as-
+signments (δ(ˆρi, ρi) is 1 if the predicted head and
+the correct head match, 0 otherwise). The score is
+normalized by the summed arc lengths for the sen-
+tence. The labeled version of this score requires that
+the labels of the arc are also correct. Optimizing
+for dependency arc length is particularly important
+as parsers tend to do worse on longer dependencies
+(McDonald and Nivre, 2007) and these dependen-
+cies are typically the most meaningful for down-
+stream tasks, e.g., main verb dependencies for tasks
+</bodyText>
+<footnote confidence="0.982038333333333">
+2For the graph-based parser one can also find the higest scor-
+ing tree with correct root by setting the score of all competing
+arcs to −∞.
+</footnote>
+<equation confidence="0.713069333333333">
+trans–PTB
+trans–QTB
+trans–aug.-loss
+graph–PTB
+graph–QTB
+graph–aug.-loss
+</equation>
+<page confidence="0.949337">
+1495
+</page>
+<table confidence="0.998130857142857">
+LAS UAS ALS
+88.64 91.64 82.96
+88.74 91.91 83.65
+88.84 91.91 83.46
+85.75 88.70 73.88
+85.80 88.81 74.26
+85.85 88.93 74.40
+</table>
+<bodyText confidence="0.998818">
+parsing. A parse with perfect scores under ALS
+and LAS will match the gold-standard training tree.
+However, if we were to order incorrect parses of a
+sentence, ALS and LAS will suggest different order-
+ings. Our results show that by optimizing for losses
+based on a combination of these metrics we train a
+more robust parsing model.
+</bodyText>
+<figure confidence="0.774265166666667">
+trans–PTB
+trans–unlabeled aug.-loss
+trans–labeled aug.-loss
+graph–PTB
+graph–unlabeled aug.-loss
+graph–labeled aug.-loss
+</figure>
+<tableCaption confidence="0.911791">
+Table 3: Results for both parsers on the development set
+</tableCaption>
+<bodyText confidence="0.977004789473684">
+of the PTB. When training with ALS (labeled and unla-
+beled), we see an improvement in UAS, LAS, and ALS.
+Furthermore, if we use a labeled-ALS as the metric for
+augmented-loss training, we also see a considerable in-
+crease in LAS.
+like information extraction (Yates and Etzioni, 2009)
+and textual entailment (Berant et al., 2010).
+In Table 3 we show results for parsing with the
+ALS augmented-loss objective. For each parser, we
+consider two different ALS objective functions; one
+based on unlabeled-ALS and the other on labeled-
+ALS. The arc-length score penalizes incorrect long-
+distance dependencies more than local dependen-
+cies; long-distance dependencies are often more de-
+structive in preserving sentence meaning and can be
+more difficult to predict correctly due to the larger
+context on which they depend. Combining this with
+the standard attachment scores biases training to fo-
+cus on the difficult head dependencies.
+For both experiments we see that by adding the
+ALS augmented-loss we achieve an improvement in
+LAS and UAS in addition to ALS. The augmented-
+loss not only helps us improve on the longer depen-
+dencies (as reflected in the increased ALS), but also
+in the main parser objective function of LAS and
+UAS. Using the labeled loss function provides better
+reinforcement as can be seen in the improvements
+over the unlabeled loss-function. As with all experi-
+ments in this paper, the graph-based parser baselines
+are much lower than the transition-based parser due
+to the use of arc-factored features. In these experi-
+ments we used an inline-ranker loss with 8 parses.
+We experimented with larger sizes (16 and 64) and
+found very similar improvements: for example, the
+transition parser’s LAS for the labeled loss is 88.68
+and 88.84, respectively).
+We note that ALS can be decomposed locally and
+could be used as the primary objective function for
+</bodyText>
+<sectionHeader confidence="0.999963" genericHeader="related work">
+5 Related Work
+</sectionHeader>
+<bodyText confidence="0.999993131578947">
+A recent study by Katz-Brown et al. (2011) also in-
+vestigates the task of training parsers to improve MT
+reordering. In that work, a parser is used to first
+parse a set of manually reordered sentences to pro-
+duce k-best lists. The parse with the best reordering
+score is then fixed and added back to the training set
+and a new parser is trained on resulting data. The
+method is called targeted self-training as it is simi-
+lar in vein to self-training (McClosky et al., 2006),
+with the exception that the new parse data is targeted
+to produce accurate word reorderings. Our method
+differs as it does not statically fix a new parse, but
+dynamically updates the parameters and parse selec-
+tion by incorporating the additional loss in the inner
+loop of online learning. This allows us to give guar-
+antees of convergence. Furthermore, we also evalu-
+ate the method on alternate extrinsic loss functions.
+Liang et al. (2006) presented a perceptron-based
+algorithm for learning the phrase-translation param-
+eters in a statistical machine translation system.
+Similar to the inline-ranker loss function presented
+here, they use a k-best lists of hypotheses in order to
+identify parameters which can improve a global ob-
+jective function: BLEU score. In their work, they
+are interested in learning a parameterization over
+translation phrases (including the underlying word-
+alignment) which optimizes the BLEU score. Their
+goal is considerably different; they want to incor-
+porate additional features into their model and de-
+fine an objective function which allows them to do
+so; whereas, we are interested in allowing for mul-
+tiple objective functions in order to adapt the parser
+model parameters to downstream tasks or alternative
+intrinsic (parsing) objectives.
+The work that is most similar to ours is that
+of Chang et al. (2007), who introduced the Con-
+straint Driven Learning algorithm (CODL). Their al-
+gorithm specifically optimizes a loss function with
+</bodyText>
+<page confidence="0.800082">
+1496
+</page>
+<bodyText confidence="0.966752666666667">
+the addition of constraints based on unlabeled data with a shared underlying parameter space.
+(what we call extrinsic datasets). For each unla- 6 Discussion
+beled example, they use the current model along The empirical results show that incorporating an
+with their set of constraints to select a set of k au- augmented-loss using the inline-ranker loss frame-
+tomatically labeled examples which best meet the work achieves better performance under metrics as-
+constraints. These induced examples are then added sociated with the external loss function. For the in-
+to their training set and, after processing each unla- trinsic loss, we see that the augmented-loss frame-
+beled dataset, they perform full model optimization work can also result in an improvement in parsing
+with the concatenation of training data and newly performance; however, in the case of ALS, this is
+generated training items. The augmented-loss al- due to the fact that the loss function is very closely
+gorithm can be viewed as an online version of this related to the standard evaluation metrics of UAS
+algorithm which performs model updates based on and LAS.
+the augmented-loss functions directly (rather than Although our analysis suggests that this algorithm
+adding a set of examples to the training set). Un- is guaranteed to converge only for the separable
+like the CODL approach, we do not perform com- case, it makes a further assumption that if there is
+plete optimization on each iteration over the unla- a better parse under the augmented-loss, then there
+beled dataset; rather, we incorporate the updates in must be a lower cost parse in the k-best list. The em-
+our online learning algorithm. As mentioned earlier, pirical evaluation presented here is based on a very
+CODL is one example of learning algorithms that conservative approximation by choosing lists with
+use weak supervision, others include Mann and Mc- at most 8 parses. However, in our experiments, we
+Callum (2010) and Ganchev et al. (2010). Again, found that increasing the size of the lists did not sig-
+these works are typically interested in using the ex- nificantly increase our accuracy under the external
+trinsic metric – or, in general, extrinsic information metrics. If we do have at least one improvement
+– to optimize the intrinsic metric in the absence of in our k-best lists, the analysis suggests that this is
+any labeled intrinsic data. Our goal is to optimize enough to move in the correct direction for updating
+both simultaneously. the model. The assumption that there will always
+The idea of jointly training parsers to optimize be an improvement in the k-best list if there is some
+multiple objectives is related to joint learning and in- better parse breaks down as training continues. We
+ference for tasks like information extraction (Finkel suspect that an increasing k, as suggested in Sec-
+and Manning, 2009) and machine translation (Bur- tion 2.3, will allow for continued improvements.
+kett et al., 2010). In such works, a large search space Dependency parsing, as presented in this pa-
+that covers both the space of parse structures and per, is performed over (k-best) part-of-speech tags
+the space of task-specific structures is defined and and is therefore dependent on the quality of the
+parameterized so that standard learning and infer- tagger. The experiments presented in this paper
+ence algorithms can be applied. What sets our work made use of a tagger trained on the source treebank
+apart is that there is still just a single parameter set data which severely limits the variation in parses.
+that is being optimized – the parser parameters. Our The augmented-loss perceptron algorithm presented
+method only uses feedback from task specific objec- here can be applied to any online learning prob-
+tives in order to update the parser parameters, guid- lem, including part-of-speech tagger training. To
+ing it towards better downstream performance. This build a dependency parser which is better adapted
+is advantageous for two reasons. First, it decouples to a downstream task, one would want to perform
+the tasks, making inference and learning more effi- augmented-loss training on the tagger as well.
+cient. Second, it does not force arbitrary paraemter 7 Conclusion
+factorizations in order to define a joint search space We introduced the augmented-loss training algo-
+that can be searched efficiently. rithm and show that the algorithm can incorporate
+Finally, augmented-loss training can be viewed
+as multi-task learning (Caruana, 1997) as the model
+optimizes multiple objectives over multiple data sets
+1497
+additional loss functions to adapt the model towards
+extrinsic evaluation metrics. Analytical results are
+presented that show that the algorithm can opti-
+mize multiple objective functions simultaneously.
+We present an empirical analysis for training depen-
+dency parsers for multiple parsing algorithms and
+multiple loss functions.
+The augmented-loss framework supports both in-
+trinsic and extrinsic losses, allowing for both com-
+binations of objectives as well as multiple sources
+of data for which the results of a parser can be eval-
+uated. This flexibility makes it possible to tune a
+model for a downstream task. The only requirement
+is a metric which can be defined over parses of the
+downstream data. Our dependency parsing results
+show that we are not limited to increasing parser
+performance via more data or external domain adap-
+tation techniques, but that we can incorporate the
+downstream task into parser training.
+Acknowledgements: We would like to thank Kuz-
+man Ganchev for feedback on an earlier draft of this
+paper as well as Slav Petrov for frequent discussions
+on this topic.
+</bodyText>
+<sectionHeader confidence="0.999263" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999944173333333">
+S. Banerjee and A. Lavie. 2005. METEOR: An auto-
+matic metric for MT evaluation with improved corre-
+lation with human judgments. In Proceedings of the
+ACL Workshop on Intrinsic and Extrinsic Evaluation
+Measures for Machine Translation and/or Summariza-
+tion.
+J. Berant, I. Dagan, and J. Goldberger. 2010. Global
+learning of focused entailment graphs. In Proc. of
+ACL.
+J. Blitzer, R. McDonald, and F. Pereira. 2006. Domain
+adaptation with structural correspondence learning. In
+Proc. of EMNLP.
+S. Buchholz and E. Marsi. 2006. CoNLL-X shared
+task on multilingual dependency parsing. In Proc. of
+CoNLL.
+D. Burkett, J. Blitzer, and D. Klein. 2010. Joint parsing
+and alignment with weakly synchronized grammars.
+In Proc. of NAACL.
+R. Caruana. 1997. Multitask learning. Machine Learn-
+ing, 28(1):41–75.
+M.W. Chang, L. Ratinov, and D. Roth. 2007. Guiding
+semi-supervision with constraint-driven learning. In
+Proc. of ACL.
+M. Chang, D. Goldwasser, D. Roth, and V. Srikumar.
+2010. Structured output learning with indirect super-
+vision. In Proc. of ICML.
+M. Collins, P. Koehn, and I. Kuˇcerov´a. 2005. Clause re-
+structuring for statistical machine translation. In Proc.
+of ACL.
+Michael Collins. 2000. Discriminative reranking for nat-
+ural language parsing. In Proc. of ICML.
+M. Collins. 2002. Discriminative training methods for
+hidden markov models: Theory and experiments with
+perceptron algorithms. In Proc. ofACL.
+M.C. de Marneffe, B. MacCartney, and C. Manning.
+2006. Generating typed dependency parses from
+phrase structure parses. In Proc. of LREC, Genoa,
+Italy.
+J.R. Finkel and C.D. Manning. 2009. Joint parsing and
+named entity recognition. In Proc. of NAACL.
+K. Ganchev, J. Grac¸a, J. Gillenwater, and B. Taskar.
+2010. Posterior regularization for structured latent
+variable models. Journal of Machine Learning Re-
+search.
+D. Gildea. 2001. Corpus variation and parser perfor-
+mance. In Proc. of EMNLP.
+K. Hall. 2007. k-best spanning tree parsing. In Proc. of
+ACL, June.
+J. Judge, A. Cahill, and J. Van Genabith. 2006. Question-
+bank: Creating a corpus of parse-annotated questions.
+In Proc. of ACL, pages 497–504.
+J. Katz-Brown, S. Petrov, R. McDonald, D. Talbot,
+F. Och, H. Ichikawa, M. Seno, and H. Kazawa. 2011.
+Training a parser for machine translation reordering.
+In Proc. of EMNLP.
+S. K¨ubler, R. McDonald, and J. Nivre. 2009. Depen-
+dency parsing. Synthesis Lectures on Human Lan-
+guage Technologies. Morgan &amp; Claypool Publishers.
+P. Liang, A. Bouchard-Ct, D. Klein, and B. Taskar. 2006.
+An end-to-end discriminative approach to machine
+translation. In Proc. of COLING/ACL.
+G.S. Mann and A. McCallum. 2010. Generalized Ex-
+pectation Criteria for Semi-Supervised Learning with
+Weakly Labeled Data. The Journal of Machine Learn-
+ing Research, 11:955–984.
+M. Marcus, B. Santorini, and M.A. Marcinkiewicz.
+1993. Building a large annotated corpus of en-
+glish: The penn treebank. Computational Linguistics,
+19:313–330.
+D. McClosky, E. Charniak, and M. Johnson. 2006.
+Reranking and self-training for parser adaptation. In
+Proc. of ACL.
+R. McDonald and J. Nivre. 2007. Characterizing the
+errors of data-driven dependency parsing models. In
+Proc. of EMNLP-CoNLL.
+</reference>
+<page confidence="0.838313">
+1498
+</page>
+<reference confidence="0.999760806451613">
+R. McDonald, K. Crammer, and F. Pereira. 2005. Online
+large-margin training of dependency parsers. In Proc.
+of ACL.
+T. Nakagawa, K. Inui, and S. Kurohashi. 2010. De-
+pendency tree-based sentiment classification using crfs
+with hidden variables. In Proc. of NAACL.
+J. Nivre. 2008. Algorithms for deterministic incremen-
+tal dependency parsing. Computational Linguistics,
+34(4):513–553.
+S. Petrov, P.C. Chang, M. Ringgaard, and H. Alshawi.
+2010. Uptraining for accurate deterministic question
+parsing. In Proc. of EMNLP, pages 705–713.
+D. Talbot, H. Kazawa, H. Ichikawa, J. Katz-Brown,
+M. Seno, and F. Och. 2011. A lightweight evalu-
+ation framework for machine translation reordering.
+In Proc. of the Sixth Workshop on Statistical Machine
+Translation.
+M. Wang, N.A. Smith, and T. Mitamura. 2007. What is
+the Jeopardy model? A quasi-synchronous grammar
+for QA. In Proc. of EMNLP-CoNLL.
+P. Xu, J. Kang, M. Ringgaard, and F. Och. 2009. Us-
+ing a dependency parser to improve SMT for Subject-
+Object-Verb languages. In Proc. of NAACL.
+A. Yates and O. Etzioni. 2009. Unsupervised meth-
+ods for determining object and relation synonyms on
+the web. Journal of Artificial Intelligence Research,
+34(1):255–296.
+Y. Zhang and S. Clark. 2008. A Tale of Two
+Parsers: Investigating and Combining Graph-based
+and Transition-based Dependency Parsing. In Proc.
+of EMNLP, pages 562–571.
+</reference>
+<page confidence="0.997595">
+1499
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.892998">
+<title confidence="0.999824">Training dependency parsers by jointly optimizing multiple objectives</title>
+<author confidence="0.995444">Keith Hall Ryan McDonald Jason Katz-Brown Michael</author>
+<affiliation confidence="0.905923">Google Research</affiliation>
+<abstract confidence="0.999157733333333">We present an online learning algorithm for training parsers which allows for the inclusion of multiple objective functions. The primary example is the extension of a standard supervised parsing objective function with additional loss-functions, either based on intrinsic parsing quality or task-specific extrinsic measures of quality. Our empirical results show how this approach performs for two dependency parsing algorithms (graph-based and transition-based parsing) and how it achieves increased performance on multiple target tasks including reordering for machine translation and parser adaptation.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>S Banerjee</author>
+<author>A Lavie</author>
+</authors>
+<title>METEOR: An automatic metric for MT evaluation with improved correlation with human judgments.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the ACL Workshop on Intrinsic and Extrinsic Evaluation Measures for Machine Translation and/or Summarization.</booktitle>
+<contexts>
+<context position="21842" citStr="Banerjee and Lavie, 2005" startWordPosition="3808" endWordPosition="3811">ation system. In particular, we use a system of source-side reordering rules which, given a parse of the source sentence, will reorder the sentence into a target-side order (Collins et al., 2005). In our experiments we work with a set of EnglishJapanese reordering rules1 and gold reorderings based on human generated correct reordering of an aligned target sentences. We use a reordering score based on the reordering penalty from the METEOR scoring metric. Though we could have used a further downstream measure like BLEU, METEOR has also been shown to directly correlate with translation quality (Banerjee and Lavie, 2005) and is simpler to measure. reorder-score = 1 − # chunks − 1 # unigrams matched − 1 reorder-cost = 1 − reorder-score All reordering augmented-loss experiments are run with the same treebank data as the baseline (the training portions of PTB, Brown, and QTB). The extrinsic reordering training data consists of 10930 examples of English sentences and their correct Japanese word-order. We evaluate our results on an evaluation set of 6338 examples of similarly created reordering data. The reordering cost, evaluation 1Our rules are similar to those from Xu et al. (2009). trans–PTB + Brown + QTB tran</context>
+</contexts>
+<marker>Banerjee, Lavie, 2005</marker>
+<rawString>S. Banerjee and A. Lavie. 2005. METEOR: An automatic metric for MT evaluation with improved correlation with human judgments. In Proceedings of the ACL Workshop on Intrinsic and Extrinsic Evaluation Measures for Machine Translation and/or Summarization.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Berant</author>
+<author>I Dagan</author>
+<author>J Goldberger</author>
+</authors>
+<title>Global learning of focused entailment graphs.</title>
+<date>2010</date>
+<booktitle>In Proc. of ACL.</booktitle>
+<contexts>
+<context position="29642" citStr="Berant et al., 2010" startWordPosition="5110" endWordPosition="5113">lts show that by optimizing for losses based on a combination of these metrics we train a more robust parsing model. trans–PTB trans–unlabeled aug.-loss trans–labeled aug.-loss graph–PTB graph–unlabeled aug.-loss graph–labeled aug.-loss Table 3: Results for both parsers on the development set of the PTB. When training with ALS (labeled and unlabeled), we see an improvement in UAS, LAS, and ALS. Furthermore, if we use a labeled-ALS as the metric for augmented-loss training, we also see a considerable increase in LAS. like information extraction (Yates and Etzioni, 2009) and textual entailment (Berant et al., 2010). In Table 3 we show results for parsing with the ALS augmented-loss objective. For each parser, we consider two different ALS objective functions; one based on unlabeled-ALS and the other on labeledALS. The arc-length score penalizes incorrect longdistance dependencies more than local dependencies; long-distance dependencies are often more destructive in preserving sentence meaning and can be more difficult to predict correctly due to the larger context on which they depend. Combining this with the standard attachment scores biases training to focus on the difficult head dependencies. For bot</context>
+</contexts>
+<marker>Berant, Dagan, Goldberger, 2010</marker>
+<rawString>J. Berant, I. Dagan, and J. Goldberger. 2010. Global learning of focused entailment graphs. In Proc. of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Blitzer</author>
+<author>R McDonald</author>
+<author>F Pereira</author>
+</authors>
+<title>Domain adaptation with structural correspondence learning.</title>
+<date>2006</date>
+<booktitle>In Proc. of EMNLP.</booktitle>
+<contexts>
+<context position="1316" citStr="Blitzer et al., 2006" startWordPosition="183" endWordPosition="186">eased performance on multiple target tasks including reordering for machine translation and parser adaptation. 1 Introduction The accuracy and speed of state-of-the-art dependency parsers has motivated a resumed interest in utilizing the output of parsing as an input to many downstream natural language processing tasks. This includes work on question answering (Wang et al., 2007), sentiment analysis (Nakagawa et al., 2010), MT reordering (Xu et al., 2009), and many other tasks. In most cases, the accuracy of parsers degrades when run on out-of-domain data (Gildea, 2001; McClosky et al., 2006; Blitzer et al., 2006; Petrov et al., 2010). But these accuracies are measured with respect to gold-standard out-of-domain parse trees. There are few tasks that actually depend on the complete parse tree. Furthermore, when evaluated on a downstream task, often the optimal parse output has a model score lower than the best parse as predicted by the parsing model. While this means that we are not properly modeling the downstream task in the parsers, it also means that there is some information from small task or domain-specific data sets which could help direct our search for optimal parameters during parser trainin</context>
+</contexts>
+<marker>Blitzer, McDonald, Pereira, 2006</marker>
+<rawString>J. Blitzer, R. McDonald, and F. Pereira. 2006. Domain adaptation with structural correspondence learning. In Proc. of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Buchholz</author>
+<author>E Marsi</author>
+</authors>
+<title>CoNLL-X shared task on multilingual dependency parsing.</title>
+<date>2006</date>
+<booktitle>In Proc. of CoNLL.</booktitle>
+<contexts>
+<context position="20540" citStr="Buchholz and Marsi, 2006" startWordPosition="3592" endWordPosition="3595">ented-loss for each one. Augmented-loss learning is then applied to target a downstream task using the loss functions to measure gains. We show empirical results for two extrinsic loss-functions (optimizing for the downstream task): machine translation and domain adaptation; and for one intrinsic loss-function: an arclength parsing score. For some experiments we also 1493 Exact Reorder 35.29 76.49 38.71 78.19 39.02 78.39 39.58 78.67 25.71 69.84 28.99 72.23 29.99 72.88 30.03 73.15 measure the standard intrinsic parser metrics unlabeled attachment score (UAS) and labeled attachment score (LAS) (Buchholz and Marsi, 2006). In terms of treebank data, the primary training corpus is the Penn Wall Street Journal Treebank (PTB) (Marcus et al., 1993). We also make use of the Brown corpus, and the Question Treebank (QTB) (Judge et al., 2006). For PTB and Brown we use standard training/development/testing splits of the data. For the QTB we split the data into three sections: 2000 training, 1000 development, and 1000 test. All treebanks are converted to dependency format using the Stanford converter v1.6 (de Marneffe et al., 2006). 4 Experiments 4.1 Machine Translation Reordering Score As alluded to in Section 2.2, we </context>
+</contexts>
+<marker>Buchholz, Marsi, 2006</marker>
+<rawString>S. Buchholz and E. Marsi. 2006. CoNLL-X shared task on multilingual dependency parsing. In Proc. of CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Burkett</author>
+<author>J Blitzer</author>
+<author>D Klein</author>
+</authors>
+<title>Joint parsing and alignment with weakly synchronized grammars.</title>
+<date>2010</date>
+<booktitle>In Proc. of NAACL.</booktitle>
+<marker>Burkett, Blitzer, Klein, 2010</marker>
+<rawString>D. Burkett, J. Blitzer, and D. Klein. 2010. Joint parsing and alignment with weakly synchronized grammars. In Proc. of NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Caruana</author>
+</authors>
+<date>1997</date>
+<booktitle>Multitask learning. Machine Learning,</booktitle>
+<volume>28</volume>
+<issue>1</issue>
+<contexts>
+<context position="37635" citStr="Caruana, 1997" startWordPosition="6404" endWordPosition="6405">ownstream performance. This build a dependency parser which is better adapted is advantageous for two reasons. First, it decouples to a downstream task, one would want to perform the tasks, making inference and learning more effi- augmented-loss training on the tagger as well. cient. Second, it does not force arbitrary paraemter 7 Conclusion factorizations in order to define a joint search space We introduced the augmented-loss training algothat can be searched efficiently. rithm and show that the algorithm can incorporate Finally, augmented-loss training can be viewed as multi-task learning (Caruana, 1997) as the model optimizes multiple objectives over multiple data sets 1497 additional loss functions to adapt the model towards extrinsic evaluation metrics. Analytical results are presented that show that the algorithm can optimize multiple objective functions simultaneously. We present an empirical analysis for training dependency parsers for multiple parsing algorithms and multiple loss functions. The augmented-loss framework supports both intrinsic and extrinsic losses, allowing for both combinations of objectives as well as multiple sources of data for which the results of a parser can be e</context>
+</contexts>
+<marker>Caruana, 1997</marker>
+<rawString>R. Caruana. 1997. Multitask learning. Machine Learning, 28(1):41–75.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M W Chang</author>
+<author>L Ratinov</author>
+<author>D Roth</author>
+</authors>
+<title>Guiding semi-supervision with constraint-driven learning.</title>
+<date>2007</date>
+<booktitle>In Proc. of ACL.</booktitle>
+<contexts>
+<context position="4266" citStr="Chang et al., 2007" startWordPosition="648" endWordPosition="651">Perceptron associated with the instance (either intrinsic or extrinsic), thus jointly optimizing multiple objectives. An update schedule trades-off the relative importance of each objective function. We call our algorithm augmented-loss training as it optimizes multiple losses to augment the traditional supervised parser loss. There have been a number of efforts to exploit weak or external signals of quality to train better prediction models. This includes work on generalized expectation (Mann and McCallum, 2010), posterior regularization (Ganchev et al., 2010) and constraint driven learning (Chang et al., 2007; Chang et al., 2010). The work of Chang et al. (2007) on constraint driven learning is perhaps the closest to our framework and we draw connections to it in Section 5. In these studies the typical goal is to use the weak signal to improve the structured prediction models on the intrinsic evaluation metrics. For our setting this would mean using weak application specific signals to improve dependency parsing. Though we explore such ideas in our experiments, in particular for semi-supervised domain adaptation, we are primarily interested in the case where the weak signal is precisely what we wi</context>
+<context position="32994" citStr="Chang et al. (2007)" startWordPosition="5658" endWordPosition="5661">a global objective function: BLEU score. In their work, they are interested in learning a parameterization over translation phrases (including the underlying wordalignment) which optimizes the BLEU score. Their goal is considerably different; they want to incorporate additional features into their model and define an objective function which allows them to do so; whereas, we are interested in allowing for multiple objective functions in order to adapt the parser model parameters to downstream tasks or alternative intrinsic (parsing) objectives. The work that is most similar to ours is that of Chang et al. (2007), who introduced the Constraint Driven Learning algorithm (CODL). Their algorithm specifically optimizes a loss function with 1496 the addition of constraints based on unlabeled data with a shared underlying parameter space. (what we call extrinsic datasets). For each unla- 6 Discussion beled example, they use the current model along The empirical results show that incorporating an with their set of constraints to select a set of k au- augmented-loss using the inline-ranker loss frametomatically labeled examples which best meet the work achieves better performance under metrics asconstraints. </context>
+</contexts>
+<marker>Chang, Ratinov, Roth, 2007</marker>
+<rawString>M.W. Chang, L. Ratinov, and D. Roth. 2007. Guiding semi-supervision with constraint-driven learning. In Proc. of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Chang</author>
+<author>D Goldwasser</author>
+<author>D Roth</author>
+<author>V Srikumar</author>
+</authors>
+<title>Structured output learning with indirect supervision.</title>
+<date>2010</date>
+<booktitle>In Proc. of ICML.</booktitle>
+<contexts>
+<context position="4287" citStr="Chang et al., 2010" startWordPosition="652" endWordPosition="655">d with the instance (either intrinsic or extrinsic), thus jointly optimizing multiple objectives. An update schedule trades-off the relative importance of each objective function. We call our algorithm augmented-loss training as it optimizes multiple losses to augment the traditional supervised parser loss. There have been a number of efforts to exploit weak or external signals of quality to train better prediction models. This includes work on generalized expectation (Mann and McCallum, 2010), posterior regularization (Ganchev et al., 2010) and constraint driven learning (Chang et al., 2007; Chang et al., 2010). The work of Chang et al. (2007) on constraint driven learning is perhaps the closest to our framework and we draw connections to it in Section 5. In these studies the typical goal is to use the weak signal to improve the structured prediction models on the intrinsic evaluation metrics. For our setting this would mean using weak application specific signals to improve dependency parsing. Though we explore such ideas in our experiments, in particular for semi-supervised domain adaptation, we are primarily interested in the case where the weak signal is precisely what we wish to optimize, but a</context>
+</contexts>
+<marker>Chang, Goldwasser, Roth, Srikumar, 2010</marker>
+<rawString>M. Chang, D. Goldwasser, D. Roth, and V. Srikumar. 2010. Structured output learning with indirect supervision. In Proc. of ICML.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Collins</author>
+<author>P Koehn</author>
+<author>I Kuˇcerov´a</author>
+</authors>
+<title>Clause restructuring for statistical machine translation.</title>
+<date>2005</date>
+<booktitle>In Proc. of ACL.</booktitle>
+<marker>Collins, Koehn, Kuˇcerov´a, 2005</marker>
+<rawString>M. Collins, P. Koehn, and I. Kuˇcerov´a. 2005. Clause restructuring for statistical machine translation. In Proc. of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>Discriminative reranking for natural language parsing.</title>
+<date>2000</date>
+<booktitle>In Proc. of ICML.</booktitle>
+<contexts>
+<context position="2286" citStr="Collins, 2000" startWordPosition="341" endWordPosition="342">eans that we are not properly modeling the downstream task in the parsers, it also means that there is some information from small task or domain-specific data sets which could help direct our search for optimal parameters during parser training. The goal being not necessarily to obtain better parse performance, but to exploit the structure induced from human labeled treebank data while targeting specific extrinsic metrics of quality, which can include task specific metrics or external weak constraints on the parse structure. One obvious approach to this problem is to employ parser reranking (Collins, 2000). In such a setting, an auxiliary reranker is added in a pipeline following the parser. The standard setting involves training the base parser and applying it to a development set (this is often done in a cross-validated jack-knife training framework). The reranker can then be trained to optimize for the downstream or extrinsic objective. While this will bias the reranker towards the target task, it is limited by the oracle performance of the original base parser. In this paper, we propose a training algorithm for statistical dependency parsers (K¨ubler et al., 2009) in which a single model is</context>
+</contexts>
+<marker>Collins, 2000</marker>
+<rawString>Michael Collins. 2000. Discriminative reranking for natural language parsing. In Proc. of ICML.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Collins</author>
+</authors>
+<title>Discriminative training methods for hidden markov models: Theory and experiments with perceptron algorithms.</title>
+<date>2002</date>
+<booktitle>In Proc. ofACL.</booktitle>
+<contexts>
+<context position="6380" citStr="Collins, 2002" startWordPosition="1026" endWordPosition="1027"> training examples di = (xi, yi) consisting of an input sen1490 {Input data sets: D = {dl = (xi, yi) ... dN = (xN, yN)}} {Input 0/1 loss: L(Fθ(x), y) = [Fθ(x) =� y ? 1 : 0]} {Let: Fθ(x) = arg maxy∈Y 0 · I(y)} {Initialize model parameters: 0 = 0} repeat for i = 1 ... N do {Compute structured loss} ˆyi = Fθ(xi) if L(ˆyi, yi) &gt; 0 then {Update model Parameters} 0 = 0 + I(yi) − I(ˆyi) end if end for until converged {Return model 0} tence xi and an output yi; and 2) a loss-function, L(ˆy, y), that measures the cost of predicting output yˆ relative to the gold standard y and is usually the 0/1 loss (Collins, 2002). For dependency parser training, this set-up consists of input sentences x and the corresponding gold dependency tree y E Yx, where Yx is the space of possible parse trees for sentence x. In the perceptron setting, Fθ(x) = arg maxy∈Yx θ · Φ(y) where Φ is mapping from a parse tree y for sentence x to a high dimensional feature space. Learning proceeds by predicting a structured output given the current model, and if that structure is incorrect, updating the model: rewarding features that fire in the gold-standard Φ(yi), and discounting features that fire in the predicted output, Φ(ˆyi). The st</context>
+<context position="13796" citStr="Collins (2002)" startWordPosition="2382" endWordPosition="2383">&apos;, y&apos;&apos; E Yx and (x, y) E D, if L(y&apos;, y) &lt; L(y&apos;&apos;, y), then u·`F(y&apos;)−u·`F(y&apos;&apos;) &gt; γ. Furthermore, let R &gt; II`F(y) − `F(y&apos;)11, for all y, y&apos;. Assumption 1. Assume training set D is lossseparable with margin γ. Theorem 1. Given Assumption 1. Let m be the number of mistakes made when training the perceptron (Algorithm 2) with inline ranker loss (Algorithm 3) on D, where a mistake occurs for (x, y) E D with parameter vector θ when 1ˆyj E F k-best θ (x) where ˆyj =� ˆy1 and L(ˆyj, y) &lt; L(ˆy1, y). If training is run indefinitely, then m &lt; R2 γ2. Proof. Identical to the standard perceptron proof, e.g., Collins (2002), by inserting in loss-separability for normal separability. Like the original perceptron theorem, this implies that the algorithm will converge. However, unlike the original theorem, it does not imply that it will converge to a parameter vector θ such that for all (x, y) E D, if yˆ = arg maxg θ ·`F(ˆy) then L(ˆy, y) = 0. Even if we assume for every x there exists an output with zero loss, Theorem 1 still makes no guarantees. Consider a training set with one instance (x, y). Now, set k = 2 for the k-best output list and let ˆy1, ˆy2, and ˆy3 be the top-3 scoring outputs and let L(ˆy1, y) = 1, </context>
+</contexts>
+<marker>Collins, 2002</marker>
+<rawString>M. Collins. 2002. Discriminative training methods for hidden markov models: Theory and experiments with perceptron algorithms. In Proc. ofACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M C de Marneffe</author>
+<author>B MacCartney</author>
+<author>C Manning</author>
+</authors>
+<title>Generating typed dependency parses from phrase structure parses.</title>
+<date>2006</date>
+<booktitle>In Proc. of LREC,</booktitle>
+<location>Genoa, Italy.</location>
+<marker>de Marneffe, MacCartney, Manning, 2006</marker>
+<rawString>M.C. de Marneffe, B. MacCartney, and C. Manning. 2006. Generating typed dependency parses from phrase structure parses. In Proc. of LREC, Genoa, Italy.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J R Finkel</author>
+<author>C D Manning</author>
+</authors>
+<title>Joint parsing and named entity recognition.</title>
+<date>2009</date>
+<booktitle>In Proc. of NAACL.</booktitle>
+<marker>Finkel, Manning, 2009</marker>
+<rawString>J.R. Finkel and C.D. Manning. 2009. Joint parsing and named entity recognition. In Proc. of NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Ganchev</author>
+<author>J Grac¸a</author>
+<author>J Gillenwater</author>
+<author>B Taskar</author>
+</authors>
+<title>Posterior regularization for structured latent variable models.</title>
+<date>2010</date>
+<journal>Journal of Machine Learning Research.</journal>
+<marker>Ganchev, Grac¸a, Gillenwater, Taskar, 2010</marker>
+<rawString>K. Ganchev, J. Grac¸a, J. Gillenwater, and B. Taskar. 2010. Posterior regularization for structured latent variable models. Journal of Machine Learning Research.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Gildea</author>
+</authors>
+<title>Corpus variation and parser performance.</title>
+<date>2001</date>
+<booktitle>In Proc. of EMNLP.</booktitle>
+<contexts>
+<context position="1271" citStr="Gildea, 2001" startWordPosition="177" endWordPosition="178">sed parsing) and how it achieves increased performance on multiple target tasks including reordering for machine translation and parser adaptation. 1 Introduction The accuracy and speed of state-of-the-art dependency parsers has motivated a resumed interest in utilizing the output of parsing as an input to many downstream natural language processing tasks. This includes work on question answering (Wang et al., 2007), sentiment analysis (Nakagawa et al., 2010), MT reordering (Xu et al., 2009), and many other tasks. In most cases, the accuracy of parsers degrades when run on out-of-domain data (Gildea, 2001; McClosky et al., 2006; Blitzer et al., 2006; Petrov et al., 2010). But these accuracies are measured with respect to gold-standard out-of-domain parse trees. There are few tasks that actually depend on the complete parse tree. Furthermore, when evaluated on a downstream task, often the optimal parse output has a model score lower than the best parse as predicted by the parsing model. While this means that we are not properly modeling the downstream task in the parsers, it also means that there is some information from small task or domain-specific data sets which could help direct our search</context>
+</contexts>
+<marker>Gildea, 2001</marker>
+<rawString>D. Gildea. 2001. Corpus variation and parser performance. In Proc. of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Hall</author>
+</authors>
+<title>k-best spanning tree parsing.</title>
+<date>2007</date>
+<booktitle>In Proc. of ACL,</booktitle>
+<contexts>
+<context position="18949" citStr="Hall, 2007" startWordPosition="3325" endWordPosition="3326">es of the first two words on the buffer and of the top word on the stack; the word identity of the syntactic head of the top word on the stack (if available); dependency arc label identities for the top word on the stack, the left and rightmost modifier of the top word on the stack, and the left most modifier of the first word in the buffer (if available). All feature conjunctions are included. • Graph-based: An implementation of graphbased parsing algorithms with an arc-factored parameterization (McDonald et al., 2005). We use the non-projective k-best MST algorithm to generate k-best lists (Hall, 2007), where k = 8 for the experiments in this paper. The graphbased parser features used in the experiments in this paper are defined over a word, wi at position i; the head of this word wρ(i) where ρ(i) provides the index of the head word; and partof-speech tags of these words ti. We use the following set of features similar to McDonald et al. (2005): isolated features: wi, ti, wρ(i), tρ(i) word-tag pairs: (wi, ti); (wρ(i), tρ(i)) word-head pairs: (wi, wρ(i)), (ti, tρ(i)) word-head-tag triples: (tρ(i), wi, ti) (wρ(i), wi, ti) (wρ(i), tρ(i), ti) (wρ(i), tρ(i), wi) tag-neighbourhood: (tρ(i), tρ(i)+</context>
+</contexts>
+<marker>Hall, 2007</marker>
+<rawString>K. Hall. 2007. k-best spanning tree parsing. In Proc. of ACL, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Judge</author>
+<author>A Cahill</author>
+<author>J Van Genabith</author>
+</authors>
+<title>Questionbank: Creating a corpus of parse-annotated questions.</title>
+<date>2006</date>
+<booktitle>In Proc. of ACL,</booktitle>
+<pages>497--504</pages>
+<marker>Judge, Cahill, Van Genabith, 2006</marker>
+<rawString>J. Judge, A. Cahill, and J. Van Genabith. 2006. Questionbank: Creating a corpus of parse-annotated questions. In Proc. of ACL, pages 497–504.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Katz-Brown</author>
+<author>S Petrov</author>
+<author>R McDonald</author>
+<author>D Talbot</author>
+<author>F Och</author>
+<author>H Ichikawa</author>
+<author>M Seno</author>
+<author>H Kazawa</author>
+</authors>
+<title>Training a parser for machine translation reordering.</title>
+<date>2011</date>
+<booktitle>In Proc. of EMNLP.</booktitle>
+<contexts>
+<context position="31227" citStr="Katz-Brown et al. (2011)" startWordPosition="5369" endWordPosition="5372">e seen in the improvements over the unlabeled loss-function. As with all experiments in this paper, the graph-based parser baselines are much lower than the transition-based parser due to the use of arc-factored features. In these experiments we used an inline-ranker loss with 8 parses. We experimented with larger sizes (16 and 64) and found very similar improvements: for example, the transition parser’s LAS for the labeled loss is 88.68 and 88.84, respectively). We note that ALS can be decomposed locally and could be used as the primary objective function for 5 Related Work A recent study by Katz-Brown et al. (2011) also investigates the task of training parsers to improve MT reordering. In that work, a parser is used to first parse a set of manually reordered sentences to produce k-best lists. The parse with the best reordering score is then fixed and added back to the training set and a new parser is trained on resulting data. The method is called targeted self-training as it is similar in vein to self-training (McClosky et al., 2006), with the exception that the new parse data is targeted to produce accurate word reorderings. Our method differs as it does not statically fix a new parse, but dynamicall</context>
+</contexts>
+<marker>Katz-Brown, Petrov, McDonald, Talbot, Och, Ichikawa, Seno, Kazawa, 2011</marker>
+<rawString>J. Katz-Brown, S. Petrov, R. McDonald, D. Talbot, F. Och, H. Ichikawa, M. Seno, and H. Kazawa. 2011. Training a parser for machine translation reordering. In Proc. of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S K¨ubler</author>
+<author>R McDonald</author>
+<author>J Nivre</author>
+</authors>
+<title>Dependency parsing. Synthesis Lectures on Human Language Technologies.</title>
+<date>2009</date>
+<publisher>Morgan &amp; Claypool Publishers.</publisher>
+<marker>K¨ubler, McDonald, Nivre, 2009</marker>
+<rawString>S. K¨ubler, R. McDonald, and J. Nivre. 2009. Dependency parsing. Synthesis Lectures on Human Language Technologies. Morgan &amp; Claypool Publishers.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Liang</author>
+<author>A Bouchard-Ct</author>
+<author>D Klein</author>
+<author>B Taskar</author>
+</authors>
+<title>An end-to-end discriminative approach to machine translation.</title>
+<date>2006</date>
+<booktitle>In Proc. of COLING/ACL.</booktitle>
+<contexts>
+<context position="32096" citStr="Liang et al. (2006)" startWordPosition="5520" endWordPosition="5523">ck to the training set and a new parser is trained on resulting data. The method is called targeted self-training as it is similar in vein to self-training (McClosky et al., 2006), with the exception that the new parse data is targeted to produce accurate word reorderings. Our method differs as it does not statically fix a new parse, but dynamically updates the parameters and parse selection by incorporating the additional loss in the inner loop of online learning. This allows us to give guarantees of convergence. Furthermore, we also evaluate the method on alternate extrinsic loss functions. Liang et al. (2006) presented a perceptron-based algorithm for learning the phrase-translation parameters in a statistical machine translation system. Similar to the inline-ranker loss function presented here, they use a k-best lists of hypotheses in order to identify parameters which can improve a global objective function: BLEU score. In their work, they are interested in learning a parameterization over translation phrases (including the underlying wordalignment) which optimizes the BLEU score. Their goal is considerably different; they want to incorporate additional features into their model and define an ob</context>
+</contexts>
+<marker>Liang, Bouchard-Ct, Klein, Taskar, 2006</marker>
+<rawString>P. Liang, A. Bouchard-Ct, D. Klein, and B. Taskar. 2006. An end-to-end discriminative approach to machine translation. In Proc. of COLING/ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G S Mann</author>
+<author>A McCallum</author>
+</authors>
+<title>Generalized Expectation Criteria for Semi-Supervised Learning with Weakly Labeled Data.</title>
+<date>2010</date>
+<journal>The Journal of Machine Learning Research,</journal>
+<pages>11--955</pages>
+<contexts>
+<context position="4166" citStr="Mann and McCallum, 2010" startWordPosition="634" endWordPosition="637"> for Computational Linguistics eters are optimized based on the objective function Algorithm 1 Structured Perceptron associated with the instance (either intrinsic or extrinsic), thus jointly optimizing multiple objectives. An update schedule trades-off the relative importance of each objective function. We call our algorithm augmented-loss training as it optimizes multiple losses to augment the traditional supervised parser loss. There have been a number of efforts to exploit weak or external signals of quality to train better prediction models. This includes work on generalized expectation (Mann and McCallum, 2010), posterior regularization (Ganchev et al., 2010) and constraint driven learning (Chang et al., 2007; Chang et al., 2010). The work of Chang et al. (2007) on constraint driven learning is perhaps the closest to our framework and we draw connections to it in Section 5. In these studies the typical goal is to use the weak signal to improve the structured prediction models on the intrinsic evaluation metrics. For our setting this would mean using weak application specific signals to improve dependency parsing. Though we explore such ideas in our experiments, in particular for semi-supervised doma</context>
+</contexts>
+<marker>Mann, McCallum, 2010</marker>
+<rawString>G.S. Mann and A. McCallum. 2010. Generalized Expectation Criteria for Semi-Supervised Learning with Weakly Labeled Data. The Journal of Machine Learning Research, 11:955–984.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Marcus</author>
+<author>B Santorini</author>
+<author>M A Marcinkiewicz</author>
+</authors>
+<title>Building a large annotated corpus of english: The penn treebank. Computational Linguistics,</title>
+<date>1993</date>
+<contexts>
+<context position="20665" citStr="Marcus et al., 1993" startWordPosition="3613" endWordPosition="3616">ains. We show empirical results for two extrinsic loss-functions (optimizing for the downstream task): machine translation and domain adaptation; and for one intrinsic loss-function: an arclength parsing score. For some experiments we also 1493 Exact Reorder 35.29 76.49 38.71 78.19 39.02 78.39 39.58 78.67 25.71 69.84 28.99 72.23 29.99 72.88 30.03 73.15 measure the standard intrinsic parser metrics unlabeled attachment score (UAS) and labeled attachment score (LAS) (Buchholz and Marsi, 2006). In terms of treebank data, the primary training corpus is the Penn Wall Street Journal Treebank (PTB) (Marcus et al., 1993). We also make use of the Brown corpus, and the Question Treebank (QTB) (Judge et al., 2006). For PTB and Brown we use standard training/development/testing splits of the data. For the QTB we split the data into three sections: 2000 training, 1000 development, and 1000 test. All treebanks are converted to dependency format using the Stanford converter v1.6 (de Marneffe et al., 2006). 4 Experiments 4.1 Machine Translation Reordering Score As alluded to in Section 2.2, we use a reorderingbased loss function to improve word order in a machine translation system. In particular, we use a system of </context>
+</contexts>
+<marker>Marcus, Santorini, Marcinkiewicz, 1993</marker>
+<rawString>M. Marcus, B. Santorini, and M.A. Marcinkiewicz. 1993. Building a large annotated corpus of english: The penn treebank. Computational Linguistics, 19:313–330.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D McClosky</author>
+<author>E Charniak</author>
+<author>M Johnson</author>
+</authors>
+<title>Reranking and self-training for parser adaptation.</title>
+<date>2006</date>
+<booktitle>In Proc. of ACL.</booktitle>
+<contexts>
+<context position="1294" citStr="McClosky et al., 2006" startWordPosition="179" endWordPosition="182">nd how it achieves increased performance on multiple target tasks including reordering for machine translation and parser adaptation. 1 Introduction The accuracy and speed of state-of-the-art dependency parsers has motivated a resumed interest in utilizing the output of parsing as an input to many downstream natural language processing tasks. This includes work on question answering (Wang et al., 2007), sentiment analysis (Nakagawa et al., 2010), MT reordering (Xu et al., 2009), and many other tasks. In most cases, the accuracy of parsers degrades when run on out-of-domain data (Gildea, 2001; McClosky et al., 2006; Blitzer et al., 2006; Petrov et al., 2010). But these accuracies are measured with respect to gold-standard out-of-domain parse trees. There are few tasks that actually depend on the complete parse tree. Furthermore, when evaluated on a downstream task, often the optimal parse output has a model score lower than the best parse as predicted by the parsing model. While this means that we are not properly modeling the downstream task in the parsers, it also means that there is some information from small task or domain-specific data sets which could help direct our search for optimal parameters</context>
+<context position="31656" citStr="McClosky et al., 2006" startWordPosition="5447" endWordPosition="5450">s is 88.68 and 88.84, respectively). We note that ALS can be decomposed locally and could be used as the primary objective function for 5 Related Work A recent study by Katz-Brown et al. (2011) also investigates the task of training parsers to improve MT reordering. In that work, a parser is used to first parse a set of manually reordered sentences to produce k-best lists. The parse with the best reordering score is then fixed and added back to the training set and a new parser is trained on resulting data. The method is called targeted self-training as it is similar in vein to self-training (McClosky et al., 2006), with the exception that the new parse data is targeted to produce accurate word reorderings. Our method differs as it does not statically fix a new parse, but dynamically updates the parameters and parse selection by incorporating the additional loss in the inner loop of online learning. This allows us to give guarantees of convergence. Furthermore, we also evaluate the method on alternate extrinsic loss functions. Liang et al. (2006) presented a perceptron-based algorithm for learning the phrase-translation parameters in a statistical machine translation system. Similar to the inline-ranker</context>
+</contexts>
+<marker>McClosky, Charniak, Johnson, 2006</marker>
+<rawString>D. McClosky, E. Charniak, and M. Johnson. 2006. Reranking and self-training for parser adaptation. In Proc. of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R McDonald</author>
+<author>J Nivre</author>
+</authors>
+<title>Characterizing the errors of data-driven dependency parsing models.</title>
+<date>2007</date>
+<booktitle>In Proc. of EMNLP-CoNLL.</booktitle>
+<contexts>
+<context position="28354" citStr="McDonald and Nivre, 2007" startWordPosition="4905" endWordPosition="4908"> ALS = �i δ(ˆρi, ρi)(i − ρi) Ei(i − ρi) For each word of the sentence we compute the distance between the word’s position i and the position of the words head ρi. The arc-length score is the summed length of all those with correct head assignments (δ(ˆρi, ρi) is 1 if the predicted head and the correct head match, 0 otherwise). The score is normalized by the summed arc lengths for the sentence. The labeled version of this score requires that the labels of the arc are also correct. Optimizing for dependency arc length is particularly important as parsers tend to do worse on longer dependencies (McDonald and Nivre, 2007) and these dependencies are typically the most meaningful for downstream tasks, e.g., main verb dependencies for tasks 2For the graph-based parser one can also find the higest scoring tree with correct root by setting the score of all competing arcs to −∞. trans–PTB trans–QTB trans–aug.-loss graph–PTB graph–QTB graph–aug.-loss 1495 LAS UAS ALS 88.64 91.64 82.96 88.74 91.91 83.65 88.84 91.91 83.46 85.75 88.70 73.88 85.80 88.81 74.26 85.85 88.93 74.40 parsing. A parse with perfect scores under ALS and LAS will match the gold-standard training tree. However, if we were to order incorrect parses o</context>
+</contexts>
+<marker>McDonald, Nivre, 2007</marker>
+<rawString>R. McDonald and J. Nivre. 2007. Characterizing the errors of data-driven dependency parsing models. In Proc. of EMNLP-CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R McDonald</author>
+<author>K Crammer</author>
+<author>F Pereira</author>
+</authors>
+<title>Online large-margin training of dependency parsers.</title>
+<date>2005</date>
+<booktitle>In Proc. of ACL.</booktitle>
+<contexts>
+<context position="7509" citStr="McDonald et al., 2005" startWordPosition="1218" endWordPosition="1221">ld-standard Φ(yi), and discounting features that fire in the predicted output, Φ(ˆyi). The structured perceptron, as given in Algorithm 1, only updates when there is a positive loss, meaning that there was a prediction mistake. For the moment we will abstract away from details such as the precise definition of F(x) and Φ(y). We will show in the next section that our augmentedloss method is general and can be applied to any dependency parsing framework that can be trained by the perceptron algorithm, such as transition-based parsers (Nivre, 2008; Zhang and Clark, 2008) and graph-based parsers (McDonald et al., 2005). 2.1 Augmented-Loss Training The augmented-loss training algorithm that we propose is based on the structured perceptron; however, the augmented-loss training framework is a general mechanism to incorporate multiple loss functions in online learner training. Algorithm 2 is the pseudocode for the augmented-loss structured perceptron algorithm. The algorithm is an extension to Algorithm 1 where there are 1) multiple loss functions being evaluated L1, ... , LM; 2) there are multiple datasets associated with each of these loss functions D1, ... , DM; and 3) there is a schedule for processing exam</context>
+<context position="18863" citStr="McDonald et al., 2005" startWordPosition="3310" endWordPosition="3313">gs of the first four words on the buffer and of the top two words on the stack; the word identities of the first two words on the buffer and of the top word on the stack; the word identity of the syntactic head of the top word on the stack (if available); dependency arc label identities for the top word on the stack, the left and rightmost modifier of the top word on the stack, and the left most modifier of the first word in the buffer (if available). All feature conjunctions are included. • Graph-based: An implementation of graphbased parsing algorithms with an arc-factored parameterization (McDonald et al., 2005). We use the non-projective k-best MST algorithm to generate k-best lists (Hall, 2007), where k = 8 for the experiments in this paper. The graphbased parser features used in the experiments in this paper are defined over a word, wi at position i; the head of this word wρ(i) where ρ(i) provides the index of the head word; and partof-speech tags of these words ti. We use the following set of features similar to McDonald et al. (2005): isolated features: wi, ti, wρ(i), tρ(i) word-tag pairs: (wi, ti); (wρ(i), tρ(i)) word-head pairs: (wi, wρ(i)), (ti, tρ(i)) word-head-tag triples: (tρ(i), wi, ti) (</context>
+</contexts>
+<marker>McDonald, Crammer, Pereira, 2005</marker>
+<rawString>R. McDonald, K. Crammer, and F. Pereira. 2005. Online large-margin training of dependency parsers. In Proc. of ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Nakagawa</author>
+<author>K Inui</author>
+<author>S Kurohashi</author>
+</authors>
+<title>Dependency tree-based sentiment classification using crfs with hidden variables.</title>
+<date>2010</date>
+<booktitle>In Proc. of NAACL.</booktitle>
+<contexts>
+<context position="1122" citStr="Nakagawa et al., 2010" startWordPosition="149" endWordPosition="152">cific extrinsic measures of quality. Our empirical results show how this approach performs for two dependency parsing algorithms (graph-based and transition-based parsing) and how it achieves increased performance on multiple target tasks including reordering for machine translation and parser adaptation. 1 Introduction The accuracy and speed of state-of-the-art dependency parsers has motivated a resumed interest in utilizing the output of parsing as an input to many downstream natural language processing tasks. This includes work on question answering (Wang et al., 2007), sentiment analysis (Nakagawa et al., 2010), MT reordering (Xu et al., 2009), and many other tasks. In most cases, the accuracy of parsers degrades when run on out-of-domain data (Gildea, 2001; McClosky et al., 2006; Blitzer et al., 2006; Petrov et al., 2010). But these accuracies are measured with respect to gold-standard out-of-domain parse trees. There are few tasks that actually depend on the complete parse tree. Furthermore, when evaluated on a downstream task, often the optimal parse output has a model score lower than the best parse as predicted by the parsing model. While this means that we are not properly modeling the downstr</context>
+</contexts>
+<marker>Nakagawa, Inui, Kurohashi, 2010</marker>
+<rawString>T. Nakagawa, K. Inui, and S. Kurohashi. 2010. Dependency tree-based sentiment classification using crfs with hidden variables. In Proc. of NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Nivre</author>
+</authors>
+<title>Algorithms for deterministic incremental dependency parsing.</title>
+<date>2008</date>
+<journal>Computational Linguistics,</journal>
+<volume>34</volume>
+<issue>4</issue>
+<contexts>
+<context position="7437" citStr="Nivre, 2008" startWordPosition="1209" endWordPosition="1210">t, updating the model: rewarding features that fire in the gold-standard Φ(yi), and discounting features that fire in the predicted output, Φ(ˆyi). The structured perceptron, as given in Algorithm 1, only updates when there is a positive loss, meaning that there was a prediction mistake. For the moment we will abstract away from details such as the precise definition of F(x) and Φ(y). We will show in the next section that our augmentedloss method is general and can be applied to any dependency parsing framework that can be trained by the perceptron algorithm, such as transition-based parsers (Nivre, 2008; Zhang and Clark, 2008) and graph-based parsers (McDonald et al., 2005). 2.1 Augmented-Loss Training The augmented-loss training algorithm that we propose is based on the structured perceptron; however, the augmented-loss training framework is a general mechanism to incorporate multiple loss functions in online learner training. Algorithm 2 is the pseudocode for the augmented-loss structured perceptron algorithm. The algorithm is an extension to Algorithm 1 where there are 1) multiple loss functions being evaluated L1, ... , LM; 2) there are multiple datasets associated with each of these los</context>
+<context position="17983" citStr="Nivre, 2008" startWordPosition="3150" endWordPosition="3151">e. It may be the case that for most instances a small k is required, but the algorithm is doing more work unnecessarily if k is large. 3 Experimental Set-up 3.1 Dependency Parsers The augmented-loss framework we present is general in the sense that it can be combined with any loss function and any parser, provided the parser can be parameterized as a linear classifier, trained with the perceptron and is capable of producing a k-best list of trees. For our experiments we focus on two dependency parsers. • Transition-based: An implementation of the transition-based dependency parsing framework (Nivre, 2008) using an arc-eager transition strategy and are trained using the perceptron algorithm as in Zhang and Clark (2008) with a beam size of 8. Beams with varying sizes can be used to produce k-best lists. The features used by all models are: the part-ofspeech tags of the first four words on the buffer and of the top two words on the stack; the word identities of the first two words on the buffer and of the top word on the stack; the word identity of the syntactic head of the top word on the stack (if available); dependency arc label identities for the top word on the stack, the left and rightmost </context>
+</contexts>
+<marker>Nivre, 2008</marker>
+<rawString>J. Nivre. 2008. Algorithms for deterministic incremental dependency parsing. Computational Linguistics, 34(4):513–553.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Petrov</author>
+<author>P C Chang</author>
+<author>M Ringgaard</author>
+<author>H Alshawi</author>
+</authors>
+<title>Uptraining for accurate deterministic question parsing.</title>
+<date>2010</date>
+<booktitle>In Proc. of EMNLP,</booktitle>
+<pages>705--713</pages>
+<contexts>
+<context position="1338" citStr="Petrov et al., 2010" startWordPosition="187" endWordPosition="190">ultiple target tasks including reordering for machine translation and parser adaptation. 1 Introduction The accuracy and speed of state-of-the-art dependency parsers has motivated a resumed interest in utilizing the output of parsing as an input to many downstream natural language processing tasks. This includes work on question answering (Wang et al., 2007), sentiment analysis (Nakagawa et al., 2010), MT reordering (Xu et al., 2009), and many other tasks. In most cases, the accuracy of parsers degrades when run on out-of-domain data (Gildea, 2001; McClosky et al., 2006; Blitzer et al., 2006; Petrov et al., 2010). But these accuracies are measured with respect to gold-standard out-of-domain parse trees. There are few tasks that actually depend on the complete parse tree. Furthermore, when evaluated on a downstream task, often the optimal parse output has a model score lower than the best parse as predicted by the parsing model. While this means that we are not properly modeling the downstream task in the parsers, it also means that there is some information from small task or domain-specific data sets which could help direct our search for optimal parameters during parser training. The goal being not </context>
+<context position="23878" citStr="Petrov et al. (2010)" startWordPosition="4127" endWordPosition="4130">d by the reordering score as well as a coarse exact-match score (the number of sentences which would have correct word-order given the parse and the fixed reordering rules). We see continued improvements as we adjust the schedule to process the extrinsic loss more frequently, the best result being when we make two augmented-loss updates for every one treebank-based loss update. 4.2 Semi-supervised domain adaptation Another application of the augmented-loss framework is to improve parser domain portability in the presence of partially labeled data. Consider, for example, the case of questions. Petrov et al. (2010) observed that dependency parsers tend to do quite poorly when parsing questions due to their limited exposure to them in the news corpora from the PennTreebank. Table 2 shows the accuracy of two parsers (LAS, UAS and the F1 of the root dependency attachment) on the QuestionBank test data. The first is a parser trained on the standard training sections of the PennTreebank (PTB) and the second is a parser trained on the training portion of the QuestionBank (QTB). Results for both 1494 LAS UAS Root-F1 67.97 73.52 47.60 84.59 89.59 91.06 76.27 86.42 83.41 65.27 72.72 43.10 82.73 87.44 91.58 72.82</context>
+</contexts>
+<marker>Petrov, Chang, Ringgaard, Alshawi, 2010</marker>
+<rawString>S. Petrov, P.C. Chang, M. Ringgaard, and H. Alshawi. 2010. Uptraining for accurate deterministic question parsing. In Proc. of EMNLP, pages 705–713.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Talbot</author>
+<author>H Kazawa</author>
+<author>H Ichikawa</author>
+<author>J Katz-Brown</author>
+<author>M Seno</author>
+<author>F Och</author>
+</authors>
+<title>A lightweight evaluation framework for machine translation reordering.</title>
+<date>2011</date>
+<booktitle>In Proc. of the Sixth Workshop on Statistical Machine Translation.</booktitle>
+<contexts>
+<context position="23103" citStr="Talbot et al. (2011)" startWordPosition="4004" endWordPosition="4007">–2.0xaug.-loss graph–PTB + Brown + QTB graph–0.5x aug.-loss graph–1.0xaug.-loss graph–2.0xaug.-loss Table 1: Reordering scores for parser-based reordering (English-to-Japanese). Exact is the number of correctly reordered sentences. All models use the same treebankdata (PTB, QTB, and the Brown corpus). Results for three augmented-loss schedules are shown: 0.5 where for every two treebank updates we make one augmented-loss update, 1 is a 1-to-1 mix, and 2 is where we make twice as many augmented-loss updates as treebank updates. criteria and data used in our experiments are based on the work of Talbot et al. (2011). Table 1 shows the results of using the reordering cost as an augmented-loss to the standard treebank objective function. Results are presented as measured by the reordering score as well as a coarse exact-match score (the number of sentences which would have correct word-order given the parse and the fixed reordering rules). We see continued improvements as we adjust the schedule to process the extrinsic loss more frequently, the best result being when we make two augmented-loss updates for every one treebank-based loss update. 4.2 Semi-supervised domain adaptation Another application of the</context>
+</contexts>
+<marker>Talbot, Kazawa, Ichikawa, Katz-Brown, Seno, Och, 2011</marker>
+<rawString>D. Talbot, H. Kazawa, H. Ichikawa, J. Katz-Brown, M. Seno, and F. Och. 2011. A lightweight evaluation framework for machine translation reordering. In Proc. of the Sixth Workshop on Statistical Machine Translation.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Wang</author>
+<author>N A Smith</author>
+<author>T Mitamura</author>
+</authors>
+<title>What is the Jeopardy model? A quasi-synchronous grammar for QA.</title>
+<date>2007</date>
+<booktitle>In Proc. of EMNLP-CoNLL.</booktitle>
+<contexts>
+<context position="1078" citStr="Wang et al., 2007" startWordPosition="143" endWordPosition="146">on intrinsic parsing quality or task-specific extrinsic measures of quality. Our empirical results show how this approach performs for two dependency parsing algorithms (graph-based and transition-based parsing) and how it achieves increased performance on multiple target tasks including reordering for machine translation and parser adaptation. 1 Introduction The accuracy and speed of state-of-the-art dependency parsers has motivated a resumed interest in utilizing the output of parsing as an input to many downstream natural language processing tasks. This includes work on question answering (Wang et al., 2007), sentiment analysis (Nakagawa et al., 2010), MT reordering (Xu et al., 2009), and many other tasks. In most cases, the accuracy of parsers degrades when run on out-of-domain data (Gildea, 2001; McClosky et al., 2006; Blitzer et al., 2006; Petrov et al., 2010). But these accuracies are measured with respect to gold-standard out-of-domain parse trees. There are few tasks that actually depend on the complete parse tree. Furthermore, when evaluated on a downstream task, often the optimal parse output has a model score lower than the best parse as predicted by the parsing model. While this means t</context>
+</contexts>
+<marker>Wang, Smith, Mitamura, 2007</marker>
+<rawString>M. Wang, N.A. Smith, and T. Mitamura. 2007. What is the Jeopardy model? A quasi-synchronous grammar for QA. In Proc. of EMNLP-CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Xu</author>
+<author>J Kang</author>
+<author>M Ringgaard</author>
+<author>F Och</author>
+</authors>
+<title>Using a dependency parser to improve SMT for SubjectObject-Verb languages. In</title>
+<date>2009</date>
+<booktitle>Proc. of NAACL.</booktitle>
+<contexts>
+<context position="1155" citStr="Xu et al., 2009" startWordPosition="155" endWordPosition="158">r empirical results show how this approach performs for two dependency parsing algorithms (graph-based and transition-based parsing) and how it achieves increased performance on multiple target tasks including reordering for machine translation and parser adaptation. 1 Introduction The accuracy and speed of state-of-the-art dependency parsers has motivated a resumed interest in utilizing the output of parsing as an input to many downstream natural language processing tasks. This includes work on question answering (Wang et al., 2007), sentiment analysis (Nakagawa et al., 2010), MT reordering (Xu et al., 2009), and many other tasks. In most cases, the accuracy of parsers degrades when run on out-of-domain data (Gildea, 2001; McClosky et al., 2006; Blitzer et al., 2006; Petrov et al., 2010). But these accuracies are measured with respect to gold-standard out-of-domain parse trees. There are few tasks that actually depend on the complete parse tree. Furthermore, when evaluated on a downstream task, often the optimal parse output has a model score lower than the best parse as predicted by the parsing model. While this means that we are not properly modeling the downstream task in the parsers, it also </context>
+<context position="22412" citStr="Xu et al. (2009)" startWordPosition="3903" endWordPosition="3906">translation quality (Banerjee and Lavie, 2005) and is simpler to measure. reorder-score = 1 − # chunks − 1 # unigrams matched − 1 reorder-cost = 1 − reorder-score All reordering augmented-loss experiments are run with the same treebank data as the baseline (the training portions of PTB, Brown, and QTB). The extrinsic reordering training data consists of 10930 examples of English sentences and their correct Japanese word-order. We evaluate our results on an evaluation set of 6338 examples of similarly created reordering data. The reordering cost, evaluation 1Our rules are similar to those from Xu et al. (2009). trans–PTB + Brown + QTB trans–0.5xaug.-loss trans–1.0xaug.-loss trans–2.0xaug.-loss graph–PTB + Brown + QTB graph–0.5x aug.-loss graph–1.0xaug.-loss graph–2.0xaug.-loss Table 1: Reordering scores for parser-based reordering (English-to-Japanese). Exact is the number of correctly reordered sentences. All models use the same treebankdata (PTB, QTB, and the Brown corpus). Results for three augmented-loss schedules are shown: 0.5 where for every two treebank updates we make one augmented-loss update, 1 is a 1-to-1 mix, and 2 is where we make twice as many augmented-loss updates as treebank updat</context>
+</contexts>
+<marker>Xu, Kang, Ringgaard, Och, 2009</marker>
+<rawString>P. Xu, J. Kang, M. Ringgaard, and F. Och. 2009. Using a dependency parser to improve SMT for SubjectObject-Verb languages. In Proc. of NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Yates</author>
+<author>O Etzioni</author>
+</authors>
+<title>Unsupervised methods for determining object and relation synonyms on the web.</title>
+<date>2009</date>
+<journal>Journal of Artificial Intelligence Research,</journal>
+<volume>34</volume>
+<issue>1</issue>
+<contexts>
+<context position="29597" citStr="Yates and Etzioni, 2009" startWordPosition="5103" endWordPosition="5106">nd LAS will suggest different orderings. Our results show that by optimizing for losses based on a combination of these metrics we train a more robust parsing model. trans–PTB trans–unlabeled aug.-loss trans–labeled aug.-loss graph–PTB graph–unlabeled aug.-loss graph–labeled aug.-loss Table 3: Results for both parsers on the development set of the PTB. When training with ALS (labeled and unlabeled), we see an improvement in UAS, LAS, and ALS. Furthermore, if we use a labeled-ALS as the metric for augmented-loss training, we also see a considerable increase in LAS. like information extraction (Yates and Etzioni, 2009) and textual entailment (Berant et al., 2010). In Table 3 we show results for parsing with the ALS augmented-loss objective. For each parser, we consider two different ALS objective functions; one based on unlabeled-ALS and the other on labeledALS. The arc-length score penalizes incorrect longdistance dependencies more than local dependencies; long-distance dependencies are often more destructive in preserving sentence meaning and can be more difficult to predict correctly due to the larger context on which they depend. Combining this with the standard attachment scores biases training to focu</context>
+</contexts>
+<marker>Yates, Etzioni, 2009</marker>
+<rawString>A. Yates and O. Etzioni. 2009. Unsupervised methods for determining object and relation synonyms on the web. Journal of Artificial Intelligence Research, 34(1):255–296.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Zhang</author>
+<author>S Clark</author>
+</authors>
+<title>A Tale of Two Parsers: Investigating and Combining Graph-based and Transition-based Dependency Parsing.</title>
+<date>2008</date>
+<booktitle>In Proc. of EMNLP,</booktitle>
+<pages>562--571</pages>
+<contexts>
+<context position="7461" citStr="Zhang and Clark, 2008" startWordPosition="1211" endWordPosition="1214">he model: rewarding features that fire in the gold-standard Φ(yi), and discounting features that fire in the predicted output, Φ(ˆyi). The structured perceptron, as given in Algorithm 1, only updates when there is a positive loss, meaning that there was a prediction mistake. For the moment we will abstract away from details such as the precise definition of F(x) and Φ(y). We will show in the next section that our augmentedloss method is general and can be applied to any dependency parsing framework that can be trained by the perceptron algorithm, such as transition-based parsers (Nivre, 2008; Zhang and Clark, 2008) and graph-based parsers (McDonald et al., 2005). 2.1 Augmented-Loss Training The augmented-loss training algorithm that we propose is based on the structured perceptron; however, the augmented-loss training framework is a general mechanism to incorporate multiple loss functions in online learner training. Algorithm 2 is the pseudocode for the augmented-loss structured perceptron algorithm. The algorithm is an extension to Algorithm 1 where there are 1) multiple loss functions being evaluated L1, ... , LM; 2) there are multiple datasets associated with each of these loss functions D1, ... , DM</context>
+<context position="18098" citStr="Zhang and Clark (2008)" startWordPosition="3168" endWordPosition="3171"> unnecessarily if k is large. 3 Experimental Set-up 3.1 Dependency Parsers The augmented-loss framework we present is general in the sense that it can be combined with any loss function and any parser, provided the parser can be parameterized as a linear classifier, trained with the perceptron and is capable of producing a k-best list of trees. For our experiments we focus on two dependency parsers. • Transition-based: An implementation of the transition-based dependency parsing framework (Nivre, 2008) using an arc-eager transition strategy and are trained using the perceptron algorithm as in Zhang and Clark (2008) with a beam size of 8. Beams with varying sizes can be used to produce k-best lists. The features used by all models are: the part-ofspeech tags of the first four words on the buffer and of the top two words on the stack; the word identities of the first two words on the buffer and of the top word on the stack; the word identity of the syntactic head of the top word on the stack (if available); dependency arc label identities for the top word on the stack, the left and rightmost modifier of the top word on the stack, and the left most modifier of the first word in the buffer (if available). A</context>
+</contexts>
+<marker>Zhang, Clark, 2008</marker>
+<rawString>Y. Zhang and S. Clark. 2008. A Tale of Two Parsers: Investigating and Combining Graph-based and Transition-based Dependency Parsing. In Proc. of EMNLP, pages 562–571.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

@@ -1,0 +1,1008 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.007329">
+<title confidence="0.999286">
+Labeled Pseudo-Projective Dependency Parsing
+with Support Vector Machines
+</title>
+<author confidence="0.815477333333333">
+Joakim Nivre
+Johan Hall
+Jens Nilsson
+</author>
+<affiliation confidence="0.971658666666667">
+School of Mathematics
+and Systems Engineering
+V¨axj¨o University
+</affiliation>
+<address confidence="0.920396">
+35195 V¨axj¨o, Sweden
+</address>
+<email confidence="0.997587">
+{nivre,jha,jni}@msi.vxu.se
+</email>
+<author confidence="0.989951">
+G¨uls¸en Eryiˇgit
+</author>
+<affiliation confidence="0.983491666666667">
+Department of
+Computer Engineering
+Istanbul Technical University
+</affiliation>
+<address confidence="0.557141">
+34469 Istanbul, Turkey
+</address>
+<email confidence="0.996543">
+gulsen@cs.itu.edu.tr
+</email>
+<author confidence="0.985372">
+Svetoslav Marinov
+</author>
+<affiliation confidence="0.978020333333333">
+School of Humanities
+and Informatics
+University of Sk¨ovde
+</affiliation>
+<address confidence="0.986586">
+Box 408
+54128 Sk¨ovde, Sweden
+</address>
+<email confidence="0.998371">
+svetoslav.marinov@his.se
+</email>
+<sectionHeader confidence="0.995628" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999806">
+We use SVM classifiers to predict the next
+action of a deterministic parser that builds
+labeled projective dependency graphs in
+an incremental fashion. Non-projective
+dependencies are captured indirectly by
+projectivizing the training data for the
+classifiers and applying an inverse trans-
+formation to the output of the parser. We
+present evaluation results and an error
+analysis focusing on Swedish and Turkish.
+</bodyText>
+<sectionHeader confidence="0.998991" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.9997742">
+The CoNLL-X shared task consists in parsing texts
+in multiple languages using a single dependency
+parser that has the capacity to learn from treebank
+data. Our methodology for performing this task is
+based on four essential components:
+</bodyText>
+<listItem confidence="0.992647625">
+• A deterministic algorithm for building labeled
+projective dependency graphs (Nivre, 2006).
+• History-based feature models for predicting the
+next parser action (Black et al., 1992).
+• Support vector machines for mapping histories
+to parser actions (Kudo and Matsumoto, 2002).
+• Graph transformations for recovering non-
+projective structures (Nivre and Nilsson, 2005).
+</listItem>
+<bodyText confidence="0.84798425">
+All experiments have been performed using Malt-
+Parser (Nivre et al., 2006), version 0.4, which is
+made available together with the suite of programs
+used for pre- and post-processing.1
+</bodyText>
+<footnote confidence="0.749453">
+1www.msi.vxu.se/users/nivre/research/MaltParser.html
+</footnote>
+<sectionHeader confidence="0.952724" genericHeader="method">
+2 Parsing Methodology
+</sectionHeader>
+<subsectionHeader confidence="0.953854">
+2.1 Parsing Algorithm
+</subsectionHeader>
+<bodyText confidence="0.999743">
+The parsing algorithm used for all languages is the
+deterministic algorithm first proposed for unlabeled
+dependency parsing by Nivre (2003) and extended
+to labeled dependency parsing by Nivre et al. (2004).
+The algorithm builds a labeled dependency graph in
+one left-to-right pass over the input, using a stack
+to store partially processed tokens and adding arcs
+using four elementary actions (where top is the token
+on top of the stack and next is the next token):
+</bodyText>
+<listItem confidence="0.997745">
+• SHIFT: Push next onto the stack.
+• REDUCE: Pop the stack.
+• RIGHT-ARC(r): Add an arc labeled r from top
+to next; push next onto the stack.
+• LEFT-ARC(r): Add an arc labeled r from next
+to top; pop the stack.
+</listItem>
+<bodyText confidence="0.993893125">
+Although the parser only derives projective graphs,
+the fact that graphs are labeled allows non-projective
+dependencies to be captured using the pseudo-
+projective approach of Nivre and Nilsson (2005) .
+Another limitation of the parsing algorithm is that
+it does not assign dependency labels to roots, i.e., to
+tokens having HEAD=0. To overcome this problem,
+we have implemented a variant of the algorithm that
+starts by pushing an artificial root token with ID=0
+onto the stack. Tokens having HEAD=0 can now
+be attached to the artificial root in a RIGHT-ARC(r)
+action, which means that they can be assigned any
+label. Since this variant of the algorithm increases
+the overall nondeterminism, it has only been used
+for the data sets that include informative root labels
+(Arabic, Czech, Portuguese, Slovene).
+</bodyText>
+<page confidence="0.962255">
+221
+</page>
+<note confidence="0.541255">
+Proceedings of the 10th Conference on Computational Natural Language Learning (CoNLL-X),
+pages 221–225, New York City, June 2006. c�2006 Association for Computational Linguistics
+</note>
+<table confidence="0.986832090909091">
+FO L C P FE D
+S: top + + + + + +
+S: top−1 +
+I: next + + + + +
+I: next+1 + +
+I: next+2 +
+I: next+3 +
+G: head of top +
+G: leftmost dep of top +
+G: rightmost dep of top +
+G: leftmost dep of next +
+</table>
+<tableCaption confidence="0.71499">
+Table 1: Base model; S: stack, I: input, G: graph;
+FO: FORM, L: LEMMA, C: CPOS, P: POS,
+FE: FEATS, D: DEPREL
+</tableCaption>
+<subsectionHeader confidence="0.998678">
+2.2 History-Based Feature Models
+</subsectionHeader>
+<bodyText confidence="0.999947952380952">
+History-based parsing models rely on features of the
+derivation history to predict the next parser action.
+The features used in our system are all symbolic
+and extracted from the following fields of the data
+representation: FORM, LEMMA, CPOSTAG, POSTAG,
+FEATS, and DEPREL. Features of the type DEPREL
+have a special status in that they are extracted during
+parsing from the partially built dependency graph
+and may therefore contain errors, whereas all the
+other features have gold standard values during both
+training and parsing.2
+Based on previous research, we defined a base
+model to be used as a starting point for language-
+specific feature selection. The features of this model
+are shown in Table 1, where rows denote tokens in
+a parser configuration (defined relative to the stack,
+the remaining input, and the partially built depen-
+dency graph), and where columns correspond to data
+fields. The base model contains twenty features, but
+note that the fields LEMMA, CPOS and FEATS are not
+available for all languages.
+</bodyText>
+<subsectionHeader confidence="0.999767">
+2.3 Support Vector Machines
+</subsectionHeader>
+<bodyText confidence="0.999979666666667">
+We use support vector machines3 to predict the next
+parser action from a feature vector representing the
+history. More specifically, we use LIBSVM (Chang
+and Lin, 2001) with a quadratic kernel K(xZ, xj) =
+(-yxT xj +r)2 and the built-in one-versus-all strategy
+for multi-class classification. Symbolic features are
+</bodyText>
+<footnote confidence="0.8608686">
+2The fields PHEAD and PDEPREL have not been used at all,
+since we rely on pseudo-projective parsing for the treatment of
+non-projective structures.
+3We also ran preliminary experiments with memory-based
+learning but found that this gave consistently lower accuracy.
+</footnote>
+<bodyText confidence="0.9998666">
+converted to numerical features using the standard
+technique of binarization, and we split values of the
+FEATS field into its atomic components.4
+For some languages, we divide the training data
+into smaller sets, based on some feature s (normally
+the CPOS or POS of the next input token), which may
+reduce training times without a significant loss in
+accuracy (Yamada and Matsumoto, 2003). To avoid
+too small training sets, we pool together categories
+that have a frequency below a certain threshold t.
+</bodyText>
+<subsectionHeader confidence="0.982578">
+2.4 Pseudo-Projective Parsing
+</subsectionHeader>
+<bodyText confidence="0.999990764705882">
+Pseudo-projective parsing was proposed by Nivre
+and Nilsson (2005) as a way of dealing with
+non-projective structures in a projective data-driven
+parser. We projectivize training data by a minimal
+transformation, lifting non-projective arcs one step
+at a time, and extending the arc label of lifted arcs
+using the encoding scheme called HEAD by Nivre
+and Nilsson (2005), which means that a lifted arc is
+assigned the label rTh, where r is the original label
+and h is the label of the original head in the non-
+projective dependency graph.
+Non-projective dependencies can be recovered by
+applying an inverse transformation to the output of
+the parser, using a left-to-right, top-down, breadth-
+first search, guided by the extended arc labels rTh
+assigned by the parser. This technique has been used
+without exception for all languages.
+</bodyText>
+<sectionHeader confidence="0.999383" genericHeader="method">
+3 Experiments
+</sectionHeader>
+<bodyText confidence="0.999358769230769">
+Since the projective parsing algorithm and graph
+transformation techniques are the same for all data
+sets, our optimization efforts have been focused on
+feature selection, using a combination of backward
+and forward selection starting from the base model
+described in section 2.2, and parameter optimization
+for the SVM learner, using grid search for an optimal
+combination of the kernel parameters -y and r, the
+penalty parameter C and the termination criterion c,
+as well as the splitting feature s and the frequency
+threshold t. Feature selection and parameter opti-
+mization have to some extent been interleaved, but
+the amount of work done varies between languages.
+</bodyText>
+<footnote confidence="0.970642666666667">
+4Preliminary experiments showed a slight improvement for
+most languages when splitting the FEATS values, as opposed to
+taking every combination of atomic values as a distinct value.
+</footnote>
+<page confidence="0.959414">
+222
+</page>
+<table confidence="0.99974025">
+Ara Bul Chi Cze Dan Dut Ger Jap Por Slo Spa Swe Tur Total
+LAS 66.71 87.41 86.92 78.42 84.77 78.59 85.82 91.65 87.60 70.30 81.29 84.58 65.68 80.19
+UAS 77.52 91.72 90.54 84.80 89.80 81.35 88.76 93.10 91.22 78.72 84.67 89.50 75.82 85.48
+LAcc 80.34 90.44 89.01 85.40 89.16 83.69 91.03 94.34 91.54 80.54 90.06 87.39 78.49 86.75
+</table>
+<tableCaption confidence="0.9492755">
+Table 2: Evaluation on final test set; LAS = labeled attachment score, UAS = unlabeled attachment score,
+LAcc = label accuracy score; total score excluding Bulgarian
+</tableCaption>
+<bodyText confidence="0.999007705882353">
+The main optimization criterion has been labeled
+attachment score on held-out data, using ten-fold
+cross-validation for all data sets with 100k tokens
+or less, and an 80-20 split into training and devtest
+sets for larger datasets. The number of features in
+the optimized models varies from 16 (Turkish) to 30
+(Spanish), but the models use all fields available for
+a given language, except that FORM is not used for
+Turkish (only LEMMA). The SVM parameters fall
+into the following ranges: γ: 0.12–0.20; r: 0.0–0.6;
+C: 0.1–0.7; c: 0.01–1.0. Data has been split on the
+POS of the next input token for Czech (t = 200),
+German (t = 1000), and Spanish (t = 1000), and
+on the CPOS of the next input token for Bulgarian
+(t = 1000), Slovene (t = 600), and Turkish (t = 100).
+(For the remaining languages, the training data has
+not been split at all.)5 A dry run at the end of the
+development phase gave a labeled attachment score
+of 80.46 over the twelve required languages.
+Table 2 shows final test results for each language
+and for the twelve required languages together. The
+total score is only 0.27 percentage points below the
+score from the dry run, which seems to indicate that
+models have not been overfitted to the training data.
+The labeled attachment score varies from 91.65 to
+65.68 but is above average for all languages. We
+have the best reported score for Japanese, Swedish
+and Turkish, and the score for Arabic, Danish,
+Dutch, Portuguese, Spanish, and overall does not
+differ significantly from the best one. The unlabeled
+score is less competitive, with only Turkish having
+the highest reported score, which indirectly indicates
+that the integration of labels into the parsing process
+primarily benefits labeled accuracy.
+</bodyText>
+<sectionHeader confidence="0.999682" genericHeader="method">
+4 Error Analysis
+</sectionHeader>
+<bodyText confidence="0.99939">
+An overall error analysis is beyond the scope of this
+paper, but we will offer a few general observations
+</bodyText>
+<footnote confidence="0.9073055">
+5Detailed specifications of the feature models and learning
+algorithm parameters can be found on the MaltParser web page.
+</footnote>
+<bodyText confidence="0.999821731707317">
+before we turn to Swedish and Turkish, focusing on
+recall and precision of root nodes, as a reflection of
+global syntactic structure, and on attachment score
+as a function of arc length. If we start by considering
+languages with a labeled attachment score of 85% or
+higher, they are characterized by high precision and
+recall for root nodes, typically 95/90, and by a grace-
+ful degradation of attachment score as arcs grow
+longer, typically 95–90–85, for arcs of length 1, 2
+and 3–6. Typical examples are Bulgarian (Simov
+et al., 2005; Simov and Osenova, 2003), Chinese
+(Chen et al., 2003), Danish (Kromann, 2003), and
+Swedish (Nilsson et al., 2005). Japanese (Kawata
+and Bartels, 2000), despite a very high accuracy, is
+different in that attachment score drops from 98%
+to 85%, as we go from length 1 to 2, which may
+have something to do with the data consisting of
+transcribed speech with very short utterances.
+A second observation is that a high proportion of
+non-projective structures leads to fragmentation in
+the parser output, reflected in lower precision for
+roots. This is noticeable for German (Brants et al.,
+2002) and Portuguese (Afonso et al., 2002), which
+still have high overall accuracy thanks to very high
+attachment scores, but much more conspicuous for
+Czech (B¨ohmov´a et al., 2003), Dutch (van der Beek
+et al., 2002) and Slovene (Dˇzeroski et al., 2006),
+where root precision drops more drastically to about
+69%, 71% and 41%, respectively, and root recall is
+also affected negatively. On the other hand, all three
+languages behave like high-accuracy languages with
+respect to attachment score. A very similar pattern
+is found for Spanish (Civit Torruella and MartiAn-
+tonin, 2002), although this cannot be explained by
+a high proportion of non-projective structures. One
+possible explanation in this case may be the fact that
+dependency graphs in the Spanish data are sparsely
+labeled, which may cause problem for a parser that
+relies on dependency labels as features.
+The results for Arabic (Hajiˇc et al., 2004; Smrˇz
+et al., 2002) are characterized by low root accuracy
+</bodyText>
+<page confidence="0.997161">
+223
+</page>
+<bodyText confidence="0.999623666666667">
+as well as a rapid degradation of attachment score
+with arc length (from about 93% for length 1 to 67%
+for length 2). By contrast, Turkish (Oflazer et al.,
+2003; Atalay et al., 2003) exhibits high root accu-
+racy but consistently low attachment scores (about
+88% for length 1 and 68% for length 2). It is note-
+worthy that Arabic and Turkish, being “typological
+outliers”, show patterns that are different both from
+each other and from most of the other languages.
+</bodyText>
+<subsectionHeader confidence="0.986074">
+4.1 Swedish
+</subsectionHeader>
+<bodyText confidence="0.999989516129032">
+A more fine-grained analysis of the Swedish results
+reveals a high accuracy for function words, which
+is compatible with previous studies (Nivre, 2006).
+Thus, the labeled F-score is 100% for infinitive
+markers (IM) and subordinating conjunctions (UK) ,
+and above 95% for determiners (DT). In addition,
+subjects (SS) have a score above 90%. In all these
+cases, the dependent has a configurationally defined
+(but not fixed) position with respect to its head.
+Arguments of the verb, such as objects (DO, IO)
+and predicative complements (SP), have a slightly
+lower accuracy (about 85% labeled F-score), which
+is due to the fact that they “compete” in the same
+structural positions, whereas adverbials (labels that
+end in A) have even lower scores (often below 70%).
+The latter result must be related both to the relatively
+fine-grained inventory of dependency labels for ad-
+verbials and to attachment ambiguities that involve
+prepositional phrases. The importance of this kind
+of ambiguity is reflected also in the drastic differ-
+ence in accuracy between noun pre-modifiers (AT)
+(F &gt; 97%) and noun post-modifiers (ET) (F Pz� 75%).
+Finally, it is worth noting that coordination, which
+is often problematic in parsing, has high accuracy.
+The Swedish treebank annotation treats the second
+conjunct as a dependent of the first conjunct and as
+the head of the coordinator, which seems to facil-
+itate parsing.6 The attachment of the second con-
+junct to the first (CC) has a labeled F-score above
+80%, while the attachment of the coordinator to the
+second conjunct (++) has a score well above 90%.
+</bodyText>
+<subsectionHeader confidence="0.981114">
+4.2 Turkish
+</subsectionHeader>
+<bodyText confidence="0.989532">
+In Turkish, very essential syntactic information is
+contained in the rich morphological structure, where
+</bodyText>
+<footnote confidence="0.9851095">
+6The analysis is reminiscent of the treatment of coordination
+in the Collins parser (Collins, 1999).
+</footnote>
+<bodyText confidence="0.999935564102564">
+concatenated suffixes carry information that in other
+languages may be expressed by separate words. The
+Turkish treebank therefore divides word forms into
+smaller units, called inflectional groups (IGs), and
+the task of the parser is to construct dependencies
+between IGs, not (primarily) between word forms
+(Eryi˘git and Oflazer, 2006). It is then important
+to remember that an unlabeled attachment score
+of 75.8% corresponds to a word-to-word score of
+82.7%, which puts Turkish on a par with languages
+like Czech, Dutch and Spanish. Moreover, when
+we break down the results according to whether the
+head of a dependency is part of a multiple-IG word
+or a complete (single-IG) word, we observe a highly
+significant difference in accuracy, with only 53.2%
+unlabeled attachment score for multiple-IG heads
+versus 83.7% for single-IG heads. It is hard to say
+at this stage whether this means that our methods
+are ill-suited for IG-based parsing, or whether it is
+mainly a case of sparse data for multiple-IG words.
+When we break down the results by dependency
+type, we can distinguish three main groups. The first
+consists of determiners and particles, which have
+an unlabeled attachment score over 80% and which
+are found within a distance of 1–1.4 IGs from their
+head.7 The second group mainly contains subjects,
+objects and different kinds of adjuncts, with a score
+in the range 60–80% and a distance of 1.8–5.2 IGs to
+their head. In this group, information about case and
+possessive features of nominals is important, which
+is found in the FEATS field in the data representation.
+We believe that one important explanation for our
+relatively good results for Turkish is that we break
+down the FEATS information into its atomic com-
+ponents, independently of POS and CPOS tags, and
+let the classifier decide which one to use in a given
+situation. The third group contains distant depen-
+dencies, such as sentence modifiers, vocatives and
+appositions, which have a much lower accuracy.
+</bodyText>
+<sectionHeader confidence="0.999259" genericHeader="conclusions">
+5 Conclusion
+</sectionHeader>
+<bodyText confidence="0.951352285714286">
+The evaluation shows that labeled pseudo-projective
+dependency parsing, using a deterministic parsing
+algorithm and SVM classifiers, gives competitive
+parsing accuracy for all languages involved in the
+7Given that the average IG count of a word is 1.26 in the
+treebank, this means that they are normally adjacent to the head
+word.
+</bodyText>
+<page confidence="0.99376">
+224
+</page>
+<bodyText confidence="0.999964666666667">
+shared task, although the level of accuracy varies
+considerably between languages. To analyze in
+depth the factors determining this variation, and to
+improve our parsing methods accordingly to meet
+the challenges posed by the linguistic diversity, will
+be an important research goal for years to come.
+</bodyText>
+<sectionHeader confidence="0.997385" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.999984571428571">
+We are grateful for the support from T ¨UB˙ITAK
+(The Scientific and Technical Research Council of
+Turkey) and the Swedish Research Council. We also
+want to thank Atanas Chanev for assistance with
+Slovene, the organizers of the shared task for all
+their hard work, and the creators of the treebanks
+for making the data available.
+</bodyText>
+<sectionHeader confidence="0.998945" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999891721518988">
+A. Abeill´e, editor. 2003. Treebanks: Building and Using
+Parsed Corpora, volume 20 of Text, Speech and Language
+Technology. Kluwer Academic Publishers, Dordrecht.
+S. Afonso, E. Bick, R. Haber, and D. Santos. 2002. “Floresta
+sint´a(c)tica”: a treebank for Portuguese. In Proc. of LREC-
+2002, pages 1698–1703.
+N. B. Atalay, K. Oflazer, and B. Say. 2003. The annotation
+process in the Turkish treebank. In Proc. ofLINC-2003.
+E. Black, F. Jelinek, J. D. Lafferty, D. M. Magerman, R. L. Mer-
+cer, and S. Roukos. 1992. Towards history-based grammars:
+Using richer models for probabilistic parsing. In Proc. of the
+5th DARPA Speech and Natural Language Workshop, pages
+31–37.
+A. B¨ohmov´a, J. Hajiˇc, E. Hajiˇcov´a, and B. Hladk´a. 2003. The
+PDT: a 3-level annotation scenario. In Abeill´e (Abeill´e,
+2003), chapter 7.
+S. Brants, S. Dipper, S. Hansen, W. Lezius, and G. Smith. 2002.
+The TIGER treebank. In Proc. of TLT-2002.
+C.-C. Chang and C.-J. Lin, 2001. LIBSVM: A Library
+for Support Vector Machines. Software available at
+http://www.csie.ntu.edu.tw/ cjlin/libsvm.
+K. Chen, C. Luo, M. Chang, F. Chen, C. Chen, C. Huang, and
+Z. Gao. 2003. Sinica treebank: Design criteria, representa-
+tional issues and implementation. In Abeill´e (Abeill´e, 2003),
+chapter 13, pages 231–248.
+M. Civit Torruella and Ma A. MartiAntonin. 2002. Design
+principles for a Spanish treebank. In Proc. of TLT-2002.
+M. Collins. 1999. Head-Driven Statistical Models for Natural
+Language Parsing. Ph.D. thesis, University of Pennsylvania.
+S. Dieroski, T. Erjavec, N. Ledinek, P. Pajas, Z. ˇZabokrtsky, and
+A. ˇZele. 2006. Towards a Slovene dependency treebank. In
+Proc. ofLREC-2006.
+G. Eryi˘git and K. Oflazer. 2006. Statistical dependency parsing
+of Turkish. In Proc. ofEACL-2006.
+J. Hajiˇc, O. Smrˇz, P. Zem´anek, J. ˇSnaidauf, and E. Beˇska. 2004.
+Prague Arabic dependency treebank: Development in data
+and tools. In Proc. ofNEMLAR-2004, pages 110–117.
+Y. Kawata and J. Bartels. 2000. Stylebook for the Japanese
+treebank in VERBMOBIL. Verbmobil-Report 240, Seminar
+f¨ur Sprachwissenschaft, Universit¨at T¨ubingen.
+M. T. Kromann. 2003. The Danish dependency treebank and
+the underlying linguistic theory. In Proc. of TLT-2003.
+T. Kudo and Y. Matsumoto. 2002. Japanese dependency anal-
+ysis using cascaded chunking. In Proc. of CoNLL-2002,
+pages 63–69.
+J. Nilsson, J. Hall, and J. Nivre. 2005. MAMBA meets TIGER:
+Reconstructing a Swedish treebank from antiquity. In Proc.
+of the NODALIDA Special Session on Treebanks.
+J. Nivre and J. Nilsson. 2005. Pseudo-projective dependency
+parsing. In Proc. ofACL-2005, pages 99–106.
+J. Nivre, J. Hall, and J. Nilsson. 2004. Memory-based depen-
+dency parsing. In Proc. CoNLL-2004, pages 49–56.
+J. Nivre, J. Hall, and J. Nilsson. 2006. MaltParser: A data-
+driven parser-generator for dependency parsing. In Proc. of
+LREC-2006.
+J. Nivre. 2003. An efficient algorithm for projective depen-
+dency parsing. In Proc. ofIWPT-2003, pages 149–160.
+J. Nivre. 2006. Inductive Dependency Parsing. Springer.
+K. Oflazer, B. Say, D. Zeynep Hakkani-T¨ur, and G. T¨ur. 2003.
+Building a Turkish treebank. In Abeill´e (Abeill´e, 2003),
+chapter 15.
+K. Simov and P. Osenova. 2003. Practical annotation scheme
+for an HPSG treebank of Bulgarian. In Proc. ofLINC-2003,
+pages 17–24.
+K. Simov, P. Osenova, A. Simov, and M. Kouylekov. 2005.
+Design and implementation of the Bulgarian HPSG-based
+treebank. In Journal of Research on Language and Com-
+putation – Special Issue, pages 495–522. Kluwer Academic
+Publishers.
+O. Smrˇz, J. ˇSnaidauf, and P. Zem´anek. 2002. Prague depen-
+dency treebank for Arabic: Multi-level annotation of Arabic
+corpus. In Proc. of the Intern. Symposium on Processing of
+Arabic, pages 147–155.
+L. van der Beek, G. Bouma, R. Malouf, and G. van Noord.
+2002. The Alpino dependency treebank. In Computational
+Linguistics in the Netherlands (CLIN).
+H. Yamada and Y. Matsumoto. 2003. Statistical dependency
+analysis with support vector machines. In Proc. of IWPT-
+2003, pages 195–206.
+</reference>
+<page confidence="0.998821">
+225
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.216509">
+<title confidence="0.954827">Labeled Pseudo-Projective Dependency with Support Vector Machines Joakim</title>
+<author confidence="0.897885">Johan Jens</author>
+<affiliation confidence="0.910724333333333">School of and Systems V¨axj¨o</affiliation>
+<address confidence="0.994602">35195 V¨axj¨o, Sweden</address>
+<affiliation confidence="0.894464">Department Computer Istanbul Technical</affiliation>
+<address confidence="0.999984">34469 Istanbul, Turkey</address>
+<email confidence="0.990933">gulsen@cs.itu.edu.tr</email>
+<author confidence="0.652323">Svetoslav</author>
+<affiliation confidence="0.996256333333334">School of and University of</affiliation>
+<address confidence="0.958836">Box 54128 Sk¨ovde, Sweden</address>
+<email confidence="0.989793">svetoslav.marinov@his.se</email>
+<abstract confidence="0.997157545454545">We use SVM classifiers to predict the next action of a deterministic parser that builds labeled projective dependency graphs in an incremental fashion. Non-projective dependencies are captured indirectly by projectivizing the training data for the classifiers and applying an inverse transformation to the output of the parser. We present evaluation results and an error analysis focusing on Swedish and Turkish.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<title>Treebanks: Building and Using Parsed Corpora,</title>
+<date>2003</date>
+<booktitle>Text, Speech and Language Technology.</booktitle>
+<volume>20</volume>
+<editor>A. Abeill´e, editor.</editor>
+<publisher>Kluwer Academic Publishers,</publisher>
+<location>Dordrecht.</location>
+<contexts>
+<context position="1946" citStr="(2003)" startWordPosition="263" endWordPosition="263"> • Support vector machines for mapping histories to parser actions (Kudo and Matsumoto, 2002). • Graph transformations for recovering nonprojective structures (Nivre and Nilsson, 2005). All experiments have been performed using MaltParser (Nivre et al., 2006), version 0.4, which is made available together with the suite of programs used for pre- and post-processing.1 1www.msi.vxu.se/users/nivre/research/MaltParser.html 2 Parsing Methodology 2.1 Parsing Algorithm The parsing algorithm used for all languages is the deterministic algorithm first proposed for unlabeled dependency parsing by Nivre (2003) and extended to labeled dependency parsing by Nivre et al. (2004). The algorithm builds a labeled dependency graph in one left-to-right pass over the input, using a stack to store partially processed tokens and adding arcs using four elementary actions (where top is the token on top of the stack and next is the next token): • SHIFT: Push next onto the stack. • REDUCE: Pop the stack. • RIGHT-ARC(r): Add an arc labeled r from top to next; push next onto the stack. • LEFT-ARC(r): Add an arc labeled r from next to top; pop the stack. Although the parser only derives projective graphs, the fact th</context>
+</contexts>
+<marker>2003</marker>
+<rawString>A. Abeill´e, editor. 2003. Treebanks: Building and Using Parsed Corpora, volume 20 of Text, Speech and Language Technology. Kluwer Academic Publishers, Dordrecht.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Afonso</author>
+<author>E Bick</author>
+<author>R Haber</author>
+<author>D Santos</author>
+</authors>
+<title>Floresta sint´a(c)tica”: a treebank for Portuguese.</title>
+<date>2002</date>
+<booktitle>In Proc. of LREC2002,</booktitle>
+<pages>1698--1703</pages>
+<contexts>
+<context position="11296" citStr="Afonso et al., 2002" startWordPosition="1814" endWordPosition="1817">nd Osenova, 2003), Chinese (Chen et al., 2003), Danish (Kromann, 2003), and Swedish (Nilsson et al., 2005). Japanese (Kawata and Bartels, 2000), despite a very high accuracy, is different in that attachment score drops from 98% to 85%, as we go from length 1 to 2, which may have something to do with the data consisting of transcribed speech with very short utterances. A second observation is that a high proportion of non-projective structures leads to fragmentation in the parser output, reflected in lower precision for roots. This is noticeable for German (Brants et al., 2002) and Portuguese (Afonso et al., 2002), which still have high overall accuracy thanks to very high attachment scores, but much more conspicuous for Czech (B¨ohmov´a et al., 2003), Dutch (van der Beek et al., 2002) and Slovene (Dˇzeroski et al., 2006), where root precision drops more drastically to about 69%, 71% and 41%, respectively, and root recall is also affected negatively. On the other hand, all three languages behave like high-accuracy languages with respect to attachment score. A very similar pattern is found for Spanish (Civit Torruella and MartiAntonin, 2002), although this cannot be explained by a high proportion of non</context>
+</contexts>
+<marker>Afonso, Bick, Haber, Santos, 2002</marker>
+<rawString>S. Afonso, E. Bick, R. Haber, and D. Santos. 2002. “Floresta sint´a(c)tica”: a treebank for Portuguese. In Proc. of LREC2002, pages 1698–1703.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N B Atalay</author>
+<author>K Oflazer</author>
+<author>B Say</author>
+</authors>
+<title>The annotation process in the Turkish treebank.</title>
+<date>2003</date>
+<booktitle>In Proc. ofLINC-2003.</booktitle>
+<contexts>
+<context position="12412" citStr="Atalay et al., 2003" startWordPosition="1998" endWordPosition="2001"> (Civit Torruella and MartiAntonin, 2002), although this cannot be explained by a high proportion of non-projective structures. One possible explanation in this case may be the fact that dependency graphs in the Spanish data are sparsely labeled, which may cause problem for a parser that relies on dependency labels as features. The results for Arabic (Hajiˇc et al., 2004; Smrˇz et al., 2002) are characterized by low root accuracy 223 as well as a rapid degradation of attachment score with arc length (from about 93% for length 1 to 67% for length 2). By contrast, Turkish (Oflazer et al., 2003; Atalay et al., 2003) exhibits high root accuracy but consistently low attachment scores (about 88% for length 1 and 68% for length 2). It is noteworthy that Arabic and Turkish, being “typological outliers”, show patterns that are different both from each other and from most of the other languages. 4.1 Swedish A more fine-grained analysis of the Swedish results reveals a high accuracy for function words, which is compatible with previous studies (Nivre, 2006). Thus, the labeled F-score is 100% for infinitive markers (IM) and subordinating conjunctions (UK) , and above 95% for determiners (DT). In addition, subject</context>
+</contexts>
+<marker>Atalay, Oflazer, Say, 2003</marker>
+<rawString>N. B. Atalay, K. Oflazer, and B. Say. 2003. The annotation process in the Turkish treebank. In Proc. ofLINC-2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Black</author>
+<author>F Jelinek</author>
+<author>J D Lafferty</author>
+<author>D M Magerman</author>
+<author>R L Mercer</author>
+<author>S Roukos</author>
+</authors>
+<title>Towards history-based grammars: Using richer models for probabilistic parsing.</title>
+<date>1992</date>
+<booktitle>In Proc. of the 5th DARPA Speech and Natural Language Workshop,</booktitle>
+<pages>31--37</pages>
+<contexts>
+<context position="1339" citStr="Black et al., 1992" startWordPosition="178" endWordPosition="181">raining data for the classifiers and applying an inverse transformation to the output of the parser. We present evaluation results and an error analysis focusing on Swedish and Turkish. 1 Introduction The CoNLL-X shared task consists in parsing texts in multiple languages using a single dependency parser that has the capacity to learn from treebank data. Our methodology for performing this task is based on four essential components: • A deterministic algorithm for building labeled projective dependency graphs (Nivre, 2006). • History-based feature models for predicting the next parser action (Black et al., 1992). • Support vector machines for mapping histories to parser actions (Kudo and Matsumoto, 2002). • Graph transformations for recovering nonprojective structures (Nivre and Nilsson, 2005). All experiments have been performed using MaltParser (Nivre et al., 2006), version 0.4, which is made available together with the suite of programs used for pre- and post-processing.1 1www.msi.vxu.se/users/nivre/research/MaltParser.html 2 Parsing Methodology 2.1 Parsing Algorithm The parsing algorithm used for all languages is the deterministic algorithm first proposed for unlabeled dependency parsing by Nivre</context>
+</contexts>
+<marker>Black, Jelinek, Lafferty, Magerman, Mercer, Roukos, 1992</marker>
+<rawString>E. Black, F. Jelinek, J. D. Lafferty, D. M. Magerman, R. L. Mercer, and S. Roukos. 1992. Towards history-based grammars: Using richer models for probabilistic parsing. In Proc. of the 5th DARPA Speech and Natural Language Workshop, pages 31–37.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A B¨ohmov´a</author>
+<author>J Hajiˇc</author>
+<author>E Hajiˇcov´a</author>
+<author>B Hladk´a</author>
+</authors>
+<title>The PDT: a 3-level annotation scenario.</title>
+<date>2003</date>
+<booktitle>In Abeill´e (Abeill´e,</booktitle>
+<note>chapter 7.</note>
+<marker>B¨ohmov´a, Hajiˇc, Hajiˇcov´a, Hladk´a, 2003</marker>
+<rawString>A. B¨ohmov´a, J. Hajiˇc, E. Hajiˇcov´a, and B. Hladk´a. 2003. The PDT: a 3-level annotation scenario. In Abeill´e (Abeill´e, 2003), chapter 7.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Brants</author>
+<author>S Dipper</author>
+<author>S Hansen</author>
+<author>W Lezius</author>
+<author>G Smith</author>
+</authors>
+<title>The TIGER treebank.</title>
+<date>2002</date>
+<booktitle>In Proc. of TLT-2002.</booktitle>
+<contexts>
+<context position="11259" citStr="Brants et al., 2002" startWordPosition="1808" endWordPosition="1811">ulgarian (Simov et al., 2005; Simov and Osenova, 2003), Chinese (Chen et al., 2003), Danish (Kromann, 2003), and Swedish (Nilsson et al., 2005). Japanese (Kawata and Bartels, 2000), despite a very high accuracy, is different in that attachment score drops from 98% to 85%, as we go from length 1 to 2, which may have something to do with the data consisting of transcribed speech with very short utterances. A second observation is that a high proportion of non-projective structures leads to fragmentation in the parser output, reflected in lower precision for roots. This is noticeable for German (Brants et al., 2002) and Portuguese (Afonso et al., 2002), which still have high overall accuracy thanks to very high attachment scores, but much more conspicuous for Czech (B¨ohmov´a et al., 2003), Dutch (van der Beek et al., 2002) and Slovene (Dˇzeroski et al., 2006), where root precision drops more drastically to about 69%, 71% and 41%, respectively, and root recall is also affected negatively. On the other hand, all three languages behave like high-accuracy languages with respect to attachment score. A very similar pattern is found for Spanish (Civit Torruella and MartiAntonin, 2002), although this cannot be </context>
+</contexts>
+<marker>Brants, Dipper, Hansen, Lezius, Smith, 2002</marker>
+<rawString>S. Brants, S. Dipper, S. Hansen, W. Lezius, and G. Smith. 2002. The TIGER treebank. In Proc. of TLT-2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C-C Chang</author>
+<author>C-J Lin</author>
+</authors>
+<title>LIBSVM: A Library for Support Vector Machines. Software available at http://www.csie.ntu.edu.tw/ cjlin/libsvm.</title>
+<date>2001</date>
+<contexts>
+<context position="5026" citStr="Chang and Lin, 2001" startWordPosition="789" endWordPosition="792"> a starting point for languagespecific feature selection. The features of this model are shown in Table 1, where rows denote tokens in a parser configuration (defined relative to the stack, the remaining input, and the partially built dependency graph), and where columns correspond to data fields. The base model contains twenty features, but note that the fields LEMMA, CPOS and FEATS are not available for all languages. 2.3 Support Vector Machines We use support vector machines3 to predict the next parser action from a feature vector representing the history. More specifically, we use LIBSVM (Chang and Lin, 2001) with a quadratic kernel K(xZ, xj) = (-yxT xj +r)2 and the built-in one-versus-all strategy for multi-class classification. Symbolic features are 2The fields PHEAD and PDEPREL have not been used at all, since we rely on pseudo-projective parsing for the treatment of non-projective structures. 3We also ran preliminary experiments with memory-based learning but found that this gave consistently lower accuracy. converted to numerical features using the standard technique of binarization, and we split values of the FEATS field into its atomic components.4 For some languages, we divide the training</context>
+</contexts>
+<marker>Chang, Lin, 2001</marker>
+<rawString>C.-C. Chang and C.-J. Lin, 2001. LIBSVM: A Library for Support Vector Machines. Software available at http://www.csie.ntu.edu.tw/ cjlin/libsvm.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Chen</author>
+<author>C Luo</author>
+<author>M Chang</author>
+<author>F Chen</author>
+<author>C Chen</author>
+<author>C Huang</author>
+<author>Z Gao</author>
+</authors>
+<title>Sinica treebank: Design criteria, representational issues and implementation.</title>
+<date>2003</date>
+<booktitle>In Abeill´e (Abeill´e,</booktitle>
+<pages>231--248</pages>
+<contexts>
+<context position="10722" citStr="Chen et al., 2003" startWordPosition="1720" endWordPosition="1723">d on the MaltParser web page. before we turn to Swedish and Turkish, focusing on recall and precision of root nodes, as a reflection of global syntactic structure, and on attachment score as a function of arc length. If we start by considering languages with a labeled attachment score of 85% or higher, they are characterized by high precision and recall for root nodes, typically 95/90, and by a graceful degradation of attachment score as arcs grow longer, typically 95–90–85, for arcs of length 1, 2 and 3–6. Typical examples are Bulgarian (Simov et al., 2005; Simov and Osenova, 2003), Chinese (Chen et al., 2003), Danish (Kromann, 2003), and Swedish (Nilsson et al., 2005). Japanese (Kawata and Bartels, 2000), despite a very high accuracy, is different in that attachment score drops from 98% to 85%, as we go from length 1 to 2, which may have something to do with the data consisting of transcribed speech with very short utterances. A second observation is that a high proportion of non-projective structures leads to fragmentation in the parser output, reflected in lower precision for roots. This is noticeable for German (Brants et al., 2002) and Portuguese (Afonso et al., 2002), which still have high ov</context>
+</contexts>
+<marker>Chen, Luo, Chang, Chen, Chen, Huang, Gao, 2003</marker>
+<rawString>K. Chen, C. Luo, M. Chang, F. Chen, C. Chen, C. Huang, and Z. Gao. 2003. Sinica treebank: Design criteria, representational issues and implementation. In Abeill´e (Abeill´e, 2003), chapter 13, pages 231–248.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Civit Torruella</author>
+<author>Ma A MartiAntonin</author>
+</authors>
+<title>Design principles for a Spanish treebank.</title>
+<date>2002</date>
+<booktitle>In Proc. of TLT-2002.</booktitle>
+<contexts>
+<context position="11833" citStr="Torruella and MartiAntonin, 2002" startWordPosition="1898" endWordPosition="1902"> roots. This is noticeable for German (Brants et al., 2002) and Portuguese (Afonso et al., 2002), which still have high overall accuracy thanks to very high attachment scores, but much more conspicuous for Czech (B¨ohmov´a et al., 2003), Dutch (van der Beek et al., 2002) and Slovene (Dˇzeroski et al., 2006), where root precision drops more drastically to about 69%, 71% and 41%, respectively, and root recall is also affected negatively. On the other hand, all three languages behave like high-accuracy languages with respect to attachment score. A very similar pattern is found for Spanish (Civit Torruella and MartiAntonin, 2002), although this cannot be explained by a high proportion of non-projective structures. One possible explanation in this case may be the fact that dependency graphs in the Spanish data are sparsely labeled, which may cause problem for a parser that relies on dependency labels as features. The results for Arabic (Hajiˇc et al., 2004; Smrˇz et al., 2002) are characterized by low root accuracy 223 as well as a rapid degradation of attachment score with arc length (from about 93% for length 1 to 67% for length 2). By contrast, Turkish (Oflazer et al., 2003; Atalay et al., 2003) exhibits high root a</context>
+</contexts>
+<marker>Torruella, MartiAntonin, 2002</marker>
+<rawString>M. Civit Torruella and Ma A. MartiAntonin. 2002. Design principles for a Spanish treebank. In Proc. of TLT-2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Collins</author>
+</authors>
+<title>Head-Driven Statistical Models for Natural Language Parsing.</title>
+<date>1999</date>
+<tech>Ph.D. thesis,</tech>
+<institution>University of Pennsylvania.</institution>
+<contexts>
+<context position="14502" citStr="Collins, 1999" startWordPosition="2337" endWordPosition="2338">n problematic in parsing, has high accuracy. The Swedish treebank annotation treats the second conjunct as a dependent of the first conjunct and as the head of the coordinator, which seems to facilitate parsing.6 The attachment of the second conjunct to the first (CC) has a labeled F-score above 80%, while the attachment of the coordinator to the second conjunct (++) has a score well above 90%. 4.2 Turkish In Turkish, very essential syntactic information is contained in the rich morphological structure, where 6The analysis is reminiscent of the treatment of coordination in the Collins parser (Collins, 1999). concatenated suffixes carry information that in other languages may be expressed by separate words. The Turkish treebank therefore divides word forms into smaller units, called inflectional groups (IGs), and the task of the parser is to construct dependencies between IGs, not (primarily) between word forms (Eryi˘git and Oflazer, 2006). It is then important to remember that an unlabeled attachment score of 75.8% corresponds to a word-to-word score of 82.7%, which puts Turkish on a par with languages like Czech, Dutch and Spanish. Moreover, when we break down the results according to whether t</context>
+</contexts>
+<marker>Collins, 1999</marker>
+<rawString>M. Collins. 1999. Head-Driven Statistical Models for Natural Language Parsing. Ph.D. thesis, University of Pennsylvania.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Dieroski</author>
+<author>T Erjavec</author>
+<author>N Ledinek</author>
+<author>P Pajas</author>
+<author>Z ˇZabokrtsky</author>
+<author>A ˇZele</author>
+</authors>
+<title>Towards a Slovene dependency treebank.</title>
+<date>2006</date>
+<booktitle>In Proc. ofLREC-2006.</booktitle>
+<marker>Dieroski, Erjavec, Ledinek, Pajas, ˇZabokrtsky, ˇZele, 2006</marker>
+<rawString>S. Dieroski, T. Erjavec, N. Ledinek, P. Pajas, Z. ˇZabokrtsky, and A. ˇZele. 2006. Towards a Slovene dependency treebank. In Proc. ofLREC-2006.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Eryi˘git</author>
+<author>K Oflazer</author>
+</authors>
+<title>Statistical dependency parsing of Turkish. In</title>
+<date>2006</date>
+<booktitle>Proc. ofEACL-2006.</booktitle>
+<marker>Eryi˘git, Oflazer, 2006</marker>
+<rawString>G. Eryi˘git and K. Oflazer. 2006. Statistical dependency parsing of Turkish. In Proc. ofEACL-2006.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Hajiˇc</author>
+<author>O Smrˇz</author>
+<author>P Zem´anek</author>
+<author>J ˇSnaidauf</author>
+<author>E Beˇska</author>
+</authors>
+<title>Prague Arabic dependency treebank: Development in data and tools.</title>
+<date>2004</date>
+<booktitle>In Proc. ofNEMLAR-2004,</booktitle>
+<pages>110--117</pages>
+<marker>Hajiˇc, Smrˇz, Zem´anek, ˇSnaidauf, Beˇska, 2004</marker>
+<rawString>J. Hajiˇc, O. Smrˇz, P. Zem´anek, J. ˇSnaidauf, and E. Beˇska. 2004. Prague Arabic dependency treebank: Development in data and tools. In Proc. ofNEMLAR-2004, pages 110–117.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Kawata</author>
+<author>J Bartels</author>
+</authors>
+<title>Stylebook for the Japanese treebank in VERBMOBIL. Verbmobil-Report 240, Seminar f¨ur Sprachwissenschaft,</title>
+<date>2000</date>
+<booktitle>In Proc. of TLT-2003.</booktitle>
+<institution>Universit¨at</institution>
+<contexts>
+<context position="10819" citStr="Kawata and Bartels, 2000" startWordPosition="1734" endWordPosition="1737">d precision of root nodes, as a reflection of global syntactic structure, and on attachment score as a function of arc length. If we start by considering languages with a labeled attachment score of 85% or higher, they are characterized by high precision and recall for root nodes, typically 95/90, and by a graceful degradation of attachment score as arcs grow longer, typically 95–90–85, for arcs of length 1, 2 and 3–6. Typical examples are Bulgarian (Simov et al., 2005; Simov and Osenova, 2003), Chinese (Chen et al., 2003), Danish (Kromann, 2003), and Swedish (Nilsson et al., 2005). Japanese (Kawata and Bartels, 2000), despite a very high accuracy, is different in that attachment score drops from 98% to 85%, as we go from length 1 to 2, which may have something to do with the data consisting of transcribed speech with very short utterances. A second observation is that a high proportion of non-projective structures leads to fragmentation in the parser output, reflected in lower precision for roots. This is noticeable for German (Brants et al., 2002) and Portuguese (Afonso et al., 2002), which still have high overall accuracy thanks to very high attachment scores, but much more conspicuous for Czech (B¨ohmo</context>
+</contexts>
+<marker>Kawata, Bartels, 2000</marker>
+<rawString>Y. Kawata and J. Bartels. 2000. Stylebook for the Japanese treebank in VERBMOBIL. Verbmobil-Report 240, Seminar f¨ur Sprachwissenschaft, Universit¨at T¨ubingen. M. T. Kromann. 2003. The Danish dependency treebank and the underlying linguistic theory. In Proc. of TLT-2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Kudo</author>
+<author>Y Matsumoto</author>
+</authors>
+<title>Japanese dependency analysis using cascaded chunking.</title>
+<date>2002</date>
+<booktitle>In Proc. of CoNLL-2002,</booktitle>
+<pages>63--69</pages>
+<contexts>
+<context position="1433" citStr="Kudo and Matsumoto, 2002" startWordPosition="192" endWordPosition="195"> the parser. We present evaluation results and an error analysis focusing on Swedish and Turkish. 1 Introduction The CoNLL-X shared task consists in parsing texts in multiple languages using a single dependency parser that has the capacity to learn from treebank data. Our methodology for performing this task is based on four essential components: • A deterministic algorithm for building labeled projective dependency graphs (Nivre, 2006). • History-based feature models for predicting the next parser action (Black et al., 1992). • Support vector machines for mapping histories to parser actions (Kudo and Matsumoto, 2002). • Graph transformations for recovering nonprojective structures (Nivre and Nilsson, 2005). All experiments have been performed using MaltParser (Nivre et al., 2006), version 0.4, which is made available together with the suite of programs used for pre- and post-processing.1 1www.msi.vxu.se/users/nivre/research/MaltParser.html 2 Parsing Methodology 2.1 Parsing Algorithm The parsing algorithm used for all languages is the deterministic algorithm first proposed for unlabeled dependency parsing by Nivre (2003) and extended to labeled dependency parsing by Nivre et al. (2004). The algorithm build</context>
+</contexts>
+<marker>Kudo, Matsumoto, 2002</marker>
+<rawString>T. Kudo and Y. Matsumoto. 2002. Japanese dependency analysis using cascaded chunking. In Proc. of CoNLL-2002, pages 63–69.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Nilsson</author>
+<author>J Hall</author>
+<author>J Nivre</author>
+</authors>
+<title>MAMBA meets TIGER: Reconstructing a Swedish treebank from antiquity.</title>
+<date>2005</date>
+<booktitle>In Proc. of the NODALIDA Special Session on Treebanks.</booktitle>
+<contexts>
+<context position="10782" citStr="Nilsson et al., 2005" startWordPosition="1729" endWordPosition="1732">nd Turkish, focusing on recall and precision of root nodes, as a reflection of global syntactic structure, and on attachment score as a function of arc length. If we start by considering languages with a labeled attachment score of 85% or higher, they are characterized by high precision and recall for root nodes, typically 95/90, and by a graceful degradation of attachment score as arcs grow longer, typically 95–90–85, for arcs of length 1, 2 and 3–6. Typical examples are Bulgarian (Simov et al., 2005; Simov and Osenova, 2003), Chinese (Chen et al., 2003), Danish (Kromann, 2003), and Swedish (Nilsson et al., 2005). Japanese (Kawata and Bartels, 2000), despite a very high accuracy, is different in that attachment score drops from 98% to 85%, as we go from length 1 to 2, which may have something to do with the data consisting of transcribed speech with very short utterances. A second observation is that a high proportion of non-projective structures leads to fragmentation in the parser output, reflected in lower precision for roots. This is noticeable for German (Brants et al., 2002) and Portuguese (Afonso et al., 2002), which still have high overall accuracy thanks to very high attachment scores, but mu</context>
+</contexts>
+<marker>Nilsson, Hall, Nivre, 2005</marker>
+<rawString>J. Nilsson, J. Hall, and J. Nivre. 2005. MAMBA meets TIGER: Reconstructing a Swedish treebank from antiquity. In Proc. of the NODALIDA Special Session on Treebanks.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Nivre</author>
+<author>J Nilsson</author>
+</authors>
+<title>Pseudo-projective dependency parsing.</title>
+<date>2005</date>
+<booktitle>In Proc. ofACL-2005,</booktitle>
+<pages>99--106</pages>
+<contexts>
+<context position="1524" citStr="Nivre and Nilsson, 2005" startWordPosition="204" endWordPosition="207">kish. 1 Introduction The CoNLL-X shared task consists in parsing texts in multiple languages using a single dependency parser that has the capacity to learn from treebank data. Our methodology for performing this task is based on four essential components: • A deterministic algorithm for building labeled projective dependency graphs (Nivre, 2006). • History-based feature models for predicting the next parser action (Black et al., 1992). • Support vector machines for mapping histories to parser actions (Kudo and Matsumoto, 2002). • Graph transformations for recovering nonprojective structures (Nivre and Nilsson, 2005). All experiments have been performed using MaltParser (Nivre et al., 2006), version 0.4, which is made available together with the suite of programs used for pre- and post-processing.1 1www.msi.vxu.se/users/nivre/research/MaltParser.html 2 Parsing Methodology 2.1 Parsing Algorithm The parsing algorithm used for all languages is the deterministic algorithm first proposed for unlabeled dependency parsing by Nivre (2003) and extended to labeled dependency parsing by Nivre et al. (2004). The algorithm builds a labeled dependency graph in one left-to-right pass over the input, using a stack to sto</context>
+<context position="6037" citStr="Nivre and Nilsson (2005)" startWordPosition="943" endWordPosition="946">istently lower accuracy. converted to numerical features using the standard technique of binarization, and we split values of the FEATS field into its atomic components.4 For some languages, we divide the training data into smaller sets, based on some feature s (normally the CPOS or POS of the next input token), which may reduce training times without a significant loss in accuracy (Yamada and Matsumoto, 2003). To avoid too small training sets, we pool together categories that have a frequency below a certain threshold t. 2.4 Pseudo-Projective Parsing Pseudo-projective parsing was proposed by Nivre and Nilsson (2005) as a way of dealing with non-projective structures in a projective data-driven parser. We projectivize training data by a minimal transformation, lifting non-projective arcs one step at a time, and extending the arc label of lifted arcs using the encoding scheme called HEAD by Nivre and Nilsson (2005), which means that a lifted arc is assigned the label rTh, where r is the original label and h is the label of the original head in the nonprojective dependency graph. Non-projective dependencies can be recovered by applying an inverse transformation to the output of the parser, using a left-to-r</context>
+</contexts>
+<marker>Nivre, Nilsson, 2005</marker>
+<rawString>J. Nivre and J. Nilsson. 2005. Pseudo-projective dependency parsing. In Proc. ofACL-2005, pages 99–106.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Nivre</author>
+<author>J Hall</author>
+<author>J Nilsson</author>
+</authors>
+<title>Memory-based dependency parsing.</title>
+<date>2004</date>
+<booktitle>In Proc. CoNLL-2004,</booktitle>
+<pages>49--56</pages>
+<contexts>
+<context position="2012" citStr="Nivre et al. (2004)" startWordPosition="271" endWordPosition="274">arser actions (Kudo and Matsumoto, 2002). • Graph transformations for recovering nonprojective structures (Nivre and Nilsson, 2005). All experiments have been performed using MaltParser (Nivre et al., 2006), version 0.4, which is made available together with the suite of programs used for pre- and post-processing.1 1www.msi.vxu.se/users/nivre/research/MaltParser.html 2 Parsing Methodology 2.1 Parsing Algorithm The parsing algorithm used for all languages is the deterministic algorithm first proposed for unlabeled dependency parsing by Nivre (2003) and extended to labeled dependency parsing by Nivre et al. (2004). The algorithm builds a labeled dependency graph in one left-to-right pass over the input, using a stack to store partially processed tokens and adding arcs using four elementary actions (where top is the token on top of the stack and next is the next token): • SHIFT: Push next onto the stack. • REDUCE: Pop the stack. • RIGHT-ARC(r): Add an arc labeled r from top to next; push next onto the stack. • LEFT-ARC(r): Add an arc labeled r from next to top; pop the stack. Although the parser only derives projective graphs, the fact that graphs are labeled allows non-projective dependencies to be cap</context>
+</contexts>
+<marker>Nivre, Hall, Nilsson, 2004</marker>
+<rawString>J. Nivre, J. Hall, and J. Nilsson. 2004. Memory-based dependency parsing. In Proc. CoNLL-2004, pages 49–56.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Nivre</author>
+<author>J Hall</author>
+<author>J Nilsson</author>
+</authors>
+<title>MaltParser: A datadriven parser-generator for dependency parsing.</title>
+<date>2006</date>
+<booktitle>In Proc. of LREC-2006.</booktitle>
+<contexts>
+<context position="1599" citStr="Nivre et al., 2006" startWordPosition="216" endWordPosition="219">le languages using a single dependency parser that has the capacity to learn from treebank data. Our methodology for performing this task is based on four essential components: • A deterministic algorithm for building labeled projective dependency graphs (Nivre, 2006). • History-based feature models for predicting the next parser action (Black et al., 1992). • Support vector machines for mapping histories to parser actions (Kudo and Matsumoto, 2002). • Graph transformations for recovering nonprojective structures (Nivre and Nilsson, 2005). All experiments have been performed using MaltParser (Nivre et al., 2006), version 0.4, which is made available together with the suite of programs used for pre- and post-processing.1 1www.msi.vxu.se/users/nivre/research/MaltParser.html 2 Parsing Methodology 2.1 Parsing Algorithm The parsing algorithm used for all languages is the deterministic algorithm first proposed for unlabeled dependency parsing by Nivre (2003) and extended to labeled dependency parsing by Nivre et al. (2004). The algorithm builds a labeled dependency graph in one left-to-right pass over the input, using a stack to store partially processed tokens and adding arcs using four elementary actions</context>
+</contexts>
+<marker>Nivre, Hall, Nilsson, 2006</marker>
+<rawString>J. Nivre, J. Hall, and J. Nilsson. 2006. MaltParser: A datadriven parser-generator for dependency parsing. In Proc. of LREC-2006.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Nivre</author>
+</authors>
+<title>An efficient algorithm for projective dependency parsing.</title>
+<date>2003</date>
+<booktitle>In Proc. ofIWPT-2003,</booktitle>
+<pages>149--160</pages>
+<publisher>Springer.</publisher>
+<contexts>
+<context position="1946" citStr="Nivre (2003)" startWordPosition="262" endWordPosition="263">1992). • Support vector machines for mapping histories to parser actions (Kudo and Matsumoto, 2002). • Graph transformations for recovering nonprojective structures (Nivre and Nilsson, 2005). All experiments have been performed using MaltParser (Nivre et al., 2006), version 0.4, which is made available together with the suite of programs used for pre- and post-processing.1 1www.msi.vxu.se/users/nivre/research/MaltParser.html 2 Parsing Methodology 2.1 Parsing Algorithm The parsing algorithm used for all languages is the deterministic algorithm first proposed for unlabeled dependency parsing by Nivre (2003) and extended to labeled dependency parsing by Nivre et al. (2004). The algorithm builds a labeled dependency graph in one left-to-right pass over the input, using a stack to store partially processed tokens and adding arcs using four elementary actions (where top is the token on top of the stack and next is the next token): • SHIFT: Push next onto the stack. • REDUCE: Pop the stack. • RIGHT-ARC(r): Add an arc labeled r from top to next; push next onto the stack. • LEFT-ARC(r): Add an arc labeled r from next to top; pop the stack. Although the parser only derives projective graphs, the fact th</context>
+</contexts>
+<marker>Nivre, 2003</marker>
+<rawString>J. Nivre. 2003. An efficient algorithm for projective dependency parsing. In Proc. ofIWPT-2003, pages 149–160. J. Nivre. 2006. Inductive Dependency Parsing. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Oflazer</author>
+<author>B Say</author>
+<author>D Zeynep Hakkani-T¨ur</author>
+<author>G T¨ur</author>
+</authors>
+<title>Building a Turkish treebank. In Abeill´e (Abeill´e,</title>
+<date>2003</date>
+<pages>15</pages>
+<marker>Oflazer, Say, Hakkani-T¨ur, T¨ur, 2003</marker>
+<rawString>K. Oflazer, B. Say, D. Zeynep Hakkani-T¨ur, and G. T¨ur. 2003. Building a Turkish treebank. In Abeill´e (Abeill´e, 2003), chapter 15.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Simov</author>
+<author>P Osenova</author>
+</authors>
+<title>Practical annotation scheme for an HPSG treebank of Bulgarian. In</title>
+<date>2003</date>
+<booktitle>Proc. ofLINC-2003,</booktitle>
+<pages>17--24</pages>
+<contexts>
+<context position="10693" citStr="Simov and Osenova, 2003" startWordPosition="1715" endWordPosition="1718">ng algorithm parameters can be found on the MaltParser web page. before we turn to Swedish and Turkish, focusing on recall and precision of root nodes, as a reflection of global syntactic structure, and on attachment score as a function of arc length. If we start by considering languages with a labeled attachment score of 85% or higher, they are characterized by high precision and recall for root nodes, typically 95/90, and by a graceful degradation of attachment score as arcs grow longer, typically 95–90–85, for arcs of length 1, 2 and 3–6. Typical examples are Bulgarian (Simov et al., 2005; Simov and Osenova, 2003), Chinese (Chen et al., 2003), Danish (Kromann, 2003), and Swedish (Nilsson et al., 2005). Japanese (Kawata and Bartels, 2000), despite a very high accuracy, is different in that attachment score drops from 98% to 85%, as we go from length 1 to 2, which may have something to do with the data consisting of transcribed speech with very short utterances. A second observation is that a high proportion of non-projective structures leads to fragmentation in the parser output, reflected in lower precision for roots. This is noticeable for German (Brants et al., 2002) and Portuguese (Afonso et al., 20</context>
+</contexts>
+<marker>Simov, Osenova, 2003</marker>
+<rawString>K. Simov and P. Osenova. 2003. Practical annotation scheme for an HPSG treebank of Bulgarian. In Proc. ofLINC-2003, pages 17–24.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Simov</author>
+<author>P Osenova</author>
+<author>A Simov</author>
+<author>M Kouylekov</author>
+</authors>
+<title>Design and implementation of the Bulgarian HPSG-based treebank.</title>
+<date>2005</date>
+<journal>In Journal of Research on Language and Computation – Special Issue,</journal>
+<pages>495--522</pages>
+<publisher>Kluwer Academic Publishers.</publisher>
+<contexts>
+<context position="10667" citStr="Simov et al., 2005" startWordPosition="1711" endWordPosition="1714">re models and learning algorithm parameters can be found on the MaltParser web page. before we turn to Swedish and Turkish, focusing on recall and precision of root nodes, as a reflection of global syntactic structure, and on attachment score as a function of arc length. If we start by considering languages with a labeled attachment score of 85% or higher, they are characterized by high precision and recall for root nodes, typically 95/90, and by a graceful degradation of attachment score as arcs grow longer, typically 95–90–85, for arcs of length 1, 2 and 3–6. Typical examples are Bulgarian (Simov et al., 2005; Simov and Osenova, 2003), Chinese (Chen et al., 2003), Danish (Kromann, 2003), and Swedish (Nilsson et al., 2005). Japanese (Kawata and Bartels, 2000), despite a very high accuracy, is different in that attachment score drops from 98% to 85%, as we go from length 1 to 2, which may have something to do with the data consisting of transcribed speech with very short utterances. A second observation is that a high proportion of non-projective structures leads to fragmentation in the parser output, reflected in lower precision for roots. This is noticeable for German (Brants et al., 2002) and Por</context>
+</contexts>
+<marker>Simov, Osenova, Simov, Kouylekov, 2005</marker>
+<rawString>K. Simov, P. Osenova, A. Simov, and M. Kouylekov. 2005. Design and implementation of the Bulgarian HPSG-based treebank. In Journal of Research on Language and Computation – Special Issue, pages 495–522. Kluwer Academic Publishers.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Smrˇz</author>
+<author>J ˇSnaidauf</author>
+<author>P Zem´anek</author>
+</authors>
+<title>Prague dependency treebank for Arabic: Multi-level annotation of Arabic corpus.</title>
+<date>2002</date>
+<booktitle>In Proc. of the Intern. Symposium on Processing of Arabic,</booktitle>
+<pages>147--155</pages>
+<marker>Smrˇz, ˇSnaidauf, Zem´anek, 2002</marker>
+<rawString>O. Smrˇz, J. ˇSnaidauf, and P. Zem´anek. 2002. Prague dependency treebank for Arabic: Multi-level annotation of Arabic corpus. In Proc. of the Intern. Symposium on Processing of Arabic, pages 147–155.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L van der Beek</author>
+<author>G Bouma</author>
+<author>R Malouf</author>
+<author>G van Noord</author>
+</authors>
+<title>The Alpino dependency treebank.</title>
+<date>2002</date>
+<booktitle>In Computational Linguistics in the Netherlands (CLIN).</booktitle>
+<marker>van der Beek, Bouma, Malouf, van Noord, 2002</marker>
+<rawString>L. van der Beek, G. Bouma, R. Malouf, and G. van Noord. 2002. The Alpino dependency treebank. In Computational Linguistics in the Netherlands (CLIN).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>H Yamada</author>
+<author>Y Matsumoto</author>
+</authors>
+<title>Statistical dependency analysis with support vector machines.</title>
+<date>2003</date>
+<booktitle>In Proc. of IWPT2003,</booktitle>
+<pages>195--206</pages>
+<contexts>
+<context position="5826" citStr="Yamada and Matsumoto, 2003" startWordPosition="912" endWordPosition="915">EL have not been used at all, since we rely on pseudo-projective parsing for the treatment of non-projective structures. 3We also ran preliminary experiments with memory-based learning but found that this gave consistently lower accuracy. converted to numerical features using the standard technique of binarization, and we split values of the FEATS field into its atomic components.4 For some languages, we divide the training data into smaller sets, based on some feature s (normally the CPOS or POS of the next input token), which may reduce training times without a significant loss in accuracy (Yamada and Matsumoto, 2003). To avoid too small training sets, we pool together categories that have a frequency below a certain threshold t. 2.4 Pseudo-Projective Parsing Pseudo-projective parsing was proposed by Nivre and Nilsson (2005) as a way of dealing with non-projective structures in a projective data-driven parser. We projectivize training data by a minimal transformation, lifting non-projective arcs one step at a time, and extending the arc label of lifted arcs using the encoding scheme called HEAD by Nivre and Nilsson (2005), which means that a lifted arc is assigned the label rTh, where r is the original lab</context>
+</contexts>
+<marker>Yamada, Matsumoto, 2003</marker>
+<rawString>H. Yamada and Y. Matsumoto. 2003. Statistical dependency analysis with support vector machines. In Proc. of IWPT2003, pages 195–206.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

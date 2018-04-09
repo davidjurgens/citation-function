@@ -1,0 +1,1370 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000001">
+<title confidence="0.983256">
+Forest-based Translation Rule Extraction
+</title>
+<author confidence="0.991293">
+Haitao Mi1
+</author>
+<affiliation confidence="0.977671666666667">
+1Key Lab. of Intelligent Information Processing
+Institute of Computing Technology
+Chinese Academy of Sciences
+</affiliation>
+<address confidence="0.758227">
+P.O. Box 2704, Beijing 100190, China
+</address>
+<email confidence="0.995607">
+htmi@ict.ac.cn
+</email>
+<author confidence="0.994852">
+Liang Huang2,1
+</author>
+<affiliation confidence="0.79401025">
+2Dept. of Computer &amp; Information Science
+University of Pennsylvania
+3330 Walnut St., Levine Hall
+Philadelphia, PA 19104, USA
+</affiliation>
+<email confidence="0.990068">
+lhuang3@cis.upenn.edu
+</email>
+<bodyText confidence="0.976647">
+examples (partial)
+Abstract source target
+tree-to-tree
+Ding and Palmer (2005)
+Translation rule extraction is a fundamental
+problem in machine translation, especially for
+linguistically syntax-based systems that need
+parse trees from either or both sides of the bi-
+text. The current dominant practice only uses
+1-best trees, which adversely affects the rule
+set quality due to parsing errors. So we pro-
+pose a novel approach which extracts rules
+from a packed forest that compactly encodes
+exponentially many parses. Experiments show
+that this method improves translation quality
+by over 1 BLEU point on a state-of-the-art
+tree-to-string system, and is 0.5 points better
+than (and twice as fast as) extracting on 30-
+best parses. When combined with our previous
+work on forest-based decoding, it achieves a
+2.5 BLEU points improvement over the base-
+line, and even outperforms the hierarchical
+system of Hiero by 0.7 points.
+</bodyText>
+<sectionHeader confidence="0.99913" genericHeader="abstract">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.989832333333334">
+Automatic extraction of translation rules is a funda-
+mental problem in statistical machine translation, es-
+pecially for many syntax-based models where trans-
+lation rules directly encode linguistic knowledge.
+Typically, these models extract rules using parse
+trees from both or either side(s) of the bitext. The
+former case, with trees on both sides, is often called
+tree-to-tree models; while the latter case, with trees
+on either source or target side, include both tree-
+to-string and string-to-tree models (see Table 1).
+Leveraging from structural and linguistic informa-
+tion from parse trees, these models are believed
+to be better than their phrase-based counterparts in
+tree-to-string
+string-to-tree
+</bodyText>
+<note confidence="0.269446">
+string-to-string Chiang (2005)
+</note>
+<tableCaption confidence="0.96928075">
+Table 1: A classification of syntax-based MT. The first
+three use linguistic syntax, while the last one only formal
+syntax. Our experiments cover the second type using a
+packed forest in place of the tree for rule-extraction.
+</tableCaption>
+<bodyText confidence="0.9997588">
+handling non-local reorderings, and have achieved
+promising translation results.1
+However, these systems suffer from a major limi-
+tation, that the rule extractor only uses 1-best parse
+tree(s), which adversely affects the rule set quality
+due to parsing errors. To make things worse, mod-
+ern statistical parsers are often trained on domains
+quite different from those used in MT. By contrast,
+formally syntax-based models (Chiang, 2005) do not
+rely on parse trees, yet usually perform better than
+these linguistically sophisticated counterparts.
+To alleviate this problem, an obvious idea is to
+extract rules from k-best parses instead. However, a
+k-best list, with its limited scope, has too few vari-
+ations and too many redundancies (Huang, 2008).
+This situation worsens with longer sentences as the
+number of possible parses grows exponentially with
+the sentence length and a k-best list will only capture
+a tiny fraction of the whole space. In addition, many
+subtrees are repeated across different parses, so it is
+</bodyText>
+<footnote confidence="0.997378666666667">
+1For example, in recent NIST Evaluations, some of these
+models (Galley et al., 2006; Quirk et al., 2005; Liu et al., 2006)
+ranked among top 10. See http://www.nist.gov/speech/tests/mt/.
+</footnote>
+<note confidence="0.9991195">
+Liu et al. (2006); Huang et al. (2006)
+Galley et al. (2006)
+</note>
+<page confidence="0.97361">
+206
+</page>
+<note confidence="0.9716535">
+Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 206–214,
+Honolulu, October 2008.c�2008 Association for Computational Linguistics
+</note>
+<figure confidence="0.880257333333333">
+IP
+→ x1 x3 with x2
+yˇu
+</figure>
+<figureCaption confidence="0.9884485">
+Figure 1: Example translation rule r1. The Chinese con-
+junction yˇu “and” is translated into English prep. “with”.
+</figureCaption>
+<bodyText confidence="0.998596181818182">
+also inefficient to extract rules separately from each
+of these very similar trees (or from the cross-product
+of k2 similar tree-pairs in tree-to-tree models).
+We instead propose a novel approach that ex-
+tracts rules from packed forests (Section 3), which
+compactly encodes many more alternatives than k-
+best lists. Experiments (Section 5) show that forest-
+based extraction improves BLEU score by over 1
+point on a state-of-the-art tree-to-string system (Liu
+et al., 2006; Mi et al., 2008), which is also 0.5
+points better than (and twice as fast as) extracting
+on 30-best parses. When combined with our previ-
+ous orthogonal work on forest-based decoding (Mi
+et al., 2008), the forest-forest approach achieves a
+2.5 BLEU points improvement over the baseline,
+and even outperforms the hierarchical system of Hi-
+ero, one of the best-performing systems to date.
+Besides tree-to-string systems, our method is also
+applicable to other paradigms such as the string-to-
+tree models (Galley et al., 2006) where the rules are
+in the reverse order, and easily generalizable to pairs
+of forests in tree-to-tree models.
+</bodyText>
+<table confidence="0.923143333333333">
+r2 ⇓ r3 ⇓
+Bush held with
+NPB NPB
+hu`ıt´an Sh¯al´ong
+r� ⇓ r5 ⇓
+Bush held a meeting with Sharon
+</table>
+<equation confidence="0.99061425">
+r2 NPB(B`ush´ı) → Bush
+r3 VPB(VV(jˇux´ıng) AS(le) x1:NPB) → held x1
+r4 NPB(Sh¯al´ong) → Sharon
+r5 NPB(hu`ıt´an) → a meeting
+</equation>
+<figureCaption confidence="0.977698666666667">
+Figure 2: Example derivation of tree-to-string translation,
+with rules used. Each shaded region denotes a tree frag-
+ment that is pattern-matched with the rule being applied.
+</figureCaption>
+<figure confidence="0.926504564102564">
+B`ush´ı
+le
+hu`ıt´an
+yˇu
+Sh¯al´ong
+hu`ıt´an
+le
+(a) B`ush´ı yˇu Sh¯al´ong jˇux´ıng le hu`ıt´an
+⇓ 1-best parser
+IP
+jˇux´ıng
+jˇux´ıng
+NP
+VPB
+NPB
+NPB
+CC
+NPB
+VV
+AS
+r1⇓
+with NPB
+Sh¯al´ong
+VV
+VPB
+AS
+NPB
+NPB
+B`ush´ı
+NP
+x1:NPB CC
+x3:VPB
+x2:NPB
+(1) B`ush´ı
+Bush
+yˇu Sh¯al´ong jˇux´ıng le
+and/with Sharon1 hold past.
+hu`ıt´an
+meeting2
+</figure>
+<sectionHeader confidence="0.509828" genericHeader="keywords">
+2 Tree-based Translation
+</sectionHeader>
+<bodyText confidence="0.99757825">
+We review in this section the tree-based approach to
+machine translation (Liu et al., 2006; Huang et al.,
+2006), and its rule extraction algorithm (Galley et
+al., 2004; Galley et al., 2006).
+</bodyText>
+<subsectionHeader confidence="0.99348">
+2.1 Tree-to-String System
+</subsectionHeader>
+<bodyText confidence="0.999564058823529">
+Current tree-based systems perform translation in
+two separate steps: parsing and decoding. The input
+string is first parsed by a parser into a 1-best tree,
+which will then be converted to a target language
+string by applying a set of tree-to-string transforma-
+tion rules. For example, consider the following ex-
+ample translating from Chinese to English:
+“Bush held a meeting2 with Sharon1”
+Figure 2 shows how this process works. The Chi-
+nese sentence (a) is first parsed into a parse tree (b),
+which will be converted into an English string in 5
+steps. First, at the root node, we apply rule r1 shown
+in Figure 1, which translates the Chinese coordina-
+tion construction (“... and ...”) into an English prepo-
+sitional phrase. Then, from step (c) we continue ap-
+plying rules to untranslated Chinese subtrees, until
+we get the complete English translation in (e).2
+</bodyText>
+<footnote confidence="0.993397333333333">
+2We swap the 1-best and 2-best parses of the example sen-
+tence from our earlier paper (Mi et al., 2008), since the current
+1-best parse is easier to illustrate the rule extraction algorithm.
+</footnote>
+<page confidence="0.982891">
+207
+</page>
+<equation confidence="0.960138666666667">
+IP
+“Bush .. Sharon”
+→ x1 x4 x2 x3
+CC (yˇu) → with
+NPB (B`ush´ı) → Bush
+NPB (Sh¯al´ong) → Sharon
+VPB (VV(jˇux´ıng) AS(le) x1:NPB)
+→ held x1
+NPB (hu`ıt´an) → a meeting
+</equation>
+<figure confidence="0.96097148">
+NP
+“Bush ⊔ with Sharon”
+NPB
+“Bush”
+B`ush´ı
+NPB
+“Sharon”
+Sh¯al´ong
+VV
+“held”
+jˇux´ıng
+NPB
+“a meeting”
+hu`ıt´an
+AS
+“held”
+le
+Bush held a meeting with Sharon
+VPB
+“held .. meeting”
+CC
+“with”
+yˇu
+(minimal) rules extracted
+IP (NP(x1:NPB x2:CC x3:NPB) x4:VPB)
+</figure>
+<figureCaption confidence="0.9994394">
+Figure 3: Tree-based rule extraction (Galley et al., 2004). Each non-leaf node in the tree is annotated with its target
+span (below the node), where u denotes a gap, and non-faithful spans are crossed out. Shadowed nodes are admissible,
+with contiguous and faithful spans. The first two rules can be “composed” to form rule r1 in Figure 1.
+Figure 4: Forest-based rule extraction. Solid hyperedges correspond to the 1-best tree in Figure 3, while dashed hyper-
+edges denote the alternative parse interpreting yˇu as a preposition in Figure 5.
+</figureCaption>
+<figure confidence="0.953181342105263">
+extra (minimal) rules extracted
+IP0, 6
+“Bush .. Sharon”
+VP1, 6
+NP0, 3
+“Bush ⊔ with Sharon”
+e3
+IP (x1:NPB x2:VP) x1 x2
+VP (x1:PP x2:VPB) x2 x1
+PP (x1:P x2:NPB) x1 x2
+P (yˇu) → with
+e2
+e1
+“held .. Sharon”
+PP1, 3
+VPB3, 6
+“with Sharon”
+“held .. meeting”
+NPB2, 3
+CC1, 2
+NPB0, 1
+NPB5, 6
+P1, 2
+VV3, 4
+“held”
+AS4, 5
+“held”
+“Bush”
+“Sharon”
+“with”
+B`ush´ı
+“a meeting”
+hu`ıt´an
+ˇu
+le
+jˇux´ıng
+“with”
+y
+</figure>
+<bodyText confidence="0.953176666666667">
+Sh¯al´ong
+Bush held a meeting with Sharon
+More formally, a (tree-to-string) translation rule
+(Galley et al., 2004; Huang et al., 2006) is a tuple
+(lhs(r), rhs(r), 0(r)), where lhs(r) is the source-
+side tree fragment, whose internal nodes are la-
+beled by nonterminal symbols (like NP and VP),
+and whose frontier nodes are labeled by source-
+language words (like “yˇu”) or variables from a set
+X = {x1, x2,...}; rhs(r) is the target-side string
+expressed in target-language words (like “with”) and
+variables; and 0(r) is a mapping from X to nonter-
+minals. Each variable xi E X occurs exactly once in
+lhs(r) and exactly once in rhs(r). For example, for
+rule r1 in Figure 1,
+</bodyText>
+<equation confidence="0.999934333333333">
+lhs(r1) = IP ( NP(x1 CC(yˇu) x2) x3),
+rhs(r1) = x1 x3 with x2,
+0(r1) = {x1: NPB, x2: NPB, x3: VPB}.
+</equation>
+<bodyText confidence="0.9991825">
+These rules are being used in the reverse direction of
+the string-to-tree transducers in Galley et al. (2004).
+</bodyText>
+<page confidence="0.988822">
+208
+</page>
+<subsectionHeader confidence="0.998741">
+2.2 Tree-to-String Rule Extraction
+</subsectionHeader>
+<bodyText confidence="0.99996164">
+We now briefly explain the algorithm of Galley et al.
+(2004) that can extract these translation rules from a
+word-aligned bitext with source-side parses.
+Consider the example in Figure 3. The basic idea
+is to decompose the source (Chinese) parse into a se-
+ries of tree fragments, each of which will form a rule
+with its corresponding English translation. However,
+not every fragmentation can be used for rule extrac-
+tion, since it may or may not respect the alignment
+and reordering between the two languages. So we
+say a fragmentation is well-formed with respect to
+an alignment if the root node of every tree fragment
+corresponds to a contiguous span on the target side;
+the intuition is that there is a “translational equiva-
+lence” between the subtree rooted at the node and
+the corresponding target span. For example, in Fig-
+ure 3, each node is annotated with its corresponding
+English span, where the NP node maps to a non-
+contiguous one “Bush U with Sharon”.
+More formally, we need a precise formulation
+to handle the cases of one-to-many, many-to-one,
+and many-to-many alignment links. Given a source-
+target sentence pair (u, T) with alignment a, the (tar-
+get) span of node v is the set of target words aligned
+to leaf nodes yield(v) under node v:
+</bodyText>
+<equation confidence="0.572276">
+span(v)°_ {TZ E T  |luj E yield(v), (uj,TZ) E a}.
+</equation>
+<bodyText confidence="0.9997636">
+For example, in Figure 3, every node in the parse tree
+is annotated with its corresponding span below the
+node, where most nodes have contiguous spans ex-
+cept for the NP node which maps to a gapped phrase
+“Bush U with Sharon”. But contiguity alone is not
+enough to ensure well-formedness, since there might
+be words within the span aligned to source words
+uncovered by the node. So we also define a span s
+to be faithful to node v if every word in it is only
+aligned to nodes dominated by v, i.e.:
+</bodyText>
+<equation confidence="0.38671">
+VTZ E s, (uj,TZ) E a ==&gt;. uj E yield(v).
+</equation>
+<bodyText confidence="0.999798">
+For example, sibling nodes VV and AS in the tree
+have non-faithful spans (crossed out in the Figure),
+because they both map to “held”, thus neither of
+them can be translated to “held” alone. In this case,
+a larger tree fragment rooted at VPB has to be
+extracted. Nodes with non-empty, contiguous, and
+faithful spans form the admissible set (shaded nodes
+</bodyText>
+<figureCaption confidence="0.912219">
+Figure 5: An alternative parse of the Chinese sentence,
+with yˇu as a preposition instead of a conjunction; com-
+mon parts shared with 1-best parse in Fig. 3 are elided.
+</figureCaption>
+<bodyText confidence="0.999744692307692">
+in the figure), which serve as potential cut-points for
+rule extraction.3
+With the admissible set computed, rule extraction
+is as simple as a depth-first traversal from the root:
+we “cut” the tree at all admissible nodes to form tree
+fragments and extract a rule for each fragment, with
+variables matching the admissible descendant nodes.
+For example, the tree in Figure 3 is cut into 6 pieces,
+each of which corresponds to a rule on the right.
+These extracted rules are called minimal rules,
+which can be glued together to form composed rules
+with larger tree fragments (e.g. r1 in Fig. 1) (Galley
+et al., 2006). Our experiments use composed rules.
+</bodyText>
+<sectionHeader confidence="0.997029" genericHeader="introduction">
+3 Forest-based Rule Extraction
+</sectionHeader>
+<bodyText confidence="0.999993333333333">
+We now extend tree-based extraction algorithm from
+the previous section to work with a packed forest
+representing exponentially many parse trees.
+</bodyText>
+<subsectionHeader confidence="0.985721">
+3.1 Packed Forest
+</subsectionHeader>
+<bodyText confidence="0.999897181818182">
+Informally, a packed parse forest, or forest in
+short, is a compact representation of all the deriva-
+tions (i.e., parse trees) for a given sentence under
+a context-free grammar (Earley, 1970; Billot and
+Lang, 1989). For example, consider again the Chi-
+nese sentence in Example (1) above, which has
+(at least) two readings depending on the part-of-
+speech of the word yˇu: it can be either a conjunction
+(CC “and”) as shown in Figure 3, or a preposition
+(P “with”) as shown in Figure 5, with only PP and
+VPB swapped from the English word order.
+</bodyText>
+<footnote confidence="0.824079">
+3Admissible set (Wang et al., 2007) is also known as “fron-
+tier set” (Galley et al., 2004). For simplicity of presentation, we
+assume every target word is aligned to at least one source word;
+see Galley et al. (2006) for handling unaligned target words.
+</footnote>
+<figure confidence="0.67025">
+IP0,6
+NPB0,1 VP1,6
+B`ushi PP1,3 VPB3,6
+P1,2
+NPB2,3
+jˇuxing le huit´an
+yˇu Sh¯al´ong
+</figure>
+<page confidence="0.992772">
+209
+</page>
+<bodyText confidence="0.999922285714286">
+These two parse trees can be represented as a
+single forest by sharing common subtrees such as
+NPB0, 1 and VPB3, 6, as shown in Figure 4. Such a
+forest has a structure of a hypergraph (Huang and
+Chiang, 2005), where items like NP0, 3 are called
+nodes, whose indices denote the source span, and
+combinations like
+</bodyText>
+<equation confidence="0.979094">
+e1 : IP0, 6 → NPB0, 3 VP3, 6
+</equation>
+<bodyText confidence="0.886178">
+we call hyperedges. We denote head(e) and tails(e)
+to be the consequent and antecedant items of hyper-
+edge e, respectively. For example,
+</bodyText>
+<equation confidence="0.974824">
+head(e1) = IP0, 6, tails(e1) = {NPB0, 3,VP3, 6}.
+</equation>
+<bodyText confidence="0.999925">
+We also denote BS(v) to be the set of incoming hy-
+peredges of node v, being different ways of deriving
+it. For example, in Figure 4, BS(IP0, 6) = {e1, e2}.
+</bodyText>
+<subsectionHeader confidence="0.993856">
+3.2 Forest-based Rule Extraction Algorithm
+</subsectionHeader>
+<bodyText confidence="0.9990165">
+Like in tree-based extraction, we extract rules from
+a packed forest F in two steps:
+</bodyText>
+<listItem confidence="0.985202">
+(1) admissible set computation (where to cut), and
+(2) fragmentation (how to cut).
+</listItem>
+<bodyText confidence="0.978184045454546">
+It turns out that the exact formulation developed
+for admissible set in the tree-based case can be ap-
+plied to a forest without any change. The fragmen-
+tation step, however, becomes much more involved
+since we now face a choice of multiple parse hyper-
+edges at each node. In other words, it becomes non-
+deterministic how to “cut” a forest into tree frag-
+ments, which is analogous to the non-deterministic
+pattern-match in forest-based decoding (Mi et al.,
+2008). For example there are two parse hyperedges
+e1 and e2 at the root node in Figure 4. When we fol-
+low one of them to grow a fragment, there again will
+be multiple choices at each of its tail nodes. Like in
+tree-based case, a fragment is said to be complete
+if all its leaf nodes are admissible. Otherwise, an in-
+complete fragment can grow at any non-admissible
+frontier node v, where following each parse hyper-
+edge at v will split off a new fragment. For example,
+following e2 at the root node will immediately lead
+us to two admissible nodes, NPB0, 1 and VP1, 6
+(we will highlight admissible nodes by gray shades
+Algorithm 1 Forest-based Rule Extraction.
+</bodyText>
+<listItem confidence="0.9447905">
+Input: forest F, target sentence T, and alignment a
+Output: minimal rule set R
+1: admset ← ADMISSIBLE(F, T, a) &gt; admissible set
+2: for each v ∈ admset do
+3: open ← 0 &gt; queue of active fragments
+4: for each e ∈ BS(v) do &gt; incoming hyperedges
+5: front ← tails(e) \ admset &gt; initial frontier
+6: open.append(h{e}, fronti)
+7: while open =6 0 do
+8: hfrag, fronti ← open.pop() &gt; active fragment
+9: if front = 0 then
+10: generate a rule r using fragment frag
+11: R.append(r)
+12: else &gt; incomplete: further expand
+13: u ← front.pop() &gt; a frontier node
+14: for each e ∈ BS(u) do
+15: front′ ← front ∪ (tails(e) \ admset)
+16: open.append(hfrag ∪ {e}, front′i)
+</listItem>
+<bodyText confidence="0.961870923076923">
+in this section like in Figures 3 and 4). So this frag-
+ment, frag1 = {e2}, is now complete and we can
+extract a rule,
+IP (x1:NPB x2:VP) → x1 x2.
+However, following the other hyperedge e1
+IP0, 6 → NP0, 3 VPB3, 6
+will leave the new fragment frag2 = {e1} incom-
+plete with one non-admissible node NP0, 3. We then
+grow frag2 at this node by choosing hyperedge e3
+NP0, 3 → NPB0, 1 CC1, 2 NPB2, 3 ,
+and spin off anew fragment frag3 = {e1, e3}, which
+is now complete since all its four leaf nodes are ad-
+missible. We then extract a rule with four variables:
+</bodyText>
+<equation confidence="0.986826">
+IP (NP(x1:NPB x2:CC x3:NPB) x4:VPB)
+→ x1 x4 x2 x3.
+</equation>
+<bodyText confidence="0.998851285714285">
+This procedure is formalized by a breadth-first
+search (BFS) in Pseudocode 1. The basic idea is to
+visit each frontier node v, and keep a queue open
+of actively growing fragments rooted at v. We keep
+expanding incomplete fragments from open, and ex-
+tract a rule if a complete fragment is found (line 10).
+Each fragment is associated with a frontier (variable
+</bodyText>
+<page confidence="0.995831">
+210
+</page>
+<bodyText confidence="0.999950117647059">
+front in the Pseudocode), being the subset of non-
+admissible leaf nodes (recall that expansion stops at
+admissible nodes). So each initial fragment along
+hyperedge e is associated with an initial frontier
+(line 5), front = tails(e) \ admset.
+A fragment is complete if its frontier is empty
+(line 9), otherwise we pop one frontier node u to
+expand, spin off new fragments by following hyper-
+edges of u, and update the frontier (lines 14-16), un-
+til all active fragments are complete and open queue
+is empty (line 7).
+A single parse tree can also be viewed as a triv-
+ial forest, where each node has only one incoming
+hyperedge. So the Galley et al. (2004) algorithm for
+tree-based rule extraction (Sec. 2.2) can be consid-
+ered a special case of our algorithm, where the queue
+open always contains one single active fragment.
+</bodyText>
+<subsectionHeader confidence="0.99933">
+3.3 Fractional Counts and Rule Probabilities
+</subsectionHeader>
+<bodyText confidence="0.999995454545455">
+In tree-based extraction, for each sentence pair, each
+rule extracted naturally has a count of one, which
+will be used in maximum-likelihood estimation of
+rule probabilities. However, a forest is an implicit
+collection of many more trees, each of which, when
+enumerated, has its own probability accumulated
+from of the parse hyperedges involved. In other
+words, a forest can be viewed as a virtual weighted
+k-best list with a huge k. So a rule extracted from a
+non 1-best parse, i.e., using non 1-best hyperedges,
+should be penalized accordingly and should have a
+fractional count instead of a unit one, similar to the
+E-step in EM algorithms.
+Inspired by the parsing literature on pruning
+(Charniak and Johnson, 2005; Huang, 2008) we pe-
+nalize a rule r by the posterior probability of its tree
+fragment frag = lhs(r). This posterior probability,
+notated αβ(frag), can be computed in an Inside-
+Outside fashion as the product of three parts: the out-
+side probability of its root node, the probabilities of
+parse hyperedges involved in the fragment, and the
+inside probabilities of its leaf nodes,
+</bodyText>
+<equation confidence="0.870555">
+αβ(frag) =α(root(frag))
+</equation>
+<bodyText confidence="0.999935">
+where α(·) and β(·) denote the outside and inside
+probabilities of tree nodes, respectively. For example
+in Figure 4,
+</bodyText>
+<equation confidence="0.984528666666667">
+αβ(1e2, e3}) = α(IP0, 6) · P(e2) · P(e3)
+· β(NPB0, 1)β(CC1, 2)β(NPB2, 3)β(VPB3, 6).
+Now the fractional count of rule r is simply
+αβ(lhs(r))
+c(r) = (3)
+αβ(TOP)
+</equation>
+<bodyText confidence="0.999337666666667">
+where TOP denotes the root node of the forest.
+Like in the M-step in EM algorithm, we now
+extend the maximum likelihood estimation to frac-
+tional counts for three conditional probabilities re-
+garding a rule, which will be used in the experi-
+ments:
+</bodyText>
+<equation confidence="0.996600125">
+c(r)
+P(r  |lhs(r)) = Er′:lhs(r′)=lhs(r) c(r′), (4)
+Pr rhs r)) = c(r)
+( I ( Er�:rhs(r&apos;)=rhs(r) c(r′), (5)
+P(r |root(lhs(r)))
+c(r) (6)
+=
+Er′:root(lhs(r′))=root(lhs(r)) c(r′).
+</equation>
+<sectionHeader confidence="0.999761" genericHeader="related work">
+4 Related Work
+</sectionHeader>
+<bodyText confidence="0.99992325">
+The concept of packed forest has been previously
+used in translation rule extraction, for example in
+rule composition (Galley et al., 2006) and tree bina-
+rization (Wang et al., 2007). However, both of these
+efforts only use 1-best parses, with the second one
+packing different binarizations of the same tree in a
+forest. Nevertheless we suspect that their extraction
+algorithm is in principle similar to ours, although
+they do not provide details of forest-based fragmen-
+tation (Algorithm 1) which we think is non-trivial.
+The forest concept is also used in machine transla-
+tion decoding, for example to characterize the search
+space of decoding with integrated language models
+(Huang and Chiang, 2007). The first direct appli-
+cation of parse forest in translation is our previous
+work (Mi et al., 2008) which translates a packed for-
+est from a parser; it is also the base system in our
+experiments (see below). This work, on the other
+hand, is in the orthogonal direction, where we uti-
+lize forests in rule extraction instead of decoding.
+</bodyText>
+<figure confidence="0.587884714285714">
+11 ·
+e E fra�g7
+11 ·
+v E yield(frag)
+P(e)
+(2)
+β(v)
+</figure>
+<page confidence="0.959879">
+211
+</page>
+<bodyText confidence="0.945113454545455">
+BLEU score
+Our experiments will use both default 1-best decod-
+ing and forest-based decoding. As we will see in the
+next section, the best result comes when we combine
+the merits of both, i.e., using forests in both rule ex-
+traction and decoding.
+There is also a parallel work on extracting rules
+from k-best parses and k-best alignments (Venu-
+gopal et al., 2008), but both their experiments and
+our own below confirm that extraction on k-best
+parses is neither efficient nor effective.
+</bodyText>
+<sectionHeader confidence="0.997707" genericHeader="method">
+5 Experiments
+</sectionHeader>
+<subsectionHeader confidence="0.979695">
+5.1 System
+</subsectionHeader>
+<bodyText confidence="0.9997456">
+Our experiments are on Chinese-to-English trans-
+lation based on a tree-to-string system similar to
+(Huang et al., 2006; Liu et al., 2006). Given a 1-
+best tree T, the decoder searches for the best deriva-
+tion d∗ among the set of all possible derivations D:
+</bodyText>
+<equation confidence="0.997953666666667">
+A0 logP(d  |T) + Al log Plm(τ(d))
++ A2|d |+ A3|τ(d)|
+(7)
+</equation>
+<bodyText confidence="0.99997">
+where the first two terms are translation and lan-
+guage model probabilities, τ(d) is the target string
+(English sentence) for derivation d, and the last two
+terms are derivation and translation length penalties,
+respectively. The conditional probability P(d  |T)
+decomposes into the product of rule probabilities:
+</bodyText>
+<equation confidence="0.993622142857143">
+P(d  |T) = 11 P(r). (8)
+r∈d
+Each P(r) is in turn a product of five probabilities:
+P(r) =P(r  |lhs(r))A&apos; · P(r  |rhs(r))A&apos;
+· P(r  |root(lhs(r)))As
+· Pllm(lhs(r)  |rhs(r))A&apos;
+· Pllm(rhs(r)  |lhs(r))A&apos;
+</equation>
+<bodyText confidence="0.999851857142857">
+where the first three are conditional probabilities
+based on fractional counts of rules defined in Sec-
+tion 3.3, and the last two are lexical probabilities.
+These parameters Al ... As are tuned by minimum
+error rate training (Och, 2003) on the dev sets. We
+refer readers to Mi et al. (2008) for details of the
+decoding algorithm.
+</bodyText>
+<figure confidence="0.9664715">
+0 1 2 3 4 5 6
+average extracting time (secs/1000 sentences)
+</figure>
+<figureCaption confidence="0.992079">
+Figure 6: Comparison of extraction time and BLEU
+score: forest-based vs.1-best and 30-best.
+</figureCaption>
+<table confidence="0.993052">
+rules from... extraction decoding BLEU
+1-best trees 0.24 1.74 0.2430
+30-best trees 5.56 3.31 0.2488
+forest: pe=8 2.36 3.40 0.2533
+Pharaoh - - 0.2297
+</table>
+<tableCaption confidence="0.990662333333333">
+Table 2: Results with different rule extraction methods.
+Extraction and decoding columns are running times in
+secs per 1000 sentences and per sentence, respectively.
+</tableCaption>
+<bodyText confidence="0.9999877">
+We use the Chinese parser of Xiong et al. (2005)
+to parse the source side of the bitext. Following
+Huang (2008), we also modify this parser to out-
+put a packed forest for each sentence, which can
+be pruned by the marginal probability-based inside-
+outside algorithm (Charniak and Johnson, 2005;
+Huang, 2008). We will first report results trained
+on a small-scaled dataset with detailed analysis, and
+then scale to a larger one, where we also combine the
+technique of forest-based decoding (Mi et al., 2008).
+</bodyText>
+<subsectionHeader confidence="0.945508">
+5.2 Results and Analysis on Small Data
+</subsectionHeader>
+<bodyText confidence="0.9992702">
+To test the effect of forest-based rule extraction, we
+parse the training set into parse forests and use three
+levels of pruning thresholds: pe = 2, 5, 8.
+Figure 6 plots the extraction speed and transla-
+tion quality of forest-based extraction with various
+pruning thresholds, compared to 1-best and 30-best
+baselines. Using more than one parse tree apparently
+improves the BLEU score, but at the cost of much
+slower extraction, since each of the top-k trees has to
+be processed individually although they share many
+</bodyText>
+<figure confidence="0.997128444444444">
+0.254
+0.252
+0.250
+0.248
+0.246
+0.244
+0.242
+0.240
+1-best
+pe=2
+pe=5
+forest extraction
+k-best extraction
+pe=8
+k=30
+d∗ = arg max
+d∈D
+(9)
+</figure>
+<page confidence="0.99129">
+212
+</page>
+<table confidence="0.999171">
+rules from ... total # on dev new rules used
+1-best trees 440k 90k -
+30-best trees 1.2M 130k 8.71%
+forest: pe=8 3.3M 188k 16.3%
+</table>
+<tableCaption confidence="0.737952333333333">
+Table 3: Statistics of rules extracted from small data. The
+last column shows the ratio of new rules introduced by
+non 1-best parses being used in 1-best derivations.
+</tableCaption>
+<bodyText confidence="0.9995482">
+common subtrees. Forest extraction, by contrast, is
+much faster thanks to packing and produces consis-
+tently better BLEU scores. With pruning threshold
+pe = 8, forest-based extraction achieves a (case in-
+sensitive) BLEU score of 0.2533, which is an ab-
+solute improvement of 1.0% points over the 1-best
+baseline, and is statistically significant using the
+sign-test of Collins et al. (2005) (p &lt; 0.01). This
+is also 0.5 points better than (and twice as fast as)
+extracting on 30-best parses. These BLEU score re-
+sults are summarized in Table 2, which also shows
+that decoding with forest-extracted rules is less than
+twice as slow as with 1-best rules, and only fraction-
+ally slower than with 30-best rules.
+We also investigate the question of how often
+rules extracted from non 1-best parses are used by
+the decoder. Table 3 shows the numbers of rules
+extracted from 1-best, 30-best and forest-based ex-
+tractions, and the numbers that survive after filter-
+ing on the dev set. Basically in the forest-based case
+we can use about twice as many rules as in the 1-
+best case, or about 1.5 times of 30-best extraction.
+But the real question is, are these extra rules really
+useful in generating the final (1-best) translation?
+The last row shows that 16.3% of the rules used
+in 1-best derivations are indeed only extracted from
+non 1-best parses in the forests. Note that this is a
+stronger condition than changing the distribution of
+rules by considering more parses; here we introduce
+new rules never seen on any 1-best parses.
+</bodyText>
+<subsectionHeader confidence="0.994473">
+5.3 Final Results on Large Data
+</subsectionHeader>
+<bodyText confidence="0.999976571428571">
+We also conduct experiments on a larger training
+dataset, FBIS, which contains 239K sentence pairs
+with about 6.9M/8.9M words in Chinese/English,
+respectively. We also use a bigger trigram model
+trained on the first 1/3 of the Xinhua portion of Gi-
+gaword corpus. To integrate with forest-based de-
+coding, we use both 1-best trees and packed forests
+</bodyText>
+<table confidence="0.9924796">
+extract. \ decoding 1-best tree forest: pd=10
+1-best trees 0.2560 0.2674
+30-best trees 0.2634 0.2767
+forest: pe=5 0.2679 0.2816
+Hiero 0.2738
+</table>
+<tableCaption confidence="0.999785">
+Table 4: BLEU score results trained on large data.
+</tableCaption>
+<bodyText confidence="0.9997458">
+during both rule extraction and decoding phases.
+Since the data scale is larger than the small data, we
+are forced to use harsher pruning thresholds, with
+pe = 5 for extraction and pd = 10 for decoding.
+The final BLEU score results are shown in Ta-
+ble 4. With both tree-based and forest-based decod-
+ing, rules extracted from forests significantly outper-
+form those extracted from 1-best trees (p &lt; 0.01).
+The final result with both forest-based extraction
+and forest-based decoding reaches a BLEU score of
+0.2816, outperforming that of Hiero (Chiang, 2005),
+one of the best performing systems to date. These re-
+sults confirm that our novel forest-based rule extrac-
+tion approach is a promising direction for syntax-
+based machine translation.
+</bodyText>
+<sectionHeader confidence="0.997112" genericHeader="conclusions">
+6 Conclusion and Future Work
+</sectionHeader>
+<bodyText confidence="0.999976846153846">
+In this paper, we have presented a novel approach
+that extracts translation rules from a packed forest
+encoding exponentially many trees, rather than from
+1-best or k-best parses. Experiments on a state-of-
+the-art tree-to-string system show that this method
+improves BLEU score significantly, with reasonable
+extraction speed. When combined with our previ-
+ous work on forest-based decoding, the final result
+is even better than the hierarchical system Hiero.
+For future work we would like to apply this ap-
+proach to other types of syntax-based translation
+systems, namely the string-to-tree systems (Galley
+et al., 2006) and tree-to-tree systems.
+</bodyText>
+<sectionHeader confidence="0.982922" genericHeader="acknowledgments">
+Acknowledgement
+</sectionHeader>
+<bodyText confidence="0.999468428571428">
+This work was funded by National Natural Sci-
+ence Foundation of China, Contracts 60736014
+and 60573188, and 863 State Key Project No.
+2006AA010108 (H. M.), and by NSF ITR EIA-
+0205456 (L. H.). We would also like to thank Qun
+Liu for supporting this work, and the three anony-
+mous reviewers for improving the earlier version.
+</bodyText>
+<page confidence="0.998705">
+213
+</page>
+<sectionHeader confidence="0.995885" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999931878787879">
+Sylvie Billot and Bernard Lang. 1989. The structure of
+shared forests in ambiguous parsing. In Proceedings
+ofACL ’89, pages 143–151.
+Eugene Charniak and Mark Johnson. 2005. Coarse-to-
+fine-grained n-best parsing and discriminative rerank-
+ing. In Proceedings of the 43rd ACL, Ann Arbor, MI.
+David Chiang. 2005. A hierarchical phrase-based model
+for statistical machine translation. In Proceedings of
+the 43rd ACL, Ann Arbor, MI.
+Michael Collins, Philipp Koehn, and Ivona Kucerova.
+2005. Clause restructuring for statistical machine
+translation. In Proceedings of ACL, pages 531–540,
+Ann Arbor, Michigan, June.
+Yuan Ding and Martha Palmer. 2005. Machine trans-
+lation using probablisitic synchronous dependency in-
+sertion grammars. In Proceedings of the 43rd ACL,
+Ann Arbor, MI.
+Jay Earley. 1970. An efficient context-free parsing algo-
+rithm. Communications of the ACM, 13(2):94–102.
+Michel Galley, Mark Hopkins, Kevin Knight, and Daniel
+Marcu. 2004. What’s in a translation rule? In Pro-
+ceedings ofHLT-NAACL, pages 273–280.
+Michel Galley, Jonathan Graehl, Kevin Knight, Daniel
+Marcu, Steve DeNeefe, Wei Wang, and Ignacio
+Thayer. 2006. Scalable inference and training of
+context-rich syntactic translation models. In Proceed-
+ings of COLING-ACL.
+Liang Huang and David Chiang. 2005. Better k-best
+Parsing. In Proceedings of the Ninth International
+Workshop on Parsing Technologies (IWPT-2005).
+Liang Huang and David Chiang. 2007. Forest rescor-
+ing: Fast decoding with integrated language models.
+In Proceedings ofACL, Prague, Czech Rep., June.
+Liang Huang, Kevin Knight, and Aravind Joshi. 2006.
+Statistical syntax-directed translation with extended
+domain of locality. In Proceedings ofAMTA, Boston,
+MA, August.
+Liang Huang. 2008. Forest reranking: Discriminative
+parsing with non-local features. In Proceedings of the
+ACL: HLT, Columbus, OH, June.
+Yang Liu, Qun Liu, and Shouxun Lin. 2006. Tree-to-
+string alignment template for statistical machine trans-
+lation. In Proceedings of COLING-ACL, pages 609–
+616.
+Haitao Mi, Liang Huang, and Qun Liu. 2008. Forest-
+based translation. In Proceedings of ACL: HLT,
+Columbus, OH.
+Franz Joseph Och. 2003. Minimum error rate training in
+statistical machine translation. In Proceedings ofACL,
+pages 160–167.
+Chris Quirk, Arul Menezes, and Colin Cherry. 2005.
+Dependency treelet translation: Syntactically informed
+phrasal smt. In Proceedings of the 43rd ACL, Ann Ar-
+bor, MI.
+Ashish Venugopal, Andreas Zollmann, Noah A. Smith,
+and Stephan Vogel. 2008. Wider pipelines: N-best
+alignments and parses in mt training. In Proceedings
+ofAMTA, Honolulu, Hawaii.
+Wei Wang, Kevin Knight, and Daniel Marcu. 2007.
+Binarizing syntax trees to improve syntax-based ma-
+chine translation accuracy. In Proceedings ofEMNLP,
+Prague, Czech Rep., July.
+Deyi Xiong, Shuanglong Li, Qun Liu, and Shouxun Lin.
+2005. Parsing the penn chinese treebank with seman-
+tic knowledge. In Proceedings ofIJCNLP 2005, pages
+70–81.
+</reference>
+<page confidence="0.998954">
+214
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.314482">
+<title confidence="0.990798">Forest-based Translation Rule Extraction</title>
+<affiliation confidence="0.8258075">Lab. of Intelligent Information Institute of Computing</affiliation>
+<address confidence="0.9155685">Chinese Academy of P.O. Box 2704, Beijing 100190,</address>
+<web confidence="0.534653">htmi@ict.ac.cn</web>
+<affiliation confidence="0.996141">of Computer &amp; Information University of</affiliation>
+<address confidence="0.974738">3330 Walnut St., Levine Philadelphia, PA 19104,</address>
+<email confidence="0.983692">lhuang3@cis.upenn.edu</email>
+<abstract confidence="0.997574695652174">examples (partial) target tree-to-tree Ding and Palmer (2005) Translation rule extraction is a fundamental problem in machine translation, especially for syntax-based that need parse trees from either or both sides of the bitext. The current dominant practice only uses 1-best trees, which adversely affects the rule set quality due to parsing errors. So we propose a novel approach which extracts rules a forest compactly encodes exponentially many parses. Experiments show that this method improves translation quality by over 1 BLEU point on a state-of-the-art tree-to-string system, and is 0.5 points better than (and twice as fast as) extracting on 30best parses. When combined with our previous work on forest-based decoding, it achieves a 2.5 BLEU points improvement over the baseline, and even outperforms the hierarchical system of Hiero by 0.7 points.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Sylvie Billot</author>
+<author>Bernard Lang</author>
+</authors>
+<title>The structure of shared forests in ambiguous parsing.</title>
+<date>1989</date>
+<booktitle>In Proceedings ofACL ’89,</booktitle>
+<pages>143--151</pages>
+<contexts>
+<context position="12635" citStr="Billot and Lang, 1989" startWordPosition="2086" endWordPosition="2089">e right. These extracted rules are called minimal rules, which can be glued together to form composed rules with larger tree fragments (e.g. r1 in Fig. 1) (Galley et al., 2006). Our experiments use composed rules. 3 Forest-based Rule Extraction We now extend tree-based extraction algorithm from the previous section to work with a packed forest representing exponentially many parse trees. 3.1 Packed Forest Informally, a packed parse forest, or forest in short, is a compact representation of all the derivations (i.e., parse trees) for a given sentence under a context-free grammar (Earley, 1970; Billot and Lang, 1989). For example, consider again the Chinese sentence in Example (1) above, which has (at least) two readings depending on the part-ofspeech of the word yˇu: it can be either a conjunction (CC “and”) as shown in Figure 3, or a preposition (P “with”) as shown in Figure 5, with only PP and VPB swapped from the English word order. 3Admissible set (Wang et al., 2007) is also known as “frontier set” (Galley et al., 2004). For simplicity of presentation, we assume every target word is aligned to at least one source word; see Galley et al. (2006) for handling unaligned target words. IP0,6 NPB0,1 VP1,6 B</context>
+</contexts>
+<marker>Billot, Lang, 1989</marker>
+<rawString>Sylvie Billot and Bernard Lang. 1989. The structure of shared forests in ambiguous parsing. In Proceedings ofACL ’89, pages 143–151.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eugene Charniak</author>
+<author>Mark Johnson</author>
+</authors>
+<title>Coarse-tofine-grained n-best parsing and discriminative reranking.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the 43rd ACL,</booktitle>
+<location>Ann Arbor, MI.</location>
+<contexts>
+<context position="18492" citStr="Charniak and Johnson, 2005" startWordPosition="3139" endWordPosition="3142"> of one, which will be used in maximum-likelihood estimation of rule probabilities. However, a forest is an implicit collection of many more trees, each of which, when enumerated, has its own probability accumulated from of the parse hyperedges involved. In other words, a forest can be viewed as a virtual weighted k-best list with a huge k. So a rule extracted from a non 1-best parse, i.e., using non 1-best hyperedges, should be penalized accordingly and should have a fractional count instead of a unit one, similar to the E-step in EM algorithms. Inspired by the parsing literature on pruning (Charniak and Johnson, 2005; Huang, 2008) we penalize a rule r by the posterior probability of its tree fragment frag = lhs(r). This posterior probability, notated αβ(frag), can be computed in an InsideOutside fashion as the product of three parts: the outside probability of its root node, the probabilities of parse hyperedges involved in the fragment, and the inside probabilities of its leaf nodes, αβ(frag) =α(root(frag)) where α(·) and β(·) denote the outside and inside probabilities of tree nodes, respectively. For example in Figure 4, αβ(1e2, e3}) = α(IP0, 6) · P(e2) · P(e3) · β(NPB0, 1)β(CC1, 2)β(NPB2, 3)β(VPB3, 6)</context>
+<context position="23099" citStr="Charniak and Johnson, 2005" startWordPosition="3909" endWordPosition="3912">.1-best and 30-best. rules from... extraction decoding BLEU 1-best trees 0.24 1.74 0.2430 30-best trees 5.56 3.31 0.2488 forest: pe=8 2.36 3.40 0.2533 Pharaoh - - 0.2297 Table 2: Results with different rule extraction methods. Extraction and decoding columns are running times in secs per 1000 sentences and per sentence, respectively. We use the Chinese parser of Xiong et al. (2005) to parse the source side of the bitext. Following Huang (2008), we also modify this parser to output a packed forest for each sentence, which can be pruned by the marginal probability-based insideoutside algorithm (Charniak and Johnson, 2005; Huang, 2008). We will first report results trained on a small-scaled dataset with detailed analysis, and then scale to a larger one, where we also combine the technique of forest-based decoding (Mi et al., 2008). 5.2 Results and Analysis on Small Data To test the effect of forest-based rule extraction, we parse the training set into parse forests and use three levels of pruning thresholds: pe = 2, 5, 8. Figure 6 plots the extraction speed and translation quality of forest-based extraction with various pruning thresholds, compared to 1-best and 30-best baselines. Using more than one parse tre</context>
+</contexts>
+<marker>Charniak, Johnson, 2005</marker>
+<rawString>Eugene Charniak and Mark Johnson. 2005. Coarse-tofine-grained n-best parsing and discriminative reranking. In Proceedings of the 43rd ACL, Ann Arbor, MI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Chiang</author>
+</authors>
+<title>A hierarchical phrase-based model for statistical machine translation.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the 43rd ACL,</booktitle>
+<location>Ann Arbor, MI.</location>
+<contexts>
+<context position="2041" citStr="Chiang (2005)" startWordPosition="296" endWordPosition="297"> many syntax-based models where translation rules directly encode linguistic knowledge. Typically, these models extract rules using parse trees from both or either side(s) of the bitext. The former case, with trees on both sides, is often called tree-to-tree models; while the latter case, with trees on either source or target side, include both treeto-string and string-to-tree models (see Table 1). Leveraging from structural and linguistic information from parse trees, these models are believed to be better than their phrase-based counterparts in tree-to-string string-to-tree string-to-string Chiang (2005) Table 1: A classification of syntax-based MT. The first three use linguistic syntax, while the last one only formal syntax. Our experiments cover the second type using a packed forest in place of the tree for rule-extraction. handling non-local reorderings, and have achieved promising translation results.1 However, these systems suffer from a major limitation, that the rule extractor only uses 1-best parse tree(s), which adversely affects the rule set quality due to parsing errors. To make things worse, modern statistical parsers are often trained on domains quite different from those used in</context>
+<context position="13511" citStr="Chiang, 2005" startWordPosition="2247" endWordPosition="2248">re 5, with only PP and VPB swapped from the English word order. 3Admissible set (Wang et al., 2007) is also known as “frontier set” (Galley et al., 2004). For simplicity of presentation, we assume every target word is aligned to at least one source word; see Galley et al. (2006) for handling unaligned target words. IP0,6 NPB0,1 VP1,6 B`ushi PP1,3 VPB3,6 P1,2 NPB2,3 jˇuxing le huit´an yˇu Sh¯al´ong 209 These two parse trees can be represented as a single forest by sharing common subtrees such as NPB0, 1 and VPB3, 6, as shown in Figure 4. Such a forest has a structure of a hypergraph (Huang and Chiang, 2005), where items like NP0, 3 are called nodes, whose indices denote the source span, and combinations like e1 : IP0, 6 → NPB0, 3 VP3, 6 we call hyperedges. We denote head(e) and tails(e) to be the consequent and antecedant items of hyperedge e, respectively. For example, head(e1) = IP0, 6, tails(e1) = {NPB0, 3,VP3, 6}. We also denote BS(v) to be the set of incoming hyperedges of node v, being different ways of deriving it. For example, in Figure 4, BS(IP0, 6) = {e1, e2}. 3.2 Forest-based Rule Extraction Algorithm Like in tree-based extraction, we extract rules from a packed forest F in two steps:</context>
+<context position="26941" citStr="Chiang, 2005" startWordPosition="4557" endWordPosition="4558">o 0.2738 Table 4: BLEU score results trained on large data. during both rule extraction and decoding phases. Since the data scale is larger than the small data, we are forced to use harsher pruning thresholds, with pe = 5 for extraction and pd = 10 for decoding. The final BLEU score results are shown in Table 4. With both tree-based and forest-based decoding, rules extracted from forests significantly outperform those extracted from 1-best trees (p &lt; 0.01). The final result with both forest-based extraction and forest-based decoding reaches a BLEU score of 0.2816, outperforming that of Hiero (Chiang, 2005), one of the best performing systems to date. These results confirm that our novel forest-based rule extraction approach is a promising direction for syntaxbased machine translation. 6 Conclusion and Future Work In this paper, we have presented a novel approach that extracts translation rules from a packed forest encoding exponentially many trees, rather than from 1-best or k-best parses. Experiments on a state-ofthe-art tree-to-string system show that this method improves BLEU score significantly, with reasonable extraction speed. When combined with our previous work on forest-based decoding,</context>
+</contexts>
+<marker>Chiang, 2005</marker>
+<rawString>David Chiang. 2005. A hierarchical phrase-based model for statistical machine translation. In Proceedings of the 43rd ACL, Ann Arbor, MI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+<author>Philipp Koehn</author>
+<author>Ivona Kucerova</author>
+</authors>
+<title>Clause restructuring for statistical machine translation.</title>
+<date>2005</date>
+<booktitle>In Proceedings of ACL,</booktitle>
+<pages>531--540</pages>
+<location>Ann Arbor, Michigan,</location>
+<contexts>
+<context position="24685" citStr="Collins et al. (2005)" startWordPosition="4174" endWordPosition="4177">0k 90k - 30-best trees 1.2M 130k 8.71% forest: pe=8 3.3M 188k 16.3% Table 3: Statistics of rules extracted from small data. The last column shows the ratio of new rules introduced by non 1-best parses being used in 1-best derivations. common subtrees. Forest extraction, by contrast, is much faster thanks to packing and produces consistently better BLEU scores. With pruning threshold pe = 8, forest-based extraction achieves a (case insensitive) BLEU score of 0.2533, which is an absolute improvement of 1.0% points over the 1-best baseline, and is statistically significant using the sign-test of Collins et al. (2005) (p &lt; 0.01). This is also 0.5 points better than (and twice as fast as) extracting on 30-best parses. These BLEU score results are summarized in Table 2, which also shows that decoding with forest-extracted rules is less than twice as slow as with 1-best rules, and only fractionally slower than with 30-best rules. We also investigate the question of how often rules extracted from non 1-best parses are used by the decoder. Table 3 shows the numbers of rules extracted from 1-best, 30-best and forest-based extractions, and the numbers that survive after filtering on the dev set. Basically in the </context>
+</contexts>
+<marker>Collins, Koehn, Kucerova, 2005</marker>
+<rawString>Michael Collins, Philipp Koehn, and Ivona Kucerova. 2005. Clause restructuring for statistical machine translation. In Proceedings of ACL, pages 531–540, Ann Arbor, Michigan, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yuan Ding</author>
+<author>Martha Palmer</author>
+</authors>
+<title>Machine translation using probablisitic synchronous dependency insertion grammars.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the 43rd ACL,</booktitle>
+<location>Ann Arbor, MI.</location>
+<marker>Ding, Palmer, 2005</marker>
+<rawString>Yuan Ding and Martha Palmer. 2005. Machine translation using probablisitic synchronous dependency insertion grammars. In Proceedings of the 43rd ACL, Ann Arbor, MI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jay Earley</author>
+</authors>
+<title>An efficient context-free parsing algorithm.</title>
+<date>1970</date>
+<journal>Communications of the ACM,</journal>
+<volume>13</volume>
+<issue>2</issue>
+<contexts>
+<context position="12611" citStr="Earley, 1970" startWordPosition="2084" endWordPosition="2085">o a rule on the right. These extracted rules are called minimal rules, which can be glued together to form composed rules with larger tree fragments (e.g. r1 in Fig. 1) (Galley et al., 2006). Our experiments use composed rules. 3 Forest-based Rule Extraction We now extend tree-based extraction algorithm from the previous section to work with a packed forest representing exponentially many parse trees. 3.1 Packed Forest Informally, a packed parse forest, or forest in short, is a compact representation of all the derivations (i.e., parse trees) for a given sentence under a context-free grammar (Earley, 1970; Billot and Lang, 1989). For example, consider again the Chinese sentence in Example (1) above, which has (at least) two readings depending on the part-ofspeech of the word yˇu: it can be either a conjunction (CC “and”) as shown in Figure 3, or a preposition (P “with”) as shown in Figure 5, with only PP and VPB swapped from the English word order. 3Admissible set (Wang et al., 2007) is also known as “frontier set” (Galley et al., 2004). For simplicity of presentation, we assume every target word is aligned to at least one source word; see Galley et al. (2006) for handling unaligned target wor</context>
+</contexts>
+<marker>Earley, 1970</marker>
+<rawString>Jay Earley. 1970. An efficient context-free parsing algorithm. Communications of the ACM, 13(2):94–102.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michel Galley</author>
+<author>Mark Hopkins</author>
+<author>Kevin Knight</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>What’s in a translation rule?</title>
+<date>2004</date>
+<booktitle>In Proceedings ofHLT-NAACL,</booktitle>
+<pages>273--280</pages>
+<contexts>
+<context position="5853" citStr="Galley et al., 2004" startWordPosition="905" endWordPosition="908">s used. Each shaded region denotes a tree fragment that is pattern-matched with the rule being applied. B`ush´ı le hu`ıt´an yˇu Sh¯al´ong hu`ıt´an le (a) B`ush´ı yˇu Sh¯al´ong jˇux´ıng le hu`ıt´an ⇓ 1-best parser IP jˇux´ıng jˇux´ıng NP VPB NPB NPB CC NPB VV AS r1⇓ with NPB Sh¯al´ong VV VPB AS NPB NPB B`ush´ı NP x1:NPB CC x3:VPB x2:NPB (1) B`ush´ı Bush yˇu Sh¯al´ong jˇux´ıng le and/with Sharon1 hold past. hu`ıt´an meeting2 2 Tree-based Translation We review in this section the tree-based approach to machine translation (Liu et al., 2006; Huang et al., 2006), and its rule extraction algorithm (Galley et al., 2004; Galley et al., 2006). 2.1 Tree-to-String System Current tree-based systems perform translation in two separate steps: parsing and decoding. The input string is first parsed by a parser into a 1-best tree, which will then be converted to a target language string by applying a set of tree-to-string transformation rules. For example, consider the following example translating from Chinese to English: “Bush held a meeting2 with Sharon1” Figure 2 shows how this process works. The Chinese sentence (a) is first parsed into a parse tree (b), which will be converted into an English string in 5 steps.</context>
+<context position="7431" citStr="Galley et al., 2004" startWordPosition="1174" endWordPosition="1177">e sentence from our earlier paper (Mi et al., 2008), since the current 1-best parse is easier to illustrate the rule extraction algorithm. 207 IP “Bush .. Sharon” → x1 x4 x2 x3 CC (yˇu) → with NPB (B`ush´ı) → Bush NPB (Sh¯al´ong) → Sharon VPB (VV(jˇux´ıng) AS(le) x1:NPB) → held x1 NPB (hu`ıt´an) → a meeting NP “Bush ⊔ with Sharon” NPB “Bush” B`ush´ı NPB “Sharon” Sh¯al´ong VV “held” jˇux´ıng NPB “a meeting” hu`ıt´an AS “held” le Bush held a meeting with Sharon VPB “held .. meeting” CC “with” yˇu (minimal) rules extracted IP (NP(x1:NPB x2:CC x3:NPB) x4:VPB) Figure 3: Tree-based rule extraction (Galley et al., 2004). Each non-leaf node in the tree is annotated with its target span (below the node), where u denotes a gap, and non-faithful spans are crossed out. Shadowed nodes are admissible, with contiguous and faithful spans. The first two rules can be “composed” to form rule r1 in Figure 1. Figure 4: Forest-based rule extraction. Solid hyperedges correspond to the 1-best tree in Figure 3, while dashed hyperedges denote the alternative parse interpreting yˇu as a preposition in Figure 5. extra (minimal) rules extracted IP0, 6 “Bush .. Sharon” VP1, 6 NP0, 3 “Bush ⊔ with Sharon” e3 IP (x1:NPB x2:VP) x1 x2 </context>
+<context position="9179" citStr="Galley et al. (2004)" startWordPosition="1488" endWordPosition="1491">terminal symbols (like NP and VP), and whose frontier nodes are labeled by sourcelanguage words (like “yˇu”) or variables from a set X = {x1, x2,...}; rhs(r) is the target-side string expressed in target-language words (like “with”) and variables; and 0(r) is a mapping from X to nonterminals. Each variable xi E X occurs exactly once in lhs(r) and exactly once in rhs(r). For example, for rule r1 in Figure 1, lhs(r1) = IP ( NP(x1 CC(yˇu) x2) x3), rhs(r1) = x1 x3 with x2, 0(r1) = {x1: NPB, x2: NPB, x3: VPB}. These rules are being used in the reverse direction of the string-to-tree transducers in Galley et al. (2004). 208 2.2 Tree-to-String Rule Extraction We now briefly explain the algorithm of Galley et al. (2004) that can extract these translation rules from a word-aligned bitext with source-side parses. Consider the example in Figure 3. The basic idea is to decompose the source (Chinese) parse into a series of tree fragments, each of which will form a rule with its corresponding English translation. However, not every fragmentation can be used for rule extraction, since it may or may not respect the alignment and reordering between the two languages. So we say a fragmentation is well-formed with respe</context>
+<context position="13051" citStr="Galley et al., 2004" startWordPosition="2164" endWordPosition="2167">y, a packed parse forest, or forest in short, is a compact representation of all the derivations (i.e., parse trees) for a given sentence under a context-free grammar (Earley, 1970; Billot and Lang, 1989). For example, consider again the Chinese sentence in Example (1) above, which has (at least) two readings depending on the part-ofspeech of the word yˇu: it can be either a conjunction (CC “and”) as shown in Figure 3, or a preposition (P “with”) as shown in Figure 5, with only PP and VPB swapped from the English word order. 3Admissible set (Wang et al., 2007) is also known as “frontier set” (Galley et al., 2004). For simplicity of presentation, we assume every target word is aligned to at least one source word; see Galley et al. (2006) for handling unaligned target words. IP0,6 NPB0,1 VP1,6 B`ushi PP1,3 VPB3,6 P1,2 NPB2,3 jˇuxing le huit´an yˇu Sh¯al´ong 209 These two parse trees can be represented as a single forest by sharing common subtrees such as NPB0, 1 and VPB3, 6, as shown in Figure 4. Such a forest has a structure of a hypergraph (Huang and Chiang, 2005), where items like NP0, 3 are called nodes, whose indices denote the source span, and combinations like e1 : IP0, 6 → NPB0, 3 VP3, 6 we call</context>
+<context position="17561" citStr="Galley et al. (2004)" startWordPosition="2988" endWordPosition="2991">ng the subset of nonadmissible leaf nodes (recall that expansion stops at admissible nodes). So each initial fragment along hyperedge e is associated with an initial frontier (line 5), front = tails(e) \ admset. A fragment is complete if its frontier is empty (line 9), otherwise we pop one frontier node u to expand, spin off new fragments by following hyperedges of u, and update the frontier (lines 14-16), until all active fragments are complete and open queue is empty (line 7). A single parse tree can also be viewed as a trivial forest, where each node has only one incoming hyperedge. So the Galley et al. (2004) algorithm for tree-based rule extraction (Sec. 2.2) can be considered a special case of our algorithm, where the queue open always contains one single active fragment. 3.3 Fractional Counts and Rule Probabilities In tree-based extraction, for each sentence pair, each rule extracted naturally has a count of one, which will be used in maximum-likelihood estimation of rule probabilities. However, a forest is an implicit collection of many more trees, each of which, when enumerated, has its own probability accumulated from of the parse hyperedges involved. In other words, a forest can be viewed a</context>
+</contexts>
+<marker>Galley, Hopkins, Knight, Marcu, 2004</marker>
+<rawString>Michel Galley, Mark Hopkins, Kevin Knight, and Daniel Marcu. 2004. What’s in a translation rule? In Proceedings ofHLT-NAACL, pages 273–280.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michel Galley</author>
+<author>Jonathan Graehl</author>
+<author>Kevin Knight</author>
+<author>Daniel Marcu</author>
+<author>Steve DeNeefe</author>
+<author>Wei Wang</author>
+<author>Ignacio Thayer</author>
+</authors>
+<title>Scalable inference and training of context-rich syntactic translation models.</title>
+<date>2006</date>
+<booktitle>In Proceedings of COLING-ACL.</booktitle>
+<contexts>
+<context position="3367" citStr="Galley et al., 2006" startWordPosition="503" endWordPosition="506">rm better than these linguistically sophisticated counterparts. To alleviate this problem, an obvious idea is to extract rules from k-best parses instead. However, a k-best list, with its limited scope, has too few variations and too many redundancies (Huang, 2008). This situation worsens with longer sentences as the number of possible parses grows exponentially with the sentence length and a k-best list will only capture a tiny fraction of the whole space. In addition, many subtrees are repeated across different parses, so it is 1For example, in recent NIST Evaluations, some of these models (Galley et al., 2006; Quirk et al., 2005; Liu et al., 2006) ranked among top 10. See http://www.nist.gov/speech/tests/mt/. Liu et al. (2006); Huang et al. (2006) Galley et al. (2006) 206 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 206–214, Honolulu, October 2008.c�2008 Association for Computational Linguistics IP → x1 x3 with x2 yˇu Figure 1: Example translation rule r1. The Chinese conjunction yˇu “and” is translated into English prep. “with”. also inefficient to extract rules separately from each of these very similar trees (or from the cross-product of k2 simil</context>
+<context position="4835" citStr="Galley et al., 2006" startWordPosition="733" endWordPosition="736">n improves BLEU score by over 1 point on a state-of-the-art tree-to-string system (Liu et al., 2006; Mi et al., 2008), which is also 0.5 points better than (and twice as fast as) extracting on 30-best parses. When combined with our previous orthogonal work on forest-based decoding (Mi et al., 2008), the forest-forest approach achieves a 2.5 BLEU points improvement over the baseline, and even outperforms the hierarchical system of Hiero, one of the best-performing systems to date. Besides tree-to-string systems, our method is also applicable to other paradigms such as the string-totree models (Galley et al., 2006) where the rules are in the reverse order, and easily generalizable to pairs of forests in tree-to-tree models. r2 ⇓ r3 ⇓ Bush held with NPB NPB hu`ıt´an Sh¯al´ong r� ⇓ r5 ⇓ Bush held a meeting with Sharon r2 NPB(B`ush´ı) → Bush r3 VPB(VV(jˇux´ıng) AS(le) x1:NPB) → held x1 r4 NPB(Sh¯al´ong) → Sharon r5 NPB(hu`ıt´an) → a meeting Figure 2: Example derivation of tree-to-string translation, with rules used. Each shaded region denotes a tree fragment that is pattern-matched with the rule being applied. B`ush´ı le hu`ıt´an yˇu Sh¯al´ong hu`ıt´an le (a) B`ush´ı yˇu Sh¯al´ong jˇux´ıng le hu`ıt´an ⇓ 1-</context>
+<context position="12189" citStr="Galley et al., 2006" startWordPosition="2018" endWordPosition="2021">elided. in the figure), which serve as potential cut-points for rule extraction.3 With the admissible set computed, rule extraction is as simple as a depth-first traversal from the root: we “cut” the tree at all admissible nodes to form tree fragments and extract a rule for each fragment, with variables matching the admissible descendant nodes. For example, the tree in Figure 3 is cut into 6 pieces, each of which corresponds to a rule on the right. These extracted rules are called minimal rules, which can be glued together to form composed rules with larger tree fragments (e.g. r1 in Fig. 1) (Galley et al., 2006). Our experiments use composed rules. 3 Forest-based Rule Extraction We now extend tree-based extraction algorithm from the previous section to work with a packed forest representing exponentially many parse trees. 3.1 Packed Forest Informally, a packed parse forest, or forest in short, is a compact representation of all the derivations (i.e., parse trees) for a given sentence under a context-free grammar (Earley, 1970; Billot and Lang, 1989). For example, consider again the Chinese sentence in Example (1) above, which has (at least) two readings depending on the part-ofspeech of the word yˇu:</context>
+<context position="19740" citStr="Galley et al., 2006" startWordPosition="3345" endWordPosition="3348">f rule r is simply αβ(lhs(r)) c(r) = (3) αβ(TOP) where TOP denotes the root node of the forest. Like in the M-step in EM algorithm, we now extend the maximum likelihood estimation to fractional counts for three conditional probabilities regarding a rule, which will be used in the experiments: c(r) P(r |lhs(r)) = Er′:lhs(r′)=lhs(r) c(r′), (4) Pr rhs r)) = c(r) ( I ( Er�:rhs(r&apos;)=rhs(r) c(r′), (5) P(r |root(lhs(r))) c(r) (6) = Er′:root(lhs(r′))=root(lhs(r)) c(r′). 4 Related Work The concept of packed forest has been previously used in translation rule extraction, for example in rule composition (Galley et al., 2006) and tree binarization (Wang et al., 2007). However, both of these efforts only use 1-best parses, with the second one packing different binarizations of the same tree in a forest. Nevertheless we suspect that their extraction algorithm is in principle similar to ours, although they do not provide details of forest-based fragmentation (Algorithm 1) which we think is non-trivial. The forest concept is also used in machine translation decoding, for example to characterize the search space of decoding with integrated language models (Huang and Chiang, 2007). The first direct application of parse </context>
+</contexts>
+<marker>Galley, Graehl, Knight, Marcu, DeNeefe, Wang, Thayer, 2006</marker>
+<rawString>Michel Galley, Jonathan Graehl, Kevin Knight, Daniel Marcu, Steve DeNeefe, Wei Wang, and Ignacio Thayer. 2006. Scalable inference and training of context-rich syntactic translation models. In Proceedings of COLING-ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Liang Huang</author>
+<author>David Chiang</author>
+</authors>
+<title>Better k-best Parsing.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the Ninth International Workshop on Parsing Technologies (IWPT-2005).</booktitle>
+<contexts>
+<context position="13511" citStr="Huang and Chiang, 2005" startWordPosition="2245" endWordPosition="2248">wn in Figure 5, with only PP and VPB swapped from the English word order. 3Admissible set (Wang et al., 2007) is also known as “frontier set” (Galley et al., 2004). For simplicity of presentation, we assume every target word is aligned to at least one source word; see Galley et al. (2006) for handling unaligned target words. IP0,6 NPB0,1 VP1,6 B`ushi PP1,3 VPB3,6 P1,2 NPB2,3 jˇuxing le huit´an yˇu Sh¯al´ong 209 These two parse trees can be represented as a single forest by sharing common subtrees such as NPB0, 1 and VPB3, 6, as shown in Figure 4. Such a forest has a structure of a hypergraph (Huang and Chiang, 2005), where items like NP0, 3 are called nodes, whose indices denote the source span, and combinations like e1 : IP0, 6 → NPB0, 3 VP3, 6 we call hyperedges. We denote head(e) and tails(e) to be the consequent and antecedant items of hyperedge e, respectively. For example, head(e1) = IP0, 6, tails(e1) = {NPB0, 3,VP3, 6}. We also denote BS(v) to be the set of incoming hyperedges of node v, being different ways of deriving it. For example, in Figure 4, BS(IP0, 6) = {e1, e2}. 3.2 Forest-based Rule Extraction Algorithm Like in tree-based extraction, we extract rules from a packed forest F in two steps:</context>
+</contexts>
+<marker>Huang, Chiang, 2005</marker>
+<rawString>Liang Huang and David Chiang. 2005. Better k-best Parsing. In Proceedings of the Ninth International Workshop on Parsing Technologies (IWPT-2005).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Liang Huang</author>
+<author>David Chiang</author>
+</authors>
+<title>Forest rescoring: Fast decoding with integrated language models.</title>
+<date>2007</date>
+<booktitle>In Proceedings ofACL,</booktitle>
+<location>Prague, Czech Rep.,</location>
+<contexts>
+<context position="20300" citStr="Huang and Chiang, 2007" startWordPosition="3434" endWordPosition="3437">traction, for example in rule composition (Galley et al., 2006) and tree binarization (Wang et al., 2007). However, both of these efforts only use 1-best parses, with the second one packing different binarizations of the same tree in a forest. Nevertheless we suspect that their extraction algorithm is in principle similar to ours, although they do not provide details of forest-based fragmentation (Algorithm 1) which we think is non-trivial. The forest concept is also used in machine translation decoding, for example to characterize the search space of decoding with integrated language models (Huang and Chiang, 2007). The first direct application of parse forest in translation is our previous work (Mi et al., 2008) which translates a packed forest from a parser; it is also the base system in our experiments (see below). This work, on the other hand, is in the orthogonal direction, where we utilize forests in rule extraction instead of decoding. 11 · e E fra�g7 11 · v E yield(frag) P(e) (2) β(v) 211 BLEU score Our experiments will use both default 1-best decoding and forest-based decoding. As we will see in the next section, the best result comes when we combine the merits of both, i.e., using forests in b</context>
+</contexts>
+<marker>Huang, Chiang, 2007</marker>
+<rawString>Liang Huang and David Chiang. 2007. Forest rescoring: Fast decoding with integrated language models. In Proceedings ofACL, Prague, Czech Rep., June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Liang Huang</author>
+<author>Kevin Knight</author>
+<author>Aravind Joshi</author>
+</authors>
+<title>Statistical syntax-directed translation with extended domain of locality.</title>
+<date>2006</date>
+<booktitle>In Proceedings ofAMTA,</booktitle>
+<location>Boston, MA,</location>
+<contexts>
+<context position="3508" citStr="Huang et al. (2006)" startWordPosition="525" endWordPosition="528">rses instead. However, a k-best list, with its limited scope, has too few variations and too many redundancies (Huang, 2008). This situation worsens with longer sentences as the number of possible parses grows exponentially with the sentence length and a k-best list will only capture a tiny fraction of the whole space. In addition, many subtrees are repeated across different parses, so it is 1For example, in recent NIST Evaluations, some of these models (Galley et al., 2006; Quirk et al., 2005; Liu et al., 2006) ranked among top 10. See http://www.nist.gov/speech/tests/mt/. Liu et al. (2006); Huang et al. (2006) Galley et al. (2006) 206 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 206–214, Honolulu, October 2008.c�2008 Association for Computational Linguistics IP → x1 x3 with x2 yˇu Figure 1: Example translation rule r1. The Chinese conjunction yˇu “and” is translated into English prep. “with”. also inefficient to extract rules separately from each of these very similar trees (or from the cross-product of k2 similar tree-pairs in tree-to-tree models). We instead propose a novel approach that extracts rules from packed forests (Section 3), which compact</context>
+<context position="5797" citStr="Huang et al., 2006" startWordPosition="896" endWordPosition="899">mple derivation of tree-to-string translation, with rules used. Each shaded region denotes a tree fragment that is pattern-matched with the rule being applied. B`ush´ı le hu`ıt´an yˇu Sh¯al´ong hu`ıt´an le (a) B`ush´ı yˇu Sh¯al´ong jˇux´ıng le hu`ıt´an ⇓ 1-best parser IP jˇux´ıng jˇux´ıng NP VPB NPB NPB CC NPB VV AS r1⇓ with NPB Sh¯al´ong VV VPB AS NPB NPB B`ush´ı NP x1:NPB CC x3:VPB x2:NPB (1) B`ush´ı Bush yˇu Sh¯al´ong jˇux´ıng le and/with Sharon1 hold past. hu`ıt´an meeting2 2 Tree-based Translation We review in this section the tree-based approach to machine translation (Liu et al., 2006; Huang et al., 2006), and its rule extraction algorithm (Galley et al., 2004; Galley et al., 2006). 2.1 Tree-to-String System Current tree-based systems perform translation in two separate steps: parsing and decoding. The input string is first parsed by a parser into a 1-best tree, which will then be converted to a target language string by applying a set of tree-to-string transformation rules. For example, consider the following example translating from Chinese to English: “Bush held a meeting2 with Sharon1” Figure 2 shows how this process works. The Chinese sentence (a) is first parsed into a parse tree (b), wh</context>
+<context position="8438" citStr="Huang et al., 2006" startWordPosition="1354" endWordPosition="1357">dashed hyperedges denote the alternative parse interpreting yˇu as a preposition in Figure 5. extra (minimal) rules extracted IP0, 6 “Bush .. Sharon” VP1, 6 NP0, 3 “Bush ⊔ with Sharon” e3 IP (x1:NPB x2:VP) x1 x2 VP (x1:PP x2:VPB) x2 x1 PP (x1:P x2:NPB) x1 x2 P (yˇu) → with e2 e1 “held .. Sharon” PP1, 3 VPB3, 6 “with Sharon” “held .. meeting” NPB2, 3 CC1, 2 NPB0, 1 NPB5, 6 P1, 2 VV3, 4 “held” AS4, 5 “held” “Bush” “Sharon” “with” B`ush´ı “a meeting” hu`ıt´an ˇu le jˇux´ıng “with” y Sh¯al´ong Bush held a meeting with Sharon More formally, a (tree-to-string) translation rule (Galley et al., 2004; Huang et al., 2006) is a tuple (lhs(r), rhs(r), 0(r)), where lhs(r) is the sourceside tree fragment, whose internal nodes are labeled by nonterminal symbols (like NP and VP), and whose frontier nodes are labeled by sourcelanguage words (like “yˇu”) or variables from a set X = {x1, x2,...}; rhs(r) is the target-side string expressed in target-language words (like “with”) and variables; and 0(r) is a mapping from X to nonterminals. Each variable xi E X occurs exactly once in lhs(r) and exactly once in rhs(r). For example, for rule r1 in Figure 1, lhs(r1) = IP ( NP(x1 CC(yˇu) x2) x3), rhs(r1) = x1 x3 with x2, 0(r1)</context>
+<context position="21315" citStr="Huang et al., 2006" startWordPosition="3612" endWordPosition="3615">ore Our experiments will use both default 1-best decoding and forest-based decoding. As we will see in the next section, the best result comes when we combine the merits of both, i.e., using forests in both rule extraction and decoding. There is also a parallel work on extracting rules from k-best parses and k-best alignments (Venugopal et al., 2008), but both their experiments and our own below confirm that extraction on k-best parses is neither efficient nor effective. 5 Experiments 5.1 System Our experiments are on Chinese-to-English translation based on a tree-to-string system similar to (Huang et al., 2006; Liu et al., 2006). Given a 1- best tree T, the decoder searches for the best derivation d∗ among the set of all possible derivations D: A0 logP(d |T) + Al log Plm(τ(d)) + A2|d |+ A3|τ(d)| (7) where the first two terms are translation and language model probabilities, τ(d) is the target string (English sentence) for derivation d, and the last two terms are derivation and translation length penalties, respectively. The conditional probability P(d |T) decomposes into the product of rule probabilities: P(d |T) = 11 P(r). (8) r∈d Each P(r) is in turn a product of five probabilities: P(r) =P(r |lh</context>
+</contexts>
+<marker>Huang, Knight, Joshi, 2006</marker>
+<rawString>Liang Huang, Kevin Knight, and Aravind Joshi. 2006. Statistical syntax-directed translation with extended domain of locality. In Proceedings ofAMTA, Boston, MA, August.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Liang Huang</author>
+</authors>
+<title>Forest reranking: Discriminative parsing with non-local features.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the ACL: HLT,</booktitle>
+<location>Columbus, OH,</location>
+<contexts>
+<context position="3013" citStr="Huang, 2008" startWordPosition="447" endWordPosition="448">on, that the rule extractor only uses 1-best parse tree(s), which adversely affects the rule set quality due to parsing errors. To make things worse, modern statistical parsers are often trained on domains quite different from those used in MT. By contrast, formally syntax-based models (Chiang, 2005) do not rely on parse trees, yet usually perform better than these linguistically sophisticated counterparts. To alleviate this problem, an obvious idea is to extract rules from k-best parses instead. However, a k-best list, with its limited scope, has too few variations and too many redundancies (Huang, 2008). This situation worsens with longer sentences as the number of possible parses grows exponentially with the sentence length and a k-best list will only capture a tiny fraction of the whole space. In addition, many subtrees are repeated across different parses, so it is 1For example, in recent NIST Evaluations, some of these models (Galley et al., 2006; Quirk et al., 2005; Liu et al., 2006) ranked among top 10. See http://www.nist.gov/speech/tests/mt/. Liu et al. (2006); Huang et al. (2006) Galley et al. (2006) 206 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Pro</context>
+<context position="18506" citStr="Huang, 2008" startWordPosition="3143" endWordPosition="3144">in maximum-likelihood estimation of rule probabilities. However, a forest is an implicit collection of many more trees, each of which, when enumerated, has its own probability accumulated from of the parse hyperedges involved. In other words, a forest can be viewed as a virtual weighted k-best list with a huge k. So a rule extracted from a non 1-best parse, i.e., using non 1-best hyperedges, should be penalized accordingly and should have a fractional count instead of a unit one, similar to the E-step in EM algorithms. Inspired by the parsing literature on pruning (Charniak and Johnson, 2005; Huang, 2008) we penalize a rule r by the posterior probability of its tree fragment frag = lhs(r). This posterior probability, notated αβ(frag), can be computed in an InsideOutside fashion as the product of three parts: the outside probability of its root node, the probabilities of parse hyperedges involved in the fragment, and the inside probabilities of its leaf nodes, αβ(frag) =α(root(frag)) where α(·) and β(·) denote the outside and inside probabilities of tree nodes, respectively. For example in Figure 4, αβ(1e2, e3}) = α(IP0, 6) · P(e2) · P(e3) · β(NPB0, 1)β(CC1, 2)β(NPB2, 3)β(VPB3, 6). Now the frac</context>
+<context position="22920" citStr="Huang (2008)" startWordPosition="3882" endWordPosition="3883">etails of the decoding algorithm. 0 1 2 3 4 5 6 average extracting time (secs/1000 sentences) Figure 6: Comparison of extraction time and BLEU score: forest-based vs.1-best and 30-best. rules from... extraction decoding BLEU 1-best trees 0.24 1.74 0.2430 30-best trees 5.56 3.31 0.2488 forest: pe=8 2.36 3.40 0.2533 Pharaoh - - 0.2297 Table 2: Results with different rule extraction methods. Extraction and decoding columns are running times in secs per 1000 sentences and per sentence, respectively. We use the Chinese parser of Xiong et al. (2005) to parse the source side of the bitext. Following Huang (2008), we also modify this parser to output a packed forest for each sentence, which can be pruned by the marginal probability-based insideoutside algorithm (Charniak and Johnson, 2005; Huang, 2008). We will first report results trained on a small-scaled dataset with detailed analysis, and then scale to a larger one, where we also combine the technique of forest-based decoding (Mi et al., 2008). 5.2 Results and Analysis on Small Data To test the effect of forest-based rule extraction, we parse the training set into parse forests and use three levels of pruning thresholds: pe = 2, 5, 8. Figure 6 plo</context>
+</contexts>
+<marker>Huang, 2008</marker>
+<rawString>Liang Huang. 2008. Forest reranking: Discriminative parsing with non-local features. In Proceedings of the ACL: HLT, Columbus, OH, June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yang Liu</author>
+<author>Qun Liu</author>
+<author>Shouxun Lin</author>
+</authors>
+<title>Tree-tostring alignment template for statistical machine translation.</title>
+<date>2006</date>
+<booktitle>In Proceedings of COLING-ACL,</booktitle>
+<pages>609--616</pages>
+<contexts>
+<context position="3406" citStr="Liu et al., 2006" startWordPosition="511" endWordPosition="514">sticated counterparts. To alleviate this problem, an obvious idea is to extract rules from k-best parses instead. However, a k-best list, with its limited scope, has too few variations and too many redundancies (Huang, 2008). This situation worsens with longer sentences as the number of possible parses grows exponentially with the sentence length and a k-best list will only capture a tiny fraction of the whole space. In addition, many subtrees are repeated across different parses, so it is 1For example, in recent NIST Evaluations, some of these models (Galley et al., 2006; Quirk et al., 2005; Liu et al., 2006) ranked among top 10. See http://www.nist.gov/speech/tests/mt/. Liu et al. (2006); Huang et al. (2006) Galley et al. (2006) 206 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 206–214, Honolulu, October 2008.c�2008 Association for Computational Linguistics IP → x1 x3 with x2 yˇu Figure 1: Example translation rule r1. The Chinese conjunction yˇu “and” is translated into English prep. “with”. also inefficient to extract rules separately from each of these very similar trees (or from the cross-product of k2 similar tree-pairs in tree-to-tree models). </context>
+<context position="5776" citStr="Liu et al., 2006" startWordPosition="892" endWordPosition="895">ting Figure 2: Example derivation of tree-to-string translation, with rules used. Each shaded region denotes a tree fragment that is pattern-matched with the rule being applied. B`ush´ı le hu`ıt´an yˇu Sh¯al´ong hu`ıt´an le (a) B`ush´ı yˇu Sh¯al´ong jˇux´ıng le hu`ıt´an ⇓ 1-best parser IP jˇux´ıng jˇux´ıng NP VPB NPB NPB CC NPB VV AS r1⇓ with NPB Sh¯al´ong VV VPB AS NPB NPB B`ush´ı NP x1:NPB CC x3:VPB x2:NPB (1) B`ush´ı Bush yˇu Sh¯al´ong jˇux´ıng le and/with Sharon1 hold past. hu`ıt´an meeting2 2 Tree-based Translation We review in this section the tree-based approach to machine translation (Liu et al., 2006; Huang et al., 2006), and its rule extraction algorithm (Galley et al., 2004; Galley et al., 2006). 2.1 Tree-to-String System Current tree-based systems perform translation in two separate steps: parsing and decoding. The input string is first parsed by a parser into a 1-best tree, which will then be converted to a target language string by applying a set of tree-to-string transformation rules. For example, consider the following example translating from Chinese to English: “Bush held a meeting2 with Sharon1” Figure 2 shows how this process works. The Chinese sentence (a) is first parsed into</context>
+<context position="21334" citStr="Liu et al., 2006" startWordPosition="3616" endWordPosition="3619">will use both default 1-best decoding and forest-based decoding. As we will see in the next section, the best result comes when we combine the merits of both, i.e., using forests in both rule extraction and decoding. There is also a parallel work on extracting rules from k-best parses and k-best alignments (Venugopal et al., 2008), but both their experiments and our own below confirm that extraction on k-best parses is neither efficient nor effective. 5 Experiments 5.1 System Our experiments are on Chinese-to-English translation based on a tree-to-string system similar to (Huang et al., 2006; Liu et al., 2006). Given a 1- best tree T, the decoder searches for the best derivation d∗ among the set of all possible derivations D: A0 logP(d |T) + Al log Plm(τ(d)) + A2|d |+ A3|τ(d)| (7) where the first two terms are translation and language model probabilities, τ(d) is the target string (English sentence) for derivation d, and the last two terms are derivation and translation length penalties, respectively. The conditional probability P(d |T) decomposes into the product of rule probabilities: P(d |T) = 11 P(r). (8) r∈d Each P(r) is in turn a product of five probabilities: P(r) =P(r |lhs(r))A&apos; · P(r |rhs(</context>
+</contexts>
+<marker>Liu, Liu, Lin, 2006</marker>
+<rawString>Yang Liu, Qun Liu, and Shouxun Lin. 2006. Tree-tostring alignment template for statistical machine translation. In Proceedings of COLING-ACL, pages 609– 616.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Haitao Mi</author>
+<author>Liang Huang</author>
+<author>Qun Liu</author>
+</authors>
+<title>Forestbased translation.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL: HLT,</booktitle>
+<location>Columbus, OH.</location>
+<contexts>
+<context position="4332" citStr="Mi et al., 2008" startWordPosition="653" endWordPosition="656"> x3 with x2 yˇu Figure 1: Example translation rule r1. The Chinese conjunction yˇu “and” is translated into English prep. “with”. also inefficient to extract rules separately from each of these very similar trees (or from the cross-product of k2 similar tree-pairs in tree-to-tree models). We instead propose a novel approach that extracts rules from packed forests (Section 3), which compactly encodes many more alternatives than kbest lists. Experiments (Section 5) show that forestbased extraction improves BLEU score by over 1 point on a state-of-the-art tree-to-string system (Liu et al., 2006; Mi et al., 2008), which is also 0.5 points better than (and twice as fast as) extracting on 30-best parses. When combined with our previous orthogonal work on forest-based decoding (Mi et al., 2008), the forest-forest approach achieves a 2.5 BLEU points improvement over the baseline, and even outperforms the hierarchical system of Hiero, one of the best-performing systems to date. Besides tree-to-string systems, our method is also applicable to other paradigms such as the string-totree models (Galley et al., 2006) where the rules are in the reverse order, and easily generalizable to pairs of forests in tree-t</context>
+<context position="6862" citStr="Mi et al., 2008" startWordPosition="1076" endWordPosition="1079"> English: “Bush held a meeting2 with Sharon1” Figure 2 shows how this process works. The Chinese sentence (a) is first parsed into a parse tree (b), which will be converted into an English string in 5 steps. First, at the root node, we apply rule r1 shown in Figure 1, which translates the Chinese coordination construction (“... and ...”) into an English prepositional phrase. Then, from step (c) we continue applying rules to untranslated Chinese subtrees, until we get the complete English translation in (e).2 2We swap the 1-best and 2-best parses of the example sentence from our earlier paper (Mi et al., 2008), since the current 1-best parse is easier to illustrate the rule extraction algorithm. 207 IP “Bush .. Sharon” → x1 x4 x2 x3 CC (yˇu) → with NPB (B`ush´ı) → Bush NPB (Sh¯al´ong) → Sharon VPB (VV(jˇux´ıng) AS(le) x1:NPB) → held x1 NPB (hu`ıt´an) → a meeting NP “Bush ⊔ with Sharon” NPB “Bush” B`ush´ı NPB “Sharon” Sh¯al´ong VV “held” jˇux´ıng NPB “a meeting” hu`ıt´an AS “held” le Bush held a meeting with Sharon VPB “held .. meeting” CC “with” yˇu (minimal) rules extracted IP (NP(x1:NPB x2:CC x3:NPB) x4:VPB) Figure 3: Tree-based rule extraction (Galley et al., 2004). Each non-leaf node in the tre</context>
+<context position="14651" citStr="Mi et al., 2008" startWordPosition="2444" endWordPosition="2447">tree-based extraction, we extract rules from a packed forest F in two steps: (1) admissible set computation (where to cut), and (2) fragmentation (how to cut). It turns out that the exact formulation developed for admissible set in the tree-based case can be applied to a forest without any change. The fragmentation step, however, becomes much more involved since we now face a choice of multiple parse hyperedges at each node. In other words, it becomes nondeterministic how to “cut” a forest into tree fragments, which is analogous to the non-deterministic pattern-match in forest-based decoding (Mi et al., 2008). For example there are two parse hyperedges e1 and e2 at the root node in Figure 4. When we follow one of them to grow a fragment, there again will be multiple choices at each of its tail nodes. Like in tree-based case, a fragment is said to be complete if all its leaf nodes are admissible. Otherwise, an incomplete fragment can grow at any non-admissible frontier node v, where following each parse hyperedge at v will split off a new fragment. For example, following e2 at the root node will immediately lead us to two admissible nodes, NPB0, 1 and VP1, 6 (we will highlight admissible nodes by g</context>
+<context position="20400" citStr="Mi et al., 2008" startWordPosition="3452" endWordPosition="3455">However, both of these efforts only use 1-best parses, with the second one packing different binarizations of the same tree in a forest. Nevertheless we suspect that their extraction algorithm is in principle similar to ours, although they do not provide details of forest-based fragmentation (Algorithm 1) which we think is non-trivial. The forest concept is also used in machine translation decoding, for example to characterize the search space of decoding with integrated language models (Huang and Chiang, 2007). The first direct application of parse forest in translation is our previous work (Mi et al., 2008) which translates a packed forest from a parser; it is also the base system in our experiments (see below). This work, on the other hand, is in the orthogonal direction, where we utilize forests in rule extraction instead of decoding. 11 · e E fra�g7 11 · v E yield(frag) P(e) (2) β(v) 211 BLEU score Our experiments will use both default 1-best decoding and forest-based decoding. As we will see in the next section, the best result comes when we combine the merits of both, i.e., using forests in both rule extraction and decoding. There is also a parallel work on extracting rules from k-best pars</context>
+<context position="22302" citStr="Mi et al. (2008)" startWordPosition="3780" endWordPosition="3783">and translation length penalties, respectively. The conditional probability P(d |T) decomposes into the product of rule probabilities: P(d |T) = 11 P(r). (8) r∈d Each P(r) is in turn a product of five probabilities: P(r) =P(r |lhs(r))A&apos; · P(r |rhs(r))A&apos; · P(r |root(lhs(r)))As · Pllm(lhs(r) |rhs(r))A&apos; · Pllm(rhs(r) |lhs(r))A&apos; where the first three are conditional probabilities based on fractional counts of rules defined in Section 3.3, and the last two are lexical probabilities. These parameters Al ... As are tuned by minimum error rate training (Och, 2003) on the dev sets. We refer readers to Mi et al. (2008) for details of the decoding algorithm. 0 1 2 3 4 5 6 average extracting time (secs/1000 sentences) Figure 6: Comparison of extraction time and BLEU score: forest-based vs.1-best and 30-best. rules from... extraction decoding BLEU 1-best trees 0.24 1.74 0.2430 30-best trees 5.56 3.31 0.2488 forest: pe=8 2.36 3.40 0.2533 Pharaoh - - 0.2297 Table 2: Results with different rule extraction methods. Extraction and decoding columns are running times in secs per 1000 sentences and per sentence, respectively. We use the Chinese parser of Xiong et al. (2005) to parse the source side of the bitext. Foll</context>
+</contexts>
+<marker>Mi, Huang, Liu, 2008</marker>
+<rawString>Haitao Mi, Liang Huang, and Qun Liu. 2008. Forestbased translation. In Proceedings of ACL: HLT, Columbus, OH.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Joseph Och</author>
+</authors>
+<title>Minimum error rate training in statistical machine translation.</title>
+<date>2003</date>
+<booktitle>In Proceedings ofACL,</booktitle>
+<pages>160--167</pages>
+<contexts>
+<context position="22248" citStr="Och, 2003" startWordPosition="3770" endWordPosition="3771">vation d, and the last two terms are derivation and translation length penalties, respectively. The conditional probability P(d |T) decomposes into the product of rule probabilities: P(d |T) = 11 P(r). (8) r∈d Each P(r) is in turn a product of five probabilities: P(r) =P(r |lhs(r))A&apos; · P(r |rhs(r))A&apos; · P(r |root(lhs(r)))As · Pllm(lhs(r) |rhs(r))A&apos; · Pllm(rhs(r) |lhs(r))A&apos; where the first three are conditional probabilities based on fractional counts of rules defined in Section 3.3, and the last two are lexical probabilities. These parameters Al ... As are tuned by minimum error rate training (Och, 2003) on the dev sets. We refer readers to Mi et al. (2008) for details of the decoding algorithm. 0 1 2 3 4 5 6 average extracting time (secs/1000 sentences) Figure 6: Comparison of extraction time and BLEU score: forest-based vs.1-best and 30-best. rules from... extraction decoding BLEU 1-best trees 0.24 1.74 0.2430 30-best trees 5.56 3.31 0.2488 forest: pe=8 2.36 3.40 0.2533 Pharaoh - - 0.2297 Table 2: Results with different rule extraction methods. Extraction and decoding columns are running times in secs per 1000 sentences and per sentence, respectively. We use the Chinese parser of Xiong et a</context>
+</contexts>
+<marker>Och, 2003</marker>
+<rawString>Franz Joseph Och. 2003. Minimum error rate training in statistical machine translation. In Proceedings ofACL, pages 160–167.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chris Quirk</author>
+<author>Arul Menezes</author>
+<author>Colin Cherry</author>
+</authors>
+<title>Dependency treelet translation: Syntactically informed phrasal smt.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the 43rd ACL,</booktitle>
+<location>Ann Arbor, MI.</location>
+<contexts>
+<context position="3387" citStr="Quirk et al., 2005" startWordPosition="507" endWordPosition="510">linguistically sophisticated counterparts. To alleviate this problem, an obvious idea is to extract rules from k-best parses instead. However, a k-best list, with its limited scope, has too few variations and too many redundancies (Huang, 2008). This situation worsens with longer sentences as the number of possible parses grows exponentially with the sentence length and a k-best list will only capture a tiny fraction of the whole space. In addition, many subtrees are repeated across different parses, so it is 1For example, in recent NIST Evaluations, some of these models (Galley et al., 2006; Quirk et al., 2005; Liu et al., 2006) ranked among top 10. See http://www.nist.gov/speech/tests/mt/. Liu et al. (2006); Huang et al. (2006) Galley et al. (2006) 206 Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 206–214, Honolulu, October 2008.c�2008 Association for Computational Linguistics IP → x1 x3 with x2 yˇu Figure 1: Example translation rule r1. The Chinese conjunction yˇu “and” is translated into English prep. “with”. also inefficient to extract rules separately from each of these very similar trees (or from the cross-product of k2 similar tree-pairs in tre</context>
+</contexts>
+<marker>Quirk, Menezes, Cherry, 2005</marker>
+<rawString>Chris Quirk, Arul Menezes, and Colin Cherry. 2005. Dependency treelet translation: Syntactically informed phrasal smt. In Proceedings of the 43rd ACL, Ann Arbor, MI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ashish Venugopal</author>
+<author>Andreas Zollmann</author>
+<author>Noah A Smith</author>
+<author>Stephan Vogel</author>
+</authors>
+<title>Wider pipelines: N-best alignments and parses in mt training.</title>
+<date>2008</date>
+<booktitle>In Proceedings ofAMTA,</booktitle>
+<location>Honolulu, Hawaii.</location>
+<contexts>
+<context position="21049" citStr="Venugopal et al., 2008" startWordPosition="3570" endWordPosition="3574"> forest from a parser; it is also the base system in our experiments (see below). This work, on the other hand, is in the orthogonal direction, where we utilize forests in rule extraction instead of decoding. 11 · e E fra�g7 11 · v E yield(frag) P(e) (2) β(v) 211 BLEU score Our experiments will use both default 1-best decoding and forest-based decoding. As we will see in the next section, the best result comes when we combine the merits of both, i.e., using forests in both rule extraction and decoding. There is also a parallel work on extracting rules from k-best parses and k-best alignments (Venugopal et al., 2008), but both their experiments and our own below confirm that extraction on k-best parses is neither efficient nor effective. 5 Experiments 5.1 System Our experiments are on Chinese-to-English translation based on a tree-to-string system similar to (Huang et al., 2006; Liu et al., 2006). Given a 1- best tree T, the decoder searches for the best derivation d∗ among the set of all possible derivations D: A0 logP(d |T) + Al log Plm(τ(d)) + A2|d |+ A3|τ(d)| (7) where the first two terms are translation and language model probabilities, τ(d) is the target string (English sentence) for derivation d, a</context>
+</contexts>
+<marker>Venugopal, Zollmann, Smith, Vogel, 2008</marker>
+<rawString>Ashish Venugopal, Andreas Zollmann, Noah A. Smith, and Stephan Vogel. 2008. Wider pipelines: N-best alignments and parses in mt training. In Proceedings ofAMTA, Honolulu, Hawaii.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Wei Wang</author>
+<author>Kevin Knight</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>Binarizing syntax trees to improve syntax-based machine translation accuracy.</title>
+<date>2007</date>
+<booktitle>In Proceedings ofEMNLP,</booktitle>
+<location>Prague, Czech Rep.,</location>
+<contexts>
+<context position="12997" citStr="Wang et al., 2007" startWordPosition="2153" endWordPosition="2156">tially many parse trees. 3.1 Packed Forest Informally, a packed parse forest, or forest in short, is a compact representation of all the derivations (i.e., parse trees) for a given sentence under a context-free grammar (Earley, 1970; Billot and Lang, 1989). For example, consider again the Chinese sentence in Example (1) above, which has (at least) two readings depending on the part-ofspeech of the word yˇu: it can be either a conjunction (CC “and”) as shown in Figure 3, or a preposition (P “with”) as shown in Figure 5, with only PP and VPB swapped from the English word order. 3Admissible set (Wang et al., 2007) is also known as “frontier set” (Galley et al., 2004). For simplicity of presentation, we assume every target word is aligned to at least one source word; see Galley et al. (2006) for handling unaligned target words. IP0,6 NPB0,1 VP1,6 B`ushi PP1,3 VPB3,6 P1,2 NPB2,3 jˇuxing le huit´an yˇu Sh¯al´ong 209 These two parse trees can be represented as a single forest by sharing common subtrees such as NPB0, 1 and VPB3, 6, as shown in Figure 4. Such a forest has a structure of a hypergraph (Huang and Chiang, 2005), where items like NP0, 3 are called nodes, whose indices denote the source span, and </context>
+<context position="19782" citStr="Wang et al., 2007" startWordPosition="3353" endWordPosition="3356">TOP) where TOP denotes the root node of the forest. Like in the M-step in EM algorithm, we now extend the maximum likelihood estimation to fractional counts for three conditional probabilities regarding a rule, which will be used in the experiments: c(r) P(r |lhs(r)) = Er′:lhs(r′)=lhs(r) c(r′), (4) Pr rhs r)) = c(r) ( I ( Er�:rhs(r&apos;)=rhs(r) c(r′), (5) P(r |root(lhs(r))) c(r) (6) = Er′:root(lhs(r′))=root(lhs(r)) c(r′). 4 Related Work The concept of packed forest has been previously used in translation rule extraction, for example in rule composition (Galley et al., 2006) and tree binarization (Wang et al., 2007). However, both of these efforts only use 1-best parses, with the second one packing different binarizations of the same tree in a forest. Nevertheless we suspect that their extraction algorithm is in principle similar to ours, although they do not provide details of forest-based fragmentation (Algorithm 1) which we think is non-trivial. The forest concept is also used in machine translation decoding, for example to characterize the search space of decoding with integrated language models (Huang and Chiang, 2007). The first direct application of parse forest in translation is our previous work</context>
+</contexts>
+<marker>Wang, Knight, Marcu, 2007</marker>
+<rawString>Wei Wang, Kevin Knight, and Daniel Marcu. 2007. Binarizing syntax trees to improve syntax-based machine translation accuracy. In Proceedings ofEMNLP, Prague, Czech Rep., July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Deyi Xiong</author>
+<author>Shuanglong Li</author>
+<author>Qun Liu</author>
+<author>Shouxun Lin</author>
+</authors>
+<title>Parsing the penn chinese treebank with semantic knowledge.</title>
+<date>2005</date>
+<booktitle>In Proceedings ofIJCNLP</booktitle>
+<pages>70--81</pages>
+<contexts>
+<context position="22857" citStr="Xiong et al. (2005)" startWordPosition="3869" endWordPosition="3872">Och, 2003) on the dev sets. We refer readers to Mi et al. (2008) for details of the decoding algorithm. 0 1 2 3 4 5 6 average extracting time (secs/1000 sentences) Figure 6: Comparison of extraction time and BLEU score: forest-based vs.1-best and 30-best. rules from... extraction decoding BLEU 1-best trees 0.24 1.74 0.2430 30-best trees 5.56 3.31 0.2488 forest: pe=8 2.36 3.40 0.2533 Pharaoh - - 0.2297 Table 2: Results with different rule extraction methods. Extraction and decoding columns are running times in secs per 1000 sentences and per sentence, respectively. We use the Chinese parser of Xiong et al. (2005) to parse the source side of the bitext. Following Huang (2008), we also modify this parser to output a packed forest for each sentence, which can be pruned by the marginal probability-based insideoutside algorithm (Charniak and Johnson, 2005; Huang, 2008). We will first report results trained on a small-scaled dataset with detailed analysis, and then scale to a larger one, where we also combine the technique of forest-based decoding (Mi et al., 2008). 5.2 Results and Analysis on Small Data To test the effect of forest-based rule extraction, we parse the training set into parse forests and use</context>
+</contexts>
+<marker>Xiong, Li, Liu, Lin, 2005</marker>
+<rawString>Deyi Xiong, Shuanglong Li, Qun Liu, and Shouxun Lin. 2005. Parsing the penn chinese treebank with semantic knowledge. In Proceedings ofIJCNLP 2005, pages 70–81.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

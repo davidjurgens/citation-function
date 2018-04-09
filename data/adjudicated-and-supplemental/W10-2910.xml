@@ -1,0 +1,1952 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000433">
+<title confidence="0.97853">
+Syntactic and Semantic Structure for Opinion Expression Detection
+</title>
+<author confidence="0.979992">
+Richard Johansson and Alessandro Moschitti
+</author>
+<affiliation confidence="0.978458">
+DISI, University of Trento
+</affiliation>
+<address confidence="0.692611">
+Via Sommarive 14 Povo, 38123 Trento (TN), Italy
+</address>
+<email confidence="0.973733">
+{johansson, moschitti}@disi.unitn.it
+</email>
+<sectionHeader confidence="0.996945" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999759947368421">
+We demonstrate that relational features
+derived from dependency-syntactic and
+semantic role structures are useful for the
+task of detecting opinionated expressions
+in natural-language text, significantly im-
+proving over conventional models based
+on sequence labeling with local features.
+These features allow us to model the way
+opinionated expressions interact in a sen-
+tence over arbitrary distances.
+While the relational features make the pre-
+diction task more computationally expen-
+sive, we show that it can be tackled effec-
+tively by using a reranker. We evaluate
+a number of machine learning approaches
+for the reranker, and the best model re-
+sults in a 10-point absolute improvement
+in soft recall on the MPQA corpus, while
+decreasing precision only slightly.
+</bodyText>
+<sectionHeader confidence="0.999518" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.997764575757576">
+The automatic detection and analysis of opinion-
+ated text – subjectivity analysis – is potentially
+useful for a number of natural language processing
+tasks. Examples include retrieval systems answer-
+ing queries about how a particular person feels
+about a product or political question, and various
+types of market analysis tools such as review min-
+ing systems.
+A primary task in subjectivity analysis is to
+mark up the opinionated expressions, i.e. the
+text snippets signaling the subjective content of
+the text. This is necessary for further analysis,
+such as the determination of opinion holder and
+the polarity of the opinion. The MPQA corpus
+(Wiebe et al., 2005), a widely used corpus anno-
+tated with subjectivity information, defines two
+types of subjective expressions: direct subjective
+expressions (DSEs), which are explicit mentions
+of opinion, and expressive subjective elements
+(ESEs), which signal the attitude of the speaker
+by the choice of words. DSEs are often verbs of
+statement and categorization, where the opinion
+and its holder tend to be direct semantic arguments
+of the verb. ESEs, on the other hand, are less easy
+to categorize syntactically; prototypical examples
+would include value-expressing adjectives such
+as beautiful, biased, etc. In addition to DSEs and
+ESEs, the MPQA corpus also contains annotation
+for non-subjective statements, which are referred
+to as objective speech events (OSEs). Examples
+(1) and (2) show two sentences from the MPQA
+corpus where DSEs and ESEs have been manually
+annotated.
+</bodyText>
+<listItem confidence="0.933298166666667">
+(1) For instance, he [denounced]DSE as a [human
+rights violation]ESE the banning and seizure of
+satellite dishes in Iran.
+(2) This [is viewed]DSE as the [main
+impediment]ESE to the establishment of po-
+litical order in the country .
+</listItem>
+<bodyText confidence="0.999946470588235">
+The task of marking up these expressions has
+usually been approached using straightforward
+sequence labeling techniques using simple fea-
+tures in a small contextual window (Choi et al.,
+2006; Breck et al., 2007). However, due to the
+simplicity of the feature sets, this approach fails
+to take into account the fact that the semantic
+and pragmatic interpretation of sentences is not
+only determined by words but also by syntactic
+and shallow-semantic relations. Crucially, taking
+grammatical relations into account allows us to
+model how expressions interact in various ways
+that influence their interpretation as subjective
+or not. Consider, for instance, the word said in
+examples (3) and (4) below, where the interpre-
+tation as a DSE or an OSE is influenced by the
+subjective content of the enclosed statement.
+</bodyText>
+<page confidence="0.991903">
+67
+</page>
+<note confidence="0.70703">
+Proceedings of the Fourteenth Conference on Computational Natural Language Learning, pages 67–76,
+Uppsala, Sweden, 15-16 July 2010. c�2010 Association for Computational Linguistics
+</note>
+<listItem confidence="0.9980222">
+(3) “We will identify the [culprits]ESE of these
+clashes and [punish]ESE them,” he [said]DSE.
+(4) On Monday, 80 Libyan soldiers disembarked
+from an Antonov transport plane carrying military
+equipment, an African diplomat [said]OSE.
+</listItem>
+<bodyText confidence="0.999935470588235">
+In this paper, we demonstrate how syntactic
+and semantic structural information can be used
+to improve opinion detection. While this fea-
+ture model makes it impossible to use the stan-
+dard sequence labeling method, we show that with
+a simple strategy based on reranking, incorporat-
+ing structural features results in a significant im-
+provement. We investigate two different reranking
+strategies: the Preference Kernel approach (Shen
+and Joshi, 2003) and an approach based on struc-
+ture learning (Collins, 2002). In an evaluation
+on the MPQA corpus, the best system we evalu-
+ated, a structure learning-based reranker using the
+Passive–Aggressive learning algorithm, achieved
+a 10-point absolute improvement in soft recall,
+and a 5-point improvement in F-measure, over the
+baseline sequence labeler.
+</bodyText>
+<sectionHeader confidence="0.970967" genericHeader="introduction">
+2 Motivation and Related Work
+</sectionHeader>
+<bodyText confidence="0.999917719298246">
+Most approaches to analysing the sentiment of
+natural-language text have relied fundamentally
+on purely lexical information (see (Pang et al.,
+2002; Yu and Hatzivassiloglou, 2003), inter alia)
+or low-level grammatical information such as part-
+of-speech tags and functional words (Wiebe et al.,
+1999). This is in line with the general consensus
+in the information retrieval community that very
+little can be gained by complex linguistic process-
+ing for tasks such as text categorization and search
+(Moschitti and Basili, 2004).
+However, it has been suggested that subjectiv-
+ity analysis is inherently more subtle than cate-
+gorization and that structural linguistic informa-
+tion should therefore be given more attention in
+this context. For instance, Karlgren et al. (2010)
+argued from a Construction Grammar viewpoint
+(Croft, 2005) that grammatical constructions not
+only connect words, but can also be viewed as lex-
+ical items in their own right. Starting from this
+intuition, they showed that incorporating construc-
+tion items into a bag-of-words feature representa-
+tion resulted in improved results on a number of
+coarse-grained opinion analysis tasks. These con-
+structional features were domain-independent and
+were manually extracted from dependency parse
+trees. They found that the most prominent con-
+structional feature for subjectivity analysis was the
+Tense Shift construction.
+While the position by Karlgren et al. (2010)
+– that constructional features signal opinion –
+originates from a particular theoretical framework
+and may be controversial, syntactic and shallow-
+semantic relations have repeatedly proven useful
+for subtasks of subjectivity analysis that are in-
+herently relational, above all for determining the
+holder or topic of a given opinion. Works us-
+ing syntactic features to extract topics and holders
+of opinions are numerous (Bethard et al., 2005;
+Kobayashi et al., 2007; Joshi and Penstein-Ros´e,
+2009; Wu et al., 2009). Semantic role analysis has
+also proven useful: Kim and Hovy (2006) used
+a FrameNet-based semantic role labeler to deter-
+mine holder and topic of opinions. Similarly, Choi
+et al. (2006) successfully used a PropBank-based
+semantic role labeler for opinion holder extrac-
+tion, and Wiegand and Klakow (2010) recently ap-
+plied tree kernel learning methods on a combina-
+tion of syntactic and semantic role trees for the
+same task. Ruppenhofer et al. (2008) argued that
+semantic role techniques are useful but not com-
+pletely sufficient for holder and topic identifica-
+tion, and that other linguistic phenomena must be
+studied as well. One such linguistic pheonomenon
+is the discourse structure, which has recently at-
+tracted some attention in the opinion analysis com-
+munity (Somasundaran et al., 2009).
+</bodyText>
+<sectionHeader confidence="0.749045" genericHeader="method">
+3 Opinion Expression Detection Using
+Syntactic and Semantic Structures
+</sectionHeader>
+<bodyText confidence="0.999027117647059">
+Previous systems for opinionated expression
+markup have typically used simple feature sets
+which have allowed the use of efficient off-the-
+shelf sequence labeling methods based on Viterbi
+search (Choi et al., 2006; Breck et al., 2007). This
+is not possible in our case since we would like to
+extract structural, relational features that involve
+pairs of opinionated expressions and may apply
+over an arbitrarily long distance in the sentence.
+While it is possible that search algorithms for
+exact or approximate inference can be construc-
+tured for the arg max problem in this model, we
+sidestepped this issue by using a reranking decom-
+position of the problem: We first apply a standard
+Viterbi-based sequence labeler using no structural
+features and generate a small candidate set of size
+k. Then, a second and more complex model picks
+</bodyText>
+<page confidence="0.998896">
+68
+</page>
+<bodyText confidence="0.9991720625">
+the top candidate from this set without having to
+search the whole candidate space.
+The advantages of a reranking approach com-
+pared to more complex approaches requiring ad-
+vanced search techniques are mainly simplicity
+and efficiency: this approach is conceptually sim-
+ple and fairly easy to implement provided that k-
+best output can be generated efficiently, and fea-
+tures can be arbitrarily complex – we don’t have
+to think about how the features affect the algorith-
+mic complexity of the inference step. A common
+objection to reranking is that the candidate set may
+not be diverse enough to allow for much improve-
+ment unless it is very large; the candidates may
+be trivial variations that are all very similar to the
+top-scoring candidate (Huang, 2008).
+</bodyText>
+<subsectionHeader confidence="0.998753">
+3.1 Syntactic and Semantic Structures
+</subsectionHeader>
+<bodyText confidence="0.999827235294118">
+We used the syntactic–semantic parser by Johans-
+son and Nugues (2008a) to annnotate the sen-
+tences with dependency syntax (Mel’ˇcuk, 1988)
+and shallow semantic structures in the PropBank
+(Palmer et al., 2005) and NomBank (Meyers et
+al., 2004) frameworks. Figure 1 shows an example
+of the annotation: The sentence they called him a
+liar, where called is a DSE and liar is an ESE, has
+been annotated with dependency syntax (above the
+text) and PropBank-based semantic role structure
+(below the text). The predicate called, which is
+an instance of the PropBank frame call.01, has
+three semantic arguments: the Agent (A0), the
+Theme (A1), and the Predicate (A2), which are re-
+alized on the surface-syntactic level as a subject,
+a direct object, and an object predicative comple-
+ment, respectively.
+</bodyText>
+<figure confidence="0.530803">
+OPRD
+call.01
+</figure>
+<figureCaption confidence="0.978463">
+Figure 1: Syntactic and shallow semantic struc-
+ture.
+</figureCaption>
+<subsectionHeader confidence="0.999972">
+3.2 Sequence Labeler
+</subsectionHeader>
+<bodyText confidence="0.9982706">
+We implemented a standard sequence labeler fol-
+lowing the approach of Collins (2002), while
+training the model using the Passive–Aggressive
+algorithm (Crammer et al., 2006) instead of the
+perceptron. We encoded the opinionated expres-
+sion brackets using the IOB2 encoding scheme
+(Tjong Kim Sang and Veenstra, 1999). Figure 2
+shows an example of a sentence with a DSE and
+an ESE and how they are encoded in the IOB2 en-
+coding.
+</bodyText>
+<figure confidence="0.975577">
+This O
+is O
+viewed B-DSE
+as O
+the O
+main B-ESE
+impediment I-ESE
+</figure>
+<figureCaption confidence="0.999738">
+Figure 2: Sequence labeling example.
+</figureCaption>
+<bodyText confidence="0.999987052631579">
+The sequence labeler used word, POS tag, and
+lemma features in a window of size 3. In addi-
+tion, we used prior polarity and intensity features
+derived from the lexicon created by Wilson et al.
+(2005). In the example, viewed is listed as hav-
+ing strong prior subjectivity but no polarity, and
+impediment has strong prior subjectivity and neg-
+ative polarity. Note that prior subjectivity does not
+always imply subjectivity in a particular context;
+this is why contextual features are essential for this
+task.
+This sequence labeler is used to generate the
+candidate set for the reranker; the Viterbi algo-
+rithm is easily modified to give k-best output. To
+generate training data for the reranker, we carried
+out a 5-fold cross-validation procedure: We split
+the training set into 5 pieces, trained a sequence
+labeler on pieces 1 to 4, applied it to piece 5 and
+so on.
+</bodyText>
+<subsectionHeader confidence="0.997925">
+3.3 Reranker Features
+</subsectionHeader>
+<bodyText confidence="0.999949230769231">
+The rerankers use two types of structural fea-
+tures: syntactic features extracted from the depen-
+dency tree, and semantic features extracted from
+the predicate–argument (semantic role) graph.
+The syntactic features are based on paths
+through the dependency tree. This creates a small
+complication for multiword opinionated expres-
+sions; we select the shortest possible path in such
+cases. For instance, in Example (1), the path will
+be computed between denounced and violation,
+and in Example (2) between viewed and impedi-
+ment.
+We used the following syntactic features:
+</bodyText>
+<figure confidence="0.924502">
+OBJ NMOD
+SBJ
+]DSE him a
+A0 A1 A2
+[liar]ESE
+They [called
+</figure>
+<page confidence="0.99185">
+69
+</page>
+<bodyText confidence="0.991970208333334">
+SYNTACTIC PATH. Given a pair of opinion ex-
+pressions, we use a feature representing the
+labels of the two expressions and the path be-
+tween them through the syntactic tree. For
+instance, for the DSE called and the ESE liar
+in Figure 1, we represent the syntactic config-
+uration using the feature DSE:OPRDJ:ESE,
+meaning that the path from the DSE to the
+ESE consists of a single link, where the de-
+pendency edge label is OPRD (object predica-
+tive complement).
+LEXICALIZED PATH. Same as above,
+but with lexical information attached:
+DSE/called:OPRDJ:ESE/liar.
+DOMINANCE. In addition to the features based
+on syntactic paths, we created a more generic
+feature template describing dominance re-
+lations between expressions. For instance,
+from the graph in Figure 1, we extract the
+feature DSE/called—*ESE/liar, mean-
+ing that a DSE with the word called domi-
+nates an ESE with the word liar.
+The semantic features were the following:
+PREDICATE SENSE LABEL. For every predi-
+cate found inside an opinion expression, we
+add a feature consisting of the expression la-
+bel and the predicate sense identifier. For in-
+stance, the verb call which is also a DSE is
+represented with the feature DSE/call.01.
+PREDICATE AND ARGUMENT LABEL. For
+every argument of a predicate inside an
+opinion expression, we create a feature
+representing the predicate–argument pair:
+DSE/call.01:A0.
+CONNECTING ARGUMENT LABEL. When a
+predicate inside some opinion expression is
+connected to some argument inside another
+opinion expression, we use a feature con-
+sisting of the two expression labels and the
+argument label. For instance, the ESE liar
+is connected to the DSE call via an A2 la-
+bel, and we represent this using a feature
+DSE:A2:ESE.
+Apart from the syntactic and semantic features,
+we also used the score output from the base se-
+quence labeler as a feature. We normalized the
+scores over the k candidates so that their exponen-
+tials summed to 1.
+</bodyText>
+<subsectionHeader confidence="0.993026">
+3.4 Preference Kernel Approach
+</subsectionHeader>
+<bodyText confidence="0.999984714285714">
+The first reranking strategy we investigated was
+the Preference Kernel approach (Shen and Joshi,
+2003). In this method, the reranking problem –
+learning to select the correct candidate h1 from a
+candidate set {h1, ... , hk} – is reduced to a bi-
+nary classification problem by creating pairs: pos-
+itive training instances (h1, h2), ... , (h1, hk) and
+negative instances (h2, h1),... , (hk, h1). This ap-
+proach has the advantage that the abundant tools
+for binary machine learning can be exploited.
+It is also easy to show (Shen and Joshi, 2003)
+that if we have a kernel K over the candidate space
+T, we can construct a valid kernel PK over the
+space of pairs T x T as follows:
+</bodyText>
+<equation confidence="0.996574">
+PK(h1, h2) = K(h11, h12) + K(h21, h22)
+− K(h1 1, h2 2) − K(h2 1,h1 2),
+</equation>
+<bodyText confidence="0.9999262">
+where hi are the pairs of hypotheses (h1i , h2i ) gen-
+erated by the base model. This makes it possible
+to use kernel methods to train the reranker. We
+tried two types of kernels: linear kernels and tree
+kernels.
+</bodyText>
+<subsectionHeader confidence="0.85174">
+3.4.1 Linear Kernel
+</subsectionHeader>
+<bodyText confidence="0.9999558">
+We created feature vectors extracted from the can-
+didate sequences using the features described in
+Section 3.3. We then trained linear SVMs using
+the LIBLINEAR software (Fan et al., 2008), using
+L1 loss and L2 regularization.
+</bodyText>
+<subsectionHeader confidence="0.752928">
+3.4.2 Tree Kernel
+</subsectionHeader>
+<bodyText confidence="0.996618125">
+Tree kernels have been successful for a number of
+structure extraction tasks, such as relation extrac-
+tion (Zhang et al., 2006; Nguyen et al., 2009) and
+opinion holder extraction (Wiegand and Klakow,
+2010). A tree kernel implicitly represents a large
+space of fragments extracted from trees and could
+thus reduce the need for manual feature design.
+Since the paths that we extract manually (Sec-
+tion 3.3) can be expressed as tree fragments, this
+method could be an interesting alternative to the
+manually extracted features used with the linear
+kernel.
+We therefore implemented a reranker using
+the Partial Tree Kernel (Moschitti, 2006), and
+we trained it using the SVMLight-TK software1,
+which is a modification of SVMLight (Joachims,
+</bodyText>
+<footnote confidence="0.999116">
+1Available at http://dit.unitn.it/∼moschitt
+</footnote>
+<page confidence="0.99687">
+70
+</page>
+<bodyText confidence="0.99819175">
+1999)2. It is still an open question how depen-
+dency trees should be represented for use with
+tree kernels (Suzuki et al., 2003; Nguyen et al.,
+2009); we used the representation shown in Fig-
+ure 3. Note that we have concatenated the opinion
+expression labels to the POS tag nodes. We did not
+use any of the features from Section 3.3 except for
+the base sequence labeler score.
+</bodyText>
+<figure confidence="0.99382675">
+TOP
+ROOT
+VBD−DS
+a
+</figure>
+<figureCaption confidence="0.961293">
+Figure 3: Representation of a dependency tree
+with opinion expressions for tree kernels.
+</figureCaption>
+<subsectionHeader confidence="0.979275">
+3.5 Structure Learning Approach
+</subsectionHeader>
+<bodyText confidence="0.999894555555555">
+The Preference Kernel approach reduces the
+reranking problem to a binary classification task
+on pairs, after which a standard SVM optimizer is
+used to train the reranker. A problem with this
+method is that the optimization problem solved
+by the SVM – maximizing the classification ac-
+curacy on a set of independent pairs – is not di-
+rectly related to the performance of the reranker.
+Instead, the method employed by many rerankers
+following Collins and Duffy (2002) directly learn
+a scoring function that is trained to maximize per-
+formance on the reranking task. We will refer to
+this approach as the structure learning method.
+While there are batch learning algorithms that
+work in this setting (Tsochantaridis et al., 2005),
+online learning methods have been more popular
+for efficiency reasons. We investigated two online
+learning algorithms: the popular structured per-
+ceptron Collins and Duffy (2002) and the Passive–
+Aggressive (PA) algorithm (Crammer et al., 2006).
+To increase robustness, we averaged the weight
+vectors seen during training as in the Voted Per-
+ceptron (Freund and Schapire, 1999).
+The difference between the two algorithms is
+the way the weight vector is incremented in each
+step. In the perceptron, for a given input x, we up-
+date based on the difference between the correct
+</bodyText>
+<footnote confidence="0.948752">
+2http://svmlight.joachims.org
+</footnote>
+<bodyText confidence="0.558623">
+output y and the predicted output ˆy, where Φ is
+the feature representation function:
+</bodyText>
+<equation confidence="0.914166">
+yˆ ← arg maxh w · Φ(x, h)
+w ← w + Φ(x, y) − Φ(x, ˆy)
+</equation>
+<bodyText confidence="0.978347166666667">
+In the PA algorithm, which is based on the the-
+ory of large-margin learning, we instead find the
+yˆ that violates the margin constraints maximally.
+The update step length τ is computed based on the
+margin; this update is bounded by a regularization
+constant C:
+</bodyText>
+<equation confidence="0.9671286">
+yˆ ← arg maxh w · Φ (x, h) + �l ρ(y, h)
+τ ← min C, &apos;�/
+C w(Φ(X&apos;y)—D(X&apos;Y))+ P(y,ˆy)1
+11Φ(x,9)—D(X&apos;Y)11�J
+w ← w + τ(Φ(x, y) − Φ(x, ˆy))
+</equation>
+<bodyText confidence="0.9981485">
+The algorithm uses a cost function ρ. We used
+the function ρ(y, ˆy) = 1 − F(y, ˆy), where F is
+the soft F-measure described in Section 4.1. With
+this approach, the learning algorithm thus directly
+optimizes the measure we are interested in, i.e. the
+F-measure.
+</bodyText>
+<sectionHeader confidence="0.999809" genericHeader="evaluation">
+4 Experiments
+</sectionHeader>
+<bodyText confidence="0.9998976">
+We carried out the experiments on version 2 of the
+MPQA corpus (Wiebe et al., 2005), which we split
+into a test set (150 documents, 3,743 sentences)
+and a training set (541 documents, 12,010 sen-
+tences).
+</bodyText>
+<subsectionHeader confidence="0.965077">
+4.1 Evaluation Metrics
+</subsectionHeader>
+<bodyText confidence="0.999975571428571">
+Since expression boundaries are hard to define ex-
+actly in annotation guidelines (Wiebe et al., 2005),
+we used soft precision and recall measures to score
+the quality of the system output. To derive the soft
+precision and recall, we first define the span cov-
+erage c of a span s with respect to another span s&apos;,
+which measures how well s&apos; is covered by s:
+</bodyText>
+<equation confidence="0.888998">
+c(s, s&apos;) = |s ∩ s&apos;|
+</equation>
+<bodyText confidence="0.999333428571428">
+the intersection ∩ gives the set of tokens that two
+spans have in common. Since our evaluation takes
+span labels (DSE, ESE, OSE) into account, we set
+c(s, s&apos;) to zero if the labels associated with s and
+s&apos; are different.
+Using the span coverage, we define the span set
+coverage C of a set of spans S with respect to a
+</bodyText>
+<equation confidence="0.8382425">
+set S&apos;:
+E
+C(S, S&apos;) =
+sjES
+</equation>
+<figure confidence="0.975886666666667">
+SBJ
+PRP
+called
+OBJ
+PRP
+OPRD
+NN−ES
+liar
+NMOD
+DT
+they him
+|s&apos;|
+In this formula, the operator |· |counts tokens, and
+E c(sj, s&apos; k)
+s&apos; ES&apos;
+</figure>
+<page confidence="0.991652">
+71
+</page>
+<bodyText confidence="0.999749">
+We now define the soft precision P and recall R
+of a proposed set of spans S� with respect to a gold
+standard set S as follows:
+</bodyText>
+<equation confidence="0.968837">
+P(S, S) = C(|S,|S) R(S,
+</equation>
+<bodyText confidence="0.999984833333333">
+Note that the operator  |·  |counts spans in this for-
+mula.
+Conventionally, when measuring the quality of
+a system for an information extraction task, a pre-
+dicted entity is counted as correct if it exactly
+matches the boundaries of a corresponding en-
+tity in the gold standard; there is thus no reward
+for close matches. However, since the boundaries
+of the spans annotated in the MPQA corpus are
+not strictly defined in the annotation guidelines
+(Wiebe et al., 2005), measuring precision and re-
+call using exact boundary scoring will result in fig-
+ures that are too low to be indicative of the use-
+fulness of the system. Therefore, most work us-
+ing this corpus instead use overlap-based preci-
+sion and recall measures, where a span is counted
+as correctly detected if it overlaps with a span in
+the gold standard (Choi et al., 2006; Breck et al.,
+2007). As pointed out by Breck et al. (2007), this
+is problematic since it will tend to reward long
+spans – for instance, a span covering the whole
+sentence will always be counted as correct if the
+gold standard contains any span for that sentence.
+The precision and recall measures proposed
+here correct the problem with overlap-based mea-
+sures: If the system proposes a span covering the
+whole sentence, the span coverage will be low and
+result in a low soft precision. Note that our mea-
+sures are bounded below by the exact measures
+and above by the overlap-based measures.
+</bodyText>
+<subsectionHeader confidence="0.996601">
+4.2 Reranking Approaches
+</subsectionHeader>
+<bodyText confidence="0.999912928571429">
+We compared the reranking architectures and the
+machine learning methods described in Section 3.
+In these experiments, we used a candidate set size
+k of 8. Table 1 shows the results of the evaluations
+using the precision and recall measures described
+above. The baseline is the result of taking the top-
+scoring output from the sequence labeler without
+applying any reranking.
+The results show that the rerankers using man-
+ual feature extraction outperform the tree-kernel-
+based reranker, which obtains a score just above
+the baseline. It should be noted that the mas-
+sive training time of kernel-based machine learn-
+ing precluded a detailed tuning of parameters and
+</bodyText>
+<table confidence="0.999713666666667">
+System P R F
+Baseline 63.36 46.77 53.82
+Pref-linear 64.60 50.17 56.48
+Pref-TK 63.97 46.94 54.15
+Struct-Perc 62.84 48.13 54.51
+Struct-PA 63.50 51.79 57.04
+</table>
+<tableCaption confidence="0.988284">
+Table 1: Evaluation of reranking architectures and
+learning methods.
+</tableCaption>
+<bodyText confidence="0.999763769230769">
+representation – on the other hand, we did not need
+to spend much time on parameter tuning and fea-
+ture design for the other rerankers.
+In addition, we note that the best performance
+was obtained using the PA algorithm and the struc-
+ture learning architecture. The PA algorithm is
+a simple online learning method and still out-
+performs the SVM used in the preference-kernel
+reranker. This suggests that the structure learning
+approach is superior for this task. It is possible
+that a batch learning method such as SVMstruct
+(Tsochantaridis et al., 2005) could improve the re-
+sults even further.
+</bodyText>
+<subsectionHeader confidence="0.999163">
+4.3 Candidate Set Size
+</subsectionHeader>
+<bodyText confidence="0.9999821">
+In any method based on reranking, it is important
+to study the influence of the candidate set size on
+the quality of the reranked output. In addition, an
+interesting question is what the upper bound on
+reranker performance is – the oracle performance.
+Table 2 shows the result of an experiment that in-
+vestigates these questions. We used the reranker
+based on the Passive–Aggressive method in this
+experiment since this reranker gave the best results
+in the previous experiment.
+</bodyText>
+<table confidence="0.998870818181818">
+k P Reranked F P Oracle F
+R R
+1 63.36 46.77 53.82 63.36 46.77 53.82
+2 63.70 48.17 54.86 72.66 55.18 62.72
+4 63.57 49.78 55.84 79.12 62.24 69.68
+8 63.50 51.79 57.04 83.72 68.14 75.13
+16 63.00 52.94 57.54 86.92 72.79 79.23
+32 62.15 54.50 58.07 89.18 76.76 82.51
+64 61.02 55.67 58.22 91.08 80.19 85.28
+128 60.22 56.45 58.27 92.63 83.00 87.55
+256 59.87 57.22 58.51 94.01 85.27 89.43
+</table>
+<tableCaption confidence="0.9000615">
+Table 2: Oracle and reranker performance as a
+function of candidate set size.
+</tableCaption>
+<bodyText confidence="0.996376666666667">
+As is common in reranking tasks, the reranker
+can exploit only a fraction of the potential im-
+provement – the reduction of the F-measure error
+</bodyText>
+<equation confidence="0.9378685">
+S) = C( �S,S)
+|S|
+</equation>
+<page confidence="0.980651">
+72
+</page>
+<bodyText confidence="0.9997871">
+is between 10 and 15 percent of the oracle error
+reduction for all candidate set sizes.
+The most visible effect of the reranker is that
+the recall is greatly improved. However, this does
+not seem to have an adverse effect on the precision
+until the candidate set size goes above 8 – in fact,
+the precision actually improves over the baseline
+for small candidate set sizes. After the size goes
+above 8, the recall (and the F-measure) still rises,
+but at the cost of decreased precision.
+</bodyText>
+<subsectionHeader confidence="0.999449">
+4.4 Impact of Features
+</subsectionHeader>
+<bodyText confidence="0.9983565">
+We studied the impact of syntactic and seman-
+tic structural features on the performance of the
+reranker. Table 3 shows the result of the inves-
+tigation for syntactic features. Using all the syn-
+tactic features (and no semantic features) gives an
+F-measure roughly 4 points above the baseline, us-
+ing the PA reranker with a k of 64. We then mea-
+sured the F-measure obtained when each one of
+the three syntactic features had been removed. It
+is clear that the unlexicalized syntactic path is the
+most important syntactic feature; the effect of the
+two lexicalized features seems to be negligible.
+</bodyText>
+<table confidence="0.999677833333333">
+System P R F
+Baseline 63.36 46.77 53.82
+All syntactic 62.45 53.19 57.45
+No SYN PATH 64.40 48.69 55.46
+No LEX PATH 62.62 53.19 57.52
+No DOMINANCE 62.32 52.92 57.24
+</table>
+<tableCaption confidence="0.999892">
+Table 3: Effect of syntactic features.
+</tableCaption>
+<bodyText confidence="0.999259">
+A similar result was obtained when studying the
+semantic features (Table 4). Removing the CON-
+NECTING ARGUMENT LABEL feature, which is
+unlexicalized, has a greater effect than removing
+the other two semantic features, which are lexical-
+ized.
+</bodyText>
+<table confidence="0.999682666666667">
+System P R F
+Baseline 63.36 46.77 53.82
+All semantic 61.26 53.85 57.31
+No PREDICATE SL 61.28 53.81 57.30
+No PRED+ARGLBL 60.96 53.61 57.05
+No CONN ARGLBL 60.73 50.47 55.12
+</table>
+<tableCaption confidence="0.999811">
+Table 4: Effect of semantic features.
+</tableCaption>
+<bodyText confidence="0.999450047619048">
+Since our most effective structural features
+combine a pair of opinion expression labels with
+a tree fragment, it is interesting to study whether
+the expression labels alone would be enough. If
+this were the case, we could conclude that the
+improvement is caused not by the structural fea-
+tures, but just by learning which combinations
+of labels are common in the training set, such
+as that DSE+ESE would be more common than
+OSE+ESE. We thus carried out an experiment
+comparing a reranker using label pair features
+against rerankers based on syntactic features only,
+semantic features only, and the full feature set. Ta-
+ble 5 shows the results. We see that the reranker
+using label pairs indeed achieves a performance
+well above the baseline. However, its performance
+is below that of any reranker using structural fea-
+tures. In addition, we see no improvement when
+adding label pair features to the structural feature
+set; this is to be expected since the label pair infor-
+mation is subsumed by the structural features.
+</bodyText>
+<table confidence="0.999649285714286">
+System P R F
+Baseline 63.36 46.77 53.82
+Label pairs 62.05 52.68 56.98
+All syntactic 62.45 53.19 57.45
+All semantic 61.26 53.85 57.31
+Syn + sem 61.02 55.67 58.22
+Syn + sem + pairs 61.61 54.78 57.99
+</table>
+<tableCaption confidence="0.950344">
+Table 5: Structural features compared to label
+pairs.
+</tableCaption>
+<subsectionHeader confidence="0.999133">
+4.5 Comparison with Breck et al. (2007)
+</subsectionHeader>
+<bodyText confidence="0.999656363636364">
+Comparison of systems in opinion expression de-
+tection is often nontrivial since evaluation settings
+have differed widely. Since our problem setting
+– marking up and labeling opinion expressions in
+the MPQA corpus – is most similar to that de-
+scribed by Breck et al. (2007), we carried out an
+evaluation using the setting used in their experi-
+ment.
+For compatibility with their experimental setup,
+this experiment differed from the ones described
+in the previous sections in the following ways:
+</bodyText>
+<listItem confidence="0.7770805">
+• The system did not need to distinguish DSEs
+and ESEs and did not have to detect the
+OSEs.
+• The results were measured using the overlap-
+based precision and recall, although this is
+problematic as pointed out in Section 4.1.
+</listItem>
+<page confidence="0.985191">
+73
+</page>
+<bodyText confidence="0.934467714285714">
+• Instead of the training/test split we used in the
+previous evaluations, the systems were evalu-
+ated using a 10-fold cross-validation over the
+same set of 400 documents as used in Breck’s
+experiment.
+Again, our reranker uses the PA method with a
+k of 64. Table 6 shows the results.
+</bodyText>
+<table confidence="0.99975025">
+System P R F
+Breck et al. (2007) 71.64 74.70 73.05
+Baseline 80.85 64.38 71.68
+Reranked 76.40 78.23 77.30
+</table>
+<tableCaption confidence="0.980458">
+Table 6: Results using the Breck et al. (2007) eval-
+uation setting.
+</tableCaption>
+<bodyText confidence="0.999952692307692">
+We see that the performance of our system is
+clearly higher – in both precision and recall – than
+that reported by Breck et al. (2007). This shows
+again that the structural features are effective for
+the task of finding opinionated expressions.
+We note that the performance of our base-
+line sequence labeler is lower than theirs; this
+is to be expected since they used a more com-
+plex batch learning algorithm (conditional random
+fields) while we used an online learner, and they
+spent more effort on feature design. This indicates
+that we should be able to achieve even higher per-
+formance using a stronger base model.
+</bodyText>
+<sectionHeader confidence="0.996462" genericHeader="conclusions">
+5 Conclusion
+</sectionHeader>
+<bodyText confidence="0.9999694">
+We have shown that features derived from gram-
+matical and semantic role structure can be used to
+improve the detection of opinionated expressions
+in subjectivity analysis. Most significantly, the re-
+call is drastically increased (10 points) while the
+precision decreases only slightly (3 points). This
+result compares favorably with previously pub-
+lished results, which have been biased towards
+precision and scored low on recall.
+The long-distance structural features gives us a
+model that has predictive power as well as being of
+theoretical interest: this model takes into account
+the interactions between opinion expressions in a
+sentence. While these structural features give us
+a powerful model, they come at a computational
+cost; prediction is more complex than in a stan-
+dard sequence labeler based on purely local fea-
+tures. However, we have shown that a prediction
+strategy based on reranking suffices for this task.
+We analyzed the impact of the syntactic and se-
+mantic features and saw that the best model in-
+cludes both types of features. The most effective
+features we have found are purely structural, i.e.
+based on tree fragments in a syntactic or seman-
+tic tree. Features involving words did not seem to
+have the same impact. We also showed that the im-
+provement is not explainable by mere correlations
+between opinion expression labels.
+We investigated a number of implementation
+strategies for the reranker and concluded that the
+structural learning framework seemed to give the
+best performance. We were not able to achieve
+the same performance using tree kernels as with
+manually extracted features. It is possible that this
+could be improved with a better strategy for rep-
+resenting dependency structure for tree kernels, or
+if the tree kernels could be incorporated into the
+structural learning framework.
+The flexible architecture we have presented en-
+ables interesting future research: (i) a straight-
+forward improvement is the use of lexical simi-
+larity to reduce data sparseness, e.g. (Basili et
+al., 2005; Basili et al., 2006; Bloehdorn et al.,
+2006). However, the similarity between subjective
+words, which have multiple senses against other
+words may negatively impact the system accu-
+racy. Therefore, the use of the syntactic/semantic
+kernels, i.e. (Bloehdorn and Moschitti, 2007a;
+Bloehdorn and Moschitti, 2007b), to syntactically
+contextualize word similarities may improve the
+reranker accuracy. (ii) The latter can be fur-
+ther boosted by studying complex structural ker-
+nels, e.g. (Moschitti, 2008; Nguyen et al., 2009;
+Dinarelli et al., 2009). (iii) More specific pred-
+icate argument structures such those proposed in
+FrameNet, e.g. (Baker et al., 1998; Giuglea and
+Moschitti, 2004; Giuglea and Moschitti, 2006; Jo-
+hansson and Nugues, 2008b) may be useful to
+characterize the opinion holder and the sentence
+semantic context.
+Finally, while the strategy based on reranking
+resulted in a significant performance boost, it re-
+mains to be seen whether a higher accuracy can
+be achieved by developing a more sophisticated
+inference algorithm based on dynamic program-
+ming. However, while the development of such
+an algorithm is an interesting problem, it will not
+necessarily result in a more usable system – when
+using a reranker, it is easy to trade accuracy for
+efficiency.
+</bodyText>
+<page confidence="0.998092">
+74
+</page>
+<sectionHeader confidence="0.998506" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.9999629">
+The research leading to these results has received
+funding from the European Community’s Sev-
+enth Framework Programme (FP7/2007-2013) un-
+der grant agreement 231126: LivingKnowledge –
+Facts, Opinions and Bias in Time, and from Trust-
+worthy Eternal Systems via Evolving Software,
+Data and Knowledge (EternalS, project number
+FP7 247758). In addition, we would like to thank
+Eric Breck for clarifying his results and experi-
+mental setup.
+</bodyText>
+<sectionHeader confidence="0.998966" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999025673913043">
+Collin F. Baker, Charles J. Fillmore, and John B. Lowe.
+1998. The Berkeley FrameNet Project. In Proceed-
+ings of COLING/ACL-1998.
+Roberto Basili, Marco Cammisa, and Alessandro Mos-
+chitti. 2005. Effective use of WordNet seman-
+tics via kernel-based learning. In Proceedings of
+CoNLL-2005, pages 1–8, Ann Arbor, Michigan.
+Roberto Basili, Marco Cammisa, and Alessandro Mos-
+chitti. 2006. A semantic kernel to classify texts with
+very few training examples. In in Informatica, an in-
+ternationaljournal of Computing and Informatics.
+Steven Bethard, Hong Yu, Ashley Thornton, Vasileios
+Hatzivassiloglou, and Dan Jurafsky. 2005. Extract-
+ing opinion propositions and opinion holders using
+syntactic and lexical cues. In James G. Shanahan,
+Yan Qu, and Janyce Wiebe, editors, Computing Atti-
+tude and Affect in Text: Theory and Applications.
+Stephan Bloehdorn and Alessandro Moschitti. 2007a.
+Combined syntactic and semantic kernels for text
+classification. In Proceedings of ECIR 2007, Rome,
+Italy.
+Stephan Bloehdorn and Alessandro Moschitti. 2007b.
+Structure and semantics for expressive text kernels.
+In In Proceedings of CIKM ’07.
+Stephan Bloehdorn, Roberto Basili, Marco Cammisa,
+and Alessandro Moschitti. 2006. Semantic kernels
+for text classification based on topological measures
+of feature similarity. In Proceedings of ICDM 06,
+Hong Kong, 2006.
+Eric Breck, Yejin Choi, and Claire Cardie. 2007. Iden-
+tifying expressions of opinion in context. In Pro-
+ceedings ofIJCAI-2007, Hyderabad, India.
+Yejin Choi, Eric Breck, and Claire Cardie. 2006. Joint
+extraction of entities and relations for opinion recog-
+nition. In Proceedings of EMNLP 2006.
+Michael Collins and Nigel Duffy. 2002. New rank-
+ing algorithms for parsing and tagging: Kernels over
+discrete structures, and the voted perceptron. In Pro-
+ceedings ofACL’02.
+Michael Collins. 2002. Discriminative training meth-
+ods for hidden Markov models: Theory and ex-
+periments with perceptron algorithms. In Proceed-
+ings of the 2002 Conference on Empirical Methods
+in Natural Language Processing (EMNLP 2002),
+pages 1–8.
+Koby Crammer, Ofer Dekel, Joseph Keshet, Shai
+Shalev-Schwartz, and Yoram Singer. 2006. Online
+passive-aggressive algorithms. Journal of Machine
+Learning Research, 2006(7):551–585.
+William Croft. 2005. Radical and typological argu-
+ments for radical construction grammar. In J.-O.
+¨Ostman and M. Fried, editors, Construction Gram-
+mars: Cognitive grounding and theoretical exten-
+sions.
+Marco Dinarelli, Alessandro Moschitti, and Giuseppe
+Riccardi. 2009. Re-ranking models based-on small
+training data for spoken language understanding.
+In Proceedings of the 2009 Conference on Empiri-
+cal Methods in Natural Language Processing, pages
+1076–1085, Singapore, August.
+Rong-En Fan, Kai-Wei Chang, Cho-Jui Hsieh, Xiang-
+Rui Wang, and Chih-Jen Lin. 2008. LIBLINEAR:
+A library for large linear classification. Journal of
+Machine Learning Research, 9:1871–1874.
+Yoav Freund and Robert E. Schapire. 1999. Large
+margin classification using the perceptron algorithm.
+Machine Learning, 37(3):277–296.
+Ana-Maria Giuglea and Alessandro Moschitti. 2004.
+Knowledge Discovering using FrameNet, VerbNet
+and PropBank. In In Proceedings of the Workshop
+on Ontology and Knowledge Discovering at ECML
+2004, Pisa, Italy.
+Ana-Maria Giuglea and Alessandro Moschitti. 2006.
+Semantic role labeling via FrameNet, VerbNet and
+PropBank. In Proceedings of the 21st International
+Conference on Computational Linguistics and 44th
+Annual Meeting of the Association for Computa-
+tional Linguistics, pages 929–936, Sydney, Aus-
+tralia, July.
+Liang Huang. 2008. Forest reranking: Discriminative
+parsing with non-local features. In Proceedings of
+ACL-08: HLT, pages 586–594, Columbus, United
+States.
+Thorsten Joachims. 1999. Making large-scale SVM
+learning practical. Advances in Kernel Methods –
+Support Vector Learning, 13.
+Richard Johansson and Pierre Nugues. 2008a.
+Dependency-based syntactic–semantic analysis with
+PropBank and NomBank. In CoNLL 2008: Pro-
+ceedings of the Twelfth Conference on Natural
+Language Learning, pages 183–187, Manchester,
+United Kingdom.
+</reference>
+<page confidence="0.979409">
+75
+</page>
+<reference confidence="0.999918666666666">
+Richard Johansson and Pierre Nugues. 2008b. The
+effect of syntactic representation on semantic role
+labeling. In Proceedings of the 22nd International
+Conference on Computational Linguistics (Coling
+2008), pages 393–400, Manchester, UK.
+Mahesh Joshi and Carolyn Penstein-Ros´e. 2009. Gen-
+eralizing dependency features for opinion mining.
+In Proceedings ofACL/IJCNLP 2009, Short Papers
+Track.
+Jussi Karlgren, Gunnar Eriksson, Magnus Sahlgren,
+and Oscar T¨ackstr¨om. 2010. Between bags
+and trees – constructional patterns in text used for
+attitude identification. In Proceedings of ECIR
+2010, 32nd European Conference on Information
+Retrieval, Milton Keynes, United Kingdom.
+Soo-Min Kim and Eduard Hovy. 2006. Extract-
+ing opinions, opinion holders, and topics expressed
+in online news media text. In Proceedings of
+ACL/COLING Workshop on Sentiment and Subjec-
+tivity in Text.
+Nozomi Kobayashi, Kentaro Inui, and Yuji Matsumoto.
+2007. Extracting aspect-evaluation and aspect-of re-
+lations in opinion mining. In Proceedings of Con-
+ference on Empirical Methods in Natural Language
+Processing (EMNLP-CoNLL-2007).
+Igor A. Mel’cuk. 1988. Dependency Syntax: Theory
+and Practice. State University Press of New York,
+Albany.
+Adam Meyers, Ruth Reeves, Catherine Macleod,
+Rachel Szekely, Veronika Zielinska, Brian Young,
+and Ralph Grishman. 2004. The NomBank project:
+An interim report. In HLT-NAACL 2004 Work-
+shop: Frontiers in Corpus Annotation, pages 24–31,
+Boston, United States.
+Alessandro Moschitti and Roberto Basili. 2004. Com-
+plex linguistic features for text classification: A
+comprehensive study. In Proceedings ofECIR.
+Alessandro Moschitti. 2006. Making tree kernels prac-
+tical for natural language learning. In Proccedings
+ofEACL’06.
+Alessandro Moschitti. 2008. Kernel methods, syntax
+and semantics for relational text categorization. In
+Proceeding of CIKM ’08, NY, USA.
+Truc-Vien T. Nguyen, Alessandro Moschitti, and
+Giuseppe Riccardi. 2009. Convolution kernels on
+constituent, dependency and sequential structures
+for relation extraction. In Proceedings of EMNLP.
+Martha Palmer, Dan Gildea, and Paul Kingsbury. 2005.
+The proposition bank: An annotated corpus of se-
+mantic roles. Computational Linguistics, 31(1):71–
+105.
+Bo Pang, Lillian Lee, and Shivakumar Vaithyanathan.
+2002. Thumbs up? Sentiment classification us-
+ing machine learning techniques. In Proceedings of
+EMNLP.
+JosefRuppenhofer, Swapna Somasundaran, and Janyce
+Wiebe. 2008. Finding the sources and targets of
+subjective expressions. In Proceedings ofLREC.
+Libin Shen and Aravind Joshi. 2003. An SVM based
+voting algorithm with application to parse reranking.
+In Proceedings of the CoNLL.
+Swapna Somasundaran, Galileo Namata, Janyce
+Wiebe, and Lise Getoor. 2009. Supervised and
+unsupervised methods in employing discourse rela-
+tions for improving opinion polarity classification.
+In Proceedings ofEMNLP 2009: conference on Em-
+pirical Methods in Natural Language Processing.
+Jun Suzuki, Tsutomu Hirao, Yutaka Sasaki, and Eisaku
+Maeda. 2003. Hierarchical directed acyclic graph
+kernel: Methods for structured natural language
+data. In Proceedings of the 41th Annual Meeting of
+Association for Computational Linguistics (ACL).
+Erik F. Tjong Kim Sang and Jorn Veenstra. 1999. Rep-
+resenting text chunks. In Proceedings of EACL99,
+pages 173–179, Bergen, Norway.
+Iannis Tsochantaridis, Thorsten Joachims, Thomas
+Hofmann, and Yasemin Altun. 2005. Large margin
+methods for structured and interdependent output
+variables. Journal of Machine Learning Research,
+6(Sep):1453–1484.
+Janyce Wiebe, Rebecca Bruce, and Thomas O’Hara.
+1999. Development and use of a gold standard data
+set for subjectivity classifications. In Proceedings
+of the 37th Annual Meeting of the Association for
+Computational Linguistics.
+Janyce Wiebe, Theresa Wilson, and Claire Cardie.
+2005. Annotating expressions of opinions and emo-
+tions in language. Language Resources and Evalu-
+ation, 39(2-3):165–210.
+Michael Wiegand and Dietrich Klakow. 2010. Con-
+volution kernels for opinion holder extraction. In
+Proceedings ofHLT-NAACL 2010. To appear.
+Theresa Wilson, Janyce Wiebe, and Paul Hoff-
+mann. 2005. Recognizing contextual polarity in
+phrase-level sentiment analysis. In Proceedings of
+HLT/EMNLP 2005.
+Yuanbin Wu, Qi Zhang, Xuanjing Huang, and Lide Wu.
+2009. Phrase dependency parsing for opinion min-
+ing. In Proceedings of EMNLP.
+Hong Yu and Vasileios Hatzivassiloglou. 2003. To-
+wards answering opinion questions: Separating facts
+from opinions and identifying the polarity of opin-
+ion sentences. In Proceedings of the Conference on
+Empirical Methods in Natural Language Processing
+(EMNLP-2003), pages 129–136, Sapporo, Japan.
+Min Zhang, Jie Zhang, and Jian Su. 2006. Exploring
+Syntactic Features for Relation Extraction using a
+Convolution tree kernel. In Proceedings ofNAACL.
+</reference>
+<page confidence="0.991822">
+76
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.705545">
+<title confidence="0.999876">Syntactic and Semantic Structure for Opinion Expression Detection</title>
+<author confidence="0.974406">Johansson</author>
+<affiliation confidence="0.8589935">DISI, University of Via Sommarive 14 Povo, 38123 Trento (TN),</affiliation>
+<abstract confidence="0.9996503">demonstrate that features derived from dependency-syntactic and semantic role structures are useful for the task of detecting opinionated expressions in natural-language text, significantly improving over conventional models based on sequence labeling with local features. These features allow us to model the way expressions a sentence over arbitrary distances. While the relational features make the prediction task more computationally expensive, we show that it can be tackled effectively by using a reranker. We evaluate a number of machine learning approaches for the reranker, and the best model results in a 10-point absolute improvement in soft recall on the MPQA corpus, while decreasing precision only slightly.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Collin F Baker</author>
+<author>Charles J Fillmore</author>
+<author>John B Lowe</author>
+</authors>
+<title>The Berkeley FrameNet Project.</title>
+<date>1998</date>
+<booktitle>In Proceedings of COLING/ACL-1998.</booktitle>
+<contexts>
+<context position="31532" citStr="Baker et al., 1998" startWordPosition="5184" endWordPosition="5187">t al., 2006). However, the similarity between subjective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resulted in a significant performance boost, it remains to be seen whether a higher accuracy can be achieved by developing a more sophisticated inference algorithm based on dynamic programming. However, while the development of such an algorithm is an interesting problem, it will not necessarily result in a more usable system – when using a reranker, it is easy to trade accurac</context>
+</contexts>
+<marker>Baker, Fillmore, Lowe, 1998</marker>
+<rawString>Collin F. Baker, Charles J. Fillmore, and John B. Lowe. 1998. The Berkeley FrameNet Project. In Proceedings of COLING/ACL-1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Roberto Basili</author>
+<author>Marco Cammisa</author>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>Effective use of WordNet semantics via kernel-based learning.</title>
+<date>2005</date>
+<booktitle>In Proceedings of CoNLL-2005,</booktitle>
+<pages>1--8</pages>
+<location>Ann Arbor, Michigan.</location>
+<contexts>
+<context position="30880" citStr="Basili et al., 2005" startWordPosition="5088" endWordPosition="5091">for the reranker and concluded that the structural learning framework seemed to give the best performance. We were not able to achieve the same performance using tree kernels as with manually extracted features. It is possible that this could be improved with a better strategy for representing dependency structure for tree kernels, or if the tree kernels could be incorporated into the structural learning framework. The flexible architecture we have presented enables interesting future research: (i) a straightforward improvement is the use of lexical similarity to reduce data sparseness, e.g. (Basili et al., 2005; Basili et al., 2006; Bloehdorn et al., 2006). However, the similarity between subjective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such </context>
+</contexts>
+<marker>Basili, Cammisa, Moschitti, 2005</marker>
+<rawString>Roberto Basili, Marco Cammisa, and Alessandro Moschitti. 2005. Effective use of WordNet semantics via kernel-based learning. In Proceedings of CoNLL-2005, pages 1–8, Ann Arbor, Michigan.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Roberto Basili</author>
+<author>Marco Cammisa</author>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>A semantic kernel to classify texts with very few training examples.</title>
+<date>2006</date>
+<booktitle>In in Informatica, an internationaljournal of Computing and Informatics.</booktitle>
+<contexts>
+<context position="30901" citStr="Basili et al., 2006" startWordPosition="5092" endWordPosition="5095">concluded that the structural learning framework seemed to give the best performance. We were not able to achieve the same performance using tree kernels as with manually extracted features. It is possible that this could be improved with a better strategy for representing dependency structure for tree kernels, or if the tree kernels could be incorporated into the structural learning framework. The flexible architecture we have presented enables interesting future research: (i) a straightforward improvement is the use of lexical similarity to reduce data sparseness, e.g. (Basili et al., 2005; Basili et al., 2006; Bloehdorn et al., 2006). However, the similarity between subjective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in Fra</context>
+</contexts>
+<marker>Basili, Cammisa, Moschitti, 2006</marker>
+<rawString>Roberto Basili, Marco Cammisa, and Alessandro Moschitti. 2006. A semantic kernel to classify texts with very few training examples. In in Informatica, an internationaljournal of Computing and Informatics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Steven Bethard</author>
+<author>Hong Yu</author>
+<author>Ashley Thornton</author>
+<author>Vasileios Hatzivassiloglou</author>
+<author>Dan Jurafsky</author>
+</authors>
+<title>Extracting opinion propositions and opinion holders using syntactic and lexical cues.</title>
+<date>2005</date>
+<booktitle>Computing Attitude and Affect in Text: Theory and Applications.</booktitle>
+<editor>In James G. Shanahan, Yan Qu, and Janyce Wiebe, editors,</editor>
+<contexts>
+<context position="6674" citStr="Bethard et al., 2005" startWordPosition="1001" endWordPosition="1004">dency parse trees. They found that the most prominent constructional feature for subjectivity analysis was the Tense Shift construction. While the position by Karlgren et al. (2010) – that constructional features signal opinion – originates from a particular theoretical framework and may be controversial, syntactic and shallowsemantic relations have repeatedly proven useful for subtasks of subjectivity analysis that are inherently relational, above all for determining the holder or topic of a given opinion. Works using syntactic features to extract topics and holders of opinions are numerous (Bethard et al., 2005; Kobayashi et al., 2007; Joshi and Penstein-Ros´e, 2009; Wu et al., 2009). Semantic role analysis has also proven useful: Kim and Hovy (2006) used a FrameNet-based semantic role labeler to determine holder and topic of opinions. Similarly, Choi et al. (2006) successfully used a PropBank-based semantic role labeler for opinion holder extraction, and Wiegand and Klakow (2010) recently applied tree kernel learning methods on a combination of syntactic and semantic role trees for the same task. Ruppenhofer et al. (2008) argued that semantic role techniques are useful but not completely sufficient</context>
+</contexts>
+<marker>Bethard, Yu, Thornton, Hatzivassiloglou, Jurafsky, 2005</marker>
+<rawString>Steven Bethard, Hong Yu, Ashley Thornton, Vasileios Hatzivassiloglou, and Dan Jurafsky. 2005. Extracting opinion propositions and opinion holders using syntactic and lexical cues. In James G. Shanahan, Yan Qu, and Janyce Wiebe, editors, Computing Attitude and Affect in Text: Theory and Applications.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stephan Bloehdorn</author>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>Combined syntactic and semantic kernels for text classification.</title>
+<date>2007</date>
+<booktitle>In Proceedings of ECIR 2007,</booktitle>
+<location>Rome, Italy.</location>
+<contexts>
+<context position="31157" citStr="Bloehdorn and Moschitti, 2007" startWordPosition="5128" endWordPosition="5131">r strategy for representing dependency structure for tree kernels, or if the tree kernels could be incorporated into the structural learning framework. The flexible architecture we have presented enables interesting future research: (i) a straightforward improvement is the use of lexical similarity to reduce data sparseness, e.g. (Basili et al., 2005; Basili et al., 2006; Bloehdorn et al., 2006). However, the similarity between subjective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resul</context>
+</contexts>
+<marker>Bloehdorn, Moschitti, 2007</marker>
+<rawString>Stephan Bloehdorn and Alessandro Moschitti. 2007a. Combined syntactic and semantic kernels for text classification. In Proceedings of ECIR 2007, Rome, Italy.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stephan Bloehdorn</author>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>Structure and semantics for expressive text kernels. In</title>
+<date>2007</date>
+<booktitle>In Proceedings of CIKM ’07.</booktitle>
+<contexts>
+<context position="31157" citStr="Bloehdorn and Moschitti, 2007" startWordPosition="5128" endWordPosition="5131">r strategy for representing dependency structure for tree kernels, or if the tree kernels could be incorporated into the structural learning framework. The flexible architecture we have presented enables interesting future research: (i) a straightforward improvement is the use of lexical similarity to reduce data sparseness, e.g. (Basili et al., 2005; Basili et al., 2006; Bloehdorn et al., 2006). However, the similarity between subjective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resul</context>
+</contexts>
+<marker>Bloehdorn, Moschitti, 2007</marker>
+<rawString>Stephan Bloehdorn and Alessandro Moschitti. 2007b. Structure and semantics for expressive text kernels. In In Proceedings of CIKM ’07.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stephan Bloehdorn</author>
+<author>Roberto Basili</author>
+<author>Marco Cammisa</author>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>Semantic kernels for text classification based on topological measures of feature similarity.</title>
+<date>2006</date>
+<booktitle>In Proceedings of ICDM 06,</booktitle>
+<location>Hong Kong,</location>
+<contexts>
+<context position="30926" citStr="Bloehdorn et al., 2006" startWordPosition="5096" endWordPosition="5099">ructural learning framework seemed to give the best performance. We were not able to achieve the same performance using tree kernels as with manually extracted features. It is possible that this could be improved with a better strategy for representing dependency structure for tree kernels, or if the tree kernels could be incorporated into the structural learning framework. The flexible architecture we have presented enables interesting future research: (i) a straightforward improvement is the use of lexical similarity to reduce data sparseness, e.g. (Basili et al., 2005; Basili et al., 2006; Bloehdorn et al., 2006). However, the similarity between subjective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al.</context>
+</contexts>
+<marker>Bloehdorn, Basili, Cammisa, Moschitti, 2006</marker>
+<rawString>Stephan Bloehdorn, Roberto Basili, Marco Cammisa, and Alessandro Moschitti. 2006. Semantic kernels for text classification based on topological measures of feature similarity. In Proceedings of ICDM 06, Hong Kong, 2006.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eric Breck</author>
+<author>Yejin Choi</author>
+<author>Claire Cardie</author>
+</authors>
+<title>Identifying expressions of opinion in context.</title>
+<date>2007</date>
+<booktitle>In Proceedings ofIJCAI-2007,</booktitle>
+<location>Hyderabad, India.</location>
+<contexts>
+<context position="2976" citStr="Breck et al., 2007" startWordPosition="448" endWordPosition="451">atements, which are referred to as objective speech events (OSEs). Examples (1) and (2) show two sentences from the MPQA corpus where DSEs and ESEs have been manually annotated. (1) For instance, he [denounced]DSE as a [human rights violation]ESE the banning and seizure of satellite dishes in Iran. (2) This [is viewed]DSE as the [main impediment]ESE to the establishment of political order in the country . The task of marking up these expressions has usually been approached using straightforward sequence labeling techniques using simple features in a small contextual window (Choi et al., 2006; Breck et al., 2007). However, due to the simplicity of the feature sets, this approach fails to take into account the fact that the semantic and pragmatic interpretation of sentences is not only determined by words but also by syntactic and shallow-semantic relations. Crucially, taking grammatical relations into account allows us to model how expressions interact in various ways that influence their interpretation as subjective or not. Consider, for instance, the word said in examples (3) and (4) below, where the interpretation as a DSE or an OSE is influenced by the subjective content of the enclosed statement.</context>
+<context position="7844" citStr="Breck et al., 2007" startWordPosition="1183" endWordPosition="1186">chniques are useful but not completely sufficient for holder and topic identification, and that other linguistic phenomena must be studied as well. One such linguistic pheonomenon is the discourse structure, which has recently attracted some attention in the opinion analysis community (Somasundaran et al., 2009). 3 Opinion Expression Detection Using Syntactic and Semantic Structures Previous systems for opinionated expression markup have typically used simple feature sets which have allowed the use of efficient off-theshelf sequence labeling methods based on Viterbi search (Choi et al., 2006; Breck et al., 2007). This is not possible in our case since we would like to extract structural, relational features that involve pairs of opinionated expressions and may apply over an arbitrarily long distance in the sentence. While it is possible that search algorithms for exact or approximate inference can be constructured for the arg max problem in this model, we sidestepped this issue by using a reranking decomposition of the problem: We first apply a standard Viterbi-based sequence labeler using no structural features and generate a small candidate set of size k. Then, a second and more complex model picks</context>
+<context position="20808" citStr="Breck et al., 2007" startWordPosition="3395" endWordPosition="3398"> of a corresponding entity in the gold standard; there is thus no reward for close matches. However, since the boundaries of the spans annotated in the MPQA corpus are not strictly defined in the annotation guidelines (Wiebe et al., 2005), measuring precision and recall using exact boundary scoring will result in figures that are too low to be indicative of the usefulness of the system. Therefore, most work using this corpus instead use overlap-based precision and recall measures, where a span is counted as correctly detected if it overlaps with a span in the gold standard (Choi et al., 2006; Breck et al., 2007). As pointed out by Breck et al. (2007), this is problematic since it will tend to reward long spans – for instance, a span covering the whole sentence will always be counted as correct if the gold standard contains any span for that sentence. The precision and recall measures proposed here correct the problem with overlap-based measures: If the system proposes a span covering the whole sentence, the span coverage will be low and result in a low soft precision. Note that our measures are bounded below by the exact measures and above by the overlap-based measures. 4.2 Reranking Approaches We co</context>
+<context position="27056" citStr="Breck et al. (2007)" startWordPosition="4456" endWordPosition="4459">deed achieves a performance well above the baseline. However, its performance is below that of any reranker using structural features. In addition, we see no improvement when adding label pair features to the structural feature set; this is to be expected since the label pair information is subsumed by the structural features. System P R F Baseline 63.36 46.77 53.82 Label pairs 62.05 52.68 56.98 All syntactic 62.45 53.19 57.45 All semantic 61.26 53.85 57.31 Syn + sem 61.02 55.67 58.22 Syn + sem + pairs 61.61 54.78 57.99 Table 5: Structural features compared to label pairs. 4.5 Comparison with Breck et al. (2007) Comparison of systems in opinion expression detection is often nontrivial since evaluation settings have differed widely. Since our problem setting – marking up and labeling opinion expressions in the MPQA corpus – is most similar to that described by Breck et al. (2007), we carried out an evaluation using the setting used in their experiment. For compatibility with their experimental setup, this experiment differed from the ones described in the previous sections in the following ways: • The system did not need to distinguish DSEs and ESEs and did not have to detect the OSEs. • The results w</context>
+<context position="28365" citStr="Breck et al. (2007)" startWordPosition="4684" endWordPosition="4687">pointed out in Section 4.1. 73 • Instead of the training/test split we used in the previous evaluations, the systems were evaluated using a 10-fold cross-validation over the same set of 400 documents as used in Breck’s experiment. Again, our reranker uses the PA method with a k of 64. Table 6 shows the results. System P R F Breck et al. (2007) 71.64 74.70 73.05 Baseline 80.85 64.38 71.68 Reranked 76.40 78.23 77.30 Table 6: Results using the Breck et al. (2007) evaluation setting. We see that the performance of our system is clearly higher – in both precision and recall – than that reported by Breck et al. (2007). This shows again that the structural features are effective for the task of finding opinionated expressions. We note that the performance of our baseline sequence labeler is lower than theirs; this is to be expected since they used a more complex batch learning algorithm (conditional random fields) while we used an online learner, and they spent more effort on feature design. This indicates that we should be able to achieve even higher performance using a stronger base model. 5 Conclusion We have shown that features derived from grammatical and semantic role structure can be used to improve </context>
+</contexts>
+<marker>Breck, Choi, Cardie, 2007</marker>
+<rawString>Eric Breck, Yejin Choi, and Claire Cardie. 2007. Identifying expressions of opinion in context. In Proceedings ofIJCAI-2007, Hyderabad, India.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yejin Choi</author>
+<author>Eric Breck</author>
+<author>Claire Cardie</author>
+</authors>
+<title>Joint extraction of entities and relations for opinion recognition.</title>
+<date>2006</date>
+<booktitle>In Proceedings of EMNLP</booktitle>
+<contexts>
+<context position="2955" citStr="Choi et al., 2006" startWordPosition="444" endWordPosition="447">r non-subjective statements, which are referred to as objective speech events (OSEs). Examples (1) and (2) show two sentences from the MPQA corpus where DSEs and ESEs have been manually annotated. (1) For instance, he [denounced]DSE as a [human rights violation]ESE the banning and seizure of satellite dishes in Iran. (2) This [is viewed]DSE as the [main impediment]ESE to the establishment of political order in the country . The task of marking up these expressions has usually been approached using straightforward sequence labeling techniques using simple features in a small contextual window (Choi et al., 2006; Breck et al., 2007). However, due to the simplicity of the feature sets, this approach fails to take into account the fact that the semantic and pragmatic interpretation of sentences is not only determined by words but also by syntactic and shallow-semantic relations. Crucially, taking grammatical relations into account allows us to model how expressions interact in various ways that influence their interpretation as subjective or not. Consider, for instance, the word said in examples (3) and (4) below, where the interpretation as a DSE or an OSE is influenced by the subjective content of th</context>
+<context position="6933" citStr="Choi et al. (2006)" startWordPosition="1043" endWordPosition="1046">eoretical framework and may be controversial, syntactic and shallowsemantic relations have repeatedly proven useful for subtasks of subjectivity analysis that are inherently relational, above all for determining the holder or topic of a given opinion. Works using syntactic features to extract topics and holders of opinions are numerous (Bethard et al., 2005; Kobayashi et al., 2007; Joshi and Penstein-Ros´e, 2009; Wu et al., 2009). Semantic role analysis has also proven useful: Kim and Hovy (2006) used a FrameNet-based semantic role labeler to determine holder and topic of opinions. Similarly, Choi et al. (2006) successfully used a PropBank-based semantic role labeler for opinion holder extraction, and Wiegand and Klakow (2010) recently applied tree kernel learning methods on a combination of syntactic and semantic role trees for the same task. Ruppenhofer et al. (2008) argued that semantic role techniques are useful but not completely sufficient for holder and topic identification, and that other linguistic phenomena must be studied as well. One such linguistic pheonomenon is the discourse structure, which has recently attracted some attention in the opinion analysis community (Somasundaran et al., </context>
+<context position="20787" citStr="Choi et al., 2006" startWordPosition="3391" endWordPosition="3394">ches the boundaries of a corresponding entity in the gold standard; there is thus no reward for close matches. However, since the boundaries of the spans annotated in the MPQA corpus are not strictly defined in the annotation guidelines (Wiebe et al., 2005), measuring precision and recall using exact boundary scoring will result in figures that are too low to be indicative of the usefulness of the system. Therefore, most work using this corpus instead use overlap-based precision and recall measures, where a span is counted as correctly detected if it overlaps with a span in the gold standard (Choi et al., 2006; Breck et al., 2007). As pointed out by Breck et al. (2007), this is problematic since it will tend to reward long spans – for instance, a span covering the whole sentence will always be counted as correct if the gold standard contains any span for that sentence. The precision and recall measures proposed here correct the problem with overlap-based measures: If the system proposes a span covering the whole sentence, the span coverage will be low and result in a low soft precision. Note that our measures are bounded below by the exact measures and above by the overlap-based measures. 4.2 Reran</context>
+</contexts>
+<marker>Choi, Breck, Cardie, 2006</marker>
+<rawString>Yejin Choi, Eric Breck, and Claire Cardie. 2006. Joint extraction of entities and relations for opinion recognition. In Proceedings of EMNLP 2006.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+<author>Nigel Duffy</author>
+</authors>
+<title>New ranking algorithms for parsing and tagging: Kernels over discrete structures, and the voted perceptron.</title>
+<date>2002</date>
+<booktitle>In Proceedings ofACL’02.</booktitle>
+<contexts>
+<context position="17059" citStr="Collins and Duffy (2002)" startWordPosition="2718" endWordPosition="2721">quence labeler score. TOP ROOT VBD−DS a Figure 3: Representation of a dependency tree with opinion expressions for tree kernels. 3.5 Structure Learning Approach The Preference Kernel approach reduces the reranking problem to a binary classification task on pairs, after which a standard SVM optimizer is used to train the reranker. A problem with this method is that the optimization problem solved by the SVM – maximizing the classification accuracy on a set of independent pairs – is not directly related to the performance of the reranker. Instead, the method employed by many rerankers following Collins and Duffy (2002) directly learn a scoring function that is trained to maximize performance on the reranking task. We will refer to this approach as the structure learning method. While there are batch learning algorithms that work in this setting (Tsochantaridis et al., 2005), online learning methods have been more popular for efficiency reasons. We investigated two online learning algorithms: the popular structured perceptron Collins and Duffy (2002) and the Passive– Aggressive (PA) algorithm (Crammer et al., 2006). To increase robustness, we averaged the weight vectors seen during training as in the Voted P</context>
+</contexts>
+<marker>Collins, Duffy, 2002</marker>
+<rawString>Michael Collins and Nigel Duffy. 2002. New ranking algorithms for parsing and tagging: Kernels over discrete structures, and the voted perceptron. In Proceedings ofACL’02.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>Discriminative training methods for hidden Markov models: Theory and experiments with perceptron algorithms.</title>
+<date>2002</date>
+<booktitle>In Proceedings of the 2002 Conference on Empirical Methods in Natural Language Processing (EMNLP</booktitle>
+<pages>1--8</pages>
+<contexts>
+<context position="4498" citStr="Collins, 2002" startWordPosition="679" endWordPosition="680">iers disembarked from an Antonov transport plane carrying military equipment, an African diplomat [said]OSE. In this paper, we demonstrate how syntactic and semantic structural information can be used to improve opinion detection. While this feature model makes it impossible to use the standard sequence labeling method, we show that with a simple strategy based on reranking, incorporating structural features results in a significant improvement. We investigate two different reranking strategies: the Preference Kernel approach (Shen and Joshi, 2003) and an approach based on structure learning (Collins, 2002). In an evaluation on the MPQA corpus, the best system we evaluated, a structure learning-based reranker using the Passive–Aggressive learning algorithm, achieved a 10-point absolute improvement in soft recall, and a 5-point improvement in F-measure, over the baseline sequence labeler. 2 Motivation and Related Work Most approaches to analysing the sentiment of natural-language text have relied fundamentally on purely lexical information (see (Pang et al., 2002; Yu and Hatzivassiloglou, 2003), inter alia) or low-level grammatical information such as partof-speech tags and functional words (Wieb</context>
+<context position="10197" citStr="Collins (2002)" startWordPosition="1569" endWordPosition="1570">ed is a DSE and liar is an ESE, has been annotated with dependency syntax (above the text) and PropBank-based semantic role structure (below the text). The predicate called, which is an instance of the PropBank frame call.01, has three semantic arguments: the Agent (A0), the Theme (A1), and the Predicate (A2), which are realized on the surface-syntactic level as a subject, a direct object, and an object predicative complement, respectively. OPRD call.01 Figure 1: Syntactic and shallow semantic structure. 3.2 Sequence Labeler We implemented a standard sequence labeler following the approach of Collins (2002), while training the model using the Passive–Aggressive algorithm (Crammer et al., 2006) instead of the perceptron. We encoded the opinionated expression brackets using the IOB2 encoding scheme (Tjong Kim Sang and Veenstra, 1999). Figure 2 shows an example of a sentence with a DSE and an ESE and how they are encoded in the IOB2 encoding. This O is O viewed B-DSE as O the O main B-ESE impediment I-ESE Figure 2: Sequence labeling example. The sequence labeler used word, POS tag, and lemma features in a window of size 3. In addition, we used prior polarity and intensity features derived from the </context>
+</contexts>
+<marker>Collins, 2002</marker>
+<rawString>Michael Collins. 2002. Discriminative training methods for hidden Markov models: Theory and experiments with perceptron algorithms. In Proceedings of the 2002 Conference on Empirical Methods in Natural Language Processing (EMNLP 2002), pages 1–8.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Koby Crammer</author>
+<author>Ofer Dekel</author>
+<author>Joseph Keshet</author>
+<author>Shai Shalev-Schwartz</author>
+<author>Yoram Singer</author>
+</authors>
+<title>Online passive-aggressive algorithms.</title>
+<date>2006</date>
+<journal>Journal of Machine Learning Research,</journal>
+<volume>2006</volume>
+<issue>7</issue>
+<contexts>
+<context position="10285" citStr="Crammer et al., 2006" startWordPosition="1579" endWordPosition="1582">the text) and PropBank-based semantic role structure (below the text). The predicate called, which is an instance of the PropBank frame call.01, has three semantic arguments: the Agent (A0), the Theme (A1), and the Predicate (A2), which are realized on the surface-syntactic level as a subject, a direct object, and an object predicative complement, respectively. OPRD call.01 Figure 1: Syntactic and shallow semantic structure. 3.2 Sequence Labeler We implemented a standard sequence labeler following the approach of Collins (2002), while training the model using the Passive–Aggressive algorithm (Crammer et al., 2006) instead of the perceptron. We encoded the opinionated expression brackets using the IOB2 encoding scheme (Tjong Kim Sang and Veenstra, 1999). Figure 2 shows an example of a sentence with a DSE and an ESE and how they are encoded in the IOB2 encoding. This O is O viewed B-DSE as O the O main B-ESE impediment I-ESE Figure 2: Sequence labeling example. The sequence labeler used word, POS tag, and lemma features in a window of size 3. In addition, we used prior polarity and intensity features derived from the lexicon created by Wilson et al. (2005). In the example, viewed is listed as having stro</context>
+<context position="17564" citStr="Crammer et al., 2006" startWordPosition="2795" endWordPosition="2798">o the performance of the reranker. Instead, the method employed by many rerankers following Collins and Duffy (2002) directly learn a scoring function that is trained to maximize performance on the reranking task. We will refer to this approach as the structure learning method. While there are batch learning algorithms that work in this setting (Tsochantaridis et al., 2005), online learning methods have been more popular for efficiency reasons. We investigated two online learning algorithms: the popular structured perceptron Collins and Duffy (2002) and the Passive– Aggressive (PA) algorithm (Crammer et al., 2006). To increase robustness, we averaged the weight vectors seen during training as in the Voted Perceptron (Freund and Schapire, 1999). The difference between the two algorithms is the way the weight vector is incremented in each step. In the perceptron, for a given input x, we update based on the difference between the correct 2http://svmlight.joachims.org output y and the predicted output ˆy, where Φ is the feature representation function: yˆ ← arg maxh w · Φ(x, h) w ← w + Φ(x, y) − Φ(x, ˆy) In the PA algorithm, which is based on the theory of large-margin learning, we instead find the yˆ that</context>
+</contexts>
+<marker>Crammer, Dekel, Keshet, Shalev-Schwartz, Singer, 2006</marker>
+<rawString>Koby Crammer, Ofer Dekel, Joseph Keshet, Shai Shalev-Schwartz, and Yoram Singer. 2006. Online passive-aggressive algorithms. Journal of Machine Learning Research, 2006(7):551–585.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>William Croft</author>
+</authors>
+<title>Radical and typological arguments for radical construction grammar.</title>
+<date>2005</date>
+<editor>In J.-O. ¨Ostman and M. Fried, editors,</editor>
+<contexts>
+<context position="5640" citStr="Croft, 2005" startWordPosition="849" endWordPosition="850">ical information such as partof-speech tags and functional words (Wiebe et al., 1999). This is in line with the general consensus in the information retrieval community that very little can be gained by complex linguistic processing for tasks such as text categorization and search (Moschitti and Basili, 2004). However, it has been suggested that subjectivity analysis is inherently more subtle than categorization and that structural linguistic information should therefore be given more attention in this context. For instance, Karlgren et al. (2010) argued from a Construction Grammar viewpoint (Croft, 2005) that grammatical constructions not only connect words, but can also be viewed as lexical items in their own right. Starting from this intuition, they showed that incorporating construction items into a bag-of-words feature representation resulted in improved results on a number of coarse-grained opinion analysis tasks. These constructional features were domain-independent and were manually extracted from dependency parse trees. They found that the most prominent constructional feature for subjectivity analysis was the Tense Shift construction. While the position by Karlgren et al. (2010) – th</context>
+</contexts>
+<marker>Croft, 2005</marker>
+<rawString>William Croft. 2005. Radical and typological arguments for radical construction grammar. In J.-O. ¨Ostman and M. Fried, editors, Construction Grammars: Cognitive grounding and theoretical extensions.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Marco Dinarelli</author>
+<author>Alessandro Moschitti</author>
+<author>Giuseppe Riccardi</author>
+</authors>
+<title>Re-ranking models based-on small training data for spoken language understanding.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing,</booktitle>
+<pages>1076--1085</pages>
+<location>Singapore,</location>
+<contexts>
+<context position="31423" citStr="Dinarelli et al., 2009" startWordPosition="5167" endWordPosition="5170">e use of lexical similarity to reduce data sparseness, e.g. (Basili et al., 2005; Basili et al., 2006; Bloehdorn et al., 2006). However, the similarity between subjective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resulted in a significant performance boost, it remains to be seen whether a higher accuracy can be achieved by developing a more sophisticated inference algorithm based on dynamic programming. However, while the development of such an algorithm is an interesting problem</context>
+</contexts>
+<marker>Dinarelli, Moschitti, Riccardi, 2009</marker>
+<rawString>Marco Dinarelli, Alessandro Moschitti, and Giuseppe Riccardi. 2009. Re-ranking models based-on small training data for spoken language understanding. In Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing, pages 1076–1085, Singapore, August.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Rong-En Fan</author>
+<author>Kai-Wei Chang</author>
+<author>Cho-Jui Hsieh</author>
+<author>XiangRui Wang</author>
+<author>Chih-Jen Lin</author>
+</authors>
+<title>LIBLINEAR: A library for large linear classification.</title>
+<date>2008</date>
+<journal>Journal of Machine Learning Research,</journal>
+<pages>9--1871</pages>
+<contexts>
+<context position="15244" citStr="Fan et al., 2008" startWordPosition="2423" endWordPosition="2426">t if we have a kernel K over the candidate space T, we can construct a valid kernel PK over the space of pairs T x T as follows: PK(h1, h2) = K(h11, h12) + K(h21, h22) − K(h1 1, h2 2) − K(h2 1,h1 2), where hi are the pairs of hypotheses (h1i , h2i ) generated by the base model. This makes it possible to use kernel methods to train the reranker. We tried two types of kernels: linear kernels and tree kernels. 3.4.1 Linear Kernel We created feature vectors extracted from the candidate sequences using the features described in Section 3.3. We then trained linear SVMs using the LIBLINEAR software (Fan et al., 2008), using L1 loss and L2 regularization. 3.4.2 Tree Kernel Tree kernels have been successful for a number of structure extraction tasks, such as relation extraction (Zhang et al., 2006; Nguyen et al., 2009) and opinion holder extraction (Wiegand and Klakow, 2010). A tree kernel implicitly represents a large space of fragments extracted from trees and could thus reduce the need for manual feature design. Since the paths that we extract manually (Section 3.3) can be expressed as tree fragments, this method could be an interesting alternative to the manually extracted features used with the linear </context>
+</contexts>
+<marker>Fan, Chang, Hsieh, Wang, Lin, 2008</marker>
+<rawString>Rong-En Fan, Kai-Wei Chang, Cho-Jui Hsieh, XiangRui Wang, and Chih-Jen Lin. 2008. LIBLINEAR: A library for large linear classification. Journal of Machine Learning Research, 9:1871–1874.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yoav Freund</author>
+<author>Robert E Schapire</author>
+</authors>
+<title>Large margin classification using the perceptron algorithm.</title>
+<date>1999</date>
+<booktitle>Machine Learning,</booktitle>
+<volume>37</volume>
+<issue>3</issue>
+<contexts>
+<context position="17696" citStr="Freund and Schapire, 1999" startWordPosition="2816" endWordPosition="2819">earn a scoring function that is trained to maximize performance on the reranking task. We will refer to this approach as the structure learning method. While there are batch learning algorithms that work in this setting (Tsochantaridis et al., 2005), online learning methods have been more popular for efficiency reasons. We investigated two online learning algorithms: the popular structured perceptron Collins and Duffy (2002) and the Passive– Aggressive (PA) algorithm (Crammer et al., 2006). To increase robustness, we averaged the weight vectors seen during training as in the Voted Perceptron (Freund and Schapire, 1999). The difference between the two algorithms is the way the weight vector is incremented in each step. In the perceptron, for a given input x, we update based on the difference between the correct 2http://svmlight.joachims.org output y and the predicted output ˆy, where Φ is the feature representation function: yˆ ← arg maxh w · Φ(x, h) w ← w + Φ(x, y) − Φ(x, ˆy) In the PA algorithm, which is based on the theory of large-margin learning, we instead find the yˆ that violates the margin constraints maximally. The update step length τ is computed based on the margin; this update is bounded by a re</context>
+</contexts>
+<marker>Freund, Schapire, 1999</marker>
+<rawString>Yoav Freund and Robert E. Schapire. 1999. Large margin classification using the perceptron algorithm. Machine Learning, 37(3):277–296.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ana-Maria Giuglea</author>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>Knowledge Discovering using FrameNet, VerbNet and PropBank. In</title>
+<date>2004</date>
+<booktitle>In Proceedings of the Workshop on Ontology and Knowledge Discovering at ECML 2004,</booktitle>
+<location>Pisa, Italy.</location>
+<contexts>
+<context position="31561" citStr="Giuglea and Moschitti, 2004" startWordPosition="5188" endWordPosition="5191">r, the similarity between subjective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resulted in a significant performance boost, it remains to be seen whether a higher accuracy can be achieved by developing a more sophisticated inference algorithm based on dynamic programming. However, while the development of such an algorithm is an interesting problem, it will not necessarily result in a more usable system – when using a reranker, it is easy to trade accuracy for efficiency. 74 Acknowle</context>
+</contexts>
+<marker>Giuglea, Moschitti, 2004</marker>
+<rawString>Ana-Maria Giuglea and Alessandro Moschitti. 2004. Knowledge Discovering using FrameNet, VerbNet and PropBank. In In Proceedings of the Workshop on Ontology and Knowledge Discovering at ECML 2004, Pisa, Italy.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ana-Maria Giuglea</author>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>Semantic role labeling via FrameNet, VerbNet and PropBank.</title>
+<date>2006</date>
+<booktitle>In Proceedings of the 21st International Conference on Computational Linguistics and 44th Annual Meeting of the Association for Computational Linguistics,</booktitle>
+<pages>929--936</pages>
+<location>Sydney, Australia,</location>
+<contexts>
+<context position="31590" citStr="Giuglea and Moschitti, 2006" startWordPosition="5192" endWordPosition="5195">jective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resulted in a significant performance boost, it remains to be seen whether a higher accuracy can be achieved by developing a more sophisticated inference algorithm based on dynamic programming. However, while the development of such an algorithm is an interesting problem, it will not necessarily result in a more usable system – when using a reranker, it is easy to trade accuracy for efficiency. 74 Acknowledgements The research leading</context>
+</contexts>
+<marker>Giuglea, Moschitti, 2006</marker>
+<rawString>Ana-Maria Giuglea and Alessandro Moschitti. 2006. Semantic role labeling via FrameNet, VerbNet and PropBank. In Proceedings of the 21st International Conference on Computational Linguistics and 44th Annual Meeting of the Association for Computational Linguistics, pages 929–936, Sydney, Australia, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Liang Huang</author>
+</authors>
+<title>Forest reranking: Discriminative parsing with non-local features.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL-08: HLT,</booktitle>
+<pages>586--594</pages>
+<location>Columbus, United States.</location>
+<contexts>
+<context position="9198" citStr="Huang, 2008" startWordPosition="1410" endWordPosition="1411">e complex approaches requiring advanced search techniques are mainly simplicity and efficiency: this approach is conceptually simple and fairly easy to implement provided that kbest output can be generated efficiently, and features can be arbitrarily complex – we don’t have to think about how the features affect the algorithmic complexity of the inference step. A common objection to reranking is that the candidate set may not be diverse enough to allow for much improvement unless it is very large; the candidates may be trivial variations that are all very similar to the top-scoring candidate (Huang, 2008). 3.1 Syntactic and Semantic Structures We used the syntactic–semantic parser by Johansson and Nugues (2008a) to annnotate the sentences with dependency syntax (Mel’ˇcuk, 1988) and shallow semantic structures in the PropBank (Palmer et al., 2005) and NomBank (Meyers et al., 2004) frameworks. Figure 1 shows an example of the annotation: The sentence they called him a liar, where called is a DSE and liar is an ESE, has been annotated with dependency syntax (above the text) and PropBank-based semantic role structure (below the text). The predicate called, which is an instance of the PropBank fram</context>
+</contexts>
+<marker>Huang, 2008</marker>
+<rawString>Liang Huang. 2008. Forest reranking: Discriminative parsing with non-local features. In Proceedings of ACL-08: HLT, pages 586–594, Columbus, United States.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Thorsten Joachims</author>
+</authors>
+<title>Making large-scale SVM learning practical.</title>
+<date>1999</date>
+<booktitle>Advances in Kernel Methods – Support Vector Learning,</booktitle>
+<volume>13</volume>
+<marker>Joachims, 1999</marker>
+<rawString>Thorsten Joachims. 1999. Making large-scale SVM learning practical. Advances in Kernel Methods – Support Vector Learning, 13.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Richard Johansson</author>
+<author>Pierre Nugues</author>
+</authors>
+<title>Dependency-based syntactic–semantic analysis with PropBank and NomBank.</title>
+<date>2008</date>
+<booktitle>In CoNLL 2008: Proceedings of the Twelfth Conference on Natural Language Learning,</booktitle>
+<pages>183--187</pages>
+<location>Manchester, United Kingdom.</location>
+<contexts>
+<context position="9305" citStr="Johansson and Nugues (2008" startWordPosition="1423" endWordPosition="1427">y: this approach is conceptually simple and fairly easy to implement provided that kbest output can be generated efficiently, and features can be arbitrarily complex – we don’t have to think about how the features affect the algorithmic complexity of the inference step. A common objection to reranking is that the candidate set may not be diverse enough to allow for much improvement unless it is very large; the candidates may be trivial variations that are all very similar to the top-scoring candidate (Huang, 2008). 3.1 Syntactic and Semantic Structures We used the syntactic–semantic parser by Johansson and Nugues (2008a) to annnotate the sentences with dependency syntax (Mel’ˇcuk, 1988) and shallow semantic structures in the PropBank (Palmer et al., 2005) and NomBank (Meyers et al., 2004) frameworks. Figure 1 shows an example of the annotation: The sentence they called him a liar, where called is a DSE and liar is an ESE, has been annotated with dependency syntax (above the text) and PropBank-based semantic role structure (below the text). The predicate called, which is an instance of the PropBank frame call.01, has three semantic arguments: the Agent (A0), the Theme (A1), and the Predicate (A2), which are </context>
+<context position="31618" citStr="Johansson and Nugues, 2008" startWordPosition="5196" endWordPosition="5200">tiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resulted in a significant performance boost, it remains to be seen whether a higher accuracy can be achieved by developing a more sophisticated inference algorithm based on dynamic programming. However, while the development of such an algorithm is an interesting problem, it will not necessarily result in a more usable system – when using a reranker, it is easy to trade accuracy for efficiency. 74 Acknowledgements The research leading to these results has receiv</context>
+</contexts>
+<marker>Johansson, Nugues, 2008</marker>
+<rawString>Richard Johansson and Pierre Nugues. 2008a. Dependency-based syntactic–semantic analysis with PropBank and NomBank. In CoNLL 2008: Proceedings of the Twelfth Conference on Natural Language Learning, pages 183–187, Manchester, United Kingdom.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Richard Johansson</author>
+<author>Pierre Nugues</author>
+</authors>
+<title>The effect of syntactic representation on semantic role labeling.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 22nd International Conference on Computational Linguistics (Coling</booktitle>
+<pages>393--400</pages>
+<location>Manchester, UK.</location>
+<contexts>
+<context position="9305" citStr="Johansson and Nugues (2008" startWordPosition="1423" endWordPosition="1427">y: this approach is conceptually simple and fairly easy to implement provided that kbest output can be generated efficiently, and features can be arbitrarily complex – we don’t have to think about how the features affect the algorithmic complexity of the inference step. A common objection to reranking is that the candidate set may not be diverse enough to allow for much improvement unless it is very large; the candidates may be trivial variations that are all very similar to the top-scoring candidate (Huang, 2008). 3.1 Syntactic and Semantic Structures We used the syntactic–semantic parser by Johansson and Nugues (2008a) to annnotate the sentences with dependency syntax (Mel’ˇcuk, 1988) and shallow semantic structures in the PropBank (Palmer et al., 2005) and NomBank (Meyers et al., 2004) frameworks. Figure 1 shows an example of the annotation: The sentence they called him a liar, where called is a DSE and liar is an ESE, has been annotated with dependency syntax (above the text) and PropBank-based semantic role structure (below the text). The predicate called, which is an instance of the PropBank frame call.01, has three semantic arguments: the Agent (A0), the Theme (A1), and the Predicate (A2), which are </context>
+<context position="31618" citStr="Johansson and Nugues, 2008" startWordPosition="5196" endWordPosition="5200">tiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resulted in a significant performance boost, it remains to be seen whether a higher accuracy can be achieved by developing a more sophisticated inference algorithm based on dynamic programming. However, while the development of such an algorithm is an interesting problem, it will not necessarily result in a more usable system – when using a reranker, it is easy to trade accuracy for efficiency. 74 Acknowledgements The research leading to these results has receiv</context>
+</contexts>
+<marker>Johansson, Nugues, 2008</marker>
+<rawString>Richard Johansson and Pierre Nugues. 2008b. The effect of syntactic representation on semantic role labeling. In Proceedings of the 22nd International Conference on Computational Linguistics (Coling 2008), pages 393–400, Manchester, UK.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mahesh Joshi</author>
+<author>Carolyn Penstein-Ros´e</author>
+</authors>
+<title>Generalizing dependency features for opinion mining.</title>
+<date>2009</date>
+<booktitle>In Proceedings ofACL/IJCNLP 2009, Short Papers Track.</booktitle>
+<marker>Joshi, Penstein-Ros´e, 2009</marker>
+<rawString>Mahesh Joshi and Carolyn Penstein-Ros´e. 2009. Generalizing dependency features for opinion mining. In Proceedings ofACL/IJCNLP 2009, Short Papers Track.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jussi Karlgren</author>
+<author>Gunnar Eriksson</author>
+<author>Magnus Sahlgren</author>
+<author>Oscar T¨ackstr¨om</author>
+</authors>
+<title>Between bags and trees – constructional patterns in text used for attitude identification.</title>
+<date>2010</date>
+<booktitle>In Proceedings of ECIR 2010, 32nd European Conference on Information Retrieval,</booktitle>
+<location>Milton Keynes, United Kingdom.</location>
+<marker>Karlgren, Eriksson, Sahlgren, T¨ackstr¨om, 2010</marker>
+<rawString>Jussi Karlgren, Gunnar Eriksson, Magnus Sahlgren, and Oscar T¨ackstr¨om. 2010. Between bags and trees – constructional patterns in text used for attitude identification. In Proceedings of ECIR 2010, 32nd European Conference on Information Retrieval, Milton Keynes, United Kingdom.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Soo-Min Kim</author>
+<author>Eduard Hovy</author>
+</authors>
+<title>Extracting opinions, opinion holders, and topics expressed in online news media text.</title>
+<date>2006</date>
+<booktitle>In Proceedings of ACL/COLING Workshop on Sentiment and Subjectivity in Text.</booktitle>
+<contexts>
+<context position="6816" citStr="Kim and Hovy (2006)" startWordPosition="1024" endWordPosition="1027">the position by Karlgren et al. (2010) – that constructional features signal opinion – originates from a particular theoretical framework and may be controversial, syntactic and shallowsemantic relations have repeatedly proven useful for subtasks of subjectivity analysis that are inherently relational, above all for determining the holder or topic of a given opinion. Works using syntactic features to extract topics and holders of opinions are numerous (Bethard et al., 2005; Kobayashi et al., 2007; Joshi and Penstein-Ros´e, 2009; Wu et al., 2009). Semantic role analysis has also proven useful: Kim and Hovy (2006) used a FrameNet-based semantic role labeler to determine holder and topic of opinions. Similarly, Choi et al. (2006) successfully used a PropBank-based semantic role labeler for opinion holder extraction, and Wiegand and Klakow (2010) recently applied tree kernel learning methods on a combination of syntactic and semantic role trees for the same task. Ruppenhofer et al. (2008) argued that semantic role techniques are useful but not completely sufficient for holder and topic identification, and that other linguistic phenomena must be studied as well. One such linguistic pheonomenon is the disc</context>
+</contexts>
+<marker>Kim, Hovy, 2006</marker>
+<rawString>Soo-Min Kim and Eduard Hovy. 2006. Extracting opinions, opinion holders, and topics expressed in online news media text. In Proceedings of ACL/COLING Workshop on Sentiment and Subjectivity in Text.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Nozomi Kobayashi</author>
+<author>Kentaro Inui</author>
+<author>Yuji Matsumoto</author>
+</authors>
+<title>Extracting aspect-evaluation and aspect-of relations in opinion mining.</title>
+<date>2007</date>
+<booktitle>In Proceedings of Conference on Empirical Methods in Natural Language Processing (EMNLP-CoNLL-2007).</booktitle>
+<contexts>
+<context position="6698" citStr="Kobayashi et al., 2007" startWordPosition="1005" endWordPosition="1008">y found that the most prominent constructional feature for subjectivity analysis was the Tense Shift construction. While the position by Karlgren et al. (2010) – that constructional features signal opinion – originates from a particular theoretical framework and may be controversial, syntactic and shallowsemantic relations have repeatedly proven useful for subtasks of subjectivity analysis that are inherently relational, above all for determining the holder or topic of a given opinion. Works using syntactic features to extract topics and holders of opinions are numerous (Bethard et al., 2005; Kobayashi et al., 2007; Joshi and Penstein-Ros´e, 2009; Wu et al., 2009). Semantic role analysis has also proven useful: Kim and Hovy (2006) used a FrameNet-based semantic role labeler to determine holder and topic of opinions. Similarly, Choi et al. (2006) successfully used a PropBank-based semantic role labeler for opinion holder extraction, and Wiegand and Klakow (2010) recently applied tree kernel learning methods on a combination of syntactic and semantic role trees for the same task. Ruppenhofer et al. (2008) argued that semantic role techniques are useful but not completely sufficient for holder and topic id</context>
+</contexts>
+<marker>Kobayashi, Inui, Matsumoto, 2007</marker>
+<rawString>Nozomi Kobayashi, Kentaro Inui, and Yuji Matsumoto. 2007. Extracting aspect-evaluation and aspect-of relations in opinion mining. In Proceedings of Conference on Empirical Methods in Natural Language Processing (EMNLP-CoNLL-2007).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Igor A Mel’cuk</author>
+</authors>
+<title>Dependency Syntax: Theory and Practice.</title>
+<date>1988</date>
+<publisher>State University Press of</publisher>
+<location>New York, Albany.</location>
+<marker>Mel’cuk, 1988</marker>
+<rawString>Igor A. Mel’cuk. 1988. Dependency Syntax: Theory and Practice. State University Press of New York, Albany.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adam Meyers</author>
+<author>Ruth Reeves</author>
+<author>Catherine Macleod</author>
+<author>Rachel Szekely</author>
+<author>Veronika Zielinska</author>
+<author>Brian Young</author>
+<author>Ralph Grishman</author>
+</authors>
+<title>The NomBank project: An interim report.</title>
+<date>2004</date>
+<booktitle>In HLT-NAACL 2004 Workshop: Frontiers in Corpus Annotation,</booktitle>
+<pages>24--31</pages>
+<location>Boston, United States.</location>
+<contexts>
+<context position="9478" citStr="Meyers et al., 2004" startWordPosition="1451" endWordPosition="1454">ve to think about how the features affect the algorithmic complexity of the inference step. A common objection to reranking is that the candidate set may not be diverse enough to allow for much improvement unless it is very large; the candidates may be trivial variations that are all very similar to the top-scoring candidate (Huang, 2008). 3.1 Syntactic and Semantic Structures We used the syntactic–semantic parser by Johansson and Nugues (2008a) to annnotate the sentences with dependency syntax (Mel’ˇcuk, 1988) and shallow semantic structures in the PropBank (Palmer et al., 2005) and NomBank (Meyers et al., 2004) frameworks. Figure 1 shows an example of the annotation: The sentence they called him a liar, where called is a DSE and liar is an ESE, has been annotated with dependency syntax (above the text) and PropBank-based semantic role structure (below the text). The predicate called, which is an instance of the PropBank frame call.01, has three semantic arguments: the Agent (A0), the Theme (A1), and the Predicate (A2), which are realized on the surface-syntactic level as a subject, a direct object, and an object predicative complement, respectively. OPRD call.01 Figure 1: Syntactic and shallow seman</context>
+</contexts>
+<marker>Meyers, Reeves, Macleod, Szekely, Zielinska, Young, Grishman, 2004</marker>
+<rawString>Adam Meyers, Ruth Reeves, Catherine Macleod, Rachel Szekely, Veronika Zielinska, Brian Young, and Ralph Grishman. 2004. The NomBank project: An interim report. In HLT-NAACL 2004 Workshop: Frontiers in Corpus Annotation, pages 24–31, Boston, United States.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alessandro Moschitti</author>
+<author>Roberto Basili</author>
+</authors>
+<title>Complex linguistic features for text classification: A comprehensive study.</title>
+<date>2004</date>
+<booktitle>In Proceedings ofECIR.</booktitle>
+<contexts>
+<context position="5338" citStr="Moschitti and Basili, 2004" startWordPosition="802" endWordPosition="805">d a 5-point improvement in F-measure, over the baseline sequence labeler. 2 Motivation and Related Work Most approaches to analysing the sentiment of natural-language text have relied fundamentally on purely lexical information (see (Pang et al., 2002; Yu and Hatzivassiloglou, 2003), inter alia) or low-level grammatical information such as partof-speech tags and functional words (Wiebe et al., 1999). This is in line with the general consensus in the information retrieval community that very little can be gained by complex linguistic processing for tasks such as text categorization and search (Moschitti and Basili, 2004). However, it has been suggested that subjectivity analysis is inherently more subtle than categorization and that structural linguistic information should therefore be given more attention in this context. For instance, Karlgren et al. (2010) argued from a Construction Grammar viewpoint (Croft, 2005) that grammatical constructions not only connect words, but can also be viewed as lexical items in their own right. Starting from this intuition, they showed that incorporating construction items into a bag-of-words feature representation resulted in improved results on a number of coarse-grained </context>
+</contexts>
+<marker>Moschitti, Basili, 2004</marker>
+<rawString>Alessandro Moschitti and Roberto Basili. 2004. Complex linguistic features for text classification: A comprehensive study. In Proceedings ofECIR.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>Making tree kernels practical for natural language learning.</title>
+<date>2006</date>
+<booktitle>In Proccedings ofEACL’06.</booktitle>
+<contexts>
+<context position="15935" citStr="Moschitti, 2006" startWordPosition="2535" endWordPosition="2536">been successful for a number of structure extraction tasks, such as relation extraction (Zhang et al., 2006; Nguyen et al., 2009) and opinion holder extraction (Wiegand and Klakow, 2010). A tree kernel implicitly represents a large space of fragments extracted from trees and could thus reduce the need for manual feature design. Since the paths that we extract manually (Section 3.3) can be expressed as tree fragments, this method could be an interesting alternative to the manually extracted features used with the linear kernel. We therefore implemented a reranker using the Partial Tree Kernel (Moschitti, 2006), and we trained it using the SVMLight-TK software1, which is a modification of SVMLight (Joachims, 1Available at http://dit.unitn.it/∼moschitt 70 1999)2. It is still an open question how dependency trees should be represented for use with tree kernels (Suzuki et al., 2003; Nguyen et al., 2009); we used the representation shown in Figure 3. Note that we have concatenated the opinion expression labels to the POS tag nodes. We did not use any of the features from Section 3.3 except for the base sequence labeler score. TOP ROOT VBD−DS a Figure 3: Representation of a dependency tree with opinion e</context>
+<context position="31590" citStr="Moschitti, 2006" startWordPosition="5194" endWordPosition="5195">s, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resulted in a significant performance boost, it remains to be seen whether a higher accuracy can be achieved by developing a more sophisticated inference algorithm based on dynamic programming. However, while the development of such an algorithm is an interesting problem, it will not necessarily result in a more usable system – when using a reranker, it is easy to trade accuracy for efficiency. 74 Acknowledgements The research leading</context>
+</contexts>
+<marker>Moschitti, 2006</marker>
+<rawString>Alessandro Moschitti. 2006. Making tree kernels practical for natural language learning. In Proccedings ofEACL’06.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alessandro Moschitti</author>
+</authors>
+<title>Kernel methods, syntax and semantics for relational text categorization.</title>
+<date>2008</date>
+<booktitle>In Proceeding of CIKM ’08,</booktitle>
+<location>NY, USA.</location>
+<contexts>
+<context position="31377" citStr="Moschitti, 2008" startWordPosition="5161" endWordPosition="5162">i) a straightforward improvement is the use of lexical similarity to reduce data sparseness, e.g. (Basili et al., 2005; Basili et al., 2006; Bloehdorn et al., 2006). However, the similarity between subjective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resulted in a significant performance boost, it remains to be seen whether a higher accuracy can be achieved by developing a more sophisticated inference algorithm based on dynamic programming. However, while the development </context>
+</contexts>
+<marker>Moschitti, 2008</marker>
+<rawString>Alessandro Moschitti. 2008. Kernel methods, syntax and semantics for relational text categorization. In Proceeding of CIKM ’08, NY, USA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Truc-Vien T Nguyen</author>
+<author>Alessandro Moschitti</author>
+<author>Giuseppe Riccardi</author>
+</authors>
+<title>Convolution kernels on constituent, dependency and sequential structures for relation extraction.</title>
+<date>2009</date>
+<booktitle>In Proceedings of EMNLP.</booktitle>
+<contexts>
+<context position="15448" citStr="Nguyen et al., 2009" startWordPosition="2457" endWordPosition="2460">here hi are the pairs of hypotheses (h1i , h2i ) generated by the base model. This makes it possible to use kernel methods to train the reranker. We tried two types of kernels: linear kernels and tree kernels. 3.4.1 Linear Kernel We created feature vectors extracted from the candidate sequences using the features described in Section 3.3. We then trained linear SVMs using the LIBLINEAR software (Fan et al., 2008), using L1 loss and L2 regularization. 3.4.2 Tree Kernel Tree kernels have been successful for a number of structure extraction tasks, such as relation extraction (Zhang et al., 2006; Nguyen et al., 2009) and opinion holder extraction (Wiegand and Klakow, 2010). A tree kernel implicitly represents a large space of fragments extracted from trees and could thus reduce the need for manual feature design. Since the paths that we extract manually (Section 3.3) can be expressed as tree fragments, this method could be an interesting alternative to the manually extracted features used with the linear kernel. We therefore implemented a reranker using the Partial Tree Kernel (Moschitti, 2006), and we trained it using the SVMLight-TK software1, which is a modification of SVMLight (Joachims, 1Available at</context>
+<context position="31398" citStr="Nguyen et al., 2009" startWordPosition="5163" endWordPosition="5166">ard improvement is the use of lexical similarity to reduce data sparseness, e.g. (Basili et al., 2005; Basili et al., 2006; Bloehdorn et al., 2006). However, the similarity between subjective words, which have multiple senses against other words may negatively impact the system accuracy. Therefore, the use of the syntactic/semantic kernels, i.e. (Bloehdorn and Moschitti, 2007a; Bloehdorn and Moschitti, 2007b), to syntactically contextualize word similarities may improve the reranker accuracy. (ii) The latter can be further boosted by studying complex structural kernels, e.g. (Moschitti, 2008; Nguyen et al., 2009; Dinarelli et al., 2009). (iii) More specific predicate argument structures such those proposed in FrameNet, e.g. (Baker et al., 1998; Giuglea and Moschitti, 2004; Giuglea and Moschitti, 2006; Johansson and Nugues, 2008b) may be useful to characterize the opinion holder and the sentence semantic context. Finally, while the strategy based on reranking resulted in a significant performance boost, it remains to be seen whether a higher accuracy can be achieved by developing a more sophisticated inference algorithm based on dynamic programming. However, while the development of such an algorithm </context>
+</contexts>
+<marker>Nguyen, Moschitti, Riccardi, 2009</marker>
+<rawString>Truc-Vien T. Nguyen, Alessandro Moschitti, and Giuseppe Riccardi. 2009. Convolution kernels on constituent, dependency and sequential structures for relation extraction. In Proceedings of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Martha Palmer</author>
+<author>Dan Gildea</author>
+<author>Paul Kingsbury</author>
+</authors>
+<title>The proposition bank: An annotated corpus of semantic roles.</title>
+<date>2005</date>
+<journal>Computational Linguistics,</journal>
+<volume>31</volume>
+<issue>1</issue>
+<pages>105</pages>
+<contexts>
+<context position="9444" citStr="Palmer et al., 2005" startWordPosition="1445" endWordPosition="1448"> arbitrarily complex – we don’t have to think about how the features affect the algorithmic complexity of the inference step. A common objection to reranking is that the candidate set may not be diverse enough to allow for much improvement unless it is very large; the candidates may be trivial variations that are all very similar to the top-scoring candidate (Huang, 2008). 3.1 Syntactic and Semantic Structures We used the syntactic–semantic parser by Johansson and Nugues (2008a) to annnotate the sentences with dependency syntax (Mel’ˇcuk, 1988) and shallow semantic structures in the PropBank (Palmer et al., 2005) and NomBank (Meyers et al., 2004) frameworks. Figure 1 shows an example of the annotation: The sentence they called him a liar, where called is a DSE and liar is an ESE, has been annotated with dependency syntax (above the text) and PropBank-based semantic role structure (below the text). The predicate called, which is an instance of the PropBank frame call.01, has three semantic arguments: the Agent (A0), the Theme (A1), and the Predicate (A2), which are realized on the surface-syntactic level as a subject, a direct object, and an object predicative complement, respectively. OPRD call.01 Fig</context>
+</contexts>
+<marker>Palmer, Gildea, Kingsbury, 2005</marker>
+<rawString>Martha Palmer, Dan Gildea, and Paul Kingsbury. 2005. The proposition bank: An annotated corpus of semantic roles. Computational Linguistics, 31(1):71– 105.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Bo Pang</author>
+<author>Lillian Lee</author>
+<author>Shivakumar Vaithyanathan</author>
+</authors>
+<title>Thumbs up? Sentiment classification using machine learning techniques.</title>
+<date>2002</date>
+<booktitle>In Proceedings of EMNLP.</booktitle>
+<contexts>
+<context position="4962" citStr="Pang et al., 2002" startWordPosition="744" endWordPosition="747">ate two different reranking strategies: the Preference Kernel approach (Shen and Joshi, 2003) and an approach based on structure learning (Collins, 2002). In an evaluation on the MPQA corpus, the best system we evaluated, a structure learning-based reranker using the Passive–Aggressive learning algorithm, achieved a 10-point absolute improvement in soft recall, and a 5-point improvement in F-measure, over the baseline sequence labeler. 2 Motivation and Related Work Most approaches to analysing the sentiment of natural-language text have relied fundamentally on purely lexical information (see (Pang et al., 2002; Yu and Hatzivassiloglou, 2003), inter alia) or low-level grammatical information such as partof-speech tags and functional words (Wiebe et al., 1999). This is in line with the general consensus in the information retrieval community that very little can be gained by complex linguistic processing for tasks such as text categorization and search (Moschitti and Basili, 2004). However, it has been suggested that subjectivity analysis is inherently more subtle than categorization and that structural linguistic information should therefore be given more attention in this context. For instance, Kar</context>
+</contexts>
+<marker>Pang, Lee, Vaithyanathan, 2002</marker>
+<rawString>Bo Pang, Lillian Lee, and Shivakumar Vaithyanathan. 2002. Thumbs up? Sentiment classification using machine learning techniques. In Proceedings of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Swapna Somasundaran JosefRuppenhofer</author>
+<author>Janyce Wiebe</author>
+</authors>
+<title>Finding the sources and targets of subjective expressions.</title>
+<date>2008</date>
+<booktitle>In Proceedings ofLREC.</booktitle>
+<marker>JosefRuppenhofer, Wiebe, 2008</marker>
+<rawString>JosefRuppenhofer, Swapna Somasundaran, and Janyce Wiebe. 2008. Finding the sources and targets of subjective expressions. In Proceedings ofLREC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Libin Shen</author>
+<author>Aravind Joshi</author>
+</authors>
+<title>An SVM based voting algorithm with application to parse reranking.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the CoNLL.</booktitle>
+<contexts>
+<context position="4438" citStr="Shen and Joshi, 2003" startWordPosition="667" endWordPosition="670"> and [punish]ESE them,” he [said]DSE. (4) On Monday, 80 Libyan soldiers disembarked from an Antonov transport plane carrying military equipment, an African diplomat [said]OSE. In this paper, we demonstrate how syntactic and semantic structural information can be used to improve opinion detection. While this feature model makes it impossible to use the standard sequence labeling method, we show that with a simple strategy based on reranking, incorporating structural features results in a significant improvement. We investigate two different reranking strategies: the Preference Kernel approach (Shen and Joshi, 2003) and an approach based on structure learning (Collins, 2002). In an evaluation on the MPQA corpus, the best system we evaluated, a structure learning-based reranker using the Passive–Aggressive learning algorithm, achieved a 10-point absolute improvement in soft recall, and a 5-point improvement in F-measure, over the baseline sequence labeler. 2 Motivation and Related Work Most approaches to analysing the sentiment of natural-language text have relied fundamentally on purely lexical information (see (Pang et al., 2002; Yu and Hatzivassiloglou, 2003), inter alia) or low-level grammatical infor</context>
+<context position="14185" citStr="Shen and Joshi, 2003" startWordPosition="2225" endWordPosition="2228">pression is connected to some argument inside another opinion expression, we use a feature consisting of the two expression labels and the argument label. For instance, the ESE liar is connected to the DSE call via an A2 label, and we represent this using a feature DSE:A2:ESE. Apart from the syntactic and semantic features, we also used the score output from the base sequence labeler as a feature. We normalized the scores over the k candidates so that their exponentials summed to 1. 3.4 Preference Kernel Approach The first reranking strategy we investigated was the Preference Kernel approach (Shen and Joshi, 2003). In this method, the reranking problem – learning to select the correct candidate h1 from a candidate set {h1, ... , hk} – is reduced to a binary classification problem by creating pairs: positive training instances (h1, h2), ... , (h1, hk) and negative instances (h2, h1),... , (hk, h1). This approach has the advantage that the abundant tools for binary machine learning can be exploited. It is also easy to show (Shen and Joshi, 2003) that if we have a kernel K over the candidate space T, we can construct a valid kernel PK over the space of pairs T x T as follows: PK(h1, h2) = K(h11, h12) + K(</context>
+</contexts>
+<marker>Shen, Joshi, 2003</marker>
+<rawString>Libin Shen and Aravind Joshi. 2003. An SVM based voting algorithm with application to parse reranking. In Proceedings of the CoNLL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Swapna Somasundaran</author>
+<author>Galileo Namata</author>
+<author>Janyce Wiebe</author>
+<author>Lise Getoor</author>
+</authors>
+<title>Supervised and unsupervised methods in employing discourse relations for improving opinion polarity classification.</title>
+<date>2009</date>
+<booktitle>In Proceedings ofEMNLP 2009: conference on Empirical Methods in Natural Language Processing.</booktitle>
+<contexts>
+<context position="7538" citStr="Somasundaran et al., 2009" startWordPosition="1138" endWordPosition="1141">y, Choi et al. (2006) successfully used a PropBank-based semantic role labeler for opinion holder extraction, and Wiegand and Klakow (2010) recently applied tree kernel learning methods on a combination of syntactic and semantic role trees for the same task. Ruppenhofer et al. (2008) argued that semantic role techniques are useful but not completely sufficient for holder and topic identification, and that other linguistic phenomena must be studied as well. One such linguistic pheonomenon is the discourse structure, which has recently attracted some attention in the opinion analysis community (Somasundaran et al., 2009). 3 Opinion Expression Detection Using Syntactic and Semantic Structures Previous systems for opinionated expression markup have typically used simple feature sets which have allowed the use of efficient off-theshelf sequence labeling methods based on Viterbi search (Choi et al., 2006; Breck et al., 2007). This is not possible in our case since we would like to extract structural, relational features that involve pairs of opinionated expressions and may apply over an arbitrarily long distance in the sentence. While it is possible that search algorithms for exact or approximate inference can be</context>
+</contexts>
+<marker>Somasundaran, Namata, Wiebe, Getoor, 2009</marker>
+<rawString>Swapna Somasundaran, Galileo Namata, Janyce Wiebe, and Lise Getoor. 2009. Supervised and unsupervised methods in employing discourse relations for improving opinion polarity classification. In Proceedings ofEMNLP 2009: conference on Empirical Methods in Natural Language Processing.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jun Suzuki</author>
+<author>Tsutomu Hirao</author>
+<author>Yutaka Sasaki</author>
+<author>Eisaku Maeda</author>
+</authors>
+<title>Hierarchical directed acyclic graph kernel: Methods for structured natural language data.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the 41th Annual Meeting of Association for Computational Linguistics (ACL).</booktitle>
+<contexts>
+<context position="16208" citStr="Suzuki et al., 2003" startWordPosition="2575" endWordPosition="2578">s and could thus reduce the need for manual feature design. Since the paths that we extract manually (Section 3.3) can be expressed as tree fragments, this method could be an interesting alternative to the manually extracted features used with the linear kernel. We therefore implemented a reranker using the Partial Tree Kernel (Moschitti, 2006), and we trained it using the SVMLight-TK software1, which is a modification of SVMLight (Joachims, 1Available at http://dit.unitn.it/∼moschitt 70 1999)2. It is still an open question how dependency trees should be represented for use with tree kernels (Suzuki et al., 2003; Nguyen et al., 2009); we used the representation shown in Figure 3. Note that we have concatenated the opinion expression labels to the POS tag nodes. We did not use any of the features from Section 3.3 except for the base sequence labeler score. TOP ROOT VBD−DS a Figure 3: Representation of a dependency tree with opinion expressions for tree kernels. 3.5 Structure Learning Approach The Preference Kernel approach reduces the reranking problem to a binary classification task on pairs, after which a standard SVM optimizer is used to train the reranker. A problem with this method is that the op</context>
+</contexts>
+<marker>Suzuki, Hirao, Sasaki, Maeda, 2003</marker>
+<rawString>Jun Suzuki, Tsutomu Hirao, Yutaka Sasaki, and Eisaku Maeda. 2003. Hierarchical directed acyclic graph kernel: Methods for structured natural language data. In Proceedings of the 41th Annual Meeting of Association for Computational Linguistics (ACL).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Erik F Tjong Kim Sang</author>
+<author>Jorn Veenstra</author>
+</authors>
+<title>Representing text chunks.</title>
+<date>1999</date>
+<booktitle>In Proceedings of EACL99,</booktitle>
+<pages>173--179</pages>
+<location>Bergen,</location>
+<contexts>
+<context position="10426" citStr="Sang and Veenstra, 1999" startWordPosition="1601" endWordPosition="1604">ll.01, has three semantic arguments: the Agent (A0), the Theme (A1), and the Predicate (A2), which are realized on the surface-syntactic level as a subject, a direct object, and an object predicative complement, respectively. OPRD call.01 Figure 1: Syntactic and shallow semantic structure. 3.2 Sequence Labeler We implemented a standard sequence labeler following the approach of Collins (2002), while training the model using the Passive–Aggressive algorithm (Crammer et al., 2006) instead of the perceptron. We encoded the opinionated expression brackets using the IOB2 encoding scheme (Tjong Kim Sang and Veenstra, 1999). Figure 2 shows an example of a sentence with a DSE and an ESE and how they are encoded in the IOB2 encoding. This O is O viewed B-DSE as O the O main B-ESE impediment I-ESE Figure 2: Sequence labeling example. The sequence labeler used word, POS tag, and lemma features in a window of size 3. In addition, we used prior polarity and intensity features derived from the lexicon created by Wilson et al. (2005). In the example, viewed is listed as having strong prior subjectivity but no polarity, and impediment has strong prior subjectivity and negative polarity. Note that prior subjectivity does </context>
+</contexts>
+<marker>Sang, Veenstra, 1999</marker>
+<rawString>Erik F. Tjong Kim Sang and Jorn Veenstra. 1999. Representing text chunks. In Proceedings of EACL99, pages 173–179, Bergen, Norway.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Iannis Tsochantaridis</author>
+<author>Thorsten Joachims</author>
+<author>Thomas Hofmann</author>
+<author>Yasemin Altun</author>
+</authors>
+<title>Large margin methods for structured and interdependent output variables.</title>
+<date>2005</date>
+<journal>Journal of Machine Learning Research,</journal>
+<pages>6--1453</pages>
+<contexts>
+<context position="17319" citStr="Tsochantaridis et al., 2005" startWordPosition="2760" endWordPosition="2763"> pairs, after which a standard SVM optimizer is used to train the reranker. A problem with this method is that the optimization problem solved by the SVM – maximizing the classification accuracy on a set of independent pairs – is not directly related to the performance of the reranker. Instead, the method employed by many rerankers following Collins and Duffy (2002) directly learn a scoring function that is trained to maximize performance on the reranking task. We will refer to this approach as the structure learning method. While there are batch learning algorithms that work in this setting (Tsochantaridis et al., 2005), online learning methods have been more popular for efficiency reasons. We investigated two online learning algorithms: the popular structured perceptron Collins and Duffy (2002) and the Passive– Aggressive (PA) algorithm (Crammer et al., 2006). To increase robustness, we averaged the weight vectors seen during training as in the Voted Perceptron (Freund and Schapire, 1999). The difference between the two algorithms is the way the weight vector is incremented in each step. In the perceptron, for a given input x, we update based on the difference between the correct 2http://svmlight.joachims.o</context>
+<context position="22837" citStr="Tsochantaridis et al., 2005" startWordPosition="3729" endWordPosition="3732">79 57.04 Table 1: Evaluation of reranking architectures and learning methods. representation – on the other hand, we did not need to spend much time on parameter tuning and feature design for the other rerankers. In addition, we note that the best performance was obtained using the PA algorithm and the structure learning architecture. The PA algorithm is a simple online learning method and still outperforms the SVM used in the preference-kernel reranker. This suggests that the structure learning approach is superior for this task. It is possible that a batch learning method such as SVMstruct (Tsochantaridis et al., 2005) could improve the results even further. 4.3 Candidate Set Size In any method based on reranking, it is important to study the influence of the candidate set size on the quality of the reranked output. In addition, an interesting question is what the upper bound on reranker performance is – the oracle performance. Table 2 shows the result of an experiment that investigates these questions. We used the reranker based on the Passive–Aggressive method in this experiment since this reranker gave the best results in the previous experiment. k P Reranked F P Oracle F R R 1 63.36 46.77 53.82 63.36 46</context>
+</contexts>
+<marker>Tsochantaridis, Joachims, Hofmann, Altun, 2005</marker>
+<rawString>Iannis Tsochantaridis, Thorsten Joachims, Thomas Hofmann, and Yasemin Altun. 2005. Large margin methods for structured and interdependent output variables. Journal of Machine Learning Research, 6(Sep):1453–1484.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Janyce Wiebe</author>
+<author>Rebecca Bruce</author>
+<author>Thomas O’Hara</author>
+</authors>
+<title>Development and use of a gold standard data set for subjectivity classifications.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the 37th Annual Meeting of the Association for Computational Linguistics.</booktitle>
+<marker>Wiebe, Bruce, O’Hara, 1999</marker>
+<rawString>Janyce Wiebe, Rebecca Bruce, and Thomas O’Hara. 1999. Development and use of a gold standard data set for subjectivity classifications. In Proceedings of the 37th Annual Meeting of the Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Janyce Wiebe</author>
+<author>Theresa Wilson</author>
+<author>Claire Cardie</author>
+</authors>
+<title>Annotating expressions of opinions and emotions in language. Language Resources and Evaluation,</title>
+<date>2005</date>
+<pages>39--2</pages>
+<contexts>
+<context position="1669" citStr="Wiebe et al., 2005" startWordPosition="247" endWordPosition="250">ionated text – subjectivity analysis – is potentially useful for a number of natural language processing tasks. Examples include retrieval systems answering queries about how a particular person feels about a product or political question, and various types of market analysis tools such as review mining systems. A primary task in subjectivity analysis is to mark up the opinionated expressions, i.e. the text snippets signaling the subjective content of the text. This is necessary for further analysis, such as the determination of opinion holder and the polarity of the opinion. The MPQA corpus (Wiebe et al., 2005), a widely used corpus annotated with subjectivity information, defines two types of subjective expressions: direct subjective expressions (DSEs), which are explicit mentions of opinion, and expressive subjective elements (ESEs), which signal the attitude of the speaker by the choice of words. DSEs are often verbs of statement and categorization, where the opinion and its holder tend to be direct semantic arguments of the verb. ESEs, on the other hand, are less easy to categorize syntactically; prototypical examples would include value-expressing adjectives such as beautiful, biased, etc. In a</context>
+<context position="18813" citStr="Wiebe et al., 2005" startWordPosition="3023" endWordPosition="3026">ts maximally. The update step length τ is computed based on the margin; this update is bounded by a regularization constant C: yˆ ← arg maxh w · Φ (x, h) + �l ρ(y, h) τ ← min C, &apos;�/ C w(Φ(X&apos;y)—D(X&apos;Y))+ P(y,ˆy)1 11Φ(x,9)—D(X&apos;Y)11�J w ← w + τ(Φ(x, y) − Φ(x, ˆy)) The algorithm uses a cost function ρ. We used the function ρ(y, ˆy) = 1 − F(y, ˆy), where F is the soft F-measure described in Section 4.1. With this approach, the learning algorithm thus directly optimizes the measure we are interested in, i.e. the F-measure. 4 Experiments We carried out the experiments on version 2 of the MPQA corpus (Wiebe et al., 2005), which we split into a test set (150 documents, 3,743 sentences) and a training set (541 documents, 12,010 sentences). 4.1 Evaluation Metrics Since expression boundaries are hard to define exactly in annotation guidelines (Wiebe et al., 2005), we used soft precision and recall measures to score the quality of the system output. To derive the soft precision and recall, we first define the span coverage c of a span s with respect to another span s&apos;, which measures how well s&apos; is covered by s: c(s, s&apos;) = |s ∩ s&apos;| the intersection ∩ gives the set of tokens that two spans have in common. Since our</context>
+<context position="20427" citStr="Wiebe et al., 2005" startWordPosition="3326" endWordPosition="3329"> 71 We now define the soft precision P and recall R of a proposed set of spans S� with respect to a gold standard set S as follows: P(S, S) = C(|S,|S) R(S, Note that the operator |· |counts spans in this formula. Conventionally, when measuring the quality of a system for an information extraction task, a predicted entity is counted as correct if it exactly matches the boundaries of a corresponding entity in the gold standard; there is thus no reward for close matches. However, since the boundaries of the spans annotated in the MPQA corpus are not strictly defined in the annotation guidelines (Wiebe et al., 2005), measuring precision and recall using exact boundary scoring will result in figures that are too low to be indicative of the usefulness of the system. Therefore, most work using this corpus instead use overlap-based precision and recall measures, where a span is counted as correctly detected if it overlaps with a span in the gold standard (Choi et al., 2006; Breck et al., 2007). As pointed out by Breck et al. (2007), this is problematic since it will tend to reward long spans – for instance, a span covering the whole sentence will always be counted as correct if the gold standard contains any</context>
+</contexts>
+<marker>Wiebe, Wilson, Cardie, 2005</marker>
+<rawString>Janyce Wiebe, Theresa Wilson, and Claire Cardie. 2005. Annotating expressions of opinions and emotions in language. Language Resources and Evaluation, 39(2-3):165–210.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Wiegand</author>
+<author>Dietrich Klakow</author>
+</authors>
+<title>Convolution kernels for opinion holder extraction.</title>
+<date>2010</date>
+<booktitle>In Proceedings ofHLT-NAACL</booktitle>
+<note>To appear.</note>
+<contexts>
+<context position="7051" citStr="Wiegand and Klakow (2010)" startWordPosition="1060" endWordPosition="1063">eful for subtasks of subjectivity analysis that are inherently relational, above all for determining the holder or topic of a given opinion. Works using syntactic features to extract topics and holders of opinions are numerous (Bethard et al., 2005; Kobayashi et al., 2007; Joshi and Penstein-Ros´e, 2009; Wu et al., 2009). Semantic role analysis has also proven useful: Kim and Hovy (2006) used a FrameNet-based semantic role labeler to determine holder and topic of opinions. Similarly, Choi et al. (2006) successfully used a PropBank-based semantic role labeler for opinion holder extraction, and Wiegand and Klakow (2010) recently applied tree kernel learning methods on a combination of syntactic and semantic role trees for the same task. Ruppenhofer et al. (2008) argued that semantic role techniques are useful but not completely sufficient for holder and topic identification, and that other linguistic phenomena must be studied as well. One such linguistic pheonomenon is the discourse structure, which has recently attracted some attention in the opinion analysis community (Somasundaran et al., 2009). 3 Opinion Expression Detection Using Syntactic and Semantic Structures Previous systems for opinionated express</context>
+<context position="15505" citStr="Wiegand and Klakow, 2010" startWordPosition="2465" endWordPosition="2468">erated by the base model. This makes it possible to use kernel methods to train the reranker. We tried two types of kernels: linear kernels and tree kernels. 3.4.1 Linear Kernel We created feature vectors extracted from the candidate sequences using the features described in Section 3.3. We then trained linear SVMs using the LIBLINEAR software (Fan et al., 2008), using L1 loss and L2 regularization. 3.4.2 Tree Kernel Tree kernels have been successful for a number of structure extraction tasks, such as relation extraction (Zhang et al., 2006; Nguyen et al., 2009) and opinion holder extraction (Wiegand and Klakow, 2010). A tree kernel implicitly represents a large space of fragments extracted from trees and could thus reduce the need for manual feature design. Since the paths that we extract manually (Section 3.3) can be expressed as tree fragments, this method could be an interesting alternative to the manually extracted features used with the linear kernel. We therefore implemented a reranker using the Partial Tree Kernel (Moschitti, 2006), and we trained it using the SVMLight-TK software1, which is a modification of SVMLight (Joachims, 1Available at http://dit.unitn.it/∼moschitt 70 1999)2. It is still an </context>
+</contexts>
+<marker>Wiegand, Klakow, 2010</marker>
+<rawString>Michael Wiegand and Dietrich Klakow. 2010. Convolution kernels for opinion holder extraction. In Proceedings ofHLT-NAACL 2010. To appear.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Theresa Wilson</author>
+<author>Janyce Wiebe</author>
+<author>Paul Hoffmann</author>
+</authors>
+<title>Recognizing contextual polarity in phrase-level sentiment analysis.</title>
+<date>2005</date>
+<booktitle>In Proceedings of HLT/EMNLP</booktitle>
+<contexts>
+<context position="10836" citStr="Wilson et al. (2005)" startWordPosition="1680" endWordPosition="1683">e model using the Passive–Aggressive algorithm (Crammer et al., 2006) instead of the perceptron. We encoded the opinionated expression brackets using the IOB2 encoding scheme (Tjong Kim Sang and Veenstra, 1999). Figure 2 shows an example of a sentence with a DSE and an ESE and how they are encoded in the IOB2 encoding. This O is O viewed B-DSE as O the O main B-ESE impediment I-ESE Figure 2: Sequence labeling example. The sequence labeler used word, POS tag, and lemma features in a window of size 3. In addition, we used prior polarity and intensity features derived from the lexicon created by Wilson et al. (2005). In the example, viewed is listed as having strong prior subjectivity but no polarity, and impediment has strong prior subjectivity and negative polarity. Note that prior subjectivity does not always imply subjectivity in a particular context; this is why contextual features are essential for this task. This sequence labeler is used to generate the candidate set for the reranker; the Viterbi algorithm is easily modified to give k-best output. To generate training data for the reranker, we carried out a 5-fold cross-validation procedure: We split the training set into 5 pieces, trained a seque</context>
+</contexts>
+<marker>Wilson, Wiebe, Hoffmann, 2005</marker>
+<rawString>Theresa Wilson, Janyce Wiebe, and Paul Hoffmann. 2005. Recognizing contextual polarity in phrase-level sentiment analysis. In Proceedings of HLT/EMNLP 2005.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yuanbin Wu</author>
+<author>Qi Zhang</author>
+<author>Xuanjing Huang</author>
+<author>Lide Wu</author>
+</authors>
+<title>Phrase dependency parsing for opinion mining.</title>
+<date>2009</date>
+<booktitle>In Proceedings of EMNLP.</booktitle>
+<contexts>
+<context position="6748" citStr="Wu et al., 2009" startWordPosition="1013" endWordPosition="1016">or subjectivity analysis was the Tense Shift construction. While the position by Karlgren et al. (2010) – that constructional features signal opinion – originates from a particular theoretical framework and may be controversial, syntactic and shallowsemantic relations have repeatedly proven useful for subtasks of subjectivity analysis that are inherently relational, above all for determining the holder or topic of a given opinion. Works using syntactic features to extract topics and holders of opinions are numerous (Bethard et al., 2005; Kobayashi et al., 2007; Joshi and Penstein-Ros´e, 2009; Wu et al., 2009). Semantic role analysis has also proven useful: Kim and Hovy (2006) used a FrameNet-based semantic role labeler to determine holder and topic of opinions. Similarly, Choi et al. (2006) successfully used a PropBank-based semantic role labeler for opinion holder extraction, and Wiegand and Klakow (2010) recently applied tree kernel learning methods on a combination of syntactic and semantic role trees for the same task. Ruppenhofer et al. (2008) argued that semantic role techniques are useful but not completely sufficient for holder and topic identification, and that other linguistic phenomena </context>
+</contexts>
+<marker>Wu, Zhang, Huang, Wu, 2009</marker>
+<rawString>Yuanbin Wu, Qi Zhang, Xuanjing Huang, and Lide Wu. 2009. Phrase dependency parsing for opinion mining. In Proceedings of EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hong Yu</author>
+<author>Vasileios Hatzivassiloglou</author>
+</authors>
+<title>Towards answering opinion questions: Separating facts from opinions and identifying the polarity of opinion sentences.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP-2003),</booktitle>
+<pages>129--136</pages>
+<location>Sapporo, Japan.</location>
+<contexts>
+<context position="4994" citStr="Yu and Hatzivassiloglou, 2003" startWordPosition="748" endWordPosition="751">eranking strategies: the Preference Kernel approach (Shen and Joshi, 2003) and an approach based on structure learning (Collins, 2002). In an evaluation on the MPQA corpus, the best system we evaluated, a structure learning-based reranker using the Passive–Aggressive learning algorithm, achieved a 10-point absolute improvement in soft recall, and a 5-point improvement in F-measure, over the baseline sequence labeler. 2 Motivation and Related Work Most approaches to analysing the sentiment of natural-language text have relied fundamentally on purely lexical information (see (Pang et al., 2002; Yu and Hatzivassiloglou, 2003), inter alia) or low-level grammatical information such as partof-speech tags and functional words (Wiebe et al., 1999). This is in line with the general consensus in the information retrieval community that very little can be gained by complex linguistic processing for tasks such as text categorization and search (Moschitti and Basili, 2004). However, it has been suggested that subjectivity analysis is inherently more subtle than categorization and that structural linguistic information should therefore be given more attention in this context. For instance, Karlgren et al. (2010) argued from </context>
+</contexts>
+<marker>Yu, Hatzivassiloglou, 2003</marker>
+<rawString>Hong Yu and Vasileios Hatzivassiloglou. 2003. Towards answering opinion questions: Separating facts from opinions and identifying the polarity of opinion sentences. In Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP-2003), pages 129–136, Sapporo, Japan.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Min Zhang</author>
+<author>Jie Zhang</author>
+<author>Jian Su</author>
+</authors>
+<title>Exploring Syntactic Features for Relation Extraction using a Convolution tree kernel.</title>
+<date>2006</date>
+<booktitle>In Proceedings ofNAACL.</booktitle>
+<contexts>
+<context position="15426" citStr="Zhang et al., 2006" startWordPosition="2453" endWordPosition="2456">2) − K(h2 1,h1 2), where hi are the pairs of hypotheses (h1i , h2i ) generated by the base model. This makes it possible to use kernel methods to train the reranker. We tried two types of kernels: linear kernels and tree kernels. 3.4.1 Linear Kernel We created feature vectors extracted from the candidate sequences using the features described in Section 3.3. We then trained linear SVMs using the LIBLINEAR software (Fan et al., 2008), using L1 loss and L2 regularization. 3.4.2 Tree Kernel Tree kernels have been successful for a number of structure extraction tasks, such as relation extraction (Zhang et al., 2006; Nguyen et al., 2009) and opinion holder extraction (Wiegand and Klakow, 2010). A tree kernel implicitly represents a large space of fragments extracted from trees and could thus reduce the need for manual feature design. Since the paths that we extract manually (Section 3.3) can be expressed as tree fragments, this method could be an interesting alternative to the manually extracted features used with the linear kernel. We therefore implemented a reranker using the Partial Tree Kernel (Moschitti, 2006), and we trained it using the SVMLight-TK software1, which is a modification of SVMLight (J</context>
+</contexts>
+<marker>Zhang, Zhang, Su, 2006</marker>
+<rawString>Min Zhang, Jie Zhang, and Jian Su. 2006. Exploring Syntactic Features for Relation Extraction using a Convolution tree kernel. In Proceedings ofNAACL.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

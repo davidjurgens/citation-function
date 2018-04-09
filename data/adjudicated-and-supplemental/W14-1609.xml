@@ -1,0 +1,1443 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.008762">
+<title confidence="0.9899">
+Lexicon Infused Phrase Embeddings for Named Entity Resolution
+</title>
+<author confidence="0.998827">
+Alexandre Passos, Vineet Kumar, Andrew McCallum
+</author>
+<affiliation confidence="0.999055">
+School of Computer Science
+University of Massachusetts, Amherst
+</affiliation>
+<email confidence="0.999386">
+{apassos,vineet,mccallum}@cs.umass.edu
+</email>
+<sectionHeader confidence="0.997398" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999918">
+Most state-of-the-art approaches for
+named-entity recognition (NER) use semi
+supervised information in the form of
+word clusters and lexicons. Recently
+neural network-based language models
+have been explored, as they as a byprod-
+uct generate highly informative vector
+representations for words, known as word
+embeddings. In this paper we present
+two contributions: a new form of learn-
+ing word embeddings that can leverage
+information from relevant lexicons to
+improve the representations, and the first
+system to use neural word embeddings
+to achieve state-of-the-art results on
+named-entity recognition in both CoNLL
+and Ontonotes NER. Our system achieves
+an F1 score of 90.90 on the test set for
+CoNLL 2003—significantly better than
+any previous system trained on public
+data, and matching a system employing
+massive private industrial query-log data.
+</bodyText>
+<sectionHeader confidence="0.999471" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.989404725490196">
+In many natural language processing tasks, such
+as named-entity recognition or coreference reso-
+lution, syntax alone is not enough to build a high
+performance system; some external source of in-
+formation is required. In most state-of-the-art
+systems for named-entity recognition (NER) this
+knowledge comes in two forms: domain-specific
+lexicons (lists of word types related to the de-
+sired named entity types) and word representa-
+tions (either clusterings or vectorial representa-
+tions of word types which capture some of their
+syntactic and semantic behavior and allow gener-
+alizing to unseen word types).
+Current state-of-the-art named entity recogni-
+tion systems use Brown clusters as the form of
+word representation (Ratinov and Roth, 2009;
+Turian et al., 2010; Miller et al., 2004; Brown et
+al., 1992), or other cluster-based representations
+computed from private data (Lin and Wu, 2009).
+While very attractive due to their simplicity, gen-
+erality, and hierarchical structure, Brown clusters
+are limited because the computational complex-
+ity of fitting a model scales quadratically with the
+number of words in the corpus, or the number of
+“base clusters” in some efficient implementations,
+making it infeasible to train it on large corpora or
+with millions of word types.
+Although some attempts have been made to
+train named-entity recognition systems with other
+forms of word representations, most notably those
+obtained from training neural language models
+(Turian et al., 2010; Collobert and Weston, 2008),
+these systems have historically underperformed
+simple applications of Brown clusters. A disad-
+vantage of neural language models is that, while
+they are inherently more scalable than Brown clus-
+ters, training large neural networks is still often
+expensive; for example, Turian et al (2010) re-
+port that some models took multiple days or weeks
+to produce acceptable representations. Moreover,
+language embeddings learned from neural net-
+works tend to behave in a “nonlinear” fashion, as
+they are trained to encourage a many-layered neu-
+ral network to assign high probability to the data.
+These neural networks can detect nonlinear rela-
+tionships between the embeddings, which is not
+possible in a log-linear model such as a condi-
+tional random field, and therefore limiting how
+much information from the embeddings can be ac-
+tually leveraged.
+Recently Mikolov et al (Mikolov et al., 2013a;
+</bodyText>
+<page confidence="0.976745">
+78
+</page>
+<note confidence="0.6972995">
+Proceedings of the Eighteenth Conference on Computational Language Learning, pages 78–86,
+Baltimore, Maryland USA, June 26-27 2014. c�2014 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.997311848484848">
+Mikolov et al., 2013b) proposed two simple log-
+linear language models, the CBOW model and the
+Skip-Gram model, that are simplifications of neu-
+ral language models, and which can be very effi-
+ciently trained on large amounts of data. For ex-
+ample it is possible to train a Skip-gram model
+over more than a billion tokens with a single ma-
+chine in less than half a day. These embeddings
+can also be trained on phrases instead of individual
+word types, allowing for fine granularity of mean-
+ing.
+In this paper we make the following contribu-
+tions. (1) We show how to extend the Skip-Gram
+language model by injecting supervisory train-
+ing signal from a collection of curated lexicons—
+effectively encouraging training to learn similar
+embeddings for phrases which occur in the same
+lexicons. (2) We demonstrate that this method
+outperforms a simple application of the Skip-
+Gram model on the semantic similarity task on
+which it was originally tested. (3) We show that
+a linear-chain CRF is able to successfully use
+these log-linearly-trained embeddings better than
+the other neural-network-trained embeddings. (4)
+We show that lexicon-infused embeddings let us
+easily build a new highest-performing named en-
+tity recognition system on CoNLL 2003 data
+(Tjong Kim Sang and De Meulder, 2003) which
+is trained using only publicly available data. (5)
+We also present results on the relatively under-
+studied Ontonotes NER task (Weischedel et al.,
+2011), where we show that our embeddings out-
+perform Brown clusters.
+</bodyText>
+<sectionHeader confidence="0.98747" genericHeader="introduction">
+2 Background and Related Work
+</sectionHeader>
+<subsectionHeader confidence="0.999897">
+2.1 Language models and word embeddings
+</subsectionHeader>
+<bodyText confidence="0.999649151515152">
+A statistical language model is a way to assign
+probabilities to all possible documents in a given
+language. Most such models can be classified
+in one of two categories: they can directly as-
+sign probabilities to sequences of word types, such
+as is done in n-gram models, or they can oper-
+ate in a lower-dimensional latent space, to which
+word types are mapped. While most state-of-
+the-art language models are n-gram models, the
+representations used in models of the latter cate-
+gory, henceforth referred to as “embeddings,” have
+been found to be useful in many NLP applications
+which don’t actually need a language model. The
+underlying intuition is that when language models
+compress the information about the word types in
+a latent space they capture much of the common-
+alities and differences between word types. Hence
+features extracted from these models then can gen-
+eralize better than features derived from the word
+types themselves.
+One simple language model that discovers use-
+ful embeddings is known as Brown clustering
+(Brown et al., 1992). A Brown clustering is a
+class-based bigram model in which (1) the prob-
+ability of a document is the product of the proba-
+bilities of its bigrams, (2) the probability of each
+bigram is the product of the probability of a bi-
+gram model over latent classes and the probability
+of each class generating the actual word types in
+the bigram, and (3) each word type has non-zero
+probability only on a single class. Given a one-to-
+one assignment of word types to classes, then, and
+a corpus of text, it is easy to estimate these proba-
+bilities with maximum likelihood by counting the
+frequencies of the different class bigrams and the
+frequencies of word tokens of each type in the cor-
+pus. The Brown clustering algorithm works by
+starting with an initial assignment of word types
+to classes (which is usually either one unique class
+per type or a small number of seed classes corre-
+sponding to the most frequent types in the corpus),
+and then iteratively selecting the pair of classes to
+merge that would lead to the highest post-merge
+log-likelihood, doing so until all classes have been
+merged. This process produces a hierarchical clus-
+tering of the word types in the corpus, and these
+clusterings have been found useful in many appli-
+cations (Ratinov and Roth, 2009; Koo et al., 2008;
+Miller et al., 2004). There are other similar models
+of distributional clustering of English words which
+can be similarly effective (Pereira et al., 1993).
+One limitation of Brown clusters is their com-
+putational complexity, as training takes O(kV 2 +
+N)x time to train, where k is the number of base
+clusters, V size of vocabulary, and N number of
+tokens. This is infeasible for large corpora with
+millions of word types.
+Another family of language models that pro-
+duces embeddings is the neural language mod-
+els. Neural language models generally work by
+mapping each word type to a vector in a low-
+dimensional vector space and assigning probabil-
+ities to n-grams by processing their embeddings
+in a neural network. Many different neural lan-
+guage models have been proposed (Bengio et al.,
+2003; Morin and Bengio, 2005; Bengio, 2008;
+</bodyText>
+<page confidence="0.997389">
+79
+</page>
+<bodyText confidence="0.9985036">
+Mnih and Hinton, 2008; Collobert and Weston,
+2008; Mikolov et al., 2010). While they can cap-
+ture the semantics of word types, and often gen-
+eralize better than n-gram models in terms of per-
+plexity, applying them to NLP tasks has generally
+been less successful than Brown clusters (Turian
+et al., 2010).
+Finally, there are algorithms for computing
+word embeddings which do not use language mod-
+els at all. A popular example is the CCA family of
+word embeddings (Dhillon et al., 2012; Dhillon et
+al., 2011), which work by choosing embeddings
+for a word type that capture the correlations be-
+tween the embeddings of word types which occur
+before and after this type.
+</bodyText>
+<figureCaption confidence="0.981858333333333">
+Figure 1: A binary Huffman tree. Circles repre-
+sent binary classifiers. Rectangles represent to-
+kens, which can be multi-word.
+</figureCaption>
+<figure confidence="0.99559075">
+...
+...
+...
+A An San Diego ... New York City
+</figure>
+<subsectionHeader confidence="0.996231">
+2.2 The Skip-gram Model
+</subsectionHeader>
+<bodyText confidence="0.999819053571429">
+A main limitation of neural language models is
+that they often have many parameters and slow
+training times. To mitigate this, Mikolov et
+al. (2013a; 2013b) recently proposed a family
+of log-linear language models inspired by neu-
+ral language models but designed for efficiency.
+These models operate on the assumption that, even
+though they are trained as language models, users
+will only look at their embeddings, and hence all
+they need is to produce good embeddings, and not
+high-accuracy language models.
+The most successful of these models is
+the skip-gram model, which computes the
+probability of each n-gram as the product of
+the conditional probabilities of each context
+word in the n-gram conditioned on its central
+word. For example, the probability for the n-
+gram “the cat ate my homework” is represented as
+P(the|ate)P(cat|ate)P(my|ate)P(homework|ate)
+To compute these conditional probabilities the
+model assigns an embedding to each word type
+and defines a binary tree of logistic regression
+classifiers with each word type as a leaf. Each
+classifier takes a word embedding as input and
+produces a probability for a binary decision cor-
+responding to a branch in the tree. Each leaf in the
+tree has a unique path from the root, which can be
+interpreted as a set of (classifier,label) pairs. The
+skip-gram model then computes a probability of a
+context word given a target word as the product of
+the probabilities, given the target word’s embed-
+dings, of all decisions on a path from the root to
+the leaf corresponding to the context word. Figure
+1 shows such a tree structured model.
+Given a tree, then, choosing embeddings emn
+and classifier parameters wcn
+i to maximize equa-
+tion (1) is a non-convex optimization problem
+which can be solved with stochastic gradient de-
+scent.
+The binary tree used in the model is com-
+monly estimated by computing a Huffman coding
+tree (Huffman, 1952) of the word types and their
+frequencies. We experimented with other tree esti-
+mation schemes but found no perceptible improve-
+.
+ment in the quality of the embeddings.
+It is possible to extend these embeddings to
+model phrases as well as tokens. To do so,
+Mikolov et al (2013b) use a phrase-building cri-
+terion based on the pointwise mutual information
+of bigrams. They perform multiple passes over
+a corpus to estimate trigrams and higher-order
+phrases. We instead consider candidate trigrams
+for all pairs of bigrams which have a high PMI
+and share a token.
+</bodyText>
+<subsectionHeader confidence="0.997404">
+2.3 Named Entity Recognition
+</subsectionHeader>
+<bodyText confidence="0.996660909090909">
+Named Entity Recognition (NER) is the task of
+finding all instances of explicitly named entities
+and their types in a given document. While
+The likelihood of the data, then, given a set N
+of n-grams, with mn being n-gram n’s middle-
+word, cn each context word, wcn
+i the parameters
+of the i-th classifier in the path from the root to
+cn in the tree, lcn iits label (either 1 or −1), ef the
+embedding of word type f, and σ is the logistic
+sigmoid function, is
+</bodyText>
+<equation confidence="0.954989714285714">
+rjσ(linwcnT emn). (1)
+i
+i
+ri
+n∈N
+ri
+cn∈n
+</equation>
+<page confidence="0.938679">
+80
+</page>
+<bodyText confidence="0.999981516129032">
+detecting named entities is superficially simple,
+since most sequences of capitalized words are
+named entities (excluding headlines, sentence be-
+ginnings, and a few other exceptions), finding all
+entities is non trivial, and determining the correct
+named entity type can sometimes be surprisingly
+hard. Performing the task well often requires ex-
+ternal knowledge of some form.
+In this paper we evaluate our system on two
+labeled datasets for NER: CoNLL 2003 (Tjong
+Kim Sang and De Meulder, 2003) and Ontonotes
+(Weischedel et al., 2011). The CoNLL dataset
+has approximately 320k tokens, divided into 220k
+tokens for training, 55k tokens for development,
+and 50k tokens for testing. While the training and
+development sets are quite similar, the test set is
+substantially different, and performance on it de-
+pends strongly on how much external knowledge
+the systems have. The CoNLL dataset has four
+entity types: PERSON, LOCATION, ORGANIZA-
+TION, AND MISCELLANEOUS. The Ontonotes
+dataset is substantially larger: it has 1.6M tokens
+total, with 1.4M for training, 100K for develop-
+ment, and 130k for testing. It also has eighteen
+entity types, a much larger set than the CoNLL
+dataset, including works of art, dates, cardinal
+numbers, languages, and events.
+The performance of NER systems is commonly
+measured in terms of precision, recall, and F1 on
+the sets of entities in the ground truth and returned
+by the system.
+</bodyText>
+<subsectionHeader confidence="0.867501">
+2.3.1 Baseline System
+</subsectionHeader>
+<bodyText confidence="0.984570866666667">
+In this section we describe in detail the baseline
+NER system we use. It is inspired by the system
+described in Ratinov and Roth (2009).
+Because NER annotations are commonly not
+nested (for example, in the text “the US Army”,
+“US Army” is treated as a single entity, instead
+of the location “US” and the organization “US
+Army”) it is possible to treat NER as a sequence
+labeling problem, where each token in the sen-
+tence receives a label which depends on which en-
+tity type it belongs to and its position in the en-
+tity. Following Ratinov and Roth (2009) we use
+the BILOU encoding, where each token can either
+BEGIN an entity, be INSIDE an entity, be the LAST
+token in an entity, be OUTSIDE an entity, or be the
+single UNIQUE token in an entity.
+Our baseline architecture is a stacked linear-
+chain CRF (Lafferty et al., 2001) system: we train
+two CRFs, where the second CRF can condition
+on the predictions made by the first CRF as well as
+features of the data. Both CRFs, following Zhang
+and Johnson (2003), have roughly similar features.
+While local features capture a lot of the clues
+used in text to highlight named entities, they can-
+not necessarily disambiguate entity types or detect
+named entities in special positions, such as the first
+tokens in a sentence. To solve these problems most
+NER systems incorporate some form of external
+knowledge. In our baseline system we use lexi-
+cons of months, days, person names, companies,
+job titles, places, events, organizations, books,
+films, and some minor others. These lexicons were
+gathered from US Census data, Wikipedia cate-
+gory pages, and Wikipedia redirects (and will be
+made publicly available upon publication).
+Following Ratinov and Roth (2009), we also
+compare the performance of our system with a
+system using features based on the Brown clusters
+of the word types in a document. Since, as seen
+in section 2.1, Brown clusters are hierarchical, we
+use features corresponding to prefixes of the path
+from the root to the leaf for each word type.
+More specifically, the feature templates of the
+baseline system are as follows. First for each token
+we compute:
+</bodyText>
+<listItem confidence="0.999814076923077">
+• its word type;
+• word type, after excluding digits and lower-
+casing it;
+• its capitalization pattern;
+• whether it is punctuation;
+• 4-character prefixes and suffixes;
+• character n-grams from length 2 to 5;
+• whether it is in a wikipedia-extracted lexicon
+of person names (first, last, and honorifics),
+dates (months, years), place names (country,
+US state, city, place suffixes, general location
+words), organizations, and man-made things;
+• whether it is a demonym.
+</listItem>
+<bodyText confidence="0.99984">
+For each token’s label we have feature templates
+considering all token’s features, all neighboring
+token’s features (up to distance 2), and bags of
+words of features of tokens in a window of size
+8 around each token. We also add a feature mark-
+ing whether a token is the first occurrence of its
+word type in a document.
+When using Brown clusters we add as token
+features all prefixes of lengths 4, 6, 10, and 20,
+of its brown cluster.
+For the second-layer model we use all these fea-
+tures, as well as the label predicted for each token
+</bodyText>
+<page confidence="0.997237">
+81
+</page>
+<figureCaption confidence="0.993518833333333">
+Figure 2: Chain CRF model for a NER system
+with three tokens. Filled rectangles represent fac-
+tors. Circles at top represent labels, circles at bot-
+tom represent binary token based features. Filled
+circles indicate the phrase embeddings for each to-
+ken.
+</figureCaption>
+<bodyText confidence="0.997869222222222">
+by the first-layer model.
+As seen in the Experiments Section, our base-
+line system is competitive with state-of-the-art
+systems which use similar forms of information.
+We train this system with stochastic gradient as-
+cent, using the AdaGrad RDA algorithm (Duchi et
+al., 2011), with both E1 and E2 regularization, au-
+tomatically tuned for each experimental setting by
+measuring performance on the development set.
+</bodyText>
+<subsectionHeader confidence="0.990332">
+2.4 NER with Phrase Embeddings
+</subsectionHeader>
+<bodyText confidence="0.999959227272727">
+In this section we describe how to extend our base-
+line NER system to use word embeddings as fea-
+tures.
+First we group the tokens into phrases, assign-
+ing to each token a single phrase greedily. We
+prefer shorter phrases over longer ones, sinceour
+embeddings are often more reliable for the shorter
+phrases, and since the longer phrases in our dic-
+tionary are mostly extracted from Wikipedia page
+titles, which are not always semantically meaning-
+ful when seen in free text. We then add factors
+connecting each token’s label with the embedding
+for its phrase.
+Figure 2 shows how phrase embeddings are
+plugged into a chain-CRF based NER system.
+Following Turian (2010), we scale the embed-
+ding vector by a real number, which is a hyper-
+parameter tuned on the development data. Con-
+necting tokens to phrase embeddings of their
+neighboring tokens did not improve performance
+for phrase embeddings, but it was mildly benefi-
+cial for token embeddings.
+</bodyText>
+<sectionHeader confidence="0.995843" genericHeader="method">
+3 Lexicon-infused Skip-gram Models
+</sectionHeader>
+<bodyText confidence="0.99998808">
+The Skip-gram model as defined in Section 2.2 is
+fundamentally trained in unsupervised fashion us-
+ing simply words and their n-gram contexts. In-
+jecting some NER-specific supervision into the
+embeddings can make them more relevant to the
+NER task.
+Lexicons are a simple yet powerful way to pro-
+vide task-specific supervisory information to the
+model without the burden of labeling additional
+data. However, while lexicons have proven use-
+ful in various NLP tasks, a small amount of noise
+in a lexicon can severely impair the its usefulness
+as a feature in log-linear models. For example,
+even legitimate data, such as the Chinese last name
+“He” occurring in a lexicon of person last names,
+can cause the lexicon feature to fire spuriously
+for many training tokens that are labeled PERSON,
+and then this lexicon feature may be given low or
+even negative weight.
+We propose to address both these problems by
+employing lexicons as part of the word embedding
+training. The skip-gram model can be trained to
+predict not only neighboring words but also lexi-
+con membership of the central word (or phrase).
+The resulting embedding training will thus be
+somewhat supervised by tending to bring together
+the vectors of words sharing a lexicon member-
+ship. Furthermore, this type of training can effec-
+tively “clean” the influence of noisy lexicons be-
+cause even if “He” appears in the PERSON lexicon,
+it will have a sufficiently different context distribu-
+tion than labeled named person entities (e.g. a lack
+of preceding honorifics, etc) that the presence of
+this noise in the lexicon will not be as problematic
+as it was previously.
+Furthermore, while Skip-gram models can be
+trained on billions of tokens to learn word em-
+beddings for over a million word types in a sin-
+gle day, this might not be enough data to cap-
+ture reliable embeddings of all relevant named en-
+tity phrases. Certain sets of word types, such as
+names of famous scientists, can occur infrequently
+enough that the Skip-gram model will not have
+enough contextual examples to learn embeddings
+that highlight their relevant similarities.
+In this section we describe how to extend the
+Skip-gram model to incorporate auxiliary infor-
+mation from lexicons, or lists of related words, en-
+couraging the model to assign similar embeddings
+to word types in similar lexicons.
+</bodyText>
+<page confidence="0.998339">
+82
+</page>
+<figureCaption confidence="0.968373">
+Figure 3: A Semi supervised Skip-gram Model.
+“New York” predicts the word “state”. With
+lexicon-infusion, “New York” also predicts its lex-
+icon classes: US-State, Wiki-location
+</figureCaption>
+<bodyText confidence="0.994609352941176">
+.
+In the basic Skip-gram model, as seen in Sec-
+tion 2.2, the likelihood is, for each n-gram, a prod-
+uct of the probability of the embedding associated
+with the middle word conditioned on each context
+word. We can inject supervision in this model by
+also predicting, given the embedding of the mid-
+dle word, whether it is a member of each lexicon.
+Figure 3 shows an example, where the word “New
+York” predicts “state”, and also its lexicon classes:
+Business, US-State and Wiki-Location.
+Hence, with subscript s iterating over each lex-
+icon (or set of related words), and lmn
+s being a la-
+bel for whether each word is in the set, and ws
+indicating the parameters of its classifier, the full
+likelihood of the model is
+</bodyText>
+<equation confidence="0.986957666666667">
+!
+Y
+σ(lcn
+i wcn T emn)
+i
+i
+!
+σ(lmn
+s wT s emn) .
+</equation>
+<bodyText confidence="0.99538775">
+This is a simple modification to equation (1) that
+also predicts the lexicon memberships. Note that
+the parameters ws of the auxiliary per-lexicon
+classifiers are also learned. The lexicons are not
+inserted in the binary tree with the words; instead,
+each lexicon gets its own binary classifier.
+Algorithm 1 Generating the training examples for
+lexicon-infused embeddings
+</bodyText>
+<listItem confidence="0.972477058823529">
+1: for all n-gram n with middle word mn do
+2: for all Context-word cn do
+3: for all Classifier, label pair (wcn
+i ,lcn
+i )
+in the tree do
+4: Add training example
+emn, wcn
+i , lcn
+5: end for
+6: end for
+7: for all Lexicon s, with label lmn
+s do
+8: Add training example emn, ws, lmn
+s
+9: end for
+10: end for
+</listItem>
+<bodyText confidence="0.999931117647059">
+In practice, a very small fraction of words are
+present in a lexicon-class and this creates skewed
+training data, with overwhelmingly many negative
+examples. We address this issue by aggressively
+sub-sampling negative training data for each lex-
+icon class. We do so by randomly selecting only
+1% of the possible negative lexicons for each to-
+ken.
+A Skip-gram model has V binary classifiers. A
+lexicon-infused Skip-gram model predicts an ad-
+ditional K classes, and thus has V + K binary
+classifiers. If number of classes K is large, we can
+induce a tree over the classes, similarly to what is
+done over words in the vocabulary. In our trained
+models, however, we have one million words in
+the vocabulary and twenty-two lexicons, so this is
+not necessary.
+</bodyText>
+<sectionHeader confidence="0.999385" genericHeader="evaluation">
+4 Experiments
+</sectionHeader>
+<bodyText confidence="0.999727117647059">
+Our phrase embeddings are learned on the combi-
+nation of English Wikipedia and the RCV1 Cor-
+pus (Lewis et al., 2004). Wikipedia contains 8M
+articles, and RCV1 contains 946K. To get candi-
+date phrases we first select bigrams which have
+a pointwise mutual information score larger than
+1000. We discard bigrams with stopwords from a
+manually selected list. If two bigrams share a to-
+ken we add its corresponding trigram to our phrase
+list. We further add page titles from the English
+Wikipedia to the list of candidate phrases, as well
+as all word types. We get a total of about 10M
+phrases. We restrict the vocabulary to the most fre-
+quent 1M phrases. All our reported experiments
+are on 50-dimensional embeddings. Longer em-
+beddings, while performing better on the semantic
+similarity task, as seen in Mikolov et al (2013a;
+</bodyText>
+<note confidence="0.41785">
+The state of New York is
+</note>
+<figure confidence="0.997512588235294">
+BUSINESS
+The ...
+...
+state
+...
+WIKI-LOCATION
+...
+US-STATE
+often
+...
+New York
+referred
+Y Y
+n ∈N cn∈n
+(2)
+Y
+s
+</figure>
+<page confidence="0.977193">
+83
+</page>
+<table confidence="0.9370075">
+Model Accuracy
+Skip-Gram 29.89
+Lex-0.05 30.37
+Lex-0.01 30.72
+</table>
+<tableCaption confidence="0.986406">
+Table 1: Accuracy for Semantic-Syntactic task,
+</tableCaption>
+<bodyText confidence="0.979681190476191">
+when restricted to Top 30K words. Lex-0.01 refers
+to a model trained with lexicons, where 0.01% of
+negative examples were used for training.
+2013b), did not perform as well on NER.
+To train phrase embeddings, we use a con-
+text of length 21. We use lexicons derived from
+Wikipedia categories and data from the US Cen-
+sus, totaling K = 22 lexicon classes. We use a
+randomly selected 0.01% of negative training ex-
+amples for lexicons.
+We perform two sets of experiments. First, we
+validate our lexicon-infused phrase embeddings
+on a semantic similarity task, similar to Mikolov et
+al (Mikolov et al., 2013a). Then we evaluate their
+utility on two named-entity recognition tasks.
+For the NER Experiments, we use the base-
+line system as described in Section 2.3.1. NER
+systems marked as “Skip-gram” consider phrase
+embeddings; “LexEmb” consider lexicon-infused
+embeddings; “Brown” use Brown clusters, and
+“Gaz” use our lexicons as features.
+</bodyText>
+<subsectionHeader confidence="0.998813">
+4.1 Syntactic and Semantic Similarity
+</subsectionHeader>
+<bodyText confidence="0.998440666666667">
+Mikolov et al. (2013a) introduce a test set to mea-
+sure syntactic and semantic regularities for words.
+This set contains 8869 semantic and 10675 syn-
+tactic questions. Each question consists of four
+words, such as big, biggest, small, smallest. It
+asks questions of the form “What is the word that
+is similar to small in the same sense as biggest is
+similar to big”. To test this, we compute the vec-
+tor X = vector(“biggest”) − vector(“big”) +
+vector(“small”). Next, we search for the word
+closest to X in terms of cosine distance (exclud-
+ing “biggest”, “small”, and “big”). This question
+is considered correctly answered only if the clos-
+est word found is “smallest”. As in Mikolov et
+al (Mikolov et al., 2013a), we only search over
+words which are among the 30K most frequent
+words in the vocabulary.
+Table 1 depicts the accuracy on Semantic Syn-
+tactic Task for models trained with 50 dimensions.
+We find that lexicon-infused embeddings perform
+better than Skip-gram. Further, lex-0.01 performs
+</bodyText>
+<table confidence="0.990326923076923">
+System Dev Test
+Baseline 92.22 87.93
+Baseline + Brown 93.39 90.05
+Baseline + Skip-gram 93.68 89.68
+Baseline + LexEmb 93.81 89.56
+Baseline + Gaz 93.69 89.27
+Baseline + Gaz + Brown 93.88 90.67
+Baseline + Gaz + Skip-gram 94.23 90.33
+Baseline + Gaz + LexEmb 94.46 90.90
+Ando and Zhang (2005) 93.15 89.31
+Suzuki and Isozaki (2008) 94.48 89.92
+Ratinov and Roth (2009) 93.50 90.57
+Lin and Wu (2009) - 90.90
+</table>
+<tableCaption confidence="0.973382">
+Table 2: Final NER F1 scores for the CoNLL 2003
+</tableCaption>
+<bodyText confidence="0.9975493">
+shared task. On the top are the systems presented
+in this paper, and on the bottom we have base-
+line systems. The best results within each area are
+highlighted in bold. Lin and Wu 2009 use massive
+private industrial query-log data in training.
+the best, and we use this model for further NER
+experiments. There was no perceptible difference
+in computation cost from learning lexicon-infused
+embeddings versus learning standard Skip-gram
+embeddings.
+</bodyText>
+<subsectionHeader confidence="0.985118">
+4.2 CoNLL 2003 NER
+</subsectionHeader>
+<bodyText confidence="0.999993894736842">
+We applied our models on CoNLL 2003 NER data
+set. All hyperparameters were tuned by training
+on training set, and evaluating on the development
+set. Then the best hyperparameter values were
+trained on the combination of training and devel-
+opment data and applied on the test set, to obtain
+the final results.
+Table 2 shows the phrase F1 scores of all sys-
+tems we implemented, as well as state-of-the-
+art results from the literature. Note that us-
+ing traditional unsupervised Skip-gram embed-
+dings is worse than Brown clusters. In contrast,
+our lexicon-infused phrase embeddings Lex-0.01
+achieves 90.90—a state-of-the-art F1 score for the
+test set. This result matches the highest F1 previ-
+ously reported, in Lin and Wu (2009), but is the
+first system to do so without using massive private
+data. Our result is signficantly better than the pre-
+vious best using public data.
+</bodyText>
+<subsectionHeader confidence="0.992219">
+4.3 Ontonotes 5.0 NER
+</subsectionHeader>
+<bodyText confidence="0.996195">
+Similarly to the CoNLL NER setup, we tuned the
+hyperparameters on the development set. We use
+</bodyText>
+<page confidence="0.997326">
+84
+</page>
+<table confidence="0.99953">
+System Dev Test
+Baseline 79.04 79.85
+Baseline + Brown 79.95 81.38
+Baseline + Skip-gram 80.59 81.91
+Baseline + LexEmbd 80.65 81.82
+Baseline + Gaz 79.85 81.31
+Baseline + Gaz + Brown 80.53 82.05
+Baseline + Gaz + Skip-gram 80.70 82.30
+Baseline + Gaz + LexEmb 80.81 82.24
+</table>
+<tableCaption confidence="0.996955">
+Table 3: Final NER F1 scores for Ontonotes 5.0
+</tableCaption>
+<bodyText confidence="0.947538153846154">
+dataset. The results in bold face are the best on
+each evaluation set.
+the same list of lexicons as for CoNLL NER.
+Table 3 summarize our results. We found that
+both Skip-gram and Lexicon infused embeddings
+give better results than using Brown Clusters as
+features. However, in this case Skip-gram embed-
+dings give marginally better results. (So as not to
+jeopardize our ability to fairly do further research
+on this task, we did not analyze the test set errors
+that may explain this.) These are, to the best of our
+knowledge, the first published performance num-
+bers on the Ontonotes NER task.
+</bodyText>
+<sectionHeader confidence="0.999575" genericHeader="conclusions">
+5 Conclusions
+</sectionHeader>
+<bodyText confidence="0.999974181818182">
+We have shown how to inject external supervision
+to a Skip-gram model to learn better phrase em-
+beddings. We demonstrate the quality of phrase
+embeddings on three tasks: Syntactic-semantic
+similarity, CoNLL 2003 NER, and Ontonotes 5.0
+NER. In the process, we provide a new public
+state-of-the-art NER system for the widely con-
+tested CoNLL 2003 shared task.
+We demonstrate how we can plug phrase em-
+beddings into an existing log-linear CRF System.
+This work demonstrates that it is possible to
+learn high-quality phrase embeddings and fine-
+tune them with external supervision from billions
+of tokens within one day computation time. We
+further demonstrate that learning embeddings is
+important and key to improve NLP Tasks such as
+NER.
+In future, we want to explore employing embed-
+dings to other NLP tasks such as dependency pars-
+ing and coreference resolution. We also want to
+explore improving embeddings using error gradi-
+ents from NER.
+</bodyText>
+<sectionHeader confidence="0.994896" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999143192307693">
+Rie Kubota Ando and Tong Zhang. 2005. A high-
+performance semi-supervised learning method for
+text chunking. In Proceedings of the 43rd Annual
+Meeting on Association for Computational Linguis-
+tics, pages 1–9. Association for Computational Lin-
+guistics.
+Yoshua Bengio, Rejean Ducharme, and Pascal Vincent.
+2003. A neural probabilistic language model. Jour-
+nal of Machine Learning Research, 3:1137–1155.
+Yoshua Bengio. 2008. Neural net language models.
+Scholarpedia, 3(1):3881.
+Peter F Brown, Peter V Desouza, Robert L Mercer,
+Vincent J Della Pietra, and Jenifer C Lai. 1992.
+Class-based n-gram models of natural language.
+Computational linguistics, 18(4):467–479.
+Ronan Collobert and Jason Weston. 2008. A unified
+architecture for natural language processing: Deep
+neural networks with multitask learning. In Pro-
+ceedings of the 25th international conference on
+Machine learning, pages 160–167. ACM.
+Paramveer Dhillon, Dean P Foster, and Lyle H Ungar.
+2011. Multi-view learning of word embeddings via
+cca. In Advances in Neural Information Processing
+Systems, pages 199–207.
+Paramveer Dhillon, Jordan Rodu, Dean Foster, and
+Lyle Ungar. 2012. Two step cca: A new spec-
+tral method for estimating vector models of words.
+arXiv preprint arXiv:1206.6403.
+John Duchi, Elad Hazan, and Yoram Singer. 2011.
+Adaptive subgradient methods for online learning
+and stochastic optimization. The Journal of Ma-
+chine Learning Research, 999999:2121–2159.
+David A Huffman. 1952. A method for the construc-
+tion of minimum-redundancy codes. Proceedings of
+the IRE, 40(9):1098–1101.
+Terry Koo, Xavier Carreras, and Michael Collins.
+2008. Simple semi-supervised dependency parsing.
+John Lafferty, Andrew McCallum, and Fernando CN
+Pereira. 2001. Conditional random fields: Prob-
+abilistic models for segmenting and labeling se-
+quence data.
+David D Lewis, Yiming Yang, Tony G Rose, and Fan
+Li. 2004. Rcv1: A new benchmark collection for
+text categorization research. The Journal of Ma-
+chine Learning Research, 5:361–397.
+Dekang Lin and Xiaoyun Wu. 2009. Phrase clustering
+for discriminative learning. In Proceedings of the
+Joint Conference of the 47th Annual Meeting of the
+ACL and the 4th International Joint Conference on
+Natural Language Processing of the AFNLP: Vol-
+ume 2-Volume 2, pages 1030–1038. Association for
+Computational Linguistics.
+</reference>
+<page confidence="0.993139">
+85
+</page>
+<reference confidence="0.999731693548387">
+Tomas Mikolov, Martin Karafi´at, Lukas Burget, Jan
+Cernock`y, and Sanjeev Khudanpur. 2010. Recur-
+rent neural network based language model. In IN-
+TERSPEECH, pages 1045–1048.
+Tomas Mikolov, Kai Chen, Greg Corrado, and Jef-
+frey Dean. 2013a. Efficient estimation of word
+representations in vector space. arXiv preprint
+arXiv:1301.3781.
+Tomas Mikolov, Ilya Sutskever, Kai Chen, Greg Cor-
+rado, and Jeffrey Dean. 2013b. Distributed repre-
+sentations of words and phrases and their composi-
+tionality. arXiv preprint arXiv:1310.4546.
+Scott Miller, Jethran Guinness, and Alex Zamanian.
+2004. Name tagging with word clusters and discrim-
+inative training. In HLT-NAACL, volume 4, pages
+337–342. Citeseer.
+Andriy Mnih and Geoffrey E Hinton. 2008. A scal-
+able hierarchical distributed language model. In
+Advances in neural information processing systems,
+pages 1081–1088.
+Frederic Morin and Yoshua Bengio. 2005. Hierarchi-
+cal probabilistic neural network language model. In
+Proceedings of the international workshop on artifi-
+cial intelligence and statistics, pages 246–252.
+Fernando Pereira, Naftali Tishby, and Lillian Lee.
+1993. Distributional clustering of english words. In
+Proceedings of the 31st annual meeting on Associa-
+tion for Computational Linguistics, pages 183–190.
+Association for Computational Linguistics.
+Lev Ratinov and Dan Roth. 2009. Design challenges
+and misconceptions in named entity recognition. In
+Proceedings of the Thirteenth Conference on Com-
+putational Natural Language Learning, pages 147–
+155. Association for Computational Linguistics.
+Jun Suzuki and Hideki Isozaki. 2008. Semi-supervised
+sequential labeling and segmentation using giga-
+word scale unlabeled data. In ACL, pages 665–673.
+Citeseer.
+Erik F Tjong Kim Sang and Fien De Meulder.
+2003. Introduction to the conll-2003 shared task:
+Language-independent named entity recognition. In
+Proceedings of the seventh conference on Natural
+language learning at HLT-NAACL 2003-Volume 4,
+pages 142–147. Association for Computational Lin-
+guistics.
+Joseph Turian, Lev Ratinov, and Yoshua Bengio. 2010.
+Word representations: a simple and general method
+for semi-supervised learning. In Proceedings of the
+48th Annual Meeting of the Association for Compu-
+tational Linguistics, pages 384–394. Association for
+Computational Linguistics.
+Ralph Weischedel, Martha Palmer, Mitchell Marcus,
+Eduard Hovy, Sameer Pradhan, Lance Ramshaw,
+Nianwen Xue, Ann Taylor, Jeff Kaufman, Michelle
+Franchini, et al. 2011. OntoNotes Release 4.0. Lin-
+guistic Data Consortium.
+Tong Zhang and David Johnson. 2003. A robust
+risk minimization based named entity recognition
+system. In Proceedings of the seventh conference
+on Natural language learning at HLT-NAACL 2003-
+Volume 4, pages 204–207. Association for Compu-
+tational Linguistics.
+</reference>
+<page confidence="0.998556">
+86
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.993718">
+<title confidence="0.999908">Lexicon Infused Phrase Embeddings for Named Entity Resolution</title>
+<author confidence="0.999255">Alexandre Passos</author>
+<author confidence="0.999255">Vineet Kumar</author>
+<author confidence="0.999255">Andrew</author>
+<affiliation confidence="0.999888">School of Computer University of Massachusetts,</affiliation>
+<abstract confidence="0.99976447826087">Most state-of-the-art approaches for named-entity recognition (NER) use semi supervised information in the form of word clusters and lexicons. Recently neural network-based language models have been explored, as they as a byproduct generate highly informative vector representations for words, known as word embeddings. In this paper we present two contributions: a new form of learning word embeddings that can leverage information from relevant lexicons to improve the representations, and the first system to use neural word embeddings to achieve state-of-the-art results on named-entity recognition in both CoNLL and Ontonotes NER. Our system achieves an F1 score of 90.90 on the test set for CoNLL 2003—significantly better than any previous system trained on public data, and matching a system employing massive private industrial query-log data.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Rie Kubota Ando</author>
+<author>Tong Zhang</author>
+</authors>
+<title>A highperformance semi-supervised learning method for text chunking.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the 43rd Annual Meeting on Association for Computational Linguistics,</booktitle>
+<pages>1--9</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="26429" citStr="Ando and Zhang (2005)" startWordPosition="4386" endWordPosition="4389">lest”. As in Mikolov et al (Mikolov et al., 2013a), we only search over words which are among the 30K most frequent words in the vocabulary. Table 1 depicts the accuracy on Semantic Syntactic Task for models trained with 50 dimensions. We find that lexicon-infused embeddings perform better than Skip-gram. Further, lex-0.01 performs System Dev Test Baseline 92.22 87.93 Baseline + Brown 93.39 90.05 Baseline + Skip-gram 93.68 89.68 Baseline + LexEmb 93.81 89.56 Baseline + Gaz 93.69 89.27 Baseline + Gaz + Brown 93.88 90.67 Baseline + Gaz + Skip-gram 94.23 90.33 Baseline + Gaz + LexEmb 94.46 90.90 Ando and Zhang (2005) 93.15 89.31 Suzuki and Isozaki (2008) 94.48 89.92 Ratinov and Roth (2009) 93.50 90.57 Lin and Wu (2009) - 90.90 Table 2: Final NER F1 scores for the CoNLL 2003 shared task. On the top are the systems presented in this paper, and on the bottom we have baseline systems. The best results within each area are highlighted in bold. Lin and Wu 2009 use massive private industrial query-log data in training. the best, and we use this model for further NER experiments. There was no perceptible difference in computation cost from learning lexicon-infused embeddings versus learning standard Skip-gram emb</context>
+</contexts>
+<marker>Ando, Zhang, 2005</marker>
+<rawString>Rie Kubota Ando and Tong Zhang. 2005. A highperformance semi-supervised learning method for text chunking. In Proceedings of the 43rd Annual Meeting on Association for Computational Linguistics, pages 1–9. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yoshua Bengio</author>
+<author>Rejean Ducharme</author>
+<author>Pascal Vincent</author>
+</authors>
+<title>A neural probabilistic language model.</title>
+<date>2003</date>
+<journal>Journal of Machine Learning Research,</journal>
+<pages>3--1137</pages>
+<contexts>
+<context position="8332" citStr="Bengio et al., 2003" startWordPosition="1322" endWordPosition="1325"> of Brown clusters is their computational complexity, as training takes O(kV 2 + N)x time to train, where k is the number of base clusters, V size of vocabulary, and N number of tokens. This is infeasible for large corpora with millions of word types. Another family of language models that produces embeddings is the neural language models. Neural language models generally work by mapping each word type to a vector in a lowdimensional vector space and assigning probabilities to n-grams by processing their embeddings in a neural network. Many different neural language models have been proposed (Bengio et al., 2003; Morin and Bengio, 2005; Bengio, 2008; 79 Mnih and Hinton, 2008; Collobert and Weston, 2008; Mikolov et al., 2010). While they can capture the semantics of word types, and often generalize better than n-gram models in terms of perplexity, applying them to NLP tasks has generally been less successful than Brown clusters (Turian et al., 2010). Finally, there are algorithms for computing word embeddings which do not use language models at all. A popular example is the CCA family of word embeddings (Dhillon et al., 2012; Dhillon et al., 2011), which work by choosing embeddings for a word type tha</context>
+</contexts>
+<marker>Bengio, Ducharme, Vincent, 2003</marker>
+<rawString>Yoshua Bengio, Rejean Ducharme, and Pascal Vincent. 2003. A neural probabilistic language model. Journal of Machine Learning Research, 3:1137–1155.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yoshua Bengio</author>
+</authors>
+<title>Neural net language models.</title>
+<date>2008</date>
+<journal>Scholarpedia,</journal>
+<volume>3</volume>
+<issue>1</issue>
+<contexts>
+<context position="8370" citStr="Bengio, 2008" startWordPosition="1330" endWordPosition="1331">plexity, as training takes O(kV 2 + N)x time to train, where k is the number of base clusters, V size of vocabulary, and N number of tokens. This is infeasible for large corpora with millions of word types. Another family of language models that produces embeddings is the neural language models. Neural language models generally work by mapping each word type to a vector in a lowdimensional vector space and assigning probabilities to n-grams by processing their embeddings in a neural network. Many different neural language models have been proposed (Bengio et al., 2003; Morin and Bengio, 2005; Bengio, 2008; 79 Mnih and Hinton, 2008; Collobert and Weston, 2008; Mikolov et al., 2010). While they can capture the semantics of word types, and often generalize better than n-gram models in terms of perplexity, applying them to NLP tasks has generally been less successful than Brown clusters (Turian et al., 2010). Finally, there are algorithms for computing word embeddings which do not use language models at all. A popular example is the CCA family of word embeddings (Dhillon et al., 2012; Dhillon et al., 2011), which work by choosing embeddings for a word type that capture the correlations between the</context>
+</contexts>
+<marker>Bengio, 2008</marker>
+<rawString>Yoshua Bengio. 2008. Neural net language models. Scholarpedia, 3(1):3881.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Peter F Brown</author>
+<author>Peter V Desouza</author>
+<author>Robert L Mercer</author>
+<author>Vincent J Della Pietra</author>
+<author>Jenifer C Lai</author>
+</authors>
+<title>Class-based n-gram models of natural language.</title>
+<date>1992</date>
+<journal>Computational linguistics,</journal>
+<volume>18</volume>
+<issue>4</issue>
+<contexts>
+<context position="1889" citStr="Brown et al., 1992" startWordPosition="271" endWordPosition="274">source of information is required. In most state-of-the-art systems for named-entity recognition (NER) this knowledge comes in two forms: domain-specific lexicons (lists of word types related to the desired named entity types) and word representations (either clusterings or vectorial representations of word types which capture some of their syntactic and semantic behavior and allow generalizing to unseen word types). Current state-of-the-art named entity recognition systems use Brown clusters as the form of word representation (Ratinov and Roth, 2009; Turian et al., 2010; Miller et al., 2004; Brown et al., 1992), or other cluster-based representations computed from private data (Lin and Wu, 2009). While very attractive due to their simplicity, generality, and hierarchical structure, Brown clusters are limited because the computational complexity of fitting a model scales quadratically with the number of words in the corpus, or the number of “base clusters” in some efficient implementations, making it infeasible to train it on large corpora or with millions of word types. Although some attempts have been made to train named-entity recognition systems with other forms of word representations, most nota</context>
+<context position="6268" citStr="Brown et al., 1992" startWordPosition="965" endWordPosition="968"> representations used in models of the latter category, henceforth referred to as “embeddings,” have been found to be useful in many NLP applications which don’t actually need a language model. The underlying intuition is that when language models compress the information about the word types in a latent space they capture much of the commonalities and differences between word types. Hence features extracted from these models then can generalize better than features derived from the word types themselves. One simple language model that discovers useful embeddings is known as Brown clustering (Brown et al., 1992). A Brown clustering is a class-based bigram model in which (1) the probability of a document is the product of the probabilities of its bigrams, (2) the probability of each bigram is the product of the probability of a bigram model over latent classes and the probability of each class generating the actual word types in the bigram, and (3) each word type has non-zero probability only on a single class. Given a one-toone assignment of word types to classes, then, and a corpus of text, it is easy to estimate these probabilities with maximum likelihood by counting the frequencies of the differen</context>
+</contexts>
+<marker>Brown, Desouza, Mercer, Pietra, Lai, 1992</marker>
+<rawString>Peter F Brown, Peter V Desouza, Robert L Mercer, Vincent J Della Pietra, and Jenifer C Lai. 1992. Class-based n-gram models of natural language. Computational linguistics, 18(4):467–479.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ronan Collobert</author>
+<author>Jason Weston</author>
+</authors>
+<title>A unified architecture for natural language processing: Deep neural networks with multitask learning.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 25th international conference on Machine learning,</booktitle>
+<pages>160--167</pages>
+<publisher>ACM.</publisher>
+<contexts>
+<context position="2594" citStr="Collobert and Weston, 2008" startWordPosition="377" endWordPosition="380">u, 2009). While very attractive due to their simplicity, generality, and hierarchical structure, Brown clusters are limited because the computational complexity of fitting a model scales quadratically with the number of words in the corpus, or the number of “base clusters” in some efficient implementations, making it infeasible to train it on large corpora or with millions of word types. Although some attempts have been made to train named-entity recognition systems with other forms of word representations, most notably those obtained from training neural language models (Turian et al., 2010; Collobert and Weston, 2008), these systems have historically underperformed simple applications of Brown clusters. A disadvantage of neural language models is that, while they are inherently more scalable than Brown clusters, training large neural networks is still often expensive; for example, Turian et al (2010) report that some models took multiple days or weeks to produce acceptable representations. Moreover, language embeddings learned from neural networks tend to behave in a “nonlinear” fashion, as they are trained to encourage a many-layered neural network to assign high probability to the data. These neural netw</context>
+<context position="8424" citStr="Collobert and Weston, 2008" startWordPosition="1337" endWordPosition="1340">time to train, where k is the number of base clusters, V size of vocabulary, and N number of tokens. This is infeasible for large corpora with millions of word types. Another family of language models that produces embeddings is the neural language models. Neural language models generally work by mapping each word type to a vector in a lowdimensional vector space and assigning probabilities to n-grams by processing their embeddings in a neural network. Many different neural language models have been proposed (Bengio et al., 2003; Morin and Bengio, 2005; Bengio, 2008; 79 Mnih and Hinton, 2008; Collobert and Weston, 2008; Mikolov et al., 2010). While they can capture the semantics of word types, and often generalize better than n-gram models in terms of perplexity, applying them to NLP tasks has generally been less successful than Brown clusters (Turian et al., 2010). Finally, there are algorithms for computing word embeddings which do not use language models at all. A popular example is the CCA family of word embeddings (Dhillon et al., 2012; Dhillon et al., 2011), which work by choosing embeddings for a word type that capture the correlations between the embeddings of word types which occur before and after</context>
+</contexts>
+<marker>Collobert, Weston, 2008</marker>
+<rawString>Ronan Collobert and Jason Weston. 2008. A unified architecture for natural language processing: Deep neural networks with multitask learning. In Proceedings of the 25th international conference on Machine learning, pages 160–167. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Paramveer Dhillon</author>
+<author>Dean P Foster</author>
+<author>Lyle H Ungar</author>
+</authors>
+<title>Multi-view learning of word embeddings via cca.</title>
+<date>2011</date>
+<booktitle>In Advances in Neural Information Processing Systems,</booktitle>
+<pages>199--207</pages>
+<contexts>
+<context position="8877" citStr="Dhillon et al., 2011" startWordPosition="1416" endWordPosition="1419">any different neural language models have been proposed (Bengio et al., 2003; Morin and Bengio, 2005; Bengio, 2008; 79 Mnih and Hinton, 2008; Collobert and Weston, 2008; Mikolov et al., 2010). While they can capture the semantics of word types, and often generalize better than n-gram models in terms of perplexity, applying them to NLP tasks has generally been less successful than Brown clusters (Turian et al., 2010). Finally, there are algorithms for computing word embeddings which do not use language models at all. A popular example is the CCA family of word embeddings (Dhillon et al., 2012; Dhillon et al., 2011), which work by choosing embeddings for a word type that capture the correlations between the embeddings of word types which occur before and after this type. Figure 1: A binary Huffman tree. Circles represent binary classifiers. Rectangles represent tokens, which can be multi-word. ... ... ... A An San Diego ... New York City 2.2 The Skip-gram Model A main limitation of neural language models is that they often have many parameters and slow training times. To mitigate this, Mikolov et al. (2013a; 2013b) recently proposed a family of log-linear language models inspired by neural language model</context>
+</contexts>
+<marker>Dhillon, Foster, Ungar, 2011</marker>
+<rawString>Paramveer Dhillon, Dean P Foster, and Lyle H Ungar. 2011. Multi-view learning of word embeddings via cca. In Advances in Neural Information Processing Systems, pages 199–207.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Paramveer Dhillon</author>
+<author>Jordan Rodu</author>
+<author>Dean Foster</author>
+<author>Lyle Ungar</author>
+</authors>
+<title>Two step cca: A new spectral method for estimating vector models of words. arXiv preprint arXiv:1206.6403.</title>
+<date>2012</date>
+<contexts>
+<context position="8854" citStr="Dhillon et al., 2012" startWordPosition="1412" endWordPosition="1415">in a neural network. Many different neural language models have been proposed (Bengio et al., 2003; Morin and Bengio, 2005; Bengio, 2008; 79 Mnih and Hinton, 2008; Collobert and Weston, 2008; Mikolov et al., 2010). While they can capture the semantics of word types, and often generalize better than n-gram models in terms of perplexity, applying them to NLP tasks has generally been less successful than Brown clusters (Turian et al., 2010). Finally, there are algorithms for computing word embeddings which do not use language models at all. A popular example is the CCA family of word embeddings (Dhillon et al., 2012; Dhillon et al., 2011), which work by choosing embeddings for a word type that capture the correlations between the embeddings of word types which occur before and after this type. Figure 1: A binary Huffman tree. Circles represent binary classifiers. Rectangles represent tokens, which can be multi-word. ... ... ... A An San Diego ... New York City 2.2 The Skip-gram Model A main limitation of neural language models is that they often have many parameters and slow training times. To mitigate this, Mikolov et al. (2013a; 2013b) recently proposed a family of log-linear language models inspired b</context>
+</contexts>
+<marker>Dhillon, Rodu, Foster, Ungar, 2012</marker>
+<rawString>Paramveer Dhillon, Jordan Rodu, Dean Foster, and Lyle Ungar. 2012. Two step cca: A new spectral method for estimating vector models of words. arXiv preprint arXiv:1206.6403.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>John Duchi</author>
+<author>Elad Hazan</author>
+<author>Yoram Singer</author>
+</authors>
+<title>Adaptive subgradient methods for online learning and stochastic optimization.</title>
+<date>2011</date>
+<journal>The Journal of Machine Learning Research,</journal>
+<pages>999999--2121</pages>
+<contexts>
+<context position="17286" citStr="Duchi et al., 2011" startWordPosition="2834" endWordPosition="2837">second-layer model we use all these features, as well as the label predicted for each token 81 Figure 2: Chain CRF model for a NER system with three tokens. Filled rectangles represent factors. Circles at top represent labels, circles at bottom represent binary token based features. Filled circles indicate the phrase embeddings for each token. by the first-layer model. As seen in the Experiments Section, our baseline system is competitive with state-of-the-art systems which use similar forms of information. We train this system with stochastic gradient ascent, using the AdaGrad RDA algorithm (Duchi et al., 2011), with both E1 and E2 regularization, automatically tuned for each experimental setting by measuring performance on the development set. 2.4 NER with Phrase Embeddings In this section we describe how to extend our baseline NER system to use word embeddings as features. First we group the tokens into phrases, assigning to each token a single phrase greedily. We prefer shorter phrases over longer ones, sinceour embeddings are often more reliable for the shorter phrases, and since the longer phrases in our dictionary are mostly extracted from Wikipedia page titles, which are not always semantical</context>
+</contexts>
+<marker>Duchi, Hazan, Singer, 2011</marker>
+<rawString>John Duchi, Elad Hazan, and Yoram Singer. 2011. Adaptive subgradient methods for online learning and stochastic optimization. The Journal of Machine Learning Research, 999999:2121–2159.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David A Huffman</author>
+</authors>
+<title>A method for the construction of minimum-redundancy codes.</title>
+<date>1952</date>
+<booktitle>Proceedings of the IRE,</booktitle>
+<pages>40--9</pages>
+<contexts>
+<context position="11120" citStr="Huffman, 1952" startWordPosition="1791" endWordPosition="1792">lassifier,label) pairs. The skip-gram model then computes a probability of a context word given a target word as the product of the probabilities, given the target word’s embeddings, of all decisions on a path from the root to the leaf corresponding to the context word. Figure 1 shows such a tree structured model. Given a tree, then, choosing embeddings emn and classifier parameters wcn i to maximize equation (1) is a non-convex optimization problem which can be solved with stochastic gradient descent. The binary tree used in the model is commonly estimated by computing a Huffman coding tree (Huffman, 1952) of the word types and their frequencies. We experimented with other tree estimation schemes but found no perceptible improve. ment in the quality of the embeddings. It is possible to extend these embeddings to model phrases as well as tokens. To do so, Mikolov et al (2013b) use a phrase-building criterion based on the pointwise mutual information of bigrams. They perform multiple passes over a corpus to estimate trigrams and higher-order phrases. We instead consider candidate trigrams for all pairs of bigrams which have a high PMI and share a token. 2.3 Named Entity Recognition Named Entity R</context>
+</contexts>
+<marker>Huffman, 1952</marker>
+<rawString>David A Huffman. 1952. A method for the construction of minimum-redundancy codes. Proceedings of the IRE, 40(9):1098–1101.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Terry Koo</author>
+<author>Xavier Carreras</author>
+<author>Michael Collins</author>
+</authors>
+<date>2008</date>
+<note>Simple semi-supervised dependency parsing.</note>
+<contexts>
+<context position="7541" citStr="Koo et al., 2008" startWordPosition="1189" endWordPosition="1192">h type in the corpus. The Brown clustering algorithm works by starting with an initial assignment of word types to classes (which is usually either one unique class per type or a small number of seed classes corresponding to the most frequent types in the corpus), and then iteratively selecting the pair of classes to merge that would lead to the highest post-merge log-likelihood, doing so until all classes have been merged. This process produces a hierarchical clustering of the word types in the corpus, and these clusterings have been found useful in many applications (Ratinov and Roth, 2009; Koo et al., 2008; Miller et al., 2004). There are other similar models of distributional clustering of English words which can be similarly effective (Pereira et al., 1993). One limitation of Brown clusters is their computational complexity, as training takes O(kV 2 + N)x time to train, where k is the number of base clusters, V size of vocabulary, and N number of tokens. This is infeasible for large corpora with millions of word types. Another family of language models that produces embeddings is the neural language models. Neural language models generally work by mapping each word type to a vector in a lowdi</context>
+</contexts>
+<marker>Koo, Carreras, Collins, 2008</marker>
+<rawString>Terry Koo, Xavier Carreras, and Michael Collins. 2008. Simple semi-supervised dependency parsing.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>John Lafferty</author>
+<author>Andrew McCallum</author>
+<author>Fernando CN Pereira</author>
+</authors>
+<title>Conditional random fields: Probabilistic models for segmenting and labeling sequence data.</title>
+<date>2001</date>
+<contexts>
+<context position="14462" citStr="Lafferty et al., 2001" startWordPosition="2362" endWordPosition="2365">n the text “the US Army”, “US Army” is treated as a single entity, instead of the location “US” and the organization “US Army”) it is possible to treat NER as a sequence labeling problem, where each token in the sentence receives a label which depends on which entity type it belongs to and its position in the entity. Following Ratinov and Roth (2009) we use the BILOU encoding, where each token can either BEGIN an entity, be INSIDE an entity, be the LAST token in an entity, be OUTSIDE an entity, or be the single UNIQUE token in an entity. Our baseline architecture is a stacked linearchain CRF (Lafferty et al., 2001) system: we train two CRFs, where the second CRF can condition on the predictions made by the first CRF as well as features of the data. Both CRFs, following Zhang and Johnson (2003), have roughly similar features. While local features capture a lot of the clues used in text to highlight named entities, they cannot necessarily disambiguate entity types or detect named entities in special positions, such as the first tokens in a sentence. To solve these problems most NER systems incorporate some form of external knowledge. In our baseline system we use lexicons of months, days, person names, co</context>
+</contexts>
+<marker>Lafferty, McCallum, Pereira, 2001</marker>
+<rawString>John Lafferty, Andrew McCallum, and Fernando CN Pereira. 2001. Conditional random fields: Probabilistic models for segmenting and labeling sequence data.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David D Lewis</author>
+<author>Yiming Yang</author>
+<author>Tony G Rose</author>
+<author>Fan Li</author>
+</authors>
+<title>Rcv1: A new benchmark collection for text categorization research.</title>
+<date>2004</date>
+<journal>The Journal of Machine Learning Research,</journal>
+<pages>5--361</pages>
+<contexts>
+<context position="23234" citStr="Lewis et al., 2004" startWordPosition="3850" endWordPosition="3853">o so by randomly selecting only 1% of the possible negative lexicons for each token. A Skip-gram model has V binary classifiers. A lexicon-infused Skip-gram model predicts an additional K classes, and thus has V + K binary classifiers. If number of classes K is large, we can induce a tree over the classes, similarly to what is done over words in the vocabulary. In our trained models, however, we have one million words in the vocabulary and twenty-two lexicons, so this is not necessary. 4 Experiments Our phrase embeddings are learned on the combination of English Wikipedia and the RCV1 Corpus (Lewis et al., 2004). Wikipedia contains 8M articles, and RCV1 contains 946K. To get candidate phrases we first select bigrams which have a pointwise mutual information score larger than 1000. We discard bigrams with stopwords from a manually selected list. If two bigrams share a token we add its corresponding trigram to our phrase list. We further add page titles from the English Wikipedia to the list of candidate phrases, as well as all word types. We get a total of about 10M phrases. We restrict the vocabulary to the most frequent 1M phrases. All our reported experiments are on 50-dimensional embeddings. Longe</context>
+</contexts>
+<marker>Lewis, Yang, Rose, Li, 2004</marker>
+<rawString>David D Lewis, Yiming Yang, Tony G Rose, and Fan Li. 2004. Rcv1: A new benchmark collection for text categorization research. The Journal of Machine Learning Research, 5:361–397.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dekang Lin</author>
+<author>Xiaoyun Wu</author>
+</authors>
+<title>Phrase clustering for discriminative learning.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the Joint Conference of the 47th Annual Meeting of the ACL and the 4th International Joint Conference on Natural Language Processing of the AFNLP: Volume</booktitle>
+<volume>2</volume>
+<pages>1030--1038</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="1975" citStr="Lin and Wu, 2009" startWordPosition="283" endWordPosition="286">ognition (NER) this knowledge comes in two forms: domain-specific lexicons (lists of word types related to the desired named entity types) and word representations (either clusterings or vectorial representations of word types which capture some of their syntactic and semantic behavior and allow generalizing to unseen word types). Current state-of-the-art named entity recognition systems use Brown clusters as the form of word representation (Ratinov and Roth, 2009; Turian et al., 2010; Miller et al., 2004; Brown et al., 1992), or other cluster-based representations computed from private data (Lin and Wu, 2009). While very attractive due to their simplicity, generality, and hierarchical structure, Brown clusters are limited because the computational complexity of fitting a model scales quadratically with the number of words in the corpus, or the number of “base clusters” in some efficient implementations, making it infeasible to train it on large corpora or with millions of word types. Although some attempts have been made to train named-entity recognition systems with other forms of word representations, most notably those obtained from training neural language models (Turian et al., 2010; Collober</context>
+<context position="26533" citStr="Lin and Wu (2009)" startWordPosition="4404" endWordPosition="4407">requent words in the vocabulary. Table 1 depicts the accuracy on Semantic Syntactic Task for models trained with 50 dimensions. We find that lexicon-infused embeddings perform better than Skip-gram. Further, lex-0.01 performs System Dev Test Baseline 92.22 87.93 Baseline + Brown 93.39 90.05 Baseline + Skip-gram 93.68 89.68 Baseline + LexEmb 93.81 89.56 Baseline + Gaz 93.69 89.27 Baseline + Gaz + Brown 93.88 90.67 Baseline + Gaz + Skip-gram 94.23 90.33 Baseline + Gaz + LexEmb 94.46 90.90 Ando and Zhang (2005) 93.15 89.31 Suzuki and Isozaki (2008) 94.48 89.92 Ratinov and Roth (2009) 93.50 90.57 Lin and Wu (2009) - 90.90 Table 2: Final NER F1 scores for the CoNLL 2003 shared task. On the top are the systems presented in this paper, and on the bottom we have baseline systems. The best results within each area are highlighted in bold. Lin and Wu 2009 use massive private industrial query-log data in training. the best, and we use this model for further NER experiments. There was no perceptible difference in computation cost from learning lexicon-infused embeddings versus learning standard Skip-gram embeddings. 4.2 CoNLL 2003 NER We applied our models on CoNLL 2003 NER data set. All hyperparameters were t</context>
+<context position="27776" citStr="Lin and Wu (2009)" startWordPosition="4609" endWordPosition="4612">ng set, and evaluating on the development set. Then the best hyperparameter values were trained on the combination of training and development data and applied on the test set, to obtain the final results. Table 2 shows the phrase F1 scores of all systems we implemented, as well as state-of-theart results from the literature. Note that using traditional unsupervised Skip-gram embeddings is worse than Brown clusters. In contrast, our lexicon-infused phrase embeddings Lex-0.01 achieves 90.90—a state-of-the-art F1 score for the test set. This result matches the highest F1 previously reported, in Lin and Wu (2009), but is the first system to do so without using massive private data. Our result is signficantly better than the previous best using public data. 4.3 Ontonotes 5.0 NER Similarly to the CoNLL NER setup, we tuned the hyperparameters on the development set. We use 84 System Dev Test Baseline 79.04 79.85 Baseline + Brown 79.95 81.38 Baseline + Skip-gram 80.59 81.91 Baseline + LexEmbd 80.65 81.82 Baseline + Gaz 79.85 81.31 Baseline + Gaz + Brown 80.53 82.05 Baseline + Gaz + Skip-gram 80.70 82.30 Baseline + Gaz + LexEmb 80.81 82.24 Table 3: Final NER F1 scores for Ontonotes 5.0 dataset. The results</context>
+</contexts>
+<marker>Lin, Wu, 2009</marker>
+<rawString>Dekang Lin and Xiaoyun Wu. 2009. Phrase clustering for discriminative learning. In Proceedings of the Joint Conference of the 47th Annual Meeting of the ACL and the 4th International Joint Conference on Natural Language Processing of the AFNLP: Volume 2-Volume 2, pages 1030–1038. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tomas Mikolov</author>
+<author>Martin Karafi´at</author>
+<author>Lukas Burget</author>
+<author>Jan Cernock`y</author>
+<author>Sanjeev Khudanpur</author>
+</authors>
+<title>Recurrent neural network based language model.</title>
+<date>2010</date>
+<booktitle>In INTERSPEECH,</booktitle>
+<pages>1045--1048</pages>
+<marker>Mikolov, Karafi´at, Burget, Cernock`y, Khudanpur, 2010</marker>
+<rawString>Tomas Mikolov, Martin Karafi´at, Lukas Burget, Jan Cernock`y, and Sanjeev Khudanpur. 2010. Recurrent neural network based language model. In INTERSPEECH, pages 1045–1048.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tomas Mikolov</author>
+<author>Kai Chen</author>
+<author>Greg Corrado</author>
+<author>Jeffrey Dean</author>
+</authors>
+<title>Efficient estimation of word representations in vector space. arXiv preprint arXiv:1301.3781.</title>
+<date>2013</date>
+<contexts>
+<context position="3473" citStr="Mikolov et al., 2013" startWordPosition="515" endWordPosition="518"> example, Turian et al (2010) report that some models took multiple days or weeks to produce acceptable representations. Moreover, language embeddings learned from neural networks tend to behave in a “nonlinear” fashion, as they are trained to encourage a many-layered neural network to assign high probability to the data. These neural networks can detect nonlinear relationships between the embeddings, which is not possible in a log-linear model such as a conditional random field, and therefore limiting how much information from the embeddings can be actually leveraged. Recently Mikolov et al (Mikolov et al., 2013a; 78 Proceedings of the Eighteenth Conference on Computational Language Learning, pages 78–86, Baltimore, Maryland USA, June 26-27 2014. c�2014 Association for Computational Linguistics Mikolov et al., 2013b) proposed two simple loglinear language models, the CBOW model and the Skip-Gram model, that are simplifications of neural language models, and which can be very efficiently trained on large amounts of data. For example it is possible to train a Skip-gram model over more than a billion tokens with a single machine in less than half a day. These embeddings can also be trained on phrases in</context>
+<context position="9377" citStr="Mikolov et al. (2013" startWordPosition="1502" endWordPosition="1505">guage models at all. A popular example is the CCA family of word embeddings (Dhillon et al., 2012; Dhillon et al., 2011), which work by choosing embeddings for a word type that capture the correlations between the embeddings of word types which occur before and after this type. Figure 1: A binary Huffman tree. Circles represent binary classifiers. Rectangles represent tokens, which can be multi-word. ... ... ... A An San Diego ... New York City 2.2 The Skip-gram Model A main limitation of neural language models is that they often have many parameters and slow training times. To mitigate this, Mikolov et al. (2013a; 2013b) recently proposed a family of log-linear language models inspired by neural language models but designed for efficiency. These models operate on the assumption that, even though they are trained as language models, users will only look at their embeddings, and hence all they need is to produce good embeddings, and not high-accuracy language models. The most successful of these models is the skip-gram model, which computes the probability of each n-gram as the product of the conditional probabilities of each context word in the n-gram conditioned on its central word. For example, the </context>
+<context position="11393" citStr="Mikolov et al (2013" startWordPosition="1838" endWordPosition="1841">d. Figure 1 shows such a tree structured model. Given a tree, then, choosing embeddings emn and classifier parameters wcn i to maximize equation (1) is a non-convex optimization problem which can be solved with stochastic gradient descent. The binary tree used in the model is commonly estimated by computing a Huffman coding tree (Huffman, 1952) of the word types and their frequencies. We experimented with other tree estimation schemes but found no perceptible improve. ment in the quality of the embeddings. It is possible to extend these embeddings to model phrases as well as tokens. To do so, Mikolov et al (2013b) use a phrase-building criterion based on the pointwise mutual information of bigrams. They perform multiple passes over a corpus to estimate trigrams and higher-order phrases. We instead consider candidate trigrams for all pairs of bigrams which have a high PMI and share a token. 2.3 Named Entity Recognition Named Entity Recognition (NER) is the task of finding all instances of explicitly named entities and their types in a given document. While The likelihood of the data, then, given a set N of n-grams, with mn being n-gram n’s middleword, cn each context word, wcn i the parameters of the </context>
+<context position="23935" citStr="Mikolov et al (2013" startWordPosition="3969" endWordPosition="3972"> we first select bigrams which have a pointwise mutual information score larger than 1000. We discard bigrams with stopwords from a manually selected list. If two bigrams share a token we add its corresponding trigram to our phrase list. We further add page titles from the English Wikipedia to the list of candidate phrases, as well as all word types. We get a total of about 10M phrases. We restrict the vocabulary to the most frequent 1M phrases. All our reported experiments are on 50-dimensional embeddings. Longer embeddings, while performing better on the semantic similarity task, as seen in Mikolov et al (2013a; The state of New York is BUSINESS The ... ... state ... WIKI-LOCATION ... US-STATE often ... New York referred Y Y n ∈N cn∈n (2) Y s 83 Model Accuracy Skip-Gram 29.89 Lex-0.05 30.37 Lex-0.01 30.72 Table 1: Accuracy for Semantic-Syntactic task, when restricted to Top 30K words. Lex-0.01 refers to a model trained with lexicons, where 0.01% of negative examples were used for training. 2013b), did not perform as well on NER. To train phrase embeddings, we use a context of length 21. We use lexicons derived from Wikipedia categories and data from the US Census, totaling K = 22 lexicon classes. W</context>
+<context position="25172" citStr="Mikolov et al. (2013" startWordPosition="4172" endWordPosition="4175">selected 0.01% of negative training examples for lexicons. We perform two sets of experiments. First, we validate our lexicon-infused phrase embeddings on a semantic similarity task, similar to Mikolov et al (Mikolov et al., 2013a). Then we evaluate their utility on two named-entity recognition tasks. For the NER Experiments, we use the baseline system as described in Section 2.3.1. NER systems marked as “Skip-gram” consider phrase embeddings; “LexEmb” consider lexicon-infused embeddings; “Brown” use Brown clusters, and “Gaz” use our lexicons as features. 4.1 Syntactic and Semantic Similarity Mikolov et al. (2013a) introduce a test set to measure syntactic and semantic regularities for words. This set contains 8869 semantic and 10675 syntactic questions. Each question consists of four words, such as big, biggest, small, smallest. It asks questions of the form “What is the word that is similar to small in the same sense as biggest is similar to big”. To test this, we compute the vector X = vector(“biggest”) − vector(“big”) + vector(“small”). Next, we search for the word closest to X in terms of cosine distance (excluding “biggest”, “small”, and “big”). This question is considered correctly answered onl</context>
+</contexts>
+<marker>Mikolov, Chen, Corrado, Dean, 2013</marker>
+<rawString>Tomas Mikolov, Kai Chen, Greg Corrado, and Jeffrey Dean. 2013a. Efficient estimation of word representations in vector space. arXiv preprint arXiv:1301.3781.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tomas Mikolov</author>
+<author>Ilya Sutskever</author>
+<author>Kai Chen</author>
+<author>Greg Corrado</author>
+<author>Jeffrey Dean</author>
+</authors>
+<title>Distributed representations of words and phrases and their compositionality. arXiv preprint arXiv:1310.4546.</title>
+<date>2013</date>
+<contexts>
+<context position="3473" citStr="Mikolov et al., 2013" startWordPosition="515" endWordPosition="518"> example, Turian et al (2010) report that some models took multiple days or weeks to produce acceptable representations. Moreover, language embeddings learned from neural networks tend to behave in a “nonlinear” fashion, as they are trained to encourage a many-layered neural network to assign high probability to the data. These neural networks can detect nonlinear relationships between the embeddings, which is not possible in a log-linear model such as a conditional random field, and therefore limiting how much information from the embeddings can be actually leveraged. Recently Mikolov et al (Mikolov et al., 2013a; 78 Proceedings of the Eighteenth Conference on Computational Language Learning, pages 78–86, Baltimore, Maryland USA, June 26-27 2014. c�2014 Association for Computational Linguistics Mikolov et al., 2013b) proposed two simple loglinear language models, the CBOW model and the Skip-Gram model, that are simplifications of neural language models, and which can be very efficiently trained on large amounts of data. For example it is possible to train a Skip-gram model over more than a billion tokens with a single machine in less than half a day. These embeddings can also be trained on phrases in</context>
+<context position="9377" citStr="Mikolov et al. (2013" startWordPosition="1502" endWordPosition="1505">guage models at all. A popular example is the CCA family of word embeddings (Dhillon et al., 2012; Dhillon et al., 2011), which work by choosing embeddings for a word type that capture the correlations between the embeddings of word types which occur before and after this type. Figure 1: A binary Huffman tree. Circles represent binary classifiers. Rectangles represent tokens, which can be multi-word. ... ... ... A An San Diego ... New York City 2.2 The Skip-gram Model A main limitation of neural language models is that they often have many parameters and slow training times. To mitigate this, Mikolov et al. (2013a; 2013b) recently proposed a family of log-linear language models inspired by neural language models but designed for efficiency. These models operate on the assumption that, even though they are trained as language models, users will only look at their embeddings, and hence all they need is to produce good embeddings, and not high-accuracy language models. The most successful of these models is the skip-gram model, which computes the probability of each n-gram as the product of the conditional probabilities of each context word in the n-gram conditioned on its central word. For example, the </context>
+<context position="11393" citStr="Mikolov et al (2013" startWordPosition="1838" endWordPosition="1841">d. Figure 1 shows such a tree structured model. Given a tree, then, choosing embeddings emn and classifier parameters wcn i to maximize equation (1) is a non-convex optimization problem which can be solved with stochastic gradient descent. The binary tree used in the model is commonly estimated by computing a Huffman coding tree (Huffman, 1952) of the word types and their frequencies. We experimented with other tree estimation schemes but found no perceptible improve. ment in the quality of the embeddings. It is possible to extend these embeddings to model phrases as well as tokens. To do so, Mikolov et al (2013b) use a phrase-building criterion based on the pointwise mutual information of bigrams. They perform multiple passes over a corpus to estimate trigrams and higher-order phrases. We instead consider candidate trigrams for all pairs of bigrams which have a high PMI and share a token. 2.3 Named Entity Recognition Named Entity Recognition (NER) is the task of finding all instances of explicitly named entities and their types in a given document. While The likelihood of the data, then, given a set N of n-grams, with mn being n-gram n’s middleword, cn each context word, wcn i the parameters of the </context>
+<context position="23935" citStr="Mikolov et al (2013" startWordPosition="3969" endWordPosition="3972"> we first select bigrams which have a pointwise mutual information score larger than 1000. We discard bigrams with stopwords from a manually selected list. If two bigrams share a token we add its corresponding trigram to our phrase list. We further add page titles from the English Wikipedia to the list of candidate phrases, as well as all word types. We get a total of about 10M phrases. We restrict the vocabulary to the most frequent 1M phrases. All our reported experiments are on 50-dimensional embeddings. Longer embeddings, while performing better on the semantic similarity task, as seen in Mikolov et al (2013a; The state of New York is BUSINESS The ... ... state ... WIKI-LOCATION ... US-STATE often ... New York referred Y Y n ∈N cn∈n (2) Y s 83 Model Accuracy Skip-Gram 29.89 Lex-0.05 30.37 Lex-0.01 30.72 Table 1: Accuracy for Semantic-Syntactic task, when restricted to Top 30K words. Lex-0.01 refers to a model trained with lexicons, where 0.01% of negative examples were used for training. 2013b), did not perform as well on NER. To train phrase embeddings, we use a context of length 21. We use lexicons derived from Wikipedia categories and data from the US Census, totaling K = 22 lexicon classes. W</context>
+<context position="25172" citStr="Mikolov et al. (2013" startWordPosition="4172" endWordPosition="4175">selected 0.01% of negative training examples for lexicons. We perform two sets of experiments. First, we validate our lexicon-infused phrase embeddings on a semantic similarity task, similar to Mikolov et al (Mikolov et al., 2013a). Then we evaluate their utility on two named-entity recognition tasks. For the NER Experiments, we use the baseline system as described in Section 2.3.1. NER systems marked as “Skip-gram” consider phrase embeddings; “LexEmb” consider lexicon-infused embeddings; “Brown” use Brown clusters, and “Gaz” use our lexicons as features. 4.1 Syntactic and Semantic Similarity Mikolov et al. (2013a) introduce a test set to measure syntactic and semantic regularities for words. This set contains 8869 semantic and 10675 syntactic questions. Each question consists of four words, such as big, biggest, small, smallest. It asks questions of the form “What is the word that is similar to small in the same sense as biggest is similar to big”. To test this, we compute the vector X = vector(“biggest”) − vector(“big”) + vector(“small”). Next, we search for the word closest to X in terms of cosine distance (excluding “biggest”, “small”, and “big”). This question is considered correctly answered onl</context>
+</contexts>
+<marker>Mikolov, Sutskever, Chen, Corrado, Dean, 2013</marker>
+<rawString>Tomas Mikolov, Ilya Sutskever, Kai Chen, Greg Corrado, and Jeffrey Dean. 2013b. Distributed representations of words and phrases and their compositionality. arXiv preprint arXiv:1310.4546.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Scott Miller</author>
+<author>Jethran Guinness</author>
+<author>Alex Zamanian</author>
+</authors>
+<title>Name tagging with word clusters and discriminative training.</title>
+<date>2004</date>
+<booktitle>In HLT-NAACL,</booktitle>
+<volume>4</volume>
+<pages>337--342</pages>
+<publisher>Citeseer.</publisher>
+<contexts>
+<context position="1868" citStr="Miller et al., 2004" startWordPosition="267" endWordPosition="270">ystem; some external source of information is required. In most state-of-the-art systems for named-entity recognition (NER) this knowledge comes in two forms: domain-specific lexicons (lists of word types related to the desired named entity types) and word representations (either clusterings or vectorial representations of word types which capture some of their syntactic and semantic behavior and allow generalizing to unseen word types). Current state-of-the-art named entity recognition systems use Brown clusters as the form of word representation (Ratinov and Roth, 2009; Turian et al., 2010; Miller et al., 2004; Brown et al., 1992), or other cluster-based representations computed from private data (Lin and Wu, 2009). While very attractive due to their simplicity, generality, and hierarchical structure, Brown clusters are limited because the computational complexity of fitting a model scales quadratically with the number of words in the corpus, or the number of “base clusters” in some efficient implementations, making it infeasible to train it on large corpora or with millions of word types. Although some attempts have been made to train named-entity recognition systems with other forms of word repre</context>
+<context position="7563" citStr="Miller et al., 2004" startWordPosition="1193" endWordPosition="1196">us. The Brown clustering algorithm works by starting with an initial assignment of word types to classes (which is usually either one unique class per type or a small number of seed classes corresponding to the most frequent types in the corpus), and then iteratively selecting the pair of classes to merge that would lead to the highest post-merge log-likelihood, doing so until all classes have been merged. This process produces a hierarchical clustering of the word types in the corpus, and these clusterings have been found useful in many applications (Ratinov and Roth, 2009; Koo et al., 2008; Miller et al., 2004). There are other similar models of distributional clustering of English words which can be similarly effective (Pereira et al., 1993). One limitation of Brown clusters is their computational complexity, as training takes O(kV 2 + N)x time to train, where k is the number of base clusters, V size of vocabulary, and N number of tokens. This is infeasible for large corpora with millions of word types. Another family of language models that produces embeddings is the neural language models. Neural language models generally work by mapping each word type to a vector in a lowdimensional vector space</context>
+</contexts>
+<marker>Miller, Guinness, Zamanian, 2004</marker>
+<rawString>Scott Miller, Jethran Guinness, and Alex Zamanian. 2004. Name tagging with word clusters and discriminative training. In HLT-NAACL, volume 4, pages 337–342. Citeseer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andriy Mnih</author>
+<author>Geoffrey E Hinton</author>
+</authors>
+<title>A scalable hierarchical distributed language model.</title>
+<date>2008</date>
+<booktitle>In Advances in neural information processing systems,</booktitle>
+<pages>1081--1088</pages>
+<contexts>
+<context position="8396" citStr="Mnih and Hinton, 2008" startWordPosition="1333" endWordPosition="1336">ing takes O(kV 2 + N)x time to train, where k is the number of base clusters, V size of vocabulary, and N number of tokens. This is infeasible for large corpora with millions of word types. Another family of language models that produces embeddings is the neural language models. Neural language models generally work by mapping each word type to a vector in a lowdimensional vector space and assigning probabilities to n-grams by processing their embeddings in a neural network. Many different neural language models have been proposed (Bengio et al., 2003; Morin and Bengio, 2005; Bengio, 2008; 79 Mnih and Hinton, 2008; Collobert and Weston, 2008; Mikolov et al., 2010). While they can capture the semantics of word types, and often generalize better than n-gram models in terms of perplexity, applying them to NLP tasks has generally been less successful than Brown clusters (Turian et al., 2010). Finally, there are algorithms for computing word embeddings which do not use language models at all. A popular example is the CCA family of word embeddings (Dhillon et al., 2012; Dhillon et al., 2011), which work by choosing embeddings for a word type that capture the correlations between the embeddings of word types </context>
+</contexts>
+<marker>Mnih, Hinton, 2008</marker>
+<rawString>Andriy Mnih and Geoffrey E Hinton. 2008. A scalable hierarchical distributed language model. In Advances in neural information processing systems, pages 1081–1088.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Frederic Morin</author>
+<author>Yoshua Bengio</author>
+</authors>
+<title>Hierarchical probabilistic neural network language model.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the international workshop on artificial intelligence and statistics,</booktitle>
+<pages>246--252</pages>
+<contexts>
+<context position="8356" citStr="Morin and Bengio, 2005" startWordPosition="1326" endWordPosition="1329"> their computational complexity, as training takes O(kV 2 + N)x time to train, where k is the number of base clusters, V size of vocabulary, and N number of tokens. This is infeasible for large corpora with millions of word types. Another family of language models that produces embeddings is the neural language models. Neural language models generally work by mapping each word type to a vector in a lowdimensional vector space and assigning probabilities to n-grams by processing their embeddings in a neural network. Many different neural language models have been proposed (Bengio et al., 2003; Morin and Bengio, 2005; Bengio, 2008; 79 Mnih and Hinton, 2008; Collobert and Weston, 2008; Mikolov et al., 2010). While they can capture the semantics of word types, and often generalize better than n-gram models in terms of perplexity, applying them to NLP tasks has generally been less successful than Brown clusters (Turian et al., 2010). Finally, there are algorithms for computing word embeddings which do not use language models at all. A popular example is the CCA family of word embeddings (Dhillon et al., 2012; Dhillon et al., 2011), which work by choosing embeddings for a word type that capture the correlatio</context>
+</contexts>
+<marker>Morin, Bengio, 2005</marker>
+<rawString>Frederic Morin and Yoshua Bengio. 2005. Hierarchical probabilistic neural network language model. In Proceedings of the international workshop on artificial intelligence and statistics, pages 246–252.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Fernando Pereira</author>
+<author>Naftali Tishby</author>
+<author>Lillian Lee</author>
+</authors>
+<title>Distributional clustering of english words.</title>
+<date>1993</date>
+<booktitle>In Proceedings of the 31st annual meeting on Association for Computational Linguistics,</booktitle>
+<pages>183--190</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="7697" citStr="Pereira et al., 1993" startWordPosition="1213" endWordPosition="1216"> unique class per type or a small number of seed classes corresponding to the most frequent types in the corpus), and then iteratively selecting the pair of classes to merge that would lead to the highest post-merge log-likelihood, doing so until all classes have been merged. This process produces a hierarchical clustering of the word types in the corpus, and these clusterings have been found useful in many applications (Ratinov and Roth, 2009; Koo et al., 2008; Miller et al., 2004). There are other similar models of distributional clustering of English words which can be similarly effective (Pereira et al., 1993). One limitation of Brown clusters is their computational complexity, as training takes O(kV 2 + N)x time to train, where k is the number of base clusters, V size of vocabulary, and N number of tokens. This is infeasible for large corpora with millions of word types. Another family of language models that produces embeddings is the neural language models. Neural language models generally work by mapping each word type to a vector in a lowdimensional vector space and assigning probabilities to n-grams by processing their embeddings in a neural network. Many different neural language models have</context>
+</contexts>
+<marker>Pereira, Tishby, Lee, 1993</marker>
+<rawString>Fernando Pereira, Naftali Tishby, and Lillian Lee. 1993. Distributional clustering of english words. In Proceedings of the 31st annual meeting on Association for Computational Linguistics, pages 183–190. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Lev Ratinov</author>
+<author>Dan Roth</author>
+</authors>
+<title>Design challenges and misconceptions in named entity recognition.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the Thirteenth Conference on Computational Natural Language Learning,</booktitle>
+<pages>147--155</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="1826" citStr="Ratinov and Roth, 2009" startWordPosition="259" endWordPosition="262">e is not enough to build a high performance system; some external source of information is required. In most state-of-the-art systems for named-entity recognition (NER) this knowledge comes in two forms: domain-specific lexicons (lists of word types related to the desired named entity types) and word representations (either clusterings or vectorial representations of word types which capture some of their syntactic and semantic behavior and allow generalizing to unseen word types). Current state-of-the-art named entity recognition systems use Brown clusters as the form of word representation (Ratinov and Roth, 2009; Turian et al., 2010; Miller et al., 2004; Brown et al., 1992), or other cluster-based representations computed from private data (Lin and Wu, 2009). While very attractive due to their simplicity, generality, and hierarchical structure, Brown clusters are limited because the computational complexity of fitting a model scales quadratically with the number of words in the corpus, or the number of “base clusters” in some efficient implementations, making it infeasible to train it on large corpora or with millions of word types. Although some attempts have been made to train named-entity recognit</context>
+<context position="7523" citStr="Ratinov and Roth, 2009" startWordPosition="1185" endWordPosition="1188">es of word tokens of each type in the corpus. The Brown clustering algorithm works by starting with an initial assignment of word types to classes (which is usually either one unique class per type or a small number of seed classes corresponding to the most frequent types in the corpus), and then iteratively selecting the pair of classes to merge that would lead to the highest post-merge log-likelihood, doing so until all classes have been merged. This process produces a hierarchical clustering of the word types in the corpus, and these clusterings have been found useful in many applications (Ratinov and Roth, 2009; Koo et al., 2008; Miller et al., 2004). There are other similar models of distributional clustering of English words which can be similarly effective (Pereira et al., 1993). One limitation of Brown clusters is their computational complexity, as training takes O(kV 2 + N)x time to train, where k is the number of base clusters, V size of vocabulary, and N number of tokens. This is infeasible for large corpora with millions of word types. Another family of language models that produces embeddings is the neural language models. Neural language models generally work by mapping each word type to a</context>
+<context position="13775" citStr="Ratinov and Roth (2009)" startWordPosition="2236" endWordPosition="2239">ISCELLANEOUS. The Ontonotes dataset is substantially larger: it has 1.6M tokens total, with 1.4M for training, 100K for development, and 130k for testing. It also has eighteen entity types, a much larger set than the CoNLL dataset, including works of art, dates, cardinal numbers, languages, and events. The performance of NER systems is commonly measured in terms of precision, recall, and F1 on the sets of entities in the ground truth and returned by the system. 2.3.1 Baseline System In this section we describe in detail the baseline NER system we use. It is inspired by the system described in Ratinov and Roth (2009). Because NER annotations are commonly not nested (for example, in the text “the US Army”, “US Army” is treated as a single entity, instead of the location “US” and the organization “US Army”) it is possible to treat NER as a sequence labeling problem, where each token in the sentence receives a label which depends on which entity type it belongs to and its position in the entity. Following Ratinov and Roth (2009) we use the BILOU encoding, where each token can either BEGIN an entity, be INSIDE an entity, be the LAST token in an entity, be OUTSIDE an entity, or be the single UNIQUE token in an</context>
+<context position="15340" citStr="Ratinov and Roth (2009)" startWordPosition="2503" endWordPosition="2506">e clues used in text to highlight named entities, they cannot necessarily disambiguate entity types or detect named entities in special positions, such as the first tokens in a sentence. To solve these problems most NER systems incorporate some form of external knowledge. In our baseline system we use lexicons of months, days, person names, companies, job titles, places, events, organizations, books, films, and some minor others. These lexicons were gathered from US Census data, Wikipedia category pages, and Wikipedia redirects (and will be made publicly available upon publication). Following Ratinov and Roth (2009), we also compare the performance of our system with a system using features based on the Brown clusters of the word types in a document. Since, as seen in section 2.1, Brown clusters are hierarchical, we use features corresponding to prefixes of the path from the root to the leaf for each word type. More specifically, the feature templates of the baseline system are as follows. First for each token we compute: • its word type; • word type, after excluding digits and lowercasing it; • its capitalization pattern; • whether it is punctuation; • 4-character prefixes and suffixes; • character n-gr</context>
+<context position="26503" citStr="Ratinov and Roth (2009)" startWordPosition="4398" endWordPosition="4401">words which are among the 30K most frequent words in the vocabulary. Table 1 depicts the accuracy on Semantic Syntactic Task for models trained with 50 dimensions. We find that lexicon-infused embeddings perform better than Skip-gram. Further, lex-0.01 performs System Dev Test Baseline 92.22 87.93 Baseline + Brown 93.39 90.05 Baseline + Skip-gram 93.68 89.68 Baseline + LexEmb 93.81 89.56 Baseline + Gaz 93.69 89.27 Baseline + Gaz + Brown 93.88 90.67 Baseline + Gaz + Skip-gram 94.23 90.33 Baseline + Gaz + LexEmb 94.46 90.90 Ando and Zhang (2005) 93.15 89.31 Suzuki and Isozaki (2008) 94.48 89.92 Ratinov and Roth (2009) 93.50 90.57 Lin and Wu (2009) - 90.90 Table 2: Final NER F1 scores for the CoNLL 2003 shared task. On the top are the systems presented in this paper, and on the bottom we have baseline systems. The best results within each area are highlighted in bold. Lin and Wu 2009 use massive private industrial query-log data in training. the best, and we use this model for further NER experiments. There was no perceptible difference in computation cost from learning lexicon-infused embeddings versus learning standard Skip-gram embeddings. 4.2 CoNLL 2003 NER We applied our models on CoNLL 2003 NER data s</context>
+</contexts>
+<marker>Ratinov, Roth, 2009</marker>
+<rawString>Lev Ratinov and Dan Roth. 2009. Design challenges and misconceptions in named entity recognition. In Proceedings of the Thirteenth Conference on Computational Natural Language Learning, pages 147– 155. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jun Suzuki</author>
+<author>Hideki Isozaki</author>
+</authors>
+<title>Semi-supervised sequential labeling and segmentation using gigaword scale unlabeled data. In</title>
+<date>2008</date>
+<booktitle>ACL,</booktitle>
+<pages>665--673</pages>
+<publisher>Citeseer.</publisher>
+<contexts>
+<context position="26467" citStr="Suzuki and Isozaki (2008)" startWordPosition="4392" endWordPosition="4395">v et al., 2013a), we only search over words which are among the 30K most frequent words in the vocabulary. Table 1 depicts the accuracy on Semantic Syntactic Task for models trained with 50 dimensions. We find that lexicon-infused embeddings perform better than Skip-gram. Further, lex-0.01 performs System Dev Test Baseline 92.22 87.93 Baseline + Brown 93.39 90.05 Baseline + Skip-gram 93.68 89.68 Baseline + LexEmb 93.81 89.56 Baseline + Gaz 93.69 89.27 Baseline + Gaz + Brown 93.88 90.67 Baseline + Gaz + Skip-gram 94.23 90.33 Baseline + Gaz + LexEmb 94.46 90.90 Ando and Zhang (2005) 93.15 89.31 Suzuki and Isozaki (2008) 94.48 89.92 Ratinov and Roth (2009) 93.50 90.57 Lin and Wu (2009) - 90.90 Table 2: Final NER F1 scores for the CoNLL 2003 shared task. On the top are the systems presented in this paper, and on the bottom we have baseline systems. The best results within each area are highlighted in bold. Lin and Wu 2009 use massive private industrial query-log data in training. the best, and we use this model for further NER experiments. There was no perceptible difference in computation cost from learning lexicon-infused embeddings versus learning standard Skip-gram embeddings. 4.2 CoNLL 2003 NER We applied</context>
+</contexts>
+<marker>Suzuki, Isozaki, 2008</marker>
+<rawString>Jun Suzuki and Hideki Isozaki. 2008. Semi-supervised sequential labeling and segmentation using gigaword scale unlabeled data. In ACL, pages 665–673. Citeseer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Erik F Tjong Kim Sang</author>
+<author>Fien De Meulder</author>
+</authors>
+<title>Introduction to the conll-2003 shared task: Language-independent named entity recognition.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the seventh conference on Natural language learning at HLT-NAACL 2003-Volume 4,</booktitle>
+<pages>142--147</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<marker>Sang, De Meulder, 2003</marker>
+<rawString>Erik F Tjong Kim Sang and Fien De Meulder. 2003. Introduction to the conll-2003 shared task: Language-independent named entity recognition. In Proceedings of the seventh conference on Natural language learning at HLT-NAACL 2003-Volume 4, pages 142–147. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Joseph Turian</author>
+<author>Lev Ratinov</author>
+<author>Yoshua Bengio</author>
+</authors>
+<title>Word representations: a simple and general method for semi-supervised learning.</title>
+<date>2010</date>
+<booktitle>In Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics,</booktitle>
+<pages>384--394</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="1847" citStr="Turian et al., 2010" startWordPosition="263" endWordPosition="266"> a high performance system; some external source of information is required. In most state-of-the-art systems for named-entity recognition (NER) this knowledge comes in two forms: domain-specific lexicons (lists of word types related to the desired named entity types) and word representations (either clusterings or vectorial representations of word types which capture some of their syntactic and semantic behavior and allow generalizing to unseen word types). Current state-of-the-art named entity recognition systems use Brown clusters as the form of word representation (Ratinov and Roth, 2009; Turian et al., 2010; Miller et al., 2004; Brown et al., 1992), or other cluster-based representations computed from private data (Lin and Wu, 2009). While very attractive due to their simplicity, generality, and hierarchical structure, Brown clusters are limited because the computational complexity of fitting a model scales quadratically with the number of words in the corpus, or the number of “base clusters” in some efficient implementations, making it infeasible to train it on large corpora or with millions of word types. Although some attempts have been made to train named-entity recognition systems with othe</context>
+<context position="8675" citStr="Turian et al., 2010" startWordPosition="1381" endWordPosition="1384">Neural language models generally work by mapping each word type to a vector in a lowdimensional vector space and assigning probabilities to n-grams by processing their embeddings in a neural network. Many different neural language models have been proposed (Bengio et al., 2003; Morin and Bengio, 2005; Bengio, 2008; 79 Mnih and Hinton, 2008; Collobert and Weston, 2008; Mikolov et al., 2010). While they can capture the semantics of word types, and often generalize better than n-gram models in terms of perplexity, applying them to NLP tasks has generally been less successful than Brown clusters (Turian et al., 2010). Finally, there are algorithms for computing word embeddings which do not use language models at all. A popular example is the CCA family of word embeddings (Dhillon et al., 2012; Dhillon et al., 2011), which work by choosing embeddings for a word type that capture the correlations between the embeddings of word types which occur before and after this type. Figure 1: A binary Huffman tree. Circles represent binary classifiers. Rectangles represent tokens, which can be multi-word. ... ... ... A An San Diego ... New York City 2.2 The Skip-gram Model A main limitation of neural language models i</context>
+</contexts>
+<marker>Turian, Ratinov, Bengio, 2010</marker>
+<rawString>Joseph Turian, Lev Ratinov, and Yoshua Bengio. 2010. Word representations: a simple and general method for semi-supervised learning. In Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 384–394. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ralph Weischedel</author>
+<author>Martha Palmer</author>
+<author>Mitchell Marcus</author>
+</authors>
+<title>Eduard Hovy, Sameer Pradhan, Lance Ramshaw,</title>
+<date>2011</date>
+<location>Nianwen Xue, Ann Taylor, Jeff Kaufman, Michelle</location>
+<contexts>
+<context position="5091" citStr="Weischedel et al., 2011" startWordPosition="772" endWordPosition="775">s method outperforms a simple application of the SkipGram model on the semantic similarity task on which it was originally tested. (3) We show that a linear-chain CRF is able to successfully use these log-linearly-trained embeddings better than the other neural-network-trained embeddings. (4) We show that lexicon-infused embeddings let us easily build a new highest-performing named entity recognition system on CoNLL 2003 data (Tjong Kim Sang and De Meulder, 2003) which is trained using only publicly available data. (5) We also present results on the relatively understudied Ontonotes NER task (Weischedel et al., 2011), where we show that our embeddings outperform Brown clusters. 2 Background and Related Work 2.1 Language models and word embeddings A statistical language model is a way to assign probabilities to all possible documents in a given language. Most such models can be classified in one of two categories: they can directly assign probabilities to sequences of word types, such as is done in n-gram models, or they can operate in a lower-dimensional latent space, to which word types are mapped. While most state-ofthe-art language models are n-gram models, the representations used in models of the lat</context>
+<context position="12740" citStr="Weischedel et al., 2011" startWordPosition="2067" endWordPosition="2070"> f, and σ is the logistic sigmoid function, is rjσ(linwcnT emn). (1) i i ri n∈N ri cn∈n 80 detecting named entities is superficially simple, since most sequences of capitalized words are named entities (excluding headlines, sentence beginnings, and a few other exceptions), finding all entities is non trivial, and determining the correct named entity type can sometimes be surprisingly hard. Performing the task well often requires external knowledge of some form. In this paper we evaluate our system on two labeled datasets for NER: CoNLL 2003 (Tjong Kim Sang and De Meulder, 2003) and Ontonotes (Weischedel et al., 2011). The CoNLL dataset has approximately 320k tokens, divided into 220k tokens for training, 55k tokens for development, and 50k tokens for testing. While the training and development sets are quite similar, the test set is substantially different, and performance on it depends strongly on how much external knowledge the systems have. The CoNLL dataset has four entity types: PERSON, LOCATION, ORGANIZATION, AND MISCELLANEOUS. The Ontonotes dataset is substantially larger: it has 1.6M tokens total, with 1.4M for training, 100K for development, and 130k for testing. It also has eighteen entity types</context>
+</contexts>
+<marker>Weischedel, Palmer, Marcus, 2011</marker>
+<rawString>Ralph Weischedel, Martha Palmer, Mitchell Marcus, Eduard Hovy, Sameer Pradhan, Lance Ramshaw, Nianwen Xue, Ann Taylor, Jeff Kaufman, Michelle Franchini, et al. 2011. OntoNotes Release 4.0. Linguistic Data Consortium.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tong Zhang</author>
+<author>David Johnson</author>
+</authors>
+<title>A robust risk minimization based named entity recognition system.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the seventh conference on Natural language learning at HLT-NAACL 2003-Volume 4,</booktitle>
+<pages>204--207</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="14644" citStr="Zhang and Johnson (2003)" startWordPosition="2395" endWordPosition="2398">roblem, where each token in the sentence receives a label which depends on which entity type it belongs to and its position in the entity. Following Ratinov and Roth (2009) we use the BILOU encoding, where each token can either BEGIN an entity, be INSIDE an entity, be the LAST token in an entity, be OUTSIDE an entity, or be the single UNIQUE token in an entity. Our baseline architecture is a stacked linearchain CRF (Lafferty et al., 2001) system: we train two CRFs, where the second CRF can condition on the predictions made by the first CRF as well as features of the data. Both CRFs, following Zhang and Johnson (2003), have roughly similar features. While local features capture a lot of the clues used in text to highlight named entities, they cannot necessarily disambiguate entity types or detect named entities in special positions, such as the first tokens in a sentence. To solve these problems most NER systems incorporate some form of external knowledge. In our baseline system we use lexicons of months, days, person names, companies, job titles, places, events, organizations, books, films, and some minor others. These lexicons were gathered from US Census data, Wikipedia category pages, and Wikipedia red</context>
+</contexts>
+<marker>Zhang, Johnson, 2003</marker>
+<rawString>Tong Zhang and David Johnson. 2003. A robust risk minimization based named entity recognition system. In Proceedings of the seventh conference on Natural language learning at HLT-NAACL 2003-Volume 4, pages 204–207. Association for Computational Linguistics.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

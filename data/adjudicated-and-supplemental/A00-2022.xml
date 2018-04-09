@@ -1,0 +1,1303 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.010601">
+<title confidence="0.99921">
+Ambiguity Packing in Constraint-based Parsing —
+Practical Results
+</title>
+<author confidence="0.990758">
+Stephan Oepen
+</author>
+<affiliation confidence="0.9838705">
+Computational Linguistics
+Saarland University
+</affiliation>
+<address confidence="0.795692">
+66041 Saarbriicken, Germany
+</address>
+<email confidence="0.998553">
+oe@coli.uni–sb.de
+</email>
+<author confidence="0.987092">
+John Carroll
+</author>
+<affiliation confidence="0.9857745">
+Cognitive and Computing Sciences
+University of Sussex
+</affiliation>
+<address confidence="0.995893">
+Brighton BN1 9QH, UK
+</address>
+<email confidence="0.999374">
+johnca@cogs.susx.ac.uk
+</email>
+<sectionHeader confidence="0.969991" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.9917397">
+We describe a novel approach to &apos;packing&apos; of local am-
+biguity in parsing with a wide-coverage HPSG gram-
+mar, and provide an empirical assessment of the in-
+teraction between various packing and parsing strate-
+gies. We present a linear-time, bidirectional subsump-
+tion test for typed feature structures and demonstrate
+that (a) subsumption- and equivalence-based packing is
+applicable to large HPSG grammars and (b) average parse
+complexity can be greatly reduced in bottom-up chart
+parsing with comprehensive HPSG implementations.
+</bodyText>
+<sectionHeader confidence="0.987915" genericHeader="keywords">
+1 Background
+</sectionHeader>
+<bodyText confidence="0.9999411">
+The ambiguity inherent in natural language means
+that during parsing, some segments of the input
+string may end up being analysed as the same type
+of linguistic object in several different ways. Each
+of these different ways must be recorded, but subse-
+quent parsing steps must treat the set of analyses as
+a single entity, otherwise the computation becomes
+theoretically intractable. Earley&apos;s algorithm (Ear-
+ley, 1970), for example, avoids duplication of parse
+items by maintaining pointers to alternative deriva-
+tions in association with the item. This process
+has been termed &apos;local ambiguity packing&apos; (Tomita,
+1985), and the structure built up by the parser, a
+&apos;parse forest&apos; (Billot &amp; Lang, 1989). Context free
+(CF) grammars represent linguistic objects in terms
+of atomic category symbols. The test for duplicate
+parse items—and thus being able to pack the sub-
+analyses associated with them—is equality of cate-
+gory symbols. In the final parse forest every differ-
+ent combination of packed nodes induces a distinct,
+valid parse tree.
+Most existing unification-based parsing systems
+either implicitly or explicitly contain a context-free
+core. For example, in the CLE (Alshawi, 1992)
+the (manually-assigned) functors of the Prolog terms
+forming the categories constitute a CF &apos;backbone&apos;.
+In the Alvey Tools system (Carroll, 1993) each dis-
+tinct set of features is automatically given a unique
+identifier and this is associated with every category
+containing those features. The packing technique
+has been shown to work well in practice in these
+and similar unification-augmented CF systems: the
+parser first tests for CF category equality, and then
+either (a) checks that the existing feature structure
+subsumes the newly derived one (Moore &amp; Alshawi,
+1992), or (b) forms an efficiently processable disjunc-
+tion of the feature structures (Maxwell and Kaplan,
+1995). Extracting parses from the parse forest is
+similar to the CF case, except that a global check for
+consistency of feature values between packed nodes
+or between feature structure disjuncts is required
+(this global validation is not required if the sub-
+sumption test is strengthened to feature structure
+equivalence).
+In contrast, there is essentially no CF compo-
+nent in systems which directly interpret HPSG gram-
+mars. Although HPSG feature structures are typed,
+an initial CF category equality test cannot be im-
+plemented straightforwardly in terms of the top-
+level types of feature structures since two compat-
+ible types need not be equal, but could stand in
+a subtype-supertype relationship. In addition, the
+feature structure subsumption test is potentially ex-
+pensive since feature structures are large, typically
+containing hundreds of nodes. It is therefore an open
+question whether parsing systems using grammars of
+this type can gain any advantage from local ambi-
+guity packing.
+The question is becoming increasingly impor-
+tant, though, as wide-coverage HPSG grammars are
+starting to be deployed in practical applications—
+for example for &apos;deep&apos; analysis in the VerbMo-
+bil speech-to-speech translation system (Wahlster,
+1997; Kiefer, Krieger, Carroll, &amp; Malouf, 1999).1 In
+this paper we answer the question by demonstrating
+that (a) subsumption- and equivalence-based feature
+structure packing is applicable to large HPSG gram-
+mars, and (b) average complexity and time taken
+for the parsing task can be greatly reduced. In
+Section 2 we present a new, linear-time, bidirec-
+</bodyText>
+<footnote confidence="0.990576666666667">
+1A significant body of work on efficient processing with
+such grammars has been building up recently, with investi-
+gations into efficient feature structure operations, abstract-
+machine-based compilation, CF backbone computation, and
+finite-state approximation of HPSG derivations, amongst oth-
+ers (Flickinger, Oepen, Uszkoreit, &amp; Tsujii, 2000).
+</footnote>
+<page confidence="0.994221">
+162
+</page>
+<bodyText confidence="0.999858444444444">
+tional subsumption test for typed feature structures,
+which we use in a bottom-up, chart-based parsing
+algorithm incorporating novel, efficient accounting
+mechanisms to guarantee minimal chart size (Sec-
+tion 3). We present a full-scale evaluation of the
+techniques on a large corpus (Section 4), and com-
+plete the picture with an empirically-based discus-
+sion of grammar restrictors and parsing strategies
+(Section 5).
+</bodyText>
+<sectionHeader confidence="0.7184365" genericHeader="introduction">
+2 Efficient Subsumption and
+Equivalence Algorithms
+</sectionHeader>
+<bodyText confidence="0.999820857142857">
+Our feature structure subsumption algorithm2 as-
+sumes totally well-typed structures (Carpenter,
+1992) and employs similar machinery to the
+quasi-destructive unification algorithm described by
+Tomabechi (1991). In particular, it uses temporary
+pointers in dag nodes, each pointer tagged with a
+generation counter, to keep track of intermediate
+results in processing; incrementing the generation
+counter invalidates all temporary pointers in a sin-
+gle operation. But whereas quasi-destructive unifi-
+cation makes two passes (determining whether the
+unification will be successful and then copying out
+the intermediate representation) the subsumption
+algorithm makes only one pass, checking reentran-
+cies and type-supertype relationships at the same
+time.3 The algorithm, shown in Figure 1, also si-
+multaneously tests if both feature structures sub-
+sume each other (i.e. they are equivalent), if either
+subsumes the other, or if there is no subsumption
+relation between them in either direction.
+The top-level entry point dag-subsumes-p 0 and
+subsidiary function dag-subsumes-p0 0 each return
+two values, held in variables forwardp and back-
+wardp, both initially true, recording whether it is
+possible that the first dag subsumes the second
+and/or vice-versa, respectively. When one of these
+possibilities has been ruled out the appropriate vari-
+able is set to false; in the statement of the algorithm
+the two returned values are notated as a pair, i.e.
+(forwardp, backwardp). If at any stage both vari-
+ables have become set to false the possibility of sub-
+sumption in both directions has been ruled out so
+the algorithm exits.
+The (recursive) subsidiary function dag-subsumes-
+p0 0 does most of the work, traversing the two input
+</bodyText>
+<footnote confidence="0.975642818181818">
+2Although independently-developed implementations of
+essentially the same algorithm can be found in the source code
+of The Attribute Logic Engine (ALE) version 3.2 (Carpenter
+&amp; Penn, 1999) and the SICStus Prolog term utilities library
+(Penn, personal communication), we believe that there is no
+previous published description of the algorithm.
+3Feature structure F subsumes feature structure G if:
+(1) if path p is defined in F then p is also defined in G and
+the type of the value of p in F is a supertype or equal to the
+value in G, and (2) all paths that are reentrant in F are also
+reentrant in G.
+</footnote>
+<bodyText confidence="0.998227879310345">
+dags in step. First, it checks whether the current
+node in either dag is involved in a reentrancy that
+is not present in the other: for each node visited
+in one dag it adds a temporary pointer (held in the
+&apos;copy&apos; slot) to the corresponding node in the other
+dag. If a node is reached that already has a pointer
+then this is a point of reentrancy in the dag, and
+if the pointer is not identical to the other dag node
+then this reentrancy is not present in the other dag.
+In this case the possibility that the former dag sub-
+sumes the latter is ruled out. After the reentrancy
+check the type-supertype relationship between the
+types at the current nodes in the two dags is deter-
+mined, and if one type is not equal to or a supertype
+of the other then subsumption cannot hold in that
+direction. Finally, after successfully checking the
+type-supertype relationships, the function recurses
+into the arcs outgoing from each node that have the
+same label. Since we are assuming totally well-typed
+feature structures, it must be the case that either the
+sets of arc labels in the two dags are the same, or
+one is a strict superset of the other. Only arcs with
+the same labels need be processed; extra arcs need
+not since the type-supertype check at the two nodes
+will already have determined that the feature struc-
+ture containing the extra arcs must be subsumed by
+the other, and they merely serve to further specify
+it and cannot affect the final result.
+Our implementation of the algorithm contains ex-
+tra redundant but cheap optimizations which for rea-
+sons of clarity are not shown in figure 1; these in-
+clude tests that forwardp is true immediately before
+the first supertype check and that backwardp is true
+before the second.&apos;
+The use of temporary pointers means that the
+space complexity of the algorithm is linear in the
+sum of the sizes of the feature structures. However,
+in our implementation the &apos;copy&apos; slot that the point-
+ers occupy is already present in each dag node (it is
+required for the final phase of unification to store
+new nodes representing equivalence classes), so in
+practice the subsumption test does not allocate any
+new storage. All pointer references take constant
+time since there are no chains of &apos;forwarded&apos; point-
+ers (forwarding takes place only during the course of
+unification and no forwarded pointers are left after-
+wards). Assuming the supertype tests can be carried
+4There is scope for further optimisation of the algorithm in
+the case where dagl and dag2 are identical: full processing in-
+side the structure is not required (since all nodes inside it will
+be identical between the two dags and any strictly internal
+reentrancies will necessarily be the same), but we would still
+need to assign temporary pointers inside it so that any exter-
+nal reentrancies into the structure would be treated correctly.
+In our tests we have found that as far as constituents that are
+candidates for local ambiguity packing are concerned there is
+in fact little equality of structures between them, so special
+equality processing does not justify the extra complication.
+</bodyText>
+<page confidence="0.992085">
+163
+</page>
+<figure confidence="0.99868264">
+1 procedure dag-subsumes-p(dagl ,dag2)
+2 (forwardp , backwardp) 4-- {establish context for non-local exit}
+3 catch with tag &apos;fail&apos; dag-subsumes-p0(dagl ,dag2, true, true);
+4 invalidate-temporary-pointers(); {reset temporary &apos;copy&apos; pointers}
+5 return (forwardp , backwardp);
+6 end
+7 procedure dag-subsumes-p0(dagl ,dag2,forwardp , backwardp)
+8 if (dagl.copy is empty) then dagl.copy 4-- dag2; {check reentrancies}
+9 else if(dagl.copy dag2) then forwardp 4-- false; fi
+10 if (dag2.copy is empty) then dag2.copy 4-- dagl;
+11 else if (dag2.copy dagl) then backwardp 4-- false; fi
+12 if (forwardp = false and backwardp = false) then
+13 throw (false, false) with tag &apos;fail&apos;; {reentrancy check failed}
+14 fi
+15 if (not supertype-or-equal-p(dagl.type ,dag2.type)) then forwardp 4-- false; fi {check types}
+16 if (not supertype-or-equal-p(dag2.type ,dagl.type)) then backwardp 4-- false; fi
+17 if (forwardp = false and backwardp = false) then
+18 throw (false, false) with tag &apos;fail&apos;; {no subtype relations}
+19 fi
+20 for each arc in intersect(dagl.arcs , dag2.arcs) do {check shared arcs recursively}
+21 (forwardp , backwardp)
+22 dag-subsumes-p0(destination of arc for dagl ,destination of arc for dag2 , forwardp , backwardp);
+23 od
+24 return (forwardp , backwardp); {signal result to caller}
+25 end
+</figure>
+<figureCaption confidence="0.999979">
+Figure 1: Bidirectional, linear-time feature structure subsumption (and equivalence) algorithm.
+</figureCaption>
+<bodyText confidence="0.999946818181818">
+out in constant time (e.g. by table lookup), and that
+the grammar allows us to put a small constant upper
+bound on the intersection of outgoing arcs from each
+node, the processing in the body of dag-subsumes-
+p0 0 takes unit time. The body may be executed up
+to N times where N is the number of nodes in the
+smaller of the two feature structures. So overall the
+algorithm has linear time complexity. In practice,
+our implementation (in the environment described in
+Section 4) performs of the order of 34,000 top-level
+feature structure subsumption tests per second.
+</bodyText>
+<sectionHeader confidence="0.799117" genericHeader="method">
+3 Ambiguity Packing in the Parser
+</sectionHeader>
+<bodyText confidence="0.995985209302326">
+Moore and Alshawi (1992) and Carroll (1993) have
+investigated local ambiguity packing for unification
+grammars with CF backbones, using CF category
+equality and feature structure subsumption to test
+if a newly derived constituent can be packed. If a
+new constituent is equivalent to or subsumed by an
+existing constituent, then it can be packed into the
+existing one and will take no further part in pro-
+cessing. However, if the new constituent subsumes
+an existing one, the situation is not so straightfor-
+ward: either (a) no packing takes place and the new
+constituent forms a separate edge (Carroll, 1993), or
+(b) previous processing involving the old constituent
+is undone or invalidated, and it is packed into the
+new one (Moore &amp; Alshawi, 1992; however, it is un-
+clear whether they achieve maximal compactness in
+practice: see Table 1). In the former case the parse
+forest produced will not be optimally compact; in
+the latter it will be, but maintaining chart consis-
+tency and parser correctness becomes a non-trivial
+problem. Packing of a new edge into an existing one
+we call proactive (or forward) packing; for the more
+complex situation involving a new edge subsuming
+an existing one we introduce the term retroactive (or
+backward) packing.
+Several issues arise when packing an old edge (old)
+into one that was newly derived (new) retroactively:
+(i) everything derived from old (called derivatives of
+old in the following) must be invalidated and ex-
+cluded from further processing (as new is known
+to generate more general derivatives); and (ii) all
+pending computation involving old and its deriva-
+tives has to be blocked efficiently. Derivatives of
+old that are invalidated because of retroactive pack-
+ing may already contain packed analyses, however,
+which still represent valid ambiguity. These need to
+be repacked into corresponding derivatives of new
+when those become available. In turn, derivatives of
+old may have been packed already, such that they
+need not be available in the chart for subsequent sub-
+sumption tests. Therefore, the parser cannot simply
+delete everything derived from old when it is packed;
+instead, derivatives must be preserved (but blocked)
+</bodyText>
+<page confidence="0.986248">
+164
+</page>
+<figure confidence="0.992163413793103">
+1 procedure block(edge, mark)
+2 if (edge.frozen = false or mark = freeze) then edge.frozen 4-- mark; fi {mark current edge}
+3 for each parent in edge.parents do block(parent , freeze); od {recursively freeze derivatives}
+4 end
+5 procedure packed-edge-p(new)
+6 for each old in chart[new.start][new.end] do
+7 (forwardp , backwardp) 4-- dag-subsumes-p(old.dag, new.dag);
+8 if (forwardp = true and old.frozen = false) then
+9 old.packed E— (new I old.packed);
+10 return true;
+11 fi
+12 if (backwardp) then
+13 new.packed 4-- (new.packed old.packed);
+14 old.packed 4-- 0;
+15 if (old.frozen = false) then new.packed
+16 block(old , frost);
+17 delete(old , chart);
+18 fi
+19 od
+20 return false;
+21 end
+{passive edges with same span}
+{test category subsumption}
+{equivalent or proactive packing}
+{pack &apos;new&apos; into `old&apos;}
+{return to caller; signal success}
+{retroactive packing}
+{raise all packings into new host}
+4-- (old I new.packed); fi {pack &apos;old&apos; into &apos;new&apos;)
+</figure>
+<figureCaption confidence="0.6678445">
+{frost &apos;old&apos; and freeze derivatives}
+{remove &apos;old&apos; from the chart}
+{signal failure to pack &apos;new&apos; to caller}
+Figure 2: Algorithm called on each newly derived edge to achieve maximal packing.
+</figureCaption>
+<bodyText confidence="0.936774241935484">
+until the derivations have been recomputed on the
+basis of new.5 As new is equivalent to or more gen-
+eral than old it is guaranteed to derive at least the
+same set of edges; furthermore, the derivatives of
+new will again be equivalent to or more general than
+the corresponding edges derived from old.
+The procedure packed- edge-p 0, sketched in Fig-
+ure 2, achieves pro- and retroactive packing with-
+out significant overhead in the parser; the algorithm
+can be integrated with arbitrary bottom-up (chart-
+based) parsing strategies. The interface assumes
+that the parser calls packed-edge-p() on each new
+edge new as it is derived; a return value of true indi-
+cates that new was packed proactively and requires
+no further processing. Conversely, a false return
+value from packed- edge-p ( ) signals that new should
+subsequently undergo regular processing. The sec-
+ond part of the interface builds on notions we call
+frosting and freezing, meaning temporary and per-
+mament invalidation of edges, respectively. As a
+side-effect of calls to packed-edge-p(), a new edge
+can cause retroactive packing, resulting in the dele-
+5The situation is simpler in the CLE parser (Moore &amp; Al-
+shawi, 1992) because constituents and dominance relations
+are separated in the chart. The CLE encoding, in fact, does not
+record the actual daughters used in building a phrase (e.g. as
+unique references or pointers, as we do), but instead preserves
+the category information (i.e. a description) of those daugh-
+ters. Hence, in extracting complete parses from the chart,
+the CLE has to perform (a limited) search with re-unification
+of categories; in this respect, the CLE parse forest still is an
+underspecified representation of the set of analyses, whereas
+our encoding (see below) facilitates unpacking without extra
+search.
+tion of one or more existing edges from the chart
+and blocking of derivatives. Whenever the parser
+accesses the chart (i.e. in trying to combine edges)
+or retrieves a task from the agenda, it is expected
+to ignore all edges and parser tasks involving such
+edges that have a non-null &apos;frozen&apos; value. When an
+existing edge old is packed retroactively, it is frosted
+and ignored by the parser; as old now represents lo-
+cal ambiguity, it still has to be taken into account
+when the parse forest is unpacked. Derivatives of
+old, on the other hand, need to be invalidated in
+both further parsing and later unpacking, since they
+would otherwise give rise to spurious analyses; ac-
+cordingly, such derivatives are frozen permanently.
+Frosting and freezing is done in the subsidiary pro-
+cedure block 0 that walks up the parent link recur-
+sively, storing a mark into the &apos;frozen&apos; slot of edges
+that distinguishes between temporary frosting (in
+the top-level call) and permanent freezing (in recur-
+sive calls).
+For a newly derived edge new, packed-edge-p()
+tests mutual subsumption against all passive edges
+that span the same portion of the input string.
+When forward subsumption (or equivalence) is de-
+tected and the existing edge old is not blocked, reg-
+ular proactive packing is performed (adding new to
+the packing list for old) and the procedure returns
+immediately.6 In the case of backward subsump-
+</bodyText>
+<footnote confidence="0.9792422">
+6Packing an edge el into another edge e2 logically means
+that e2 will henceforth serve as a representative for ei and
+the derivation(s) that it encodes. In practice, el is removed
+from the chart and ignored in subsequent parser action and
+subsumption tests. Only in unpacking the parse forest will
+</footnote>
+<page confidence="0.992814">
+165
+</page>
+<figure confidence="0.99677032">
+No Chart Packing
+Pro- and Retroactive Packing
+1 3 5 7 9 11 13 15 17 19 21 23 25
+String Length (in words)
+20000
+17500 -
+15000 -
+12500 -
+10000 -
+7500 -
+5000 -
+2500 -
+o 1 3
+5 7 9 11 13 15 17 19 21 23 25
+String Length (in words)
+• passive edges
+20000
+17500
+15000
+12500
+10000
+7500
+5000
+2500
+0
+</figure>
+<figureCaption confidence="0.999991">
+Figure 3: Effects of maximal ambiguity packing on the total chart size (truncated above 25 words).
+</figureCaption>
+<bodyText confidence="0.999341">
+tion, analyses packed into old are raised into new
+(using the append operator `ED&apos; because new can at-
+tract multiple existing edges in the loop); old itself is
+only packed into new when it is not blocked already.
+Finally, old is frosted, its derivatives are recursively
+frozen, and old is deleted from the chart. In contrast
+to proactive packing, the top-level loop in the pro-
+cedure continues so that new can pick up additional
+edges retroactively. However, once a backward sub-
+sumption is detected, it follows that no proactive
+packing can be achieved for new, as the chart can-
+not contain an edge that is more general than old.
+</bodyText>
+<sectionHeader confidence="0.995311" genericHeader="method">
+4 Empirical Results
+</sectionHeader>
+<bodyText confidence="0.94515852">
+We have carried out an evaluation of the algo-
+rithms presented above using the LinG0 grammar
+(Flickinger &amp; Sag, 1998), a publicly-available, multi-
+purpose, broad-coverage HPSG of English developed
+at CSLI Stanford. With roughly 8,000 types, an av-
+erage feature structure size of around 300 nodes, and
+64 lexical and grammar rules (fleshing out the inter-
+action of HPSG ID schemata, wellformedness prin-
+ciples, and LP constraints), LinG0 is among the
+largest HPSG grammars available. We used the LKB
+system (Copestake, 1992, 1999) as an experimen-
+tation platform since it provides a parameterisable
+bottom-up chart parser and precise, fine-grained
+profiling facilities (Oepen &amp; Flickinger, 1998).7 All
+of our results were obtained in this environment,
+running on a 300 Mhz UltraSparc, and using a bal-
+anced test set of 2,100 sentences extracted from
+VerbMobil corpora of transcribed speech: input
+lengths from 1 to 20 words are represented with 100
+test items each; although sentences in the corpus
+range up to 36 words in length there are relatively
+few longer than 20 words.
+the category of ei and its decomposition(s) in daughter edges
+(and corresponding subtrees) be used again, to multiply out
+and project local ambiguity.
+</bodyText>
+<footnote confidence="0.9508095">
+7The LinG0 grammar and Lica software are publicly avail-
+able at `http://lingo.stanford.edur.
+</footnote>
+<bodyText confidence="0.99514575">
+Figure 3 compares total chart size (in all-paths
+mode) for the regular LKB parser and our variant
+with pro-and retroactive packing enabled. Factor-
+ing ambiguity reduces the number of passive edges
+by a factor of more than three on average, while for
+a number of cases the reduction is by a factor of 30
+and more. Compared to regular parsing, the rate of
+increase of passive chart items with respect to sen-
+tence length is greatly diminished.
+To quantify the degree of packing we achieve
+in practice, we re-ran the experiment reported by
+Moore and Alshawi (1992): counting the number of
+nodes required to represent all readings for a simple
+declarative sentence containing zero to six preposi-
+tional phrase (PP) modifiers. The results reported
+by Moore and Alshawi (1992) (using the CLE gram-
+mar of English) and those obtained using pro- and
+retroactive packing with the LinG0 grammar are
+presented in Table 1.8 Although the comparison
+involves different grammars we believe it to be in-
+structive, since (0 both grammars have comprehen-
+sive coverage, (ii) derive the same numbers of read-
+ings for all test sentences in this experiment, (iii)
+require (almost) the same number of nodes for the
+basic cases (zero and one PP), (iv) exhibit a similar
+size in nodes for one core PP (measured by the in-
+crement from n = 0 to n = 1), and (v) the syntactic
+simplicity of the test material hardly allows crosstalk
+8Moore and Alshawi (1992) use the terms &apos;node&apos; and
+&apos;record&apos; interchangeably in their discussion of packing, where
+the OLE chart is comprised of separate con(stituent) and
+ana(lysis) entries for category and dominance information,
+respectively. It is unclear whether the counting of &apos;packed
+nodes&apos; in Moore and Alshawi (1992) includes con records or
+not, since only ana records are required in parse tree recovery.
+In any case, both types of chart record need to be checked by
+subsumption as new entries are added to the chart. Con-
+versely, in our setup each edge represents not only the node
+category, but also pointers to the daughter(s) that gave rise
+to this edge, and moreover, where applicable, a list of packed
+edges that are subsumed by the category (but not necessarily
+by the daughters). For the Lica, the column &apos;result edges&apos; in
+Table 1 refers to the total number of edges in the chart that
+contribute to at least one complete analysis.
+</bodyText>
+<page confidence="0.991156">
+166
+</page>
+<table confidence="0.998443909090909">
+Kim saw a cat (in the hotel)&apos;
+Moore &amp; Alshawi Our Method CPU Time
+n readings packed nodes result edges parse unpack plain
+0 I ÷ 0 ÷ msec msec msec
+0 1 10 1.0 11 1.0 210 10 180
+1 2 21 2.1 23 2.1 340 40 290
+2 5 38 3.8 38 3.5 460 80 530
+3 14 62 6.2 56 5.1 600 200 1,180
+4 42 94 9.4 77 7.0 870 590 2,990
+5 132 135 13.5 101 9.2 1,150 1,860 8,790
+6 429 186 18.6 128 11.6 1,460 5,690 28,160
+</table>
+<tableCaption confidence="0.999937">
+Table 1: Comparison of retroactive packing vs. the method used by Moore and Alshawi (1992); columns
+</tableCaption>
+<bodyText confidence="0.985201">
+labeled show the relative increase of packed nodes (result edges) normalised to the n = 0 baseline.
+with other grammatical phenomena. Comparing rel-
+ative packing efficiency with increasing ambiguity
+(the columns labeled &apos;&apos;in Table 1), our method ap-
+pears to produce a more compact representation of
+ambiguity than the CLE, and at the same time builds
+a more specific representation of the parse forest that
+can be unpacked without search. To give an impres-
+sion of parser throughput, Table 1 includes timings
+for our parsing and unpacking (validation) phases,
+contrasted with the plain, non-packing LKB parser:
+as would be expected, parse time increases linearly
+in the number of edges, while unpacking costs re-
+flect the exponential increase in total numbers of
+analyses; the figures show that our packing scheme
+achieves a very significant speedup, even when un-
+packing time is included in the comparison.
+</bodyText>
+<sectionHeader confidence="0.798976" genericHeader="method">
+5 Choosing the Grammar Restrictor
+</sectionHeader>
+<subsectionHeader confidence="0.934418">
+and Parsing Strategy
+</subsectionHeader>
+<bodyText confidence="0.999984418181818">
+In order for the subsumption relation to apply mean-
+ingfully to HPSG signs, two conditions must be met.
+Firstly, parse tree construction must not be dupli-
+cated in the feature structures (by means of the
+HPSG DTRS feature) but be left to the parser (i.e.
+recorded in the chart); this is achieved in a stan-
+dard way by feature structure restriction (Shieber,
+1985) applied to all passive edges. Secondly, the pro-
+cessing of constraints that do not restrict the search
+space but build up new (often semantic) structure
+should be postponed, since they are likely to inter-
+fere with subsumption. For example, analyses that
+differ only with respect to PP attachment would
+have the same syntax, but differences in semantics
+may prevent them being packed. This problem can
+be overcome by using restriction to (temporarily) re-
+move such (semantic) attributes from lexical entries
+and also from the rule set, before they are input
+to the parser in the initial parse forest construction
+phase. The second, unpacking phase of the parser re-
+verts to the unrestricted constraint set, so we can al-
+low overgeneration in the first phase and filter glob-
+ally inconsistent analyses during unpacking. Thus,
+the right choice of grammar restrictor can be viewed
+as an empirical rather than analytical problem.
+Table 2 summarizes packing efficiency and parser
+performance for three different restrictors (labeled
+no, partial, and full semantics, respectively); to
+gauge effects of input complexity, the table is fur-
+ther subdivided by sentence length into two groups
+(of around 1,000 sentences each). Compared to reg-
+ular parsing, packing with the full semantics in place
+is not effective: the chart size is reduced slightly, but
+the extra cost for testing subsumption increases total
+parse times by a factor of more than four. Eliminat-
+ing all semantics (i.e. the entire HPSG CONT value), on
+the other hand, results in overgeneralisation: with
+less information in the feature structures we achieve
+the highest number of packings, but at the same
+time rules apply much more freely, resulting in a
+larger chart compared to parsing with a partial se-
+mantics; moreover, unpacking takes longer because
+the parse forest now contains inconsistent analyses.
+Restricting compositional semantics but preserving
+attributes that participate in selection and agree-
+ment results in minimal chart size and parsing time
+(shown in the partial semantics figures) for both di-
+visions of the test corpus.
+The majority of packings involve equivalent fea-
+ture structures which suggests that unpacking could
+be greatly simplified if the grammar restrictor was
+guaranteed to preserve the generative capacity of
+the grammar (in the first parsing phase); then, only
+packings involving actual subsumption would have
+to be validated in the unpacking phase.9 Finally,
+</bodyText>
+<footnote confidence="0.99079975">
+9There is room for further investigation here: partly for
+theory-internal reasons, current development of the LinG0
+grammar is working towards a stricter separation of restrictive
+(selectional) and constructive (compositional) constraints in
+</footnote>
+<page confidence="0.981802">
+167
+</page>
+<table confidence="0.9998952">
+Parser Passive Packed Packmgs CPU Time (sec)
+Edges Trees E parse unpack
+no semantics 116 0.9 15.5 4.1 2.6 1-8 0-37 0.05
+1-10 partial semantics 111 0.8 12.0 3.6 2.4 1.4 0.33 0.05
+words full semantics 149 2.8 2.1 0.4 0.2 0.1 0.60 0.04
+no packing 160 5.6 0.44
+no semantics 622 1.2 179.0 42.1 23-8 26.0 2.37 0.70
+&gt; 10 partial semantics 575 1.0 134.9 35-0 20-6 18-9 1-97 0.63
+words full semantics 1693 33-9 38-3 3-4 2.9 3.2 29-40 0.56
+no packing 2075 99-9 - - - - 6.46 -
+</table>
+<tableCaption confidence="0.839052333333333">
+Table 2: Contrasting various grammar restrictors on short (top) and medium-length (bottom) inputs; all
+numbers are averaged over 1,000 items per class; packings are, from left to right: equivalence (`-s.&apos;), pro-
+(&apos;a&apos;) and retroactive (&apos; c&apos;) packings, and the number of edges that were frozen (`I&apos;).
+</tableCaption>
+<bodyText confidence="0.998989717948718">
+we note that the number of retroactive packings is
+relatively small, and on average each such packing
+leads to only one previously derived edge being in-
+validated. This, of course, is a function of the order
+in which edges are derived, i.e. the parsing strategy.
+All the results in Table 2 were obtained with a
+&apos;right corner&apos; strategy which aims to exhaust compu-
+tation for any suffix of the input string before mov-
+ing the input pointer to the left; this is achieved by
+means of a scoring function end - -stnart (where start
+and end are the vertices of the derivation that would
+result from the computation, and n is the total input
+length) that orders parser tasks in the agenda. How-
+ever, we have observed (Oepen &amp; Callmeier, 2000)
+that HPsG-type, highly lexicalized grammars bene-
+fit greatly from a bidirectional, &apos;key&apos;-driven, active
+parsing regime, since they often employ rules with
+underspecified arguments that are only instantiated
+by coreference with other daughters (where the &apos;key&apos;
+daughter is the linguistic head in many but not all
+constructions). This requirement and the general
+non-predictability of categories derived for any to-
+ken substring (in particular with respect to unary
+rule applications), means that a particular parsing
+strategy may reduce retroactive packing but cannot
+avoid it in general. With pro- and retroactive pack-
+ing and the minimal accounting overhead, we find
+overall parser throughput to be very robust against
+variation in the parsing strategy. Lavie and Rosé
+(2000) present heuristics for ordering parser actions
+to achieve maximally compact parse forests-though
+only with respect to a CF category backbone-in the
+absence of retroactive packing; however, the tech-
+niques we have presented here allow local ambigu-
+ity packing and parser tuning-possibly including
+priority-driven best-first search-to be carried out
+mostly independently of each other.
+the grammar and underlying semantic theory. We expect that
+our approach to packing will benefit from these developments.
+</bodyText>
+<sectionHeader confidence="0.999738" genericHeader="conclusions">
+6 Conclusions
+</sectionHeader>
+<bodyText confidence="0.99999552631579">
+We have presented novel algorithms for efficient sub-
+sumption checking and pro- and retroactive local
+ambiguity packing with large feature structures, and
+have provided strong empirical evidence that our
+approach can be applied beneficially to chart pars-
+ing with a large, broad-coverage HPSG of English.
+By comparison to previous work in unification-based
+parsing we have demonstrated that pro- and retroac-
+tive packing are well-suited to achieve optimal pack-
+ing; furthermore, experimental results obtained with
+a publicly-available HPSG processing platform con-
+firm that ambiguity packing can greatly reduce av-
+erage parse complexity for this type of grammars.
+In related work, Miyao (1999) describes an ap-
+proach to packing in which alternative feature struc-
+tures are represented as packed, distributed disjunc-
+tions of feature structure fragments. Although the
+approach may have potential, the shifting of com-
+plex accounting into the unification algorithm is at
+variance with the findings of Kiefer et al. (1999),
+who report large speed-ups from the elimination of
+disjunction processing during unification. Unfortu-
+nately, the reported evaluation measures and lack of
+discussion of parser control issues are insufficient to
+allow a precise comparison.
+We intend to develop the approach presented in
+this paper in several directions. Firstly, we will en-
+hance the unpacking phase to take advantage of the
+large number of equivalence packings we observe.
+This will significantly reduce the amount of work it
+needs to do. Secondly, many application contexts
+and subsequent layers of semantic processing will
+not require unfolding the entire parse forest; here,
+we need to define a selective, incremental unpack-
+ing procedure. Finally, applications like VerbMo-
+bil favour prioritized best-first rather than all-paths
+parsing. Using slightly more sophisticated account-
+ing in the agenda, we plan to investigate priority
+</bodyText>
+<page confidence="0.994851">
+168
+</page>
+<bodyText confidence="0.973746">
+propagation in a best-first variant of our parser.
+</bodyText>
+<sectionHeader confidence="0.990354" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.999925545454545">
+We are grateful to Ulrich Callmeier, Ann Copestake,
+Dan Flickinger, and three anonymous reviewers for
+comments on a draft of the paper, to Bob Moore for
+a detailed explanation of the workings of the CLE
+parser, and to Gerald Penn for information about
+related implementations of the subsumption algo-
+rithm. The research was supported by the Deutsche
+Forschungsgemeinschaft as part of the Collaborative
+Research Division Resource-Adaptive Cognitive Pro-
+cesses, project B4 (PERFORM); and by a UK EPSRC
+Advanced Fellowship to the second author.
+</bodyText>
+<sectionHeader confidence="0.999192" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.998866520408164">
+Alshawi, H. (Ed.). (1992). The Core Language En-
+gine. Cambridge, MA: MIT Press.
+Billot, S., &amp; Lang, B. (1989). The structure of
+shared forests in ambiguous parsing. In Proceed-
+ings of the 27th Meeting of the Association for
+Computational Linguistics (pp. 143- 151). Van-
+couver, BC.
+Carpenter, B. (1992). The logic of typed feature
+structures. Cambridge, UK: Cambridge Univer-
+sity Press.
+Carpenter, B., &amp; Penn, G. (1999). ALE. The At-
+tribute Logic Engine. User&apos;s guide version 3.2.
+(Universitat Tubingen: http : //wwww. . sf S. nphil
+.uni-tuebingen.dek,,gpenn/ale.html)
+Carroll, J. (1993). Practical unification-based
+parsing of natural language (Technical Re-
+port # 314). Cambridge, UK: Computer
+Laboratory, Cambridge University. (Online
+at: ftp : //f tp . cl . cam. ac . uk/papers/reports/
+TR314-jac-practical-unif-parsing.ps.gz)
+Copestake, A. (1992). The ACQUILEX LKB. Rep-
+resentation issues in semi-automatic acquisition of
+large lexicons. In Proceedings of the 3rd ACL Con-
+ference on Applied Natural Language Processing
+(pp. 88 - 96). Trento, Italy.
+Copestake, A. (1999). The (new) LKB sys-
+tem. User&apos;s guide. (CSLI, Stanford Uni-
+versity: http : //www-csli . stanford. edu/‘-aac/
+lkb.html)
+Earley, J. (1970). An efficient context-free parsing
+algorithm. Communications of the ACM, 13 (2),
+94 - 102.
+Flickinger, D., Oepen, S., Uszkoreit, H., &amp; Tsu-
+jii, J. (Eds.). (2000). Journal of Natural Lan-
+guage Engineering. Special Issue on Efficient pro-
+cessing with HPSG: Methods, systems, evaluation.
+Cambridge, UK: Cambridge University Press. (in
+preparation)
+Flickinger, D. P., &amp; Sag, I. A. (1998). Linguis-
+tic Grammars Online. A multi-purpose broad-
+coverage computational grammar of English. In
+CSLI Bulletin 1999 (pp. 64-68). Stanford, CA:
+CSLI Publications.
+Kiefer, B., Krieger, H.-U., Carroll, J., &amp; Malouf, R.
+(1999). A bag of useful techniques for efficient and
+robust parsing. In Proceedings of the 37th Meeting
+of the Association for Computational Linguistics
+(pp. 473-480). College Park, MD.
+Lavie, A., &amp; Rosé, C. (2000). Optimal ambiguity
+packing in context-free parsers with interleaved
+unification. In Proceedings of the 6th Interna-
+tional Workshop on Parsing Technologies (pp.
+147-158). Trento, Italy.
+Maxwell III, J. T., &amp; Kaplan, R. M. (1995). A
+method for disjunctive constraint satisfaction. In
+M. Dalrymple, R. M. Kaplan, J. T. Maxwell III,
+&amp; A. Zaenen (Eds.), Formal issues in Lexical-
+Functional Grammar (pp. 381-401). Stanford,
+CA: CSLI Publications.
+Miyao, Y. (1999). Packing of feature structures for
+efficient unification of disjunctive feature struc-
+tures. In Proceedings of the 37th Meeting of the
+Association for Computational Linguistics (pp.
+579 - 84). College Park, MD.
+Moore, R. C., &amp; Alshawi, H. (1992). Syntactic
+and semantic processing. In H. Alshawi (Ed.),
+The Core Language Engine (pp. 129- 148). Cam-
+bridge, MA: MIT Press.
+Oepen, S., &amp; Callmeier, U. (2000). Measure for
+measure: Parser cross-fertilization. Towards in-
+creased component comparability and exchange.
+In Proceedings of the 6th International Workshop
+on Parsing Technologies (pp. 183 - 194). Trento,
+Italy.
+Oepen, S., &amp; Flickinger, D. P. (1998). Towards sys-
+tematic grammar profiling. Test suite technology
+ten years after. Journal of Computer Speech and
+Language, 12 (4) (Special Issue on Evaluation),
+411 -436.
+Shieber, S. M. (1985). Using restriction to extend
+parsing algorithms for complex feature-based for-
+malisms. In Proceedings of the 23rd Meeting of the
+Association for Computational Linguistics (pp.
+145 - 152). Chicago, IL.
+Tomabechi, H. (1991). Quasi-destructive graph uni-
+fication. In Proceedings of the 29th Meeting of the
+Association for Computational Linguistics (pp.
+315-322). Berkeley, CA.
+Tomita, M. (1985). An efficient context-free parsing
+algorithm for natural languages. In Proceedings of
+the 9th International Joint Conference on Artifi-
+cial Intelligence (pp. 756 - 764). Los Angeles, CA.
+Wahlster, W. (1997). VerbMobil - Erken-
+flung, Analyse, Transfer, Generierung und Syn-
+these von Spontansprache (VerbMobil Report
+# 198). Saarbriicken, Germany: Deutsches
+Forschungszentrum fiir Kiinstliche Intelligenz
+GmbH.
+</reference>
+<page confidence="0.998827">
+169
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.999599">Ambiguity Packing in Constraint-based Parsing — Practical Results</title>
+<author confidence="0.999966">Stephan Oepen</author>
+<affiliation confidence="0.9982675">Computational Linguistics Saarland University</affiliation>
+<address confidence="0.999112">66041 Saarbriicken, Germany</address>
+<email confidence="0.996024">oe@coli.uni–sb.de</email>
+<author confidence="0.987709">John Carroll</author>
+<affiliation confidence="0.988482">Cognitive and Computing Sciences University of Sussex</affiliation>
+<address confidence="0.999539">Brighton BN1 9QH, UK</address>
+<email confidence="0.998359">johnca@cogs.susx.ac.uk</email>
+<abstract confidence="0.997254979381444">We describe a novel approach to &apos;packing&apos; of local amin parsing with a wide-coverage grammar, and provide an empirical assessment of the interaction between various packing and parsing strategies. We present a linear-time, bidirectional subsumption test for typed feature structures and demonstrate that (a) subsumptionand equivalence-based packing is to large and (b) average parse complexity can be greatly reduced in bottom-up chart with comprehensive 1 Background The ambiguity inherent in natural language means that during parsing, some segments of the input string may end up being analysed as the same type of linguistic object in several different ways. Each of these different ways must be recorded, but subsequent parsing steps must treat the set of analyses as a single entity, otherwise the computation becomes theoretically intractable. Earley&apos;s algorithm (Earley, 1970), for example, avoids duplication of parse items by maintaining pointers to alternative derivations in association with the item. This process has been termed &apos;local ambiguity packing&apos; (Tomita, 1985), and the structure built up by the parser, a forest&apos; (Billot 1989). Context free (CF) grammars represent linguistic objects in terms of atomic category symbols. The test for duplicate parse items—and thus being able to pack the subanalyses associated with them—is equality of category symbols. In the final parse forest every different combination of packed nodes induces a distinct, valid parse tree. existing unification-based parsing implicitly or explicitly contain core. For example, in the CLE (Alshawi, 1992) the (manually-assigned) functors of the Prolog terms forming the categories constitute a CF &apos;backbone&apos;. In the Alvey Tools system (Carroll, 1993) each distinct set of features is automatically given a unique identifier and this is associated with every category containing those features. The packing technique has been shown to work well in practice in these and similar unification-augmented CF systems: the parser first tests for CF category equality, and then either (a) checks that the existing feature structure subsumes the newly derived one (Moore &amp; Alshawi, 1992), or (b) forms an efficiently processable disjunction of the feature structures (Maxwell and Kaplan, 1995). Extracting parses from the parse forest is similar to the CF case, except that a global check for consistency of feature values between packed nodes or between feature structure disjuncts is required (this global validation is not required if the subsumption test is strengthened to feature structure equivalence). In contrast, there is essentially no CF compoin systems which directly interpret gram- Although structures are an initial CF category equality test cannot be implemented straightforwardly in terms of the toplevel types of feature structures since two compatible types need not be equal, but could stand in a subtype-supertype relationship. In addition, the feature structure subsumption test is potentially expensive since feature structures are large, typically containing hundreds of nodes. It is therefore an open question whether parsing systems using grammars of this type can gain any advantage from local ambiguity packing. The question is becoming increasingly importhough, as wide-coverage are starting to be deployed in practical applications— for example for &apos;deep&apos; analysis in the VerbMobil speech-to-speech translation system (Wahlster, Kiefer, Krieger, Carroll, &amp; Malouf, In this paper we answer the question by demonstrating (a) and equivalence-based feature packing is applicable to large gram- (b) average complexity and time taken for the parsing task can be greatly reduced. In 2 we present a new, linear-time, bidirecsignificant body of work on efficient processing with such grammars has been building up recently, with investigations into efficient feature structure operations, abstractmachine-based compilation, CF backbone computation, and approximation of derivations, amongst oth- (Flickinger, Uszkoreit, &amp; Tsujii, 2000). 162 tional subsumption test for typed feature structures, which we use in a bottom-up, chart-based parsing algorithm incorporating novel, efficient accounting mechanisms to guarantee minimal chart size (Section 3). We present a full-scale evaluation of the techniques on a large corpus (Section 4), and complete the picture with an empirically-based discussion of grammar restrictors and parsing strategies (Section 5). 2 Efficient Subsumption and Equivalence Algorithms feature structure subsumption assumes totally well-typed structures (Carpenter, 1992) and employs similar machinery to the quasi-destructive unification algorithm described by Tomabechi (1991). In particular, it uses temporary pointers in dag nodes, each pointer tagged with a counter, keep track of intermediate results in processing; incrementing the generation counter invalidates all temporary pointers in a single operation. But whereas quasi-destructive unification makes two passes (determining whether the unification will be successful and then copying out the intermediate representation) the subsumption algorithm makes only one pass, checking reentrancies and type-supertype relationships at the same The algorithm, shown in Figure 1, also simultaneously tests if both feature structures subsume each other (i.e. they are equivalent), if either subsumes the other, or if there is no subsumption relation between them in either direction. top-level entry point 0 function 0 return values, held in variables forwardp and backwardp, both initially true, recording whether it is possible that the first dag subsumes the second and/or vice-versa, respectively. When one of these possibilities has been ruled out the appropriate variable is set to false; in the statement of the algorithm the two returned values are notated as a pair, i.e. backwardp). at any stage both variables have become set to false the possibility of subsumption in both directions has been ruled out so the algorithm exits. (recursive) subsidiary function dag-subsumes- 0 most of the work, traversing the two input independently-developed implementations of essentially the same algorithm can be found in the source code of The Attribute Logic Engine (ALE) version 3.2 (Carpenter &amp; Penn, 1999) and the SICStus Prolog term utilities library (Penn, personal communication), we believe that there is no previous published description of the algorithm. structure feature structure if path p is defined in p is also defined in type of the value of in F a supertype or equal to the in (2) all paths that are reentrant in also in dags in step. First, it checks whether the current node in either dag is involved in a reentrancy that is not present in the other: for each node visited in one dag it adds a temporary pointer (held in the &apos;copy&apos; slot) to the corresponding node in the other dag. If a node is reached that already has a pointer then this is a point of reentrancy in the dag, and if the pointer is not identical to the other dag node then this reentrancy is not present in the other dag. In this case the possibility that the former dag subsumes the latter is ruled out. After the reentrancy check the type-supertype relationship between the types at the current nodes in the two dags is determined, and if one type is not equal to or a supertype of the other then subsumption cannot hold in that direction. Finally, after successfully checking the type-supertype relationships, the function recurses into the arcs outgoing from each node that have the same label. Since we are assuming totally well-typed feature structures, it must be the case that either the sets of arc labels in the two dags are the same, or one is a strict superset of the other. Only arcs with the same labels need be processed; extra arcs need not since the type-supertype check at the two nodes will already have determined that the feature structure containing the extra arcs must be subsumed by the other, and they merely serve to further specify it and cannot affect the final result. Our implementation of the algorithm contains extra redundant but cheap optimizations which for reasons of clarity are not shown in figure 1; these intests that true immediately before first supertype check and that true before the second.&apos; The use of temporary pointers means that the space complexity of the algorithm is linear in the sum of the sizes of the feature structures. However, in our implementation the &apos;copy&apos; slot that the pointers occupy is already present in each dag node (it is required for the final phase of unification to store new nodes representing equivalence classes), so in practice the subsumption test does not allocate any new storage. All pointer references take constant time since there are no chains of &apos;forwarded&apos; pointers (forwarding takes place only during the course of unification and no forwarded pointers are left afterwards). Assuming the supertype tests can be carried is scope for further optimisation of the algorithm in case where identical: full processing inside the structure is not required (since all nodes inside it will be identical between the two dags and any strictly internal reentrancies will necessarily be the same), but we would still need to assign temporary pointers inside it so that any external reentrancies into the structure would be treated correctly. In our tests we have found that as far as constituents that are candidates for local ambiguity packing are concerned there is in fact little equality of structures between them, so special equality processing does not justify the extra complication. 163 1 procedure dag-subsumes-p(dagl ,dag2) 2 (forwardp , backwardp) 4-context for non-local exit} 3 catch with tag &apos;fail&apos; dag-subsumes-p0(dagl ,dag2, true); 4 invalidate-temporary-pointers(); temporary &apos;copy&apos; pointers} 5 return (forwardp , backwardp); 6 end 7 procedure dag-subsumes-p0(dagl ,dag2,forwardp , backwardp) 8 if (dagl.copy is empty) then dagl.copy 4-dag2; reentrancies} 9 else if(dagl.copy dag2) then forwardp 4-- 10 if (dag2.copy is empty) then dag2.copy 4-dagl; 11 else if (dag2.copy dagl) then backwardp 4-- 12 if (forwardp = backwardp = 13 throw false) tag &apos;fail&apos;; check failed} 14 fi 15 if (not supertype-or-equal-p(dagl.type ,dag2.type)) then forwardp 4-fi types} 16 if (not supertype-or-equal-p(dag2.type ,dagl.type)) then backwardp 4-- 17 if (forwardp = backwardp = 18 throw false) tag &apos;fail&apos;; subtype relations} 19 fi 20 for each arc in intersect(dagl.arcs , dag2.arcs) do shared arcs recursively} 21 (forwardp , backwardp) 22 dag-subsumes-p0(destination of arc for dagl ,destination of arc for dag2 , forwardp , backwardp); 23 od 24 return (forwardp , backwardp); result to caller} 25 end Figure 1: Bidirectional, linear-time feature structure subsumption (and equivalence) algorithm. out in constant time (e.g. by table lookup), and that the grammar allows us to put a small constant upper bound on the intersection of outgoing arcs from each the processing in the body of dag-subsumes- 0 unit time. The body may be executed up where the number of nodes in the smaller of the two feature structures. So overall the algorithm has linear time complexity. In practice, our implementation (in the environment described in Section 4) performs of the order of 34,000 top-level feature structure subsumption tests per second. 3 Ambiguity Packing in the Parser Moore and Alshawi (1992) and Carroll (1993) have investigated local ambiguity packing for unification grammars with CF backbones, using CF category equality and feature structure subsumption to test if a newly derived constituent can be packed. If a new constituent is equivalent to or subsumed by an existing constituent, then it can be packed into the existing one and will take no further part in pro- However, if the new constituent an existing one, the situation is not so straightforward: either (a) no packing takes place and the new constituent forms a separate edge (Carroll, 1993), or (b) previous processing involving the old constituent is undone or invalidated, and it is packed into the one (Moore &amp; Alshawi, 1992; however, it is unclear whether they achieve maximal compactness in practice: see Table 1). In the former case the parse forest produced will not be optimally compact; in the latter it will be, but maintaining chart consistency and parser correctness becomes a non-trivial problem. Packing of a new edge into an existing one call forward) packing; for the more complex situation involving a new edge subsuming existing one we introduce the term backward) packing. issues arise when packing an old edge into one that was newly derived (new) retroactively: everything derived from the following) must be invalidated and excluded from further processing (as new is known to generate more general derivatives); and (ii) all computation involving its derivatives has to be blocked efficiently. Derivatives of are invalidated because of retroactive packing may already contain packed analyses, however, which still represent valid ambiguity. These need to be repacked into corresponding derivatives of new when those become available. In turn, derivatives of have been packed already, such that they need not be available in the chart for subsequent subsumption tests. Therefore, the parser cannot simply everything derived from it is packed; instead, derivatives must be preserved (but blocked) 164 1 procedure block(edge, mark) if (edge.frozen = mark = edge.frozen 4-mark; edge} for each parent in edge.parents do block(parent , derivatives} 4 end 5 procedure packed-edge-p(new) 6 for each old in chart[new.start][new.end] do 7 (forwardp , backwardp) 4-dag-subsumes-p(old.dag, new.dag); 8 if (forwardp = old.frozen = 9 old.packed I old.packed); 10 return 11 12 if (backwardp) then 13 new.packed 4-- (new.packed old.packed); 14 old.packed 4-- 0; 15 if (old.frozen = new.packed 16 block(old , 17 delete(old , chart); 18 19 od 20 return 21 end {passive edges with same span} {test category subsumption} {equivalent or proactive packing} {pack &apos;new&apos; into `old&apos;} caller; signal success} {retroactive packing} {raise all packings into new host} (old I new.packed); &apos;old&apos; into &apos;new&apos;) {frost &apos;old&apos; and freeze derivatives} {remove &apos;old&apos; from the chart} {signal failure to pack &apos;new&apos; to caller} Figure 2: Algorithm called on each newly derived edge to achieve maximal packing. until the derivations have been recomputed on the of As equivalent to or more genthan is guaranteed to derive at least the same set of edges; furthermore, the derivatives of again be equivalent to or more general than corresponding edges derived from procedure edge-p 0, in Figure 2, achieves proand retroactive packing without significant overhead in the parser; the algorithm can be integrated with arbitrary bottom-up (chartbased) parsing strategies. The interface assumes the parser calls each new as is derived; a return value of indithat packed proactively and requires further processing. Conversely, a from edge-p ( ) that subsequently undergo regular processing. The second part of the interface builds on notions we call temporary and permament invalidation of edges, respectively. As a of calls to new edge cause retroactive packing, resulting in the delesituation is simpler in the (Moore &amp; Alshawi, 1992) because constituents and dominance relations separated in the chart. The in fact, does not record the actual daughters used in building a phrase (e.g. as unique references or pointers, as we do), but instead preserves the category information (i.e. a description) of those daughters. Hence, in extracting complete parses from the chart, to perform (a limited) search with re-unification categories; in this respect, the forest still is an underspecified representation of the set of analyses, whereas our encoding (see below) facilitates unpacking without extra search. tion of one or more existing edges from the chart and blocking of derivatives. Whenever the parser accesses the chart (i.e. in trying to combine edges) or retrieves a task from the agenda, it is expected to ignore all edges and parser tasks involving such edges that have a non-null &apos;frozen&apos; value. When an edge packed retroactively, it is ignored by the parser; as represents local ambiguity, it still has to be taken into account when the parse forest is unpacked. Derivatives of the other hand, need to be invalidated in both further parsing and later unpacking, since they would otherwise give rise to spurious analyses; acsuch derivatives are Frosting and freezing is done in the subsidiary pro- 0 walks up the parent link recursively, storing a mark into the &apos;frozen&apos; slot of edges that distinguishes between temporary frosting (in the top-level call) and permanent freezing (in recursive calls). a newly derived edge packed-edge-p() tests mutual subsumption against all passive edges that span the same portion of the input string. When forward subsumption (or equivalence) is deand the existing edge not blocked, regular proactive packing is performed (adding new to packing list for the procedure returns In the case of backward subsumpan edge el into another edge e2 logically means that e2 will henceforth serve as a representative for ei and the derivation(s) that it encodes. In practice, el is removed from the chart and ignored in subsequent parser action and subsumption tests. Only in unpacking the parse forest will 165</abstract>
+<title confidence="0.91169">No Chart Packing Proand Retroactive Packing</title>
+<phone confidence="0.757243">1 3 5 7 9 11 13 15 17 19 21 23 25</phone>
+<author confidence="0.304071">String Length</author>
+<address confidence="0.900871777777778">20000 17500 - 15000 - 12500 - 10000 - 7500 - 5000 - 2500 - 3</address>
+<phone confidence="0.725701">5 7 9 11 13 15 17 19 21 23 25</phone>
+<author confidence="0.310637">String Length</author>
+<affiliation confidence="0.299332">passive edges</affiliation>
+<address confidence="0.9692265">20000 17500 15000 12500 10000 7500 5000 2500</address>
+<abstract confidence="0.992914593023256">0 Figure 3: Effects of maximal ambiguity packing on the total chart size (truncated above 25 words). analyses packed into raised into new the append operator `ED&apos; because atmultiple existing edges in the loop); is packed into it is not blocked already. frosted, its derivatives are recursively and deleted from the chart. In contrast to proactive packing, the top-level loop in the procedure continues so that new can pick up additional edges retroactively. However, once a backward subsumption is detected, it follows that no proactive packing can be achieved for new, as the chart cancontain an edge that is more general than 4 Empirical Results We have carried out an evaluation of the algorithms presented above using the LinG0 grammar 1998), a publicly-available, multibroad-coverage English developed at CSLI Stanford. With roughly 8,000 types, an average feature structure size of around 300 nodes, and 64 lexical and grammar rules (fleshing out the interof schemata, wellformedness principles, and LP constraints), LinG0 is among the available. We used the system (Copestake, 1992, 1999) as an experimentation platform since it provides a parameterisable bottom-up chart parser and precise, fine-grained facilities (Oepen All of our results were obtained in this environment, running on a 300 Mhz UltraSparc, and using a balanced test set of 2,100 sentences extracted from VerbMobil corpora of transcribed speech: input lengths from 1 to 20 words are represented with 100 test items each; although sentences in the corpus range up to 36 words in length there are relatively few longer than 20 words. the category of ei and its decomposition(s) in daughter edges (and corresponding subtrees) be used again, to multiply out and project local ambiguity. LinG0 grammar and Lica software are publicly availat Figure 3 compares total chart size (in all-paths for the regular and our variant with pro-and retroactive packing enabled. Factoring ambiguity reduces the number of passive edges by a factor of more than three on average, while for a number of cases the reduction is by a factor of 30 and more. Compared to regular parsing, the rate of increase of passive chart items with respect to sentence length is greatly diminished. To quantify the degree of packing we achieve in practice, we re-ran the experiment reported by Moore and Alshawi (1992): counting the number of nodes required to represent all readings for a simple declarative sentence containing zero to six prepositional phrase (PP) modifiers. The results reported Moore and Alshawi (1992) (using the grammar of English) and those obtained using proand retroactive packing with the LinG0 grammar are in Table Although the comparison involves different grammars we believe it to be instructive, since (0 both grammars have comprehensive coverage, (ii) derive the same numbers of readings for all test sentences in this experiment, (iii) require (almost) the same number of nodes for the basic cases (zero and one PP), (iv) exhibit a similar size in nodes for one core PP (measured by the increment from n = 0 to n = 1), and (v) the syntactic simplicity of the test material hardly allows crosstalk and Alshawi (1992) use the terms &apos;node&apos; and &apos;record&apos; interchangeably in their discussion of packing, where the OLE chart is comprised of separate con(stituent) and ana(lysis) entries for category and dominance information, respectively. It is unclear whether the counting of &apos;packed nodes&apos; in Moore and Alshawi (1992) includes con records or since only are required in parse tree recovery. In any case, both types of chart record need to be checked by subsumption as new entries are added to the chart. Conversely, in our setup each edge represents not only the node category, but also pointers to the daughter(s) that gave rise to this edge, and moreover, where applicable, a list of packed edges that are subsumed by the category (but not necessarily by the daughters). For the Lica, the column &apos;result edges&apos; in Table 1 refers to the total number of edges in the chart that contribute to at least one complete analysis.</abstract>
+<note confidence="0.548765166666667">166 Kim saw a cat (in the hotel)&apos; Moore &amp; Alshawi Our Method CPU Time n readings packed nodes result edges parse unpack plain 0 I ÷ 0 ÷ msec msec msec 0 1 10 1.0 11 1.0 210 10 180</note>
+<phone confidence="0.701748666666667">1 2 21 2.1 23 2.1 340 40 290 2 5 38 3.8 38 3.5 460 80 530 3 14 62 6.2 56 5.1 600 200 1,180 4 42 94 9.4 77 7.0 870 590 2,990 5 132 135 13.5 101 9.2 1,150 1,860 8,790 6 429 186 18.6 128 11.6 1,460 5,690 28,160</phone>
+<abstract confidence="0.986604159340659">Table 1: Comparison of retroactive packing vs. the method used by Moore and Alshawi (1992); columns labeled show the relative increase of packed nodes (result edges) normalised to the n = 0 baseline. with other grammatical phenomena. Comparing relative packing efficiency with increasing ambiguity columns labeled &apos;&apos;in Table method appears to produce a more compact representation of than the at the same time builds a more specific representation of the parse forest that can be unpacked without search. To give an impresof parser throughput, Table timings for our parsing and unpacking (validation) phases, with the plain, non-packing as would be expected, parse time increases linearly in the number of edges, while unpacking costs reflect the exponential increase in total numbers of analyses; the figures show that our packing scheme achieves a very significant speedup, even when unpacking time is included in the comparison. 5 Choosing the Grammar Restrictor and Parsing Strategy In order for the subsumption relation to apply meanto two conditions must be met. Firstly, parse tree construction must not be duplicated in the feature structures (by means of the but be left to the parser (i.e. recorded in the chart); this is achieved in a standard way by feature structure restriction (Shieber, 1985) applied to all passive edges. Secondly, the processing of constraints that do not restrict the search space but build up new (often semantic) structure should be postponed, since they are likely to interfere with subsumption. For example, analyses that only with respect to would have the same syntax, but differences in semantics may prevent them being packed. This problem can be overcome by using restriction to (temporarily) remove such (semantic) attributes from lexical entries and also from the rule set, before they are input to the parser in the initial parse forest construction The second, unpacking phase of the parser reverts to the unrestricted constraint set, so we can allow overgeneration in the first phase and filter globally inconsistent analyses during unpacking. Thus, the right choice of grammar restrictor can be viewed as an empirical rather than analytical problem. Table 2 summarizes packing efficiency and parser performance for three different restrictors (labeled partial, respectively); to gauge effects of input complexity, the table is further subdivided by sentence length into two groups (of around 1,000 sentences each). Compared to regular parsing, packing with the full semantics in place is not effective: the chart size is reduced slightly, but the extra cost for testing subsumption increases total parse times by a factor of more than four. Eliminatall semantics (i.e. the entire on the other hand, results in overgeneralisation: with less information in the feature structures we achieve the highest number of packings, but at the same time rules apply much more freely, resulting in a larger chart compared to parsing with a partial semantics; moreover, unpacking takes longer because the parse forest now contains inconsistent analyses. Restricting compositional semantics but preserving attributes that participate in selection and agreement results in minimal chart size and parsing time in the semantics for both divisions of the test corpus. The majority of packings involve equivalent feature structures which suggests that unpacking could be greatly simplified if the grammar restrictor was guaranteed to preserve the generative capacity of the grammar (in the first parsing phase); then, only packings involving actual subsumption would have be validated in the unpacking Finally, is room for further investigation here: partly for theory-internal reasons, current development of the LinG0 grammar is working towards a stricter separation of restrictive (selectional) and constructive (compositional) constraints in 167 Parser Passive Packed Packmgs CPU Time (sec) Edges Trees E parse unpack no semantics 116 0.9 15.5 4.1 2.6 1-8 0-37 0.05 partial semantics 111 0.8 12.0 3.6 2.4 1.4 0.33 0.05 words full semantics 149 2.8 2.1 0.4 0.2 0.1 0.60 0.04 no packing 160 5.6 0.44 no semantics 622 1.2 179.0 42.1 23-8 26.0 2.37 0.70 &gt; 10 partial semantics 575 1.0 134.9 35-0 20-6 18-9 1-97 0.63 words full semantics 1693 33-9 38-3 3-4 2.9 3.2 29-40 0.56 no packing 2075 99-9 - - - - 6.46 - Table 2: Contrasting various grammar restrictors on short (top) and medium-length (bottom) inputs; all numbers are averaged over 1,000 items per class; packings are, from left to right: equivalence (`-s.&apos;), pro- (&apos;a&apos;) and retroactive (&apos; c&apos;) packings, and the number of edges that were frozen (`I&apos;). we note that the number of retroactive packings is relatively small, and on average each such packing leads to only one previously derived edge being invalidated. This, of course, is a function of the order in which edges are derived, i.e. the parsing strategy. All the results in Table 2 were obtained with a &apos;right corner&apos; strategy which aims to exhaust computation for any suffix of the input string before moving the input pointer to the left; this is achieved by of a scoring function start the vertices of the derivation that would result from the computation, and n is the total input length) that orders parser tasks in the agenda. However, we have observed (Oepen &amp; Callmeier, 2000) that HPsG-type, highly lexicalized grammars benefit greatly from a bidirectional, &apos;key&apos;-driven, active parsing regime, since they often employ rules with underspecified arguments that are only instantiated by coreference with other daughters (where the &apos;key&apos; daughter is the linguistic head in many but not all constructions). This requirement and the general non-predictability of categories derived for any token substring (in particular with respect to unary rule applications), means that a particular parsing strategy may reduce retroactive packing but cannot avoid it in general. With proand retroactive packing and the minimal accounting overhead, we find overall parser throughput to be very robust against variation in the parsing strategy. Lavie and Rosé (2000) present heuristics for ordering parser actions to achieve maximally compact parse forests-though only with respect to a CF category backbone-in the absence of retroactive packing; however, the techniques we have presented here allow local ambiguity packing and parser tuning-possibly including priority-driven best-first search-to be carried out mostly independently of each other. the grammar and underlying semantic theory. We expect that our approach to packing will benefit from these developments. 6 Conclusions We have presented novel algorithms for efficient subsumption checking and proand retroactive local ambiguity packing with large feature structures, and have provided strong empirical evidence that our approach can be applied beneficially to chart parswith a large, broad-coverage English. By comparison to previous work in unification-based parsing we have demonstrated that proand retroactive packing are well-suited to achieve optimal packing; furthermore, experimental results obtained with publicly-available platform confirm that ambiguity packing can greatly reduce average parse complexity for this type of grammars. In related work, Miyao (1999) describes an approach to packing in which alternative feature structures are represented as packed, distributed disjunctions of feature structure fragments. Although the approach may have potential, the shifting of complex accounting into the unification algorithm is at variance with the findings of Kiefer et al. (1999), who report large speed-ups from the elimination of disjunction processing during unification. Unfortunately, the reported evaluation measures and lack of discussion of parser control issues are insufficient to allow a precise comparison. We intend to develop the approach presented in this paper in several directions. Firstly, we will enhance the unpacking phase to take advantage of the large number of equivalence packings we observe. This will significantly reduce the amount of work it needs to do. Secondly, many application contexts and subsequent layers of semantic processing will not require unfolding the entire parse forest; here, we need to define a selective, incremental unpacking procedure. Finally, applications like VerbMobil favour prioritized best-first rather than all-paths parsing. Using slightly more sophisticated accounting in the agenda, we plan to investigate priority 168 propagation in a best-first variant of our parser. Acknowledgements We are grateful to Ulrich Callmeier, Ann Copestake, Dan Flickinger, and three anonymous reviewers for comments on a draft of the paper, to Bob Moore for detailed explanation of the workings of the parser, and to Gerald Penn for information about related implementations of the subsumption algo- The research was supported by the part of the Collaborative</abstract>
+<affiliation confidence="0.507733">Division Cognitive Pro-</affiliation>
+<address confidence="0.509311">B4 by a UK EPSRC</address>
+<note confidence="0.6794535">Advanced Fellowship to the second author. References H. (Ed.). (1992). Core Language En- MA: MIT Press. Billot, S., &amp; Lang, B. (1989). The structure of forests in ambiguous parsing. In Proceedings of the 27th Meeting of the Association for Linguistics 143- 151). Vancouver, BC. B. (1992). logic of typed feature UK: Cambridge University Press. B., &amp; Penn, G. (1999). The Attribute Logic Engine. User&apos;s guide version 3.2. Tubingen: : //wwww. . sf S. nphil J. (1993). unification-based of natural language Report # 314). Cambridge, UK: Computer Laboratory, Cambridge University. (Online : //f tp . cl . cam. ac . uk/papers/reports/ TR314-jac-practical-unif-parsing.ps.gz) Copestake, A. (1992). The ACQUILEX LKB. Representation issues in semi-automatic acquisition of lexicons. In of the 3rd ACL Conference on Applied Natural Language Processing (pp. 88 - 96). Trento, Italy. A. (1999). (new) LKB sys- User&apos;s guide. Stanford Uni-</note>
+<abstract confidence="0.752935214285714">www-csli . stanford. edu/‘-aac/ lkb.html) Earley, J. (1970). An efficient context-free parsing of the ACM, 13 (2), 94 - 102. Flickinger, D., Oepen, S., Uszkoreit, H., &amp; Tsu- J. (Eds.). (2000). of Natural Language Engineering. Special Issue on Efficient processing with HPSG: Methods, systems, evaluation. Cambridge, UK: Cambridge University Press. (in preparation) Flickinger, D. P., &amp; Sag, I. A. (1998). Linguistic Grammars Online. A multi-purpose broadcoverage computational grammar of English. In</abstract>
+<note confidence="0.809128859649123">Bulletin 1999 64-68). Stanford, CA: CSLI Publications. B., Krieger, H.-U., Carroll, J., (1999). A bag of useful techniques for efficient and parsing. In of the 37th Meeting of the Association for Computational Linguistics College Park, MD. A., &amp; C. (2000). Optimal ambiguity packing in context-free parsers with interleaved In of the 6th Interna- Workshop on Parsing Technologies 147-158). Trento, Italy. J. T., R. M. (1995). A method for disjunctive constraint satisfaction. In Dalrymple, R. M. Kaplan, J. T. Maxwell A. Zaenen (Eds.), issues in Lexical- Grammar 381-401). Stanford, CA: CSLI Publications. Miyao, Y. (1999). Packing of feature structures for unification of disjunctive feature struc- In of the 37th Meeting of the for Computational Linguistics 579 - 84). College Park, MD. R. C., H. (1992). Syntactic and semantic processing. In H. Alshawi (Ed.), Core Language Engine 129- 148). Cambridge, MA: MIT Press. Oepen, S., &amp; Callmeier, U. (2000). Measure for Parser cross-fertilization. Towards increased component comparability and exchange. of the 6th International Workshop Parsing Technologies 183 - 194). Trento, Italy. Oepen, S., &amp; Flickinger, D. P. (1998). Towards systematic grammar profiling. Test suite technology years after. of Computer Speech and 12 Issue on Evaluation), 411 -436. Shieber, S. M. (1985). Using restriction to extend algorithms for complex feature-based for- In of the 23rd Meeting of the for Computational Linguistics 145 - 152). Chicago, IL. Tomabechi, H. (1991). Quasi-destructive graph uni- In of the 29th Meeting of the for Computational Linguistics 315-322). Berkeley, CA. Tomita, M. (1985). An efficient context-free parsing for natural languages. In of 9th International Joint Conference on Artifi- Intelligence 756 - 764). Los Angeles, CA. W. (1997). - Erken- Analyse, Transfer, Generierung Synvon Spontansprache Report Forschungszentrum fiir Kiinstliche Intelligenz GmbH. 169</note>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>H Alshawi</author>
+</authors>
+<title>The Core Language Engine.</title>
+<date>1992</date>
+<publisher>MIT Press.</publisher>
+<location>Cambridge, MA:</location>
+<contexts>
+<context position="2011" citStr="Alshawi, 1992" startWordPosition="294" endWordPosition="295"> termed &apos;local ambiguity packing&apos; (Tomita, 1985), and the structure built up by the parser, a &apos;parse forest&apos; (Billot &amp; Lang, 1989). Context free (CF) grammars represent linguistic objects in terms of atomic category symbols. The test for duplicate parse items—and thus being able to pack the subanalyses associated with them—is equality of category symbols. In the final parse forest every different combination of packed nodes induces a distinct, valid parse tree. Most existing unification-based parsing systems either implicitly or explicitly contain a context-free core. For example, in the CLE (Alshawi, 1992) the (manually-assigned) functors of the Prolog terms forming the categories constitute a CF &apos;backbone&apos;. In the Alvey Tools system (Carroll, 1993) each distinct set of features is automatically given a unique identifier and this is associated with every category containing those features. The packing technique has been shown to work well in practice in these and similar unification-augmented CF systems: the parser first tests for CF category equality, and then either (a) checks that the existing feature structure subsumes the newly derived one (Moore &amp; Alshawi, 1992), or (b) forms an efficient</context>
+<context position="12483" citStr="Alshawi (1992)" startWordPosition="1960" endWordPosition="1961">onstant time (e.g. by table lookup), and that the grammar allows us to put a small constant upper bound on the intersection of outgoing arcs from each node, the processing in the body of dag-subsumesp0 0 takes unit time. The body may be executed up to N times where N is the number of nodes in the smaller of the two feature structures. So overall the algorithm has linear time complexity. In practice, our implementation (in the environment described in Section 4) performs of the order of 34,000 top-level feature structure subsumption tests per second. 3 Ambiguity Packing in the Parser Moore and Alshawi (1992) and Carroll (1993) have investigated local ambiguity packing for unification grammars with CF backbones, using CF category equality and feature structure subsumption to test if a newly derived constituent can be packed. If a new constituent is equivalent to or subsumed by an existing constituent, then it can be packed into the existing one and will take no further part in processing. However, if the new constituent subsumes an existing one, the situation is not so straightforward: either (a) no packing takes place and the new constituent forms a separate edge (Carroll, 1993), or (b) previous </context>
+<context position="16953" citStr="Alshawi, 1992" startWordPosition="2681" endWordPosition="2683">er calls packed-edge-p() on each new edge new as it is derived; a return value of true indicates that new was packed proactively and requires no further processing. Conversely, a false return value from packed- edge-p ( ) signals that new should subsequently undergo regular processing. The second part of the interface builds on notions we call frosting and freezing, meaning temporary and permament invalidation of edges, respectively. As a side-effect of calls to packed-edge-p(), a new edge can cause retroactive packing, resulting in the dele5The situation is simpler in the CLE parser (Moore &amp; Alshawi, 1992) because constituents and dominance relations are separated in the chart. The CLE encoding, in fact, does not record the actual daughters used in building a phrase (e.g. as unique references or pointers, as we do), but instead preserves the category information (i.e. a description) of those daughters. Hence, in extracting complete parses from the chart, the CLE has to perform (a limited) search with re-unification of categories; in this respect, the CLE parse forest still is an underspecified representation of the set of analyses, whereas our encoding (see below) facilitates unpacking without </context>
+<context position="22160" citStr="Alshawi (1992)" startWordPosition="3560" endWordPosition="3561">are publicly available at `http://lingo.stanford.edur. Figure 3 compares total chart size (in all-paths mode) for the regular LKB parser and our variant with pro-and retroactive packing enabled. Factoring ambiguity reduces the number of passive edges by a factor of more than three on average, while for a number of cases the reduction is by a factor of 30 and more. Compared to regular parsing, the rate of increase of passive chart items with respect to sentence length is greatly diminished. To quantify the degree of packing we achieve in practice, we re-ran the experiment reported by Moore and Alshawi (1992): counting the number of nodes required to represent all readings for a simple declarative sentence containing zero to six prepositional phrase (PP) modifiers. The results reported by Moore and Alshawi (1992) (using the CLE grammar of English) and those obtained using pro- and retroactive packing with the LinG0 grammar are presented in Table 1.8 Although the comparison involves different grammars we believe it to be instructive, since (0 both grammars have comprehensive coverage, (ii) derive the same numbers of readings for all test sentences in this experiment, (iii) require (almost) the same</context>
+<context position="24421" citStr="Alshawi (1992)" startWordPosition="3973" endWordPosition="3974">he column &apos;result edges&apos; in Table 1 refers to the total number of edges in the chart that contribute to at least one complete analysis. 166 Kim saw a cat (in the hotel)&apos; Moore &amp; Alshawi Our Method CPU Time n readings packed nodes result edges parse unpack plain 0 I ÷ 0 ÷ msec msec msec 0 1 10 1.0 11 1.0 210 10 180 1 2 21 2.1 23 2.1 340 40 290 2 5 38 3.8 38 3.5 460 80 530 3 14 62 6.2 56 5.1 600 200 1,180 4 42 94 9.4 77 7.0 870 590 2,990 5 132 135 13.5 101 9.2 1,150 1,860 8,790 6 429 186 18.6 128 11.6 1,460 5,690 28,160 Table 1: Comparison of retroactive packing vs. the method used by Moore and Alshawi (1992); columns labeled show the relative increase of packed nodes (result edges) normalised to the n = 0 baseline. with other grammatical phenomena. Comparing relative packing efficiency with increasing ambiguity (the columns labeled &apos;&apos;in Table 1), our method appears to produce a more compact representation of ambiguity than the CLE, and at the same time builds a more specific representation of the parse forest that can be unpacked without search. To give an impression of parser throughput, Table 1 includes timings for our parsing and unpacking (validation) phases, contrasted with the plain, non-pa</context>
+</contexts>
+<marker>Alshawi, 1992</marker>
+<rawString>Alshawi, H. (Ed.). (1992). The Core Language Engine. Cambridge, MA: MIT Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Billot</author>
+<author>B Lang</author>
+</authors>
+<title>The structure of shared forests in ambiguous parsing.</title>
+<date>1989</date>
+<booktitle>In Proceedings of the 27th Meeting of the Association for Computational Linguistics</booktitle>
+<pages>143--151</pages>
+<location>Vancouver, BC.</location>
+<contexts>
+<context position="1527" citStr="Billot &amp; Lang, 1989" startWordPosition="219" endWordPosition="222">gments of the input string may end up being analysed as the same type of linguistic object in several different ways. Each of these different ways must be recorded, but subsequent parsing steps must treat the set of analyses as a single entity, otherwise the computation becomes theoretically intractable. Earley&apos;s algorithm (Earley, 1970), for example, avoids duplication of parse items by maintaining pointers to alternative derivations in association with the item. This process has been termed &apos;local ambiguity packing&apos; (Tomita, 1985), and the structure built up by the parser, a &apos;parse forest&apos; (Billot &amp; Lang, 1989). Context free (CF) grammars represent linguistic objects in terms of atomic category symbols. The test for duplicate parse items—and thus being able to pack the subanalyses associated with them—is equality of category symbols. In the final parse forest every different combination of packed nodes induces a distinct, valid parse tree. Most existing unification-based parsing systems either implicitly or explicitly contain a context-free core. For example, in the CLE (Alshawi, 1992) the (manually-assigned) functors of the Prolog terms forming the categories constitute a CF &apos;backbone&apos;. In the Alve</context>
+</contexts>
+<marker>Billot, Lang, 1989</marker>
+<rawString>Billot, S., &amp; Lang, B. (1989). The structure of shared forests in ambiguous parsing. In Proceedings of the 27th Meeting of the Association for Computational Linguistics (pp. 143- 151). Vancouver, BC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Carpenter</author>
+</authors>
+<title>The logic of typed feature structures.</title>
+<date>1992</date>
+<publisher>Cambridge University Press.</publisher>
+<location>Cambridge, UK:</location>
+<contexts>
+<context position="5174" citStr="Carpenter, 1992" startWordPosition="764" endWordPosition="765">ickinger, Oepen, Uszkoreit, &amp; Tsujii, 2000). 162 tional subsumption test for typed feature structures, which we use in a bottom-up, chart-based parsing algorithm incorporating novel, efficient accounting mechanisms to guarantee minimal chart size (Section 3). We present a full-scale evaluation of the techniques on a large corpus (Section 4), and complete the picture with an empirically-based discussion of grammar restrictors and parsing strategies (Section 5). 2 Efficient Subsumption and Equivalence Algorithms Our feature structure subsumption algorithm2 assumes totally well-typed structures (Carpenter, 1992) and employs similar machinery to the quasi-destructive unification algorithm described by Tomabechi (1991). In particular, it uses temporary pointers in dag nodes, each pointer tagged with a generation counter, to keep track of intermediate results in processing; incrementing the generation counter invalidates all temporary pointers in a single operation. But whereas quasi-destructive unification makes two passes (determining whether the unification will be successful and then copying out the intermediate representation) the subsumption algorithm makes only one pass, checking reentrancies and</context>
+</contexts>
+<marker>Carpenter, 1992</marker>
+<rawString>Carpenter, B. (1992). The logic of typed feature structures. Cambridge, UK: Cambridge University Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Carpenter</author>
+<author>G Penn</author>
+</authors>
+<title>ALE. The Attribute Logic Engine. User&apos;s guide version 3.2. (Universitat Tubingen: http : //wwww. . sf S. nphil .uni-tuebingen.dek,,gpenn/ale.html)</title>
+<date>1999</date>
+<contexts>
+<context position="6977" citStr="Carpenter &amp; Penn, 1999" startWordPosition="1036" endWordPosition="1039"> possibilities has been ruled out the appropriate variable is set to false; in the statement of the algorithm the two returned values are notated as a pair, i.e. (forwardp, backwardp). If at any stage both variables have become set to false the possibility of subsumption in both directions has been ruled out so the algorithm exits. The (recursive) subsidiary function dag-subsumesp0 0 does most of the work, traversing the two input 2Although independently-developed implementations of essentially the same algorithm can be found in the source code of The Attribute Logic Engine (ALE) version 3.2 (Carpenter &amp; Penn, 1999) and the SICStus Prolog term utilities library (Penn, personal communication), we believe that there is no previous published description of the algorithm. 3Feature structure F subsumes feature structure G if: (1) if path p is defined in F then p is also defined in G and the type of the value of p in F is a supertype or equal to the value in G, and (2) all paths that are reentrant in F are also reentrant in G. dags in step. First, it checks whether the current node in either dag is involved in a reentrancy that is not present in the other: for each node visited in one dag it adds a temporary p</context>
+</contexts>
+<marker>Carpenter, Penn, 1999</marker>
+<rawString>Carpenter, B., &amp; Penn, G. (1999). ALE. The Attribute Logic Engine. User&apos;s guide version 3.2. (Universitat Tubingen: http : //wwww. . sf S. nphil .uni-tuebingen.dek,,gpenn/ale.html)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Carroll</author>
+</authors>
+<title>Practical unification-based parsing of natural language</title>
+<date>1993</date>
+<tech>(Technical Report # 314).</tech>
+<institution>Computer Laboratory, Cambridge University. (Online</institution>
+<location>Cambridge, UK:</location>
+<note>uk/papers/reports/ TR314-jac-practical-unif-parsing.ps.gz</note>
+<contexts>
+<context position="2157" citStr="Carroll, 1993" startWordPosition="315" endWordPosition="316">CF) grammars represent linguistic objects in terms of atomic category symbols. The test for duplicate parse items—and thus being able to pack the subanalyses associated with them—is equality of category symbols. In the final parse forest every different combination of packed nodes induces a distinct, valid parse tree. Most existing unification-based parsing systems either implicitly or explicitly contain a context-free core. For example, in the CLE (Alshawi, 1992) the (manually-assigned) functors of the Prolog terms forming the categories constitute a CF &apos;backbone&apos;. In the Alvey Tools system (Carroll, 1993) each distinct set of features is automatically given a unique identifier and this is associated with every category containing those features. The packing technique has been shown to work well in practice in these and similar unification-augmented CF systems: the parser first tests for CF category equality, and then either (a) checks that the existing feature structure subsumes the newly derived one (Moore &amp; Alshawi, 1992), or (b) forms an efficiently processable disjunction of the feature structures (Maxwell and Kaplan, 1995). Extracting parses from the parse forest is similar to the CF case</context>
+<context position="12502" citStr="Carroll (1993)" startWordPosition="1963" endWordPosition="1964">by table lookup), and that the grammar allows us to put a small constant upper bound on the intersection of outgoing arcs from each node, the processing in the body of dag-subsumesp0 0 takes unit time. The body may be executed up to N times where N is the number of nodes in the smaller of the two feature structures. So overall the algorithm has linear time complexity. In practice, our implementation (in the environment described in Section 4) performs of the order of 34,000 top-level feature structure subsumption tests per second. 3 Ambiguity Packing in the Parser Moore and Alshawi (1992) and Carroll (1993) have investigated local ambiguity packing for unification grammars with CF backbones, using CF category equality and feature structure subsumption to test if a newly derived constituent can be packed. If a new constituent is equivalent to or subsumed by an existing constituent, then it can be packed into the existing one and will take no further part in processing. However, if the new constituent subsumes an existing one, the situation is not so straightforward: either (a) no packing takes place and the new constituent forms a separate edge (Carroll, 1993), or (b) previous processing involvin</context>
+</contexts>
+<marker>Carroll, 1993</marker>
+<rawString>Carroll, J. (1993). Practical unification-based parsing of natural language (Technical Report # 314). Cambridge, UK: Computer Laboratory, Cambridge University. (Online at: ftp : //f tp . cl . cam. ac . uk/papers/reports/ TR314-jac-practical-unif-parsing.ps.gz)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Copestake</author>
+</authors>
+<title>The ACQUILEX LKB. Representation issues in semi-automatic acquisition of large lexicons.</title>
+<date>1992</date>
+<booktitle>In Proceedings of the 3rd ACL Conference on Applied Natural Language Processing (pp. 88 - 96).</booktitle>
+<location>Trento, Italy.</location>
+<contexts>
+<context position="20806" citStr="Copestake, 1992" startWordPosition="3339" endWordPosition="3340">d for new, as the chart cannot contain an edge that is more general than old. 4 Empirical Results We have carried out an evaluation of the algorithms presented above using the LinG0 grammar (Flickinger &amp; Sag, 1998), a publicly-available, multipurpose, broad-coverage HPSG of English developed at CSLI Stanford. With roughly 8,000 types, an average feature structure size of around 300 nodes, and 64 lexical and grammar rules (fleshing out the interaction of HPSG ID schemata, wellformedness principles, and LP constraints), LinG0 is among the largest HPSG grammars available. We used the LKB system (Copestake, 1992, 1999) as an experimentation platform since it provides a parameterisable bottom-up chart parser and precise, fine-grained profiling facilities (Oepen &amp; Flickinger, 1998).7 All of our results were obtained in this environment, running on a 300 Mhz UltraSparc, and using a balanced test set of 2,100 sentences extracted from VerbMobil corpora of transcribed speech: input lengths from 1 to 20 words are represented with 100 test items each; although sentences in the corpus range up to 36 words in length there are relatively few longer than 20 words. the category of ei and its decomposition(s) in d</context>
+</contexts>
+<marker>Copestake, 1992</marker>
+<rawString>Copestake, A. (1992). The ACQUILEX LKB. Representation issues in semi-automatic acquisition of large lexicons. In Proceedings of the 3rd ACL Conference on Applied Natural Language Processing (pp. 88 - 96). Trento, Italy.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Copestake</author>
+</authors>
+<title>The (new) LKB system. User&apos;s guide. (CSLI, Stanford University: http : //www-csli .</title>
+<date>1999</date>
+<note>stanford. edu/‘-aac/ lkb.html</note>
+<marker>Copestake, 1999</marker>
+<rawString>Copestake, A. (1999). The (new) LKB system. User&apos;s guide. (CSLI, Stanford University: http : //www-csli . stanford. edu/‘-aac/ lkb.html)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Earley</author>
+</authors>
+<title>An efficient context-free parsing algorithm.</title>
+<date>1970</date>
+<journal>Communications of the ACM,</journal>
+<volume>13</volume>
+<issue>2</issue>
+<pages>94--102</pages>
+<contexts>
+<context position="1246" citStr="Earley, 1970" startWordPosition="176" endWordPosition="178">ivalence-based packing is applicable to large HPSG grammars and (b) average parse complexity can be greatly reduced in bottom-up chart parsing with comprehensive HPSG implementations. 1 Background The ambiguity inherent in natural language means that during parsing, some segments of the input string may end up being analysed as the same type of linguistic object in several different ways. Each of these different ways must be recorded, but subsequent parsing steps must treat the set of analyses as a single entity, otherwise the computation becomes theoretically intractable. Earley&apos;s algorithm (Earley, 1970), for example, avoids duplication of parse items by maintaining pointers to alternative derivations in association with the item. This process has been termed &apos;local ambiguity packing&apos; (Tomita, 1985), and the structure built up by the parser, a &apos;parse forest&apos; (Billot &amp; Lang, 1989). Context free (CF) grammars represent linguistic objects in terms of atomic category symbols. The test for duplicate parse items—and thus being able to pack the subanalyses associated with them—is equality of category symbols. In the final parse forest every different combination of packed nodes induces a distinct, v</context>
+</contexts>
+<marker>Earley, 1970</marker>
+<rawString>Earley, J. (1970). An efficient context-free parsing algorithm. Communications of the ACM, 13 (2), 94 - 102.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Flickinger</author>
+<author>S Oepen</author>
+<author>H Uszkoreit</author>
+<author>J Tsujii</author>
+</authors>
+<title>processing with HPSG: Methods, systems, evaluation.</title>
+<date>2000</date>
+<journal>Journal of Natural Language Engineering. Special Issue on Efficient</journal>
+<publisher>Cambridge University Press.</publisher>
+<location>Cambridge, UK:</location>
+<note>(in preparation)</note>
+<contexts>
+<context position="4600" citStr="Flickinger, Oepen, Uszkoreit, &amp; Tsujii, 2000" startWordPosition="680" endWordPosition="685">9).1 In this paper we answer the question by demonstrating that (a) subsumption- and equivalence-based feature structure packing is applicable to large HPSG grammars, and (b) average complexity and time taken for the parsing task can be greatly reduced. In Section 2 we present a new, linear-time, bidirec1A significant body of work on efficient processing with such grammars has been building up recently, with investigations into efficient feature structure operations, abstractmachine-based compilation, CF backbone computation, and finite-state approximation of HPSG derivations, amongst others (Flickinger, Oepen, Uszkoreit, &amp; Tsujii, 2000). 162 tional subsumption test for typed feature structures, which we use in a bottom-up, chart-based parsing algorithm incorporating novel, efficient accounting mechanisms to guarantee minimal chart size (Section 3). We present a full-scale evaluation of the techniques on a large corpus (Section 4), and complete the picture with an empirically-based discussion of grammar restrictors and parsing strategies (Section 5). 2 Efficient Subsumption and Equivalence Algorithms Our feature structure subsumption algorithm2 assumes totally well-typed structures (Carpenter, 1992) and employs similar machi</context>
+</contexts>
+<marker>Flickinger, Oepen, Uszkoreit, Tsujii, 2000</marker>
+<rawString>Flickinger, D., Oepen, S., Uszkoreit, H., &amp; Tsujii, J. (Eds.). (2000). Journal of Natural Language Engineering. Special Issue on Efficient processing with HPSG: Methods, systems, evaluation. Cambridge, UK: Cambridge University Press. (in preparation)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D P Flickinger</author>
+<author>I A Sag</author>
+</authors>
+<title>Linguistic Grammars Online. A multi-purpose broadcoverage computational grammar of English.</title>
+<date>1998</date>
+<booktitle>In CSLI Bulletin</booktitle>
+<pages>64--68</pages>
+<publisher>CSLI Publications.</publisher>
+<location>Stanford, CA:</location>
+<contexts>
+<context position="20405" citStr="Flickinger &amp; Sag, 1998" startWordPosition="3275" endWordPosition="3278">op); old itself is only packed into new when it is not blocked already. Finally, old is frosted, its derivatives are recursively frozen, and old is deleted from the chart. In contrast to proactive packing, the top-level loop in the procedure continues so that new can pick up additional edges retroactively. However, once a backward subsumption is detected, it follows that no proactive packing can be achieved for new, as the chart cannot contain an edge that is more general than old. 4 Empirical Results We have carried out an evaluation of the algorithms presented above using the LinG0 grammar (Flickinger &amp; Sag, 1998), a publicly-available, multipurpose, broad-coverage HPSG of English developed at CSLI Stanford. With roughly 8,000 types, an average feature structure size of around 300 nodes, and 64 lexical and grammar rules (fleshing out the interaction of HPSG ID schemata, wellformedness principles, and LP constraints), LinG0 is among the largest HPSG grammars available. We used the LKB system (Copestake, 1992, 1999) as an experimentation platform since it provides a parameterisable bottom-up chart parser and precise, fine-grained profiling facilities (Oepen &amp; Flickinger, 1998).7 All of our results were o</context>
+</contexts>
+<marker>Flickinger, Sag, 1998</marker>
+<rawString>Flickinger, D. P., &amp; Sag, I. A. (1998). Linguistic Grammars Online. A multi-purpose broadcoverage computational grammar of English. In CSLI Bulletin 1999 (pp. 64-68). Stanford, CA: CSLI Publications.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Kiefer</author>
+<author>H-U Krieger</author>
+<author>J Carroll</author>
+<author>R Malouf</author>
+</authors>
+<title>A bag of useful techniques for efficient and robust parsing.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the 37th Meeting of the Association for Computational Linguistics</booktitle>
+<pages>473--480</pages>
+<location>College Park, MD.</location>
+<contexts>
+<context position="3957" citStr="Kiefer, Krieger, Carroll, &amp; Malouf, 1999" startWordPosition="587" endWordPosition="592"> be equal, but could stand in a subtype-supertype relationship. In addition, the feature structure subsumption test is potentially expensive since feature structures are large, typically containing hundreds of nodes. It is therefore an open question whether parsing systems using grammars of this type can gain any advantage from local ambiguity packing. The question is becoming increasingly important, though, as wide-coverage HPSG grammars are starting to be deployed in practical applications— for example for &apos;deep&apos; analysis in the VerbMobil speech-to-speech translation system (Wahlster, 1997; Kiefer, Krieger, Carroll, &amp; Malouf, 1999).1 In this paper we answer the question by demonstrating that (a) subsumption- and equivalence-based feature structure packing is applicable to large HPSG grammars, and (b) average complexity and time taken for the parsing task can be greatly reduced. In Section 2 we present a new, linear-time, bidirec1A significant body of work on efficient processing with such grammars has been building up recently, with investigations into efficient feature structure operations, abstractmachine-based compilation, CF backbone computation, and finite-state approximation of HPSG derivations, amongst others (F</context>
+<context position="32232" citStr="Kiefer et al. (1999)" startWordPosition="5209" endWordPosition="5212">pro- and retroactive packing are well-suited to achieve optimal packing; furthermore, experimental results obtained with a publicly-available HPSG processing platform confirm that ambiguity packing can greatly reduce average parse complexity for this type of grammars. In related work, Miyao (1999) describes an approach to packing in which alternative feature structures are represented as packed, distributed disjunctions of feature structure fragments. Although the approach may have potential, the shifting of complex accounting into the unification algorithm is at variance with the findings of Kiefer et al. (1999), who report large speed-ups from the elimination of disjunction processing during unification. Unfortunately, the reported evaluation measures and lack of discussion of parser control issues are insufficient to allow a precise comparison. We intend to develop the approach presented in this paper in several directions. Firstly, we will enhance the unpacking phase to take advantage of the large number of equivalence packings we observe. This will significantly reduce the amount of work it needs to do. Secondly, many application contexts and subsequent layers of semantic processing will not requ</context>
+</contexts>
+<marker>Kiefer, Krieger, Carroll, Malouf, 1999</marker>
+<rawString>Kiefer, B., Krieger, H.-U., Carroll, J., &amp; Malouf, R. (1999). A bag of useful techniques for efficient and robust parsing. In Proceedings of the 37th Meeting of the Association for Computational Linguistics (pp. 473-480). College Park, MD.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Lavie</author>
+<author>C Rosé</author>
+</authors>
+<title>Optimal ambiguity packing in context-free parsers with interleaved unification.</title>
+<date>2000</date>
+<booktitle>In Proceedings of the 6th International Workshop on Parsing Technologies</booktitle>
+<pages>147--158</pages>
+<location>Trento, Italy.</location>
+<contexts>
+<context position="30705" citStr="Lavie and Rosé (2000)" startWordPosition="4985" endWordPosition="4988">h underspecified arguments that are only instantiated by coreference with other daughters (where the &apos;key&apos; daughter is the linguistic head in many but not all constructions). This requirement and the general non-predictability of categories derived for any token substring (in particular with respect to unary rule applications), means that a particular parsing strategy may reduce retroactive packing but cannot avoid it in general. With pro- and retroactive packing and the minimal accounting overhead, we find overall parser throughput to be very robust against variation in the parsing strategy. Lavie and Rosé (2000) present heuristics for ordering parser actions to achieve maximally compact parse forests-though only with respect to a CF category backbone-in the absence of retroactive packing; however, the techniques we have presented here allow local ambiguity packing and parser tuning-possibly including priority-driven best-first search-to be carried out mostly independently of each other. the grammar and underlying semantic theory. We expect that our approach to packing will benefit from these developments. 6 Conclusions We have presented novel algorithms for efficient subsumption checking and pro- and</context>
+</contexts>
+<marker>Lavie, Rosé, 2000</marker>
+<rawString>Lavie, A., &amp; Rosé, C. (2000). Optimal ambiguity packing in context-free parsers with interleaved unification. In Proceedings of the 6th International Workshop on Parsing Technologies (pp. 147-158). Trento, Italy.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J T Maxwell</author>
+<author>R M Kaplan</author>
+</authors>
+<title>A method for disjunctive constraint satisfaction. In</title>
+<date>1995</date>
+<booktitle>Formal issues in LexicalFunctional Grammar</booktitle>
+<pages>381--401</pages>
+<publisher>CSLI Publications.</publisher>
+<location>Stanford, CA:</location>
+<contexts>
+<context position="2690" citStr="Maxwell and Kaplan, 1995" startWordPosition="396" endWordPosition="399">forming the categories constitute a CF &apos;backbone&apos;. In the Alvey Tools system (Carroll, 1993) each distinct set of features is automatically given a unique identifier and this is associated with every category containing those features. The packing technique has been shown to work well in practice in these and similar unification-augmented CF systems: the parser first tests for CF category equality, and then either (a) checks that the existing feature structure subsumes the newly derived one (Moore &amp; Alshawi, 1992), or (b) forms an efficiently processable disjunction of the feature structures (Maxwell and Kaplan, 1995). Extracting parses from the parse forest is similar to the CF case, except that a global check for consistency of feature values between packed nodes or between feature structure disjuncts is required (this global validation is not required if the subsumption test is strengthened to feature structure equivalence). In contrast, there is essentially no CF component in systems which directly interpret HPSG grammars. Although HPSG feature structures are typed, an initial CF category equality test cannot be implemented straightforwardly in terms of the toplevel types of feature structures since tw</context>
+</contexts>
+<marker>Maxwell, Kaplan, 1995</marker>
+<rawString>Maxwell III, J. T., &amp; Kaplan, R. M. (1995). A method for disjunctive constraint satisfaction. In M. Dalrymple, R. M. Kaplan, J. T. Maxwell III, &amp; A. Zaenen (Eds.), Formal issues in LexicalFunctional Grammar (pp. 381-401). Stanford, CA: CSLI Publications.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Miyao</author>
+</authors>
+<title>Packing of feature structures for efficient unification of disjunctive feature structures.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the 37th Meeting of the Association for Computational Linguistics</booktitle>
+<pages>579--84</pages>
+<publisher>College Park, MD.</publisher>
+<contexts>
+<context position="31910" citStr="Miyao (1999)" startWordPosition="5161" endWordPosition="5162">ro- and retroactive local ambiguity packing with large feature structures, and have provided strong empirical evidence that our approach can be applied beneficially to chart parsing with a large, broad-coverage HPSG of English. By comparison to previous work in unification-based parsing we have demonstrated that pro- and retroactive packing are well-suited to achieve optimal packing; furthermore, experimental results obtained with a publicly-available HPSG processing platform confirm that ambiguity packing can greatly reduce average parse complexity for this type of grammars. In related work, Miyao (1999) describes an approach to packing in which alternative feature structures are represented as packed, distributed disjunctions of feature structure fragments. Although the approach may have potential, the shifting of complex accounting into the unification algorithm is at variance with the findings of Kiefer et al. (1999), who report large speed-ups from the elimination of disjunction processing during unification. Unfortunately, the reported evaluation measures and lack of discussion of parser control issues are insufficient to allow a precise comparison. We intend to develop the approach pres</context>
+</contexts>
+<marker>Miyao, 1999</marker>
+<rawString>Miyao, Y. (1999). Packing of feature structures for efficient unification of disjunctive feature structures. In Proceedings of the 37th Meeting of the Association for Computational Linguistics (pp. 579 - 84). College Park, MD.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R C Moore</author>
+<author>H Alshawi</author>
+</authors>
+<title>Syntactic and semantic processing.</title>
+<date>1992</date>
+<booktitle>In H. Alshawi (Ed.), The Core Language Engine</booktitle>
+<pages>129--148</pages>
+<publisher>MIT Press.</publisher>
+<location>Cambridge, MA:</location>
+<contexts>
+<context position="12483" citStr="Moore and Alshawi (1992)" startWordPosition="1958" endWordPosition="1961">. out in constant time (e.g. by table lookup), and that the grammar allows us to put a small constant upper bound on the intersection of outgoing arcs from each node, the processing in the body of dag-subsumesp0 0 takes unit time. The body may be executed up to N times where N is the number of nodes in the smaller of the two feature structures. So overall the algorithm has linear time complexity. In practice, our implementation (in the environment described in Section 4) performs of the order of 34,000 top-level feature structure subsumption tests per second. 3 Ambiguity Packing in the Parser Moore and Alshawi (1992) and Carroll (1993) have investigated local ambiguity packing for unification grammars with CF backbones, using CF category equality and feature structure subsumption to test if a newly derived constituent can be packed. If a new constituent is equivalent to or subsumed by an existing constituent, then it can be packed into the existing one and will take no further part in processing. However, if the new constituent subsumes an existing one, the situation is not so straightforward: either (a) no packing takes place and the new constituent forms a separate edge (Carroll, 1993), or (b) previous </context>
+<context position="22160" citStr="Moore and Alshawi (1992)" startWordPosition="3558" endWordPosition="3561"> software are publicly available at `http://lingo.stanford.edur. Figure 3 compares total chart size (in all-paths mode) for the regular LKB parser and our variant with pro-and retroactive packing enabled. Factoring ambiguity reduces the number of passive edges by a factor of more than three on average, while for a number of cases the reduction is by a factor of 30 and more. Compared to regular parsing, the rate of increase of passive chart items with respect to sentence length is greatly diminished. To quantify the degree of packing we achieve in practice, we re-ran the experiment reported by Moore and Alshawi (1992): counting the number of nodes required to represent all readings for a simple declarative sentence containing zero to six prepositional phrase (PP) modifiers. The results reported by Moore and Alshawi (1992) (using the CLE grammar of English) and those obtained using pro- and retroactive packing with the LinG0 grammar are presented in Table 1.8 Although the comparison involves different grammars we believe it to be instructive, since (0 both grammars have comprehensive coverage, (ii) derive the same numbers of readings for all test sentences in this experiment, (iii) require (almost) the same</context>
+<context position="24421" citStr="Moore and Alshawi (1992)" startWordPosition="3971" endWordPosition="3974">he Lica, the column &apos;result edges&apos; in Table 1 refers to the total number of edges in the chart that contribute to at least one complete analysis. 166 Kim saw a cat (in the hotel)&apos; Moore &amp; Alshawi Our Method CPU Time n readings packed nodes result edges parse unpack plain 0 I ÷ 0 ÷ msec msec msec 0 1 10 1.0 11 1.0 210 10 180 1 2 21 2.1 23 2.1 340 40 290 2 5 38 3.8 38 3.5 460 80 530 3 14 62 6.2 56 5.1 600 200 1,180 4 42 94 9.4 77 7.0 870 590 2,990 5 132 135 13.5 101 9.2 1,150 1,860 8,790 6 429 186 18.6 128 11.6 1,460 5,690 28,160 Table 1: Comparison of retroactive packing vs. the method used by Moore and Alshawi (1992); columns labeled show the relative increase of packed nodes (result edges) normalised to the n = 0 baseline. with other grammatical phenomena. Comparing relative packing efficiency with increasing ambiguity (the columns labeled &apos;&apos;in Table 1), our method appears to produce a more compact representation of ambiguity than the CLE, and at the same time builds a more specific representation of the parse forest that can be unpacked without search. To give an impression of parser throughput, Table 1 includes timings for our parsing and unpacking (validation) phases, contrasted with the plain, non-pa</context>
+<context position="2584" citStr="Moore &amp; Alshawi, 1992" startWordPosition="380" endWordPosition="383">ree core. For example, in the CLE (Alshawi, 1992) the (manually-assigned) functors of the Prolog terms forming the categories constitute a CF &apos;backbone&apos;. In the Alvey Tools system (Carroll, 1993) each distinct set of features is automatically given a unique identifier and this is associated with every category containing those features. The packing technique has been shown to work well in practice in these and similar unification-augmented CF systems: the parser first tests for CF category equality, and then either (a) checks that the existing feature structure subsumes the newly derived one (Moore &amp; Alshawi, 1992), or (b) forms an efficiently processable disjunction of the feature structures (Maxwell and Kaplan, 1995). Extracting parses from the parse forest is similar to the CF case, except that a global check for consistency of feature values between packed nodes or between feature structure disjuncts is required (this global validation is not required if the subsumption test is strengthened to feature structure equivalence). In contrast, there is essentially no CF component in systems which directly interpret HPSG grammars. Although HPSG feature structures are typed, an initial CF category equality </context>
+<context position="13206" citStr="Moore &amp; Alshawi, 1992" startWordPosition="2077" endWordPosition="2080">es, using CF category equality and feature structure subsumption to test if a newly derived constituent can be packed. If a new constituent is equivalent to or subsumed by an existing constituent, then it can be packed into the existing one and will take no further part in processing. However, if the new constituent subsumes an existing one, the situation is not so straightforward: either (a) no packing takes place and the new constituent forms a separate edge (Carroll, 1993), or (b) previous processing involving the old constituent is undone or invalidated, and it is packed into the new one (Moore &amp; Alshawi, 1992; however, it is unclear whether they achieve maximal compactness in practice: see Table 1). In the former case the parse forest produced will not be optimally compact; in the latter it will be, but maintaining chart consistency and parser correctness becomes a non-trivial problem. Packing of a new edge into an existing one we call proactive (or forward) packing; for the more complex situation involving a new edge subsuming an existing one we introduce the term retroactive (or backward) packing. Several issues arise when packing an old edge (old) into one that was newly derived (new) retroacti</context>
+<context position="16953" citStr="Moore &amp; Alshawi, 1992" startWordPosition="2679" endWordPosition="2683">the parser calls packed-edge-p() on each new edge new as it is derived; a return value of true indicates that new was packed proactively and requires no further processing. Conversely, a false return value from packed- edge-p ( ) signals that new should subsequently undergo regular processing. The second part of the interface builds on notions we call frosting and freezing, meaning temporary and permament invalidation of edges, respectively. As a side-effect of calls to packed-edge-p(), a new edge can cause retroactive packing, resulting in the dele5The situation is simpler in the CLE parser (Moore &amp; Alshawi, 1992) because constituents and dominance relations are separated in the chart. The CLE encoding, in fact, does not record the actual daughters used in building a phrase (e.g. as unique references or pointers, as we do), but instead preserves the category information (i.e. a description) of those daughters. Hence, in extracting complete parses from the chart, the CLE has to perform (a limited) search with re-unification of categories; in this respect, the CLE parse forest still is an underspecified representation of the set of analyses, whereas our encoding (see below) facilitates unpacking without </context>
+</contexts>
+<marker>Moore, Alshawi, 1992</marker>
+<rawString>Moore, R. C., &amp; Alshawi, H. (1992). Syntactic and semantic processing. In H. Alshawi (Ed.), The Core Language Engine (pp. 129- 148). Cambridge, MA: MIT Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Oepen</author>
+<author>U Callmeier</author>
+</authors>
+<title>Measure for measure: Parser cross-fertilization. Towards increased component comparability and exchange.</title>
+<date>2000</date>
+<booktitle>In Proceedings of the 6th International Workshop on Parsing Technologies</booktitle>
+<pages>183--194</pages>
+<location>Trento, Italy.</location>
+<contexts>
+<context position="29931" citStr="Oepen &amp; Callmeier, 2000" startWordPosition="4871" endWordPosition="4874">s to only one previously derived edge being invalidated. This, of course, is a function of the order in which edges are derived, i.e. the parsing strategy. All the results in Table 2 were obtained with a &apos;right corner&apos; strategy which aims to exhaust computation for any suffix of the input string before moving the input pointer to the left; this is achieved by means of a scoring function end - -stnart (where start and end are the vertices of the derivation that would result from the computation, and n is the total input length) that orders parser tasks in the agenda. However, we have observed (Oepen &amp; Callmeier, 2000) that HPsG-type, highly lexicalized grammars benefit greatly from a bidirectional, &apos;key&apos;-driven, active parsing regime, since they often employ rules with underspecified arguments that are only instantiated by coreference with other daughters (where the &apos;key&apos; daughter is the linguistic head in many but not all constructions). This requirement and the general non-predictability of categories derived for any token substring (in particular with respect to unary rule applications), means that a particular parsing strategy may reduce retroactive packing but cannot avoid it in general. With pro- and</context>
+</contexts>
+<marker>Oepen, Callmeier, 2000</marker>
+<rawString>Oepen, S., &amp; Callmeier, U. (2000). Measure for measure: Parser cross-fertilization. Towards increased component comparability and exchange. In Proceedings of the 6th International Workshop on Parsing Technologies (pp. 183 - 194). Trento, Italy.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Oepen</author>
+<author>D P Flickinger</author>
+</authors>
+<title>Towards systematic grammar profiling. Test suite technology ten years after.</title>
+<date>1998</date>
+<journal>Journal of Computer Speech and Language,</journal>
+<volume>12</volume>
+<issue>4</issue>
+<pages>436</pages>
+<contexts>
+<context position="20977" citStr="Oepen &amp; Flickinger, 1998" startWordPosition="3360" endWordPosition="3363">bove using the LinG0 grammar (Flickinger &amp; Sag, 1998), a publicly-available, multipurpose, broad-coverage HPSG of English developed at CSLI Stanford. With roughly 8,000 types, an average feature structure size of around 300 nodes, and 64 lexical and grammar rules (fleshing out the interaction of HPSG ID schemata, wellformedness principles, and LP constraints), LinG0 is among the largest HPSG grammars available. We used the LKB system (Copestake, 1992, 1999) as an experimentation platform since it provides a parameterisable bottom-up chart parser and precise, fine-grained profiling facilities (Oepen &amp; Flickinger, 1998).7 All of our results were obtained in this environment, running on a 300 Mhz UltraSparc, and using a balanced test set of 2,100 sentences extracted from VerbMobil corpora of transcribed speech: input lengths from 1 to 20 words are represented with 100 test items each; although sentences in the corpus range up to 36 words in length there are relatively few longer than 20 words. the category of ei and its decomposition(s) in daughter edges (and corresponding subtrees) be used again, to multiply out and project local ambiguity. 7The LinG0 grammar and Lica software are publicly available at `http</context>
+</contexts>
+<marker>Oepen, Flickinger, 1998</marker>
+<rawString>Oepen, S., &amp; Flickinger, D. P. (1998). Towards systematic grammar profiling. Test suite technology ten years after. Journal of Computer Speech and Language, 12 (4) (Special Issue on Evaluation), 411 -436.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S M Shieber</author>
+</authors>
+<title>Using restriction to extend parsing algorithms for complex feature-based formalisms.</title>
+<date>1985</date>
+<booktitle>In Proceedings of the 23rd Meeting of the Association for Computational Linguistics</booktitle>
+<pages>145--152</pages>
+<location>Chicago, IL.</location>
+<contexts>
+<context position="25749" citStr="Shieber, 1985" startWordPosition="4189" endWordPosition="4190">s reflect the exponential increase in total numbers of analyses; the figures show that our packing scheme achieves a very significant speedup, even when unpacking time is included in the comparison. 5 Choosing the Grammar Restrictor and Parsing Strategy In order for the subsumption relation to apply meaningfully to HPSG signs, two conditions must be met. Firstly, parse tree construction must not be duplicated in the feature structures (by means of the HPSG DTRS feature) but be left to the parser (i.e. recorded in the chart); this is achieved in a standard way by feature structure restriction (Shieber, 1985) applied to all passive edges. Secondly, the processing of constraints that do not restrict the search space but build up new (often semantic) structure should be postponed, since they are likely to interfere with subsumption. For example, analyses that differ only with respect to PP attachment would have the same syntax, but differences in semantics may prevent them being packed. This problem can be overcome by using restriction to (temporarily) remove such (semantic) attributes from lexical entries and also from the rule set, before they are input to the parser in the initial parse forest co</context>
+</contexts>
+<marker>Shieber, 1985</marker>
+<rawString>Shieber, S. M. (1985). Using restriction to extend parsing algorithms for complex feature-based formalisms. In Proceedings of the 23rd Meeting of the Association for Computational Linguistics (pp. 145 - 152). Chicago, IL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>H Tomabechi</author>
+</authors>
+<title>Quasi-destructive graph unification.</title>
+<date>1991</date>
+<booktitle>In Proceedings of the 29th Meeting of the Association for Computational Linguistics</booktitle>
+<pages>315--322</pages>
+<location>Berkeley, CA.</location>
+<contexts>
+<context position="5281" citStr="Tomabechi (1991)" startWordPosition="777" endWordPosition="778">h we use in a bottom-up, chart-based parsing algorithm incorporating novel, efficient accounting mechanisms to guarantee minimal chart size (Section 3). We present a full-scale evaluation of the techniques on a large corpus (Section 4), and complete the picture with an empirically-based discussion of grammar restrictors and parsing strategies (Section 5). 2 Efficient Subsumption and Equivalence Algorithms Our feature structure subsumption algorithm2 assumes totally well-typed structures (Carpenter, 1992) and employs similar machinery to the quasi-destructive unification algorithm described by Tomabechi (1991). In particular, it uses temporary pointers in dag nodes, each pointer tagged with a generation counter, to keep track of intermediate results in processing; incrementing the generation counter invalidates all temporary pointers in a single operation. But whereas quasi-destructive unification makes two passes (determining whether the unification will be successful and then copying out the intermediate representation) the subsumption algorithm makes only one pass, checking reentrancies and type-supertype relationships at the same time.3 The algorithm, shown in Figure 1, also simultaneously test</context>
+</contexts>
+<marker>Tomabechi, 1991</marker>
+<rawString>Tomabechi, H. (1991). Quasi-destructive graph unification. In Proceedings of the 29th Meeting of the Association for Computational Linguistics (pp. 315-322). Berkeley, CA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Tomita</author>
+</authors>
+<title>An efficient context-free parsing algorithm for natural languages.</title>
+<date>1985</date>
+<booktitle>In Proceedings of the 9th International Joint Conference on Artificial Intelligence</booktitle>
+<pages>756--764</pages>
+<location>Los Angeles, CA.</location>
+<contexts>
+<context position="1445" citStr="Tomita, 1985" startWordPosition="206" endWordPosition="207">e ambiguity inherent in natural language means that during parsing, some segments of the input string may end up being analysed as the same type of linguistic object in several different ways. Each of these different ways must be recorded, but subsequent parsing steps must treat the set of analyses as a single entity, otherwise the computation becomes theoretically intractable. Earley&apos;s algorithm (Earley, 1970), for example, avoids duplication of parse items by maintaining pointers to alternative derivations in association with the item. This process has been termed &apos;local ambiguity packing&apos; (Tomita, 1985), and the structure built up by the parser, a &apos;parse forest&apos; (Billot &amp; Lang, 1989). Context free (CF) grammars represent linguistic objects in terms of atomic category symbols. The test for duplicate parse items—and thus being able to pack the subanalyses associated with them—is equality of category symbols. In the final parse forest every different combination of packed nodes induces a distinct, valid parse tree. Most existing unification-based parsing systems either implicitly or explicitly contain a context-free core. For example, in the CLE (Alshawi, 1992) the (manually-assigned) functors </context>
+</contexts>
+<marker>Tomita, 1985</marker>
+<rawString>Tomita, M. (1985). An efficient context-free parsing algorithm for natural languages. In Proceedings of the 9th International Joint Conference on Artificial Intelligence (pp. 756 - 764). Los Angeles, CA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W Wahlster</author>
+</authors>
+<title>VerbMobil - Erkenflung, Analyse, Transfer,</title>
+<date>1997</date>
+<booktitle>Generierung und Synthese von Spontansprache (VerbMobil Report # 198). Saarbriicken, Germany: Deutsches Forschungszentrum fiir Kiinstliche Intelligenz GmbH.</booktitle>
+<contexts>
+<context position="3915" citStr="Wahlster, 1997" startWordPosition="585" endWordPosition="586">e types need not be equal, but could stand in a subtype-supertype relationship. In addition, the feature structure subsumption test is potentially expensive since feature structures are large, typically containing hundreds of nodes. It is therefore an open question whether parsing systems using grammars of this type can gain any advantage from local ambiguity packing. The question is becoming increasingly important, though, as wide-coverage HPSG grammars are starting to be deployed in practical applications— for example for &apos;deep&apos; analysis in the VerbMobil speech-to-speech translation system (Wahlster, 1997; Kiefer, Krieger, Carroll, &amp; Malouf, 1999).1 In this paper we answer the question by demonstrating that (a) subsumption- and equivalence-based feature structure packing is applicable to large HPSG grammars, and (b) average complexity and time taken for the parsing task can be greatly reduced. In Section 2 we present a new, linear-time, bidirec1A significant body of work on efficient processing with such grammars has been building up recently, with investigations into efficient feature structure operations, abstractmachine-based compilation, CF backbone computation, and finite-state approximat</context>
+</contexts>
+<marker>Wahlster, 1997</marker>
+<rawString>Wahlster, W. (1997). VerbMobil - Erkenflung, Analyse, Transfer, Generierung und Synthese von Spontansprache (VerbMobil Report # 198). Saarbriicken, Germany: Deutsches Forschungszentrum fiir Kiinstliche Intelligenz GmbH.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

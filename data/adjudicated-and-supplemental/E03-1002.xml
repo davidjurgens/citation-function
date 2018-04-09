@@ -1,0 +1,1212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.010173">
+<title confidence="0.9989565">
+Neural Network Probability Estimation
+for Broad Coverage Parsing
+</title>
+<author confidence="0.934366">
+James Henderson
+</author>
+<affiliation confidence="0.800603">
+Departement d&apos;Informatique
+Universite de Geneve
+</affiliation>
+<email confidence="0.978826">
+James.Henderson@cui.unige.ch
+</email>
+<sectionHeader confidence="0.998376" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.9999824375">
+We present a neural-network-based sta-
+tistical parser, trained and tested on
+the Penn Treebank. The neural net-
+work is used to estimate the parame-
+ters of a generative model of left-corner
+parsing, and these parameters are used
+to search for the most probable parse.
+The parser&apos;s performance (88.8% F-
+measure) is within 1% of the best cur-
+rent parsers for this task, despite using a
+small vocabulary size (512 inputs). Cru-
+cial to this success is the neural network
+architecture&apos;s ability to induce a finite
+representation of the unbounded parse
+history, and the biasing of this induction
+in a linguistically appropriate way.
+</bodyText>
+<sectionHeader confidence="0.999473" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999664621621622">
+Many statistical parsers (Ratnaparkhi, 1999;
+Collins, 1999; Charniak, 2001) are based on
+a history-based probability model (Black et al.,
+1993), where the probability of each decision in
+a parse is conditioned on the previous decisions
+in the parse. A major challenge in this approach is
+choosing a representation of the parse history from
+which the probability for the next parser decision
+can be accurately estimated. Previous approaches
+have used a hand-crafted finite set of features
+to represent the unbounded parse history (Ratna-
+parkhi, 1999; Collins, 1999; Charniak, 2001). In
+the work presented here, we automatically induce
+a finite set of features to represent the unbounded
+parse history. We perform this induction using an
+artificial neural network architecture, called Sim-
+ple Synchrony Networks (SSNs) (Lane and Hen-
+derson, 2001; Henderson, 2000). Because this
+architecture is specifically designed for process-
+ing structures, it allows us to impose structurally
+specified and linguistically appropriate biases on
+the search for a good history representation. The
+resulting parser achieves performance far greater
+than previous approaches to neural network pars-
+ing (Ho and Chan, 1999; Costa et al., 2001), and
+only marginally below the current state-of-the-art
+for parsing the Penn Treebank.
+We propose a hybrid parsing system consist-
+ing of two components, a neural network which
+estimates the parameters of a probability model
+for phrase structure trees, and a statistical parser
+which searches for the most probable phrase
+structure tree given these parameters. We first
+present the probability model which is common
+to these two components, followed by the estima-
+tion method, the search method, and a discussion
+of the empirical results.
+</bodyText>
+<sectionHeader confidence="0.977561" genericHeader="introduction">
+2 The Generative Probability Model
+</sectionHeader>
+<bodyText confidence="0.999915222222222">
+The probability model we use is generative and
+history-based. Generative models are expressed
+in terms of a stochastic process which generates
+both the phrase structure tree and the input sen-
+tence. At each step, the process chooses a char-
+acteristic of the tree or predicts a word in the sen-
+tence. This sequence of decisions is the derivation
+of the tree, which we will denote d1,..., dm. Be-
+cause there is a one-to-one mapping from phrase
+</bodyText>
+<page confidence="0.997228">
+131
+</page>
+<bodyText confidence="0.9999542">
+structure trees to our derivations, the probability
+of a derivation P(di,..., dm) is equal to the joint
+probability of the derivation&apos;s tree and the input
+sentence. The probability of the input sentence
+is a constant across all the candidate derivations,
+so we only need to find the most probable deriva-
+tion. in history-based models (Black et al., 1993),
+the probability estimate for each derivation deci-
+sion di is conditioned on the previous derivation
+decisions d1,..., d,_1, which is called the deriva-
+tion history at step i. This allows us to use the
+chain rule for conditional probabilities to derive
+the probability of the entire derivation as the mul-
+tiplication of the probabilities for each of its deci-
+sions.
+</bodyText>
+<equation confidence="0.796286">
+P (di ,..., = di_i)
+</equation>
+<bodyText confidence="0.980888">
+The probabilities P(dild1,..., d1)&apos; are the param-
+eters of the parser&apos;s probability model.
+To define the parameters di_i) we
+need to choose the ordering of the decisions in
+a derivation, such as a top-down or shift-reduce
+ordering. The ordering which we use here is
+that of a form of left-corner parser (Rosenkrantz
+and Lewis, 1970). A left-corner parser decides
+to introduced a node into the parse tree after the
+subtree rooted at the node&apos;s first child has been
+fully parsed. Then the subtrees for the node&apos;s re-
+maining children are parsed in their left-to-right
+order. We use the binarized version of a left-
+corner parser, described in (Manning and Carpen-
+ter, 1997), where the parse of each non-leftmost
+child begins with the parent node predicting the
+child&apos;s leftmost terminal, and ends with the child&apos;s
+root nonterminal attaching to the parent. An ex-
+ample of this ordering is shown by the numbering
+on the left in figure 1. The process which gener-
+ates a tree begins with a stack that contains a node
+labeled ROOT (step 0) and must end in the same
+configuration (step 9), as shown on the right of
+the figure. The possible derivation decisions are:
+predict the next tag-word pair and push it on the
+stack (steps 1, 4, and 6), replace the node on top
+of the stack with a new node which is its parent
+and choose the label of that node (steps 2, 3, and
+5), and pop a node from the stack and attach it as
+the child of the node below it on the stack (steps 7,
+&apos;When i = 1, P(dIdi,..., di_ 1) =
+Stacks:
+</bodyText>
+<listItem confidence="0.9898312">
+0: ROOT
+1: ROOT, NNP
+2: ROOT, NP
+3: ROOT, S
+4: ROOT, S, VBZ
+5: ROOT, S, VP
+6: ROOT, S, VP, RB
+7: ROOT, S, VP
+8: ROOT, S
+9: ROOT
+</listItem>
+<figureCaption confidence="0.991567">
+Figure 1: The decomposition of a parse tree into
+derivation decisions (left) and the stack after each
+decision (right).
+</figureCaption>
+<bodyText confidence="0.78892">
+8, and 9).2
+</bodyText>
+<sectionHeader confidence="0.9905325" genericHeader="method">
+3 Inducing Features of the Derivation
+History
+</sectionHeader>
+<bodyText confidence="0.994453352941176">
+The most important step in designing a statisti-
+cal parser with a history-based probability model
+is choosing a method for estimating the param-
+eters d,_1). The main difficulty with
+this estimation is that the history d1,..., di_1 is of
+unbounded length. Most probability estimation
+methods require that there be a finite set of fea-
+tures on which the probability is conditioned. The
+standard way to handle this problem is to hand-
+craft a finite set of features which provides a suf-
+ficient summary of the unbounded history (Rat-
+naparkhi, 1999; Collins, 1999; Charniak, 2000).
+The probabilities are then assumed to be indepen-
+dent of all the infoimation about the history which
+is not captured by the chosen features. The diffi-
+culty with this approach is that the choice of fea-
+tures can have a large impact on the performance
+of the system, but it is not feasible to search the
+space of possible feature sets by hand. One al-
+ternative to choosing a finite set of features is to
+use kernel methods, which can handle unbounded
+2We extended the left-corner parsing model in a few mi-
+nor ways using grammar transforms. We replace Chomsky
+adjunction structures (i.e. structures of the form [X [X ...]
+[Y ...]]) with a special &amp;quot;modifier&amp;quot; link in the tree (becoming
+[X ... [mod Y • requiring nodes which are popped from
+the stack to choose between attaching with a normal link or
+a modifier link. We also compiled some frequent chains of
+non-branching nodes (such as [S [VP ...1]) into a single node
+with a new label (becoming [S-VP ...]). These transforms
+are undone before any evaluation is performed on the output
+trees. We do not believe these transforms have a major impact
+on performance, but we have not currently run tests without
+them.
+</bodyText>
+<figure confidence="0.8885695">
+o ROOT
+3
+NP VP
+NNP/Mary 4 VBZ/runs 6 RB/often
+</figure>
+<page confidence="0.99236">
+132
+</page>
+<bodyText confidence="0.999913578947368">
+feature sets, but then efficiency becomes a prob-
+lem. Collins and Duffy (2002) define a kernel over
+parse trees and apply it to re-ranking the output of
+a parser, but the resulting feature space is restricted
+by the need to compute the kernel efficiently, and
+the results are not as good as Collins&apos; previous
+work on re-ranking using a finite set of features
+(Collins, 2000).
+In this work we use a method for automati-
+cally inducing a finite set of features for represent-
+ing the derivation history. The method is a form
+of multi-layered artificial neural network called
+Simple Synchrony Networks (Lane and Hender-
+son, 2001; Henderson, 2000). The outputs of
+this network are probability estimates computed
+with a log-linear model (also known as a maxi-
+mum entropy model), as is done in (Ratnaparkhi,
+1999). Log-linear models have proved success-
+ful in a wide variety of applications, and are the
+inspiration behind one of the best current statisti-
+cal parsers (Charniak, 2000). The difference from
+previous approaches is in the nature of the input
+to the log-linear model. We do not use hand-
+crafted features, but instead we use a finite vector
+of real-valued features which are induced as part
+of the neural network training process. These in-
+duced features represent the information about the
+derivation history which the training process has
+decided is relevant to estimating the output prob-
+abilities. In neural networks these feature vectors
+are called the hidden layer activations, but for con-
+tinuity with the previous discussion we will refer
+to them as the history features.
+We will denote the history feature computa-
+tion with the function h, and the output log-linear
+model with the function o, whose result is a proba-
+bility distribution over the possible derivation op-
+erations.
+</bodyText>
+<equation confidence="0.758044">
+di_1)) P(d, dz_i)
+</equation>
+<bodyText confidence="0.998368">
+The mapping h from the derivation history to the
+history features is computed with the repeated ap-
+plication of a function g, which maps previous his-
+tory representations plus pre-defined features of
+the derivation history to a real-valued vector.
+Because the function g is nonlinear, the in-
+duction of these features allows the training pro-
+cess to explore a much more general set of es-
+timators o(h(x)) than would be possible with a
+log-linear model alone (i.e. o(x)).3 This general-
+ity makes this estimation method less dependent
+on the choice of input representation x. In ad-
+dition, because the inputs to g include previous
+history representations, the mapping h is defined
+recursively. This recursion allows the input to
+the system to be unbounded, thereby allowing an
+unbounded derivation history to be successively
+compressed into a fixed-length vector of history
+features.
+Training a Simple Synchrony Network (SSN)
+is similar to training a log-linear model. First an
+appropriate error function is defined for the net-
+work&apos;s outputs, and then some form of gradient
+descent learning is applied to search for a mini-
+mum of this error function.4 This learning simul-
+taneously tries to optimize the parameters of the
+output computation o and the parameters of the
+mapping h from the derivation history to the his-
+tory features. With multi-layered networks such as
+SSNs, this training is not guaranteed to converge
+to a global optimum, but in practice a set of pa-
+rameters whose error is close to the optimum can
+be found. The reason no global optimum can be
+found is that it is intractable to find the optimal
+mapping h from the derivation history to the his-
+tory features. Given this difficulty, it is important
+to impose appropriate biases on the search for a
+good set of history features.
+The main bias we have exploited in this work
+is the recency bias in training recursively defined
+neural networks. The only trained parameters of
+the mapping h are the parameters of the function
+g, which records a subset of the information from
+a set of previous history representations in a new
+history representation. The training process auto-
+3As is standard, g is the sigmoid activation function ap-
+plied to a weighted sum of its inputs. Multi-layered neural
+networks of this form can approximate arbitrary mappings
+from inputs to outputs (Hornik et al., 1989), whereas a log-
+linear model alone can only estimate probabilities where the
+category-conditioned probability distributions P(xidi) of the
+pre-defined inputs x are in a restricted form of the exponen-
+tial family (Bishop, 1995).
+4We use the cross-entropy error function, which ensures
+that the minimum of the error function converges to the de-
+sired probabilities as the amount of training data increases
+(Bishop, 1995). This implies that the minimum for any given
+dataset is an estimate of the true probabilities. We use the
+on-line version of Backpropagation to perform the gradient
+descent.
+</bodyText>
+<page confidence="0.995237">
+133
+</page>
+<bodyText confidence="0.99998075">
+matically chooses these parameters based on what
+information needs to be recorded. The recorded
+information may be needed to compute the output
+for the current step, or it may need to be passed
+on to future history representations to compute a
+future output. However, the more history repre-
+sentations intervene between the place where the
+information is input and the place where the infor-
+mation is needed, the less likely the training is to
+learn to record this information. We can exploit
+this recency bias in inducing history representa-
+tions by ensuring that information which is known
+to be important at a given step in the derivation is
+input directly to that step&apos;s history representation,
+and that as information becomes less relevant it
+has increasing numbers of history representations
+to pass through before reaching the step&apos;s history
+representation. In the next section we will present
+how this inductive bias is exploited in the design
+of the SSN parser.
+</bodyText>
+<sectionHeader confidence="0.8609165" genericHeader="method">
+4 Estimating Derivation Probabilities
+with a Simple Synchrony Network
+</sectionHeader>
+<bodyText confidence="0.993217643835616">
+Simple Synchrony Networks are an artificial neu-
+ral network architecture which is specifically de-
+signed for processing structured data. A SSN di-
+vides the processing of a structure into a set of
+sub-processes, with one sub-process for each node
+of the structure. For phrase structure tree deriva-
+tions, we divide a derivation into a set of sub-
+derivations by assigning a derivation step i to the
+sub-derivation for the node top, which is on the top
+of the stack prior to that step. The SSN network
+then performs the same computation at each posi-
+tion in each sub-derivation. The unbounded nature
+of phrase structure trees does not pose a problem
+for this approach, because increasing the number
+of nodes only increases the number of times the
+SSN network needs to perform a computation, and
+not the number of parameters in the computation
+which need to be trained.
+Each computation which the network performs
+results in two real-valued vectors, namely the re-
+sults of the functions o and h. As discussed in
+the previous section, the function o is simply a
+log-linear model applied to the result of h. When
+h is applied to node top, at step i, it computes
+the history representation h(d1,...,di_1) by apply-
+ing the function g to a set of pre-defined features
+f di_1) of the derivation history plus a small
+set of previous history representations.
+=
+g(f (di,...,c1,_1), {rep, i(c)Ic E D(top,)})
+where repi_i(c) is the most recent previous his-
+tory representation for a node c.
+rep (c) = h(di,..•,dmax(kk&lt;jAtopk=e))
+D(top) is a small set of nodes which are in a
+structurally local domain of top,. This domain al-
+ways includes top, itself, but the remaining nodes
+in D(top) and the features in f need
+to be chosen by the system designer. These
+choices determine how information flows from
+one set of history features to another, and thus de-
+termines the inductive bias discussed in the previ-
+ous section.
+The principle we apply when designing D(top,)
+and f (di,..., di_1) is that we want the inductive
+bias to reflect structural locality. For this reason,
+D(top) includes nodes which are structurally lo-
+cal to top,. These nodes are the left-corner an-
+cestor of top, (which is below top, on the stack),
+top &apos;s left-corner child (its leftmost child, if any),
+and top &apos;s most recent child (which was top,_1,
+if any). For right-branching structures, the left-
+corner ancestor is the parent, conditioning on
+which has been found to be beneficial (Johnson,
+1998), as has conditioning on the left-corner child
+(Roark and Johnson, 1999). Because these in-
+puts include the history features of both the left-
+corner ancestor and the most recent child, a deriva-
+tion step i always has access to the history fea-
+tures from the previous derivation step i — 1, and
+thus (by induction) any information from the en-
+tire previous derivation history could in principle
+be stored in the history features. Thus this model
+is making no a priori hard independence assump-
+tions, just a priori soft biases.
+As mentioned above, D(top) also includes top,
+itself, which means that the inputs to g always
+include the history features for the most recent
+derivation step assigned to top,. This input im-
+poses an appropriate bias because the induced his-
+tory features which are relevant to previous deriva-
+tion decisions involving top, are likely to be rele-
+vant to the decision at step i as well. As a sim-
+ple example, in figure 1, the prediction of the left
+</bodyText>
+<page confidence="0.994508">
+134
+</page>
+<bodyText confidence="0.9999676">
+corner terminal of the VP node (step 4) and the
+decision that the S node is the root of the whole
+sentence (step 9) are both dependent on the fact
+that the node on the top of the stack in each case
+has the label S (chosen in step 3).
+The pre-defined features of the derivation his-
+tory f (di,..., di_i) which are input to g for node
+top, at step i are chosen to reflect the information
+which is directly relevant to choosing the next de-
+cision di. In the parser presented here, these inputs
+are the last decision di_j in the derivation, the la-
+bel or tag of the sub-derivation&apos;s node top,, the tag-
+word pair for the most recently predicted terminal,
+and the tag-word pair for top, &apos;s left-corner termi-
+nal (the leftmost terminal it dominates). Inputting
+the last decision di_j is sufficient to provide the
+SSN with a complete specification of the deriva-
+tion history. The remaining features were chosen
+so that the inductive bias would emphasize these
+pieces of information.
+</bodyText>
+<sectionHeader confidence="0.928487" genericHeader="method">
+5 Searching for the Best Parse
+</sectionHeader>
+<bodyText confidence="0.999957013513514">
+Once we have trained the SSN to estimate the pa-
+rameters of our probability model, we use these
+estimates to search the space of possible deriva-
+tions to try to find the most probable one. Search-
+ing the space of all possible derivations has expo-
+nential complexity, so it is important to be able to
+prune the search space. Being able to prune ef-
+fectively is particularly important for neural net-
+work approaches, due to the computational cost of
+computing probability estimates. We use a form
+of beam search to prune the search space.
+The choice of the left-corner ordering for
+derivations is crucial to the success of this neural
+network parser in that it allows very severe prun-
+ing without significant loss in performance. The
+most important pruning occurs after each word has
+been predicted and pushed on the stack (for exam-
+ple, after steps 1, 4, and 6 in figure 1). When a par-
+tial derivation reaches this position it is stopped to
+see if it is one of a small number of the best partial
+derivations which end in predicting that word. The
+search only pursues a beam of the best 100 deriva-
+tions past each word prediction. Experiments with
+a variety of beam widths confirms that little if
+any validation performance is gained with larger
+beam widths. To search the space of derivations in
+between two word predictions we do a best-first
+search. This search is not restricted by a beam
+width, but a limit is placed on the search&apos;s branch-
+ing factor. At each point in a partial derivation
+which is being pursued by the search, only the 10
+best alternative decisions are considered for con-
+tinuing that derivation. This was done because we
+found that the best-first search tended to pursue
+a large number of alternative labels for a nonter-
+minal before pursuing subsequent derivation steps,
+even though only the most probable labels ended
+up being used in the best derivations. We found
+that a branching factor of 10 was large enough
+that it had virtually no effect on validation perfor-
+mance.
+The most computationally intensive operation
+of the parser is computing the probability esti-
+mates for the predictions of the next tag-word pair.
+To compute the log-linear model of this prediction,
+it is necessary to compute values for all possible
+next words, not just the correct next word, because
+they are needed for normalizing. Because there are
+a very large number of words, this is expensive. To
+reduce this burden, the parser computes this pre-
+diction in two stages, first predicting the tag in the
+tag-word pair, and then predicting the word condi-
+tioned on that tag. We implement this condition-
+ing as a mixture model (Bishop, 1995), where the
+tag predictions are the mixing coefficients. This
+means that only estimates for the tag-word pairs
+with the correct tag need to be computed, both in
+training and testing. We also reduced the compu-
+tational cost of word prediction by replacing lower
+frequency tag-word pairs with a tag-&amp;quot;unknown-
+word&amp;quot; pair. Excluding words below a frequency
+threshold can greatly reduce the size of the vocab-
+ulary, because there are a very large number of low
+frequency words. This method also has the advan-
+tages of training an output to be used for words
+which were not in the training set, and smoothing
+across tag-word pairs whose low frequency would
+prevent accurate learning by themselves. We do
+not do any morphological analysis of unknown
+words, although we would expect some improve-
+ment in performance if we did. A variety of fre-
+quency thresholds were tried, as reported in sec-
+tion 6. The same representation of tag-word pairs
+was used in the input as was used for prediction.
+</bodyText>
+<page confidence="0.999085">
+135
+</page>
+<sectionHeader confidence="0.988327" genericHeader="method">
+6 The Experimental Results
+</sectionHeader>
+<bodyText confidence="0.99994152631579">
+The generality and efficiency of the above pars-
+ing model makes it possible to test a SSN parser
+on the Penn Treebank (Marcus et al., 1993), and
+thereby compare its performance directly to other
+statistical parsing models in the literature. To test
+the effects of varying vocabulary sizes on perfor-
+mance and tractability, we trained three different
+models. The simplest model (&amp;quot;Tags&amp;quot;) includes no
+words in the vocabulary, relying completely on the
+information provided by the part-of-speech tags of
+the words. The second model (&amp;quot;Freq&gt;200&amp;quot;) uses
+all tag-word pairs which occur at least 200 times
+in the training set. The remaining words were all
+treated as instances of the unknown-word. This re-
+sulted in a vocabulary size of 512 tag-word pairs.
+The third model (&amp;quot;Freq&gt;20&amp;quot;) thresholds the vo-
+cabulary at 20 instances in the training set, result-
+ing in 4242 tag-word pairs.5
+As is standard practice, we used sections 2-
+22 as the training set (39,832 sentences), sec-
+tion 24 as a development/validation set (1346 sen-
+tence), and section 23 as a testing set (2416 sen-
+tences). We determined appropriate training pa-
+rameters and network size based on our previous
+experience with networks similar to the models
+Tags and Freq&gt;200, which had been trained and
+evaluated on the same training and validation sets.
+We trained two or three networks for each of the
+three models and chose the best one based on their
+validation performance. We then tested the best
+non-lexicalized and the best lexicalized models
+on the testing set.6 Standard measures of perfor-
+mance are shown in table 1.7
+The top panel of table 1 lists the results for the
+non-lexicalized model (SSN-Tags) and the avail-
+able results for three other models which only use
+part-of-speech tags as inputs, another neural net-
+work parser (Costa et al., 2001), an earlier statis-
+</bodyText>
+<footnote confidence="0.899791909090909">
+5In these experiments the tags are included in the input to
+the system, but, for compatibility with other parsers, we did
+not use the hand-corrected tags which come with the corpus.
+We used a publicly available tagger (Ratnaparkhi, 1996) to
+tag the words and then used these in the input to the system.
+6We found that 80 hidden units produced better perfor-
+mance than 60 or 100. Momentum was applied throughout
+training. Weight decay regularization was applied at the be-
+ginning of training but reduced to zero by the end of training.
+7A11 our results are computed with the evalb program fol-
+lowing the now-standard criteria in (Collins, 1999).
+</footnote>
+<table confidence="0.998321833333333">
+Length&lt;40 All
+LR LP LR LP
+Costa-et-a101 NA NA 57.8 64.9
+Manning&amp;Carpenter97 77.6 79.9 NA NA
+Charniak97 (PCFG) 71.2 75.3 70.1 74.3
+SSN-Tags 83.9 84.9 83.3 84.3
+Ratnaparkhi99 NA NA 86.3 87.5
+Collins99 88.5 88.7 88.1 88.3
+Charniak00 90.1 90.1 89.6 89.5
+Collins00 90.1 90.4 89.6 89.9
+Bod01 90.8 90.6 89.7 89.7
+SSN-Freq&gt;200 88.8 89.6 88.3 89.2
+</table>
+<tableCaption confidence="0.916427">
+Table 1: Percentage labeled constituent recall and
+precision on the testing set.
+</tableCaption>
+<bodyText confidence="0.999554083333333">
+tical left-corner parser (Manning and Carpenter,
+1997), and a PCFG (Charniak, 1997). The Tags
+model achieves performance which is better than
+any previously published results on parsing with a
+non-lexicalized model. The Tags model also does
+much better than the only other broad coverage
+neural network parser (Costa et al., 2001).
+The bottom panel of table 1 lists the results
+for the chosen lexicalized model (SSN-Freq&gt;200)
+and five recent statistical parsers (Ratnaparkhi,
+1999; Collins, 1999; Charniak, 2000; Collins,
+2000; Bod, 2001). The performance of the lex-
+icalized model falls in the middle of this range,
+only being beaten by the three best current parsers,
+which all achieve equivalent performance. The
+best current model (Collins, 2000) has only 6%
+less precision error and only 11% less recall er-
+ror than the lexicalized model. The SSN parser
+achieves this result using much less lexical knowl-
+edge than other approaches, which all minimally
+use the words which occur at least 5 times, plus
+morphological features of the remaining words. It
+is also achieved without any explicit notion of lex-
+ical head.
+</bodyText>
+<sectionHeader confidence="0.976527" genericHeader="discussions">
+7 Discussion and Further Analysis
+</sectionHeader>
+<bodyText confidence="0.99936">
+Two novel aspects of this SSN parsing model are
+the small vocabulary size and the use of induced
+features to represent the derivation history. To in-
+vestigate these aspects we trained some additional
+</bodyText>
+<page confidence="0.995548">
+136
+</page>
+<table confidence="0.999626857142857">
+Tags 82.9 84.2 83.6
+Freq&gt;200 88.0 89.5 88.8
+Freq&gt; 20 87.9 89.2 88.5
+Freq&gt;200, ancestor label 82.6 85.4 84.0
+Freq&gt;200, child label 85.1 86.5 85.8
+Freq&gt;200, lc—child label 86.1 87.8 86.9
+Freq&gt;200, all labels 81.0 83.6 82.3
+</table>
+<tableCaption confidence="0.837819666666667">
+Table 2: Percentage labeled constituent recall, pre-
+cision, and F-measure on the validation set.
+models and tested them on the validation set.8
+</tableCaption>
+<bodyText confidence="0.979764158730159">
+The first three rows of table 2 show perfor-
+mance as the vocabulary size increases from 46
+tags (Tags) to 512 tag-word pairs (Freq&gt;200) to
+4242 tag-word pairs (Freq&gt;20). There is a 32%
+reduction in F-measure error when we add words
+with frequency greater than 200, but the perfor-
+mance does not increase when we further increase
+the vocabulary size. Two explanations for the
+lack of improvement with larger vocabularies sug-
+gest themselves. The first possible explanation is
+that something about the parser design prevents
+the SSN from fully exploiting lexical information.
+One candidate for such a problem is the lack of any
+inductive bias expressing the importance of lexical
+heads over non-head words. The second possible
+explanation is that the importance of lexical items
+in previous models is mainly that they provide in-
+formation about the types of contexts in which the
+lexical items tend to occur. This indirect repre-
+sentation of context is not very important if the
+model has a good representation of the actual con-
+text. The only lexical items which would then be
+necessary are the idiosyncratic ones, which tend
+to be high frequency. This argument is supported
+by the fact that the non-lexicalized model with in-
+duced history features actually does better than the
+lexicalized model without them (shown in the last
+line of table 2, and discussed below).
+The last four rows of table 2 show the effects of
+reducing the use of induced history features. If
+when computing history representations, we re-
+8The validation set is used to avoid repeated testing on the
+standard testing set. The sentence with length greater than
+100 was excluded. F-measure is (2 x LP x LR)/(LP LR).
+move a node from D (top) and add its label to
+f di_1), then we are replacing the induced
+features of the node&apos;s derivation history with the
+symbolic label of the node. This removes access
+to more distant characteristics of the node&apos;s deriva-
+tion history. Table 2 shows the performance of
+models where this replacement is done for none
+(Freq&gt;200), one, or all of the nodes in D(top)
+other than top, itself. The biggest decrease in
+performance occurs when the left-corner ances-
+tor&apos;s history representation is removed (ancestor
+label). This implies that more distant top-down
+constraints and constraints from the left context
+are playing a big role in the success of the SSN
+parser. Another big decrease in performance oc-
+curs when the most recent child&apos;s history repre-
+sentation is removed (child label). This implies
+that more distant bottom-up constraints are also
+playing a big role. There is also a decrease in
+performance when the left-corner child&apos;s history
+representation is remove (1c—child label). This
+implies that the first child does tend to carry in-
+formation which is relevant throughout the sub-
+derivation for the node, and suggests that this child
+deserves a special status. Finally, not using any of
+these sources of induced history features (all la-
+bels) results in dramatically worse performance,
+with a 58% increase in F-measure error over using
+all three.
+</bodyText>
+<sectionHeader confidence="0.999309" genericHeader="conclusions">
+8 Conclusions
+</sectionHeader>
+<bodyText confidence="0.999972882352941">
+This paper has presented a statistical left-corner
+parser which uses a neural network to estimate the
+parameters of its generative probability model. A
+Simple Synchrony Network is trained to estimate
+the probabilities of parse decisions conditioned on
+the previous parse history, and these estimates are
+used to efficiently search for the most probable
+parse. When trained and tested on the standard
+Penn Treebank datasets, the parser&apos;s performance
+(88.8% F-measure) is within 1% of the best cur-
+rent parsers for this task, despite using a small vo-
+cabulary size (512 inputs).
+This level of performance is achieved in large
+part due to Simple Synchrony Networks&apos; ability
+to induce a finite representation of the unbounded
+parse history. By automatically inducing features
+of the parse history, this method avoids the need
+</bodyText>
+<table confidence="0.817943">
+Validation, Length&lt; 100
+LR LP F/3-1
+</table>
+<page confidence="0.9938">
+137
+</page>
+<bodyText confidence="0.999973647058824">
+to choose hand-crafted history features and their
+associated independence assumptions. Crucial to
+the success of this induction of history features
+is imposing biases which focus the induction pro-
+cess on structurally local aspects of the parse his-
+tory. When the induced history features for struc-
+turally local aspects of the parse history are re-
+placed by hand-crafted features (namely node la-
+bels), performance degrades dramatically. In ad-
+dition to demonstrating the usefulness of a Sim-
+ple Synchrony Network&apos;s induced history repre-
+sentation, this work also adds to the diversity of
+available broad coverage parsing methods (poten-
+tially of great interest for ensemble learning) and
+demonstrates the ability of neural network proba-
+bility estimation to scale up to large datasets, un-
+restricted structures, and fairly large vocabularies.
+</bodyText>
+<sectionHeader confidence="0.999322" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999891807692308">
+Christopher M. Bishop. 1995. Neural Networks for
+Pattern Recognition. Oxford University Press, Ox-
+ford, UK.
+E. Black, F. Jelinek, J. Lafferty, D. Magerman, R. Mer-
+cer, and S. Roukos. 1993. Towards history-based
+grammars: Using richer models for probabilistic
+parsing. In Proc. 31st Meeting of Association for
+Computational Linguistics, pages 31-37, Columbus,
+Ohio.
+Rens Bod. 2001. What is the minimal set of fragments
+that achieves maximal parse accuracy? In Proc.
+34th Meeting of Association for Computational Lin-
+guistics, pages 66-73.
+Eugene Charniak. 1997. Statistical parsing with a
+context-free grammar and word statistics. In Proc.
+14th National Conference on Artificial Intelligence,
+Providence, RI. AAAI Press/MIT Press.
+Eugene Charniak. 2000. A maximum-entropy-
+inspired parser. In Proc. 1st Meeting of North Amer-
+ican Chapter of Association for Computational Lin-
+guistics, pages 132-139, Seattle, Washington.
+Eugene Charniak. 2001. Immediate-head parsing for
+language models. In Proc. 39th Meeting of Associa-
+tion for Computational Linguistics, pages 116-223,
+Toulouse France.
+Michael Collins and Nigel Duffy. 2002. New rank-
+ing algorithms for parsing and tagging: Kernels
+over discrete structures and the voted perceptron.
+In Proc. 35th Meeting of Association for Computa-
+tional Linguistics, pages 263-270.
+Michael Collins. 1999. Head-Driven Statistical Mod-
+els for Natural Language Parsing. Ph.D. thesis,
+University of Pennsylvania, Philadelphia, PA.
+Michael Collins. 2000. Discriminative reranking for
+natural language parsing. In Proc. 17th Int. Conf on
+Machine Learning, pages 175-182, Stanford, CA.
+F. Costa, V. Lombardo, P. Frasconi, and G. Soda. 2001.
+Wide coverage incremental parsing by learning at-
+tachment preferences. In Proc. of the Conf of the
+Italian Association for Artificial Intelligence.
+James Henderson. 2000. A neural network parser that
+handles sparse data. In Proc. 6th Int. Workshop on
+Parsing Technologies, pages 123-134, Trento, Italy.
+E.K.S. Ho and L.W. Chan. 1999. How to design a
+connectionist holistic parser. Neural Computation,
+11(8):1995-2016.
+K. Hornik, M. Stinchcombe, and H. White. 1989.
+Multilayer feedforward networks are universal ap-
+proximators. Neural Networks, 2:359-366.
+Mark Johnson. 1998. PCFG models of linguis-
+tic tree representations. Computational Linguistics,
+24(4):613-632.
+Peter Lane and James Henderson. 2001. Incremental
+syntactic parsing of natural language corpora with
+simple synchrony networks. IEEE Transactions on
+Knowledge and Data Engineering, 13 (2):219-231.
+Christopher D. Manning and Bob Carpenter. 1997.
+Probabilistic parsing using left corner language
+models. In Proc. Int. Workshop on Parsing Tech-
+nologies, pages 147-158.
+Mitchell P. Marcus, Beatrice Santorini, and Mary Ann
+Marcinkiewicz. 1993. Building a large annotated
+corpus of English: The Penn Treebank. Computa-
+tional Linguistics, 19(2):313-330.
+Adwait Ratnaparkhi 1996. A maximum entropy
+model for part-of-speech tagging. In Proc. Conf on
+Empirical Methods in Natural Language Process-
+ing, pages 133-142, Univ. of Pennsylvania, PA.
+Adwait Ratnaparkhi. 1999. Learning to parse natural
+language with maximum entropy models. Machine
+Learning, 34:151-175.
+Brian Roark and Mark Johnson. 1999. Efficient prob-
+abilistic top-down and left-corner parsing. In Proc.
+37th Meeting of Association for Computational Lin-
+guistics, pages 421-428.
+D.J. Rosenkrantz and P.M. Lewis. 1970. Determinis-
+tic left corner parsing. In Proc. 11th Symposium on
+Switching and Automata Theory, pages 139-152.
+</reference>
+<page confidence="0.997343">
+138
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.410104">
+<title confidence="0.999343">Neural Network Probability Estimation for Broad Coverage Parsing</title>
+<author confidence="0.999926">James Henderson</author>
+<affiliation confidence="0.9931045">Departement d&apos;Informatique Universite de Geneve</affiliation>
+<email confidence="0.420888">James.Henderson@cui.unige.ch</email>
+<abstract confidence="0.999029117647059">We present a neural-network-based statistical parser, trained and tested on the Penn Treebank. The neural network is used to estimate the parameters of a generative model of left-corner parsing, and these parameters are used to search for the most probable parse. The parser&apos;s performance (88.8% Fmeasure) is within 1% of the best current parsers for this task, despite using a small vocabulary size (512 inputs). Crucial to this success is the neural network architecture&apos;s ability to induce a finite representation of the unbounded parse history, and the biasing of this induction in a linguistically appropriate way.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Christopher M Bishop</author>
+</authors>
+<title>Neural Networks for Pattern Recognition.</title>
+<date>1995</date>
+<publisher>Oxford University Press,</publisher>
+<location>Oxford, UK.</location>
+<contexts>
+<context position="11714" citStr="Bishop, 1995" startWordPosition="1956" endWordPosition="1957">eters of the function g, which records a subset of the information from a set of previous history representations in a new history representation. The training process auto3As is standard, g is the sigmoid activation function applied to a weighted sum of its inputs. Multi-layered neural networks of this form can approximate arbitrary mappings from inputs to outputs (Hornik et al., 1989), whereas a loglinear model alone can only estimate probabilities where the category-conditioned probability distributions P(xidi) of the pre-defined inputs x are in a restricted form of the exponential family (Bishop, 1995). 4We use the cross-entropy error function, which ensures that the minimum of the error function converges to the desired probabilities as the amount of training data increases (Bishop, 1995). This implies that the minimum for any given dataset is an estimate of the true probabilities. We use the on-line version of Backpropagation to perform the gradient descent. 133 matically chooses these parameters based on what information needs to be recorded. The recorded information may be needed to compute the output for the current step, or it may need to be passed on to future history representations</context>
+<context position="20148" citStr="Bishop, 1995" startWordPosition="3404" endWordPosition="3405">ntensive operation of the parser is computing the probability estimates for the predictions of the next tag-word pair. To compute the log-linear model of this prediction, it is necessary to compute values for all possible next words, not just the correct next word, because they are needed for normalizing. Because there are a very large number of words, this is expensive. To reduce this burden, the parser computes this prediction in two stages, first predicting the tag in the tag-word pair, and then predicting the word conditioned on that tag. We implement this conditioning as a mixture model (Bishop, 1995), where the tag predictions are the mixing coefficients. This means that only estimates for the tag-word pairs with the correct tag need to be computed, both in training and testing. We also reduced the computational cost of word prediction by replacing lower frequency tag-word pairs with a tag-&amp;quot;unknownword&amp;quot; pair. Excluding words below a frequency threshold can greatly reduce the size of the vocabulary, because there are a very large number of low frequency words. This method also has the advantages of training an output to be used for words which were not in the training set, and smoothing ac</context>
+</contexts>
+<marker>Bishop, 1995</marker>
+<rawString>Christopher M. Bishop. 1995. Neural Networks for Pattern Recognition. Oxford University Press, Oxford, UK.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Black</author>
+<author>F Jelinek</author>
+<author>J Lafferty</author>
+<author>D Magerman</author>
+<author>R Mercer</author>
+<author>S Roukos</author>
+</authors>
+<title>Towards history-based grammars: Using richer models for probabilistic parsing.</title>
+<date>1993</date>
+<booktitle>In Proc. 31st Meeting of Association for Computational Linguistics,</booktitle>
+<pages>31--37</pages>
+<location>Columbus, Ohio.</location>
+<contexts>
+<context position="945" citStr="Black et al., 1993" startWordPosition="137" endWordPosition="140">ative model of left-corner parsing, and these parameters are used to search for the most probable parse. The parser&apos;s performance (88.8% Fmeasure) is within 1% of the best current parsers for this task, despite using a small vocabulary size (512 inputs). Crucial to this success is the neural network architecture&apos;s ability to induce a finite representation of the unbounded parse history, and the biasing of this induction in a linguistically appropriate way. 1 Introduction Many statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2001) are based on a history-based probability model (Black et al., 1993), where the probability of each decision in a parse is conditioned on the previous decisions in the parse. A major challenge in this approach is choosing a representation of the parse history from which the probability for the next parser decision can be accurately estimated. Previous approaches have used a hand-crafted finite set of features to represent the unbounded parse history (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2001). In the work presented here, we automatically induce a finite set of features to represent the unbounded parse history. We perform this induction using an artifici</context>
+<context position="3384" citStr="Black et al., 1993" startWordPosition="522" endWordPosition="525">d the input sentence. At each step, the process chooses a characteristic of the tree or predicts a word in the sentence. This sequence of decisions is the derivation of the tree, which we will denote d1,..., dm. Because there is a one-to-one mapping from phrase 131 structure trees to our derivations, the probability of a derivation P(di,..., dm) is equal to the joint probability of the derivation&apos;s tree and the input sentence. The probability of the input sentence is a constant across all the candidate derivations, so we only need to find the most probable derivation. in history-based models (Black et al., 1993), the probability estimate for each derivation decision di is conditioned on the previous derivation decisions d1,..., d,_1, which is called the derivation history at step i. This allows us to use the chain rule for conditional probabilities to derive the probability of the entire derivation as the multiplication of the probabilities for each of its decisions. P (di ,..., = di_i) The probabilities P(dild1,..., d1)&apos; are the parameters of the parser&apos;s probability model. To define the parameters di_i) we need to choose the ordering of the decisions in a derivation, such as a top-down or shift-red</context>
+</contexts>
+<marker>Black, Jelinek, Lafferty, Magerman, Mercer, Roukos, 1993</marker>
+<rawString>E. Black, F. Jelinek, J. Lafferty, D. Magerman, R. Mercer, and S. Roukos. 1993. Towards history-based grammars: Using richer models for probabilistic parsing. In Proc. 31st Meeting of Association for Computational Linguistics, pages 31-37, Columbus, Ohio.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Rens Bod</author>
+</authors>
+<title>What is the minimal set of fragments that achieves maximal parse accuracy?</title>
+<date>2001</date>
+<booktitle>In Proc. 34th Meeting of Association for Computational Linguistics,</booktitle>
+<pages>66--73</pages>
+<contexts>
+<context position="24575" citStr="Bod, 2001" startWordPosition="4136" endWordPosition="4137">Percentage labeled constituent recall and precision on the testing set. tical left-corner parser (Manning and Carpenter, 1997), and a PCFG (Charniak, 1997). The Tags model achieves performance which is better than any previously published results on parsing with a non-lexicalized model. The Tags model also does much better than the only other broad coverage neural network parser (Costa et al., 2001). The bottom panel of table 1 lists the results for the chosen lexicalized model (SSN-Freq&gt;200) and five recent statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2000; Collins, 2000; Bod, 2001). The performance of the lexicalized model falls in the middle of this range, only being beaten by the three best current parsers, which all achieve equivalent performance. The best current model (Collins, 2000) has only 6% less precision error and only 11% less recall error than the lexicalized model. The SSN parser achieves this result using much less lexical knowledge than other approaches, which all minimally use the words which occur at least 5 times, plus morphological features of the remaining words. It is also achieved without any explicit notion of lexical head. 7 Discussion and Furth</context>
+</contexts>
+<marker>Bod, 2001</marker>
+<rawString>Rens Bod. 2001. What is the minimal set of fragments that achieves maximal parse accuracy? In Proc. 34th Meeting of Association for Computational Linguistics, pages 66-73.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eugene Charniak</author>
+</authors>
+<title>Statistical parsing with a context-free grammar and word statistics.</title>
+<date>1997</date>
+<booktitle>In Proc. 14th National Conference on Artificial Intelligence,</booktitle>
+<publisher>AAAI Press/MIT Press.</publisher>
+<location>Providence, RI.</location>
+<contexts>
+<context position="24120" citStr="Charniak, 1997" startWordPosition="4067" endWordPosition="4068">g. 7A11 our results are computed with the evalb program following the now-standard criteria in (Collins, 1999). Length&lt;40 All LR LP LR LP Costa-et-a101 NA NA 57.8 64.9 Manning&amp;Carpenter97 77.6 79.9 NA NA Charniak97 (PCFG) 71.2 75.3 70.1 74.3 SSN-Tags 83.9 84.9 83.3 84.3 Ratnaparkhi99 NA NA 86.3 87.5 Collins99 88.5 88.7 88.1 88.3 Charniak00 90.1 90.1 89.6 89.5 Collins00 90.1 90.4 89.6 89.9 Bod01 90.8 90.6 89.7 89.7 SSN-Freq&gt;200 88.8 89.6 88.3 89.2 Table 1: Percentage labeled constituent recall and precision on the testing set. tical left-corner parser (Manning and Carpenter, 1997), and a PCFG (Charniak, 1997). The Tags model achieves performance which is better than any previously published results on parsing with a non-lexicalized model. The Tags model also does much better than the only other broad coverage neural network parser (Costa et al., 2001). The bottom panel of table 1 lists the results for the chosen lexicalized model (SSN-Freq&gt;200) and five recent statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2000; Collins, 2000; Bod, 2001). The performance of the lexicalized model falls in the middle of this range, only being beaten by the three best current parsers, which all achi</context>
+</contexts>
+<marker>Charniak, 1997</marker>
+<rawString>Eugene Charniak. 1997. Statistical parsing with a context-free grammar and word statistics. In Proc. 14th National Conference on Artificial Intelligence, Providence, RI. AAAI Press/MIT Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eugene Charniak</author>
+</authors>
+<title>A maximum-entropyinspired parser.</title>
+<date>2000</date>
+<booktitle>In Proc. 1st Meeting of North American Chapter of Association for Computational Linguistics,</booktitle>
+<pages>132--139</pages>
+<location>Seattle, Washington.</location>
+<contexts>
+<context position="6140" citStr="Charniak, 2000" startWordPosition="1019" endWordPosition="1020">3 Inducing Features of the Derivation History The most important step in designing a statistical parser with a history-based probability model is choosing a method for estimating the parameters d,_1). The main difficulty with this estimation is that the history d1,..., di_1 is of unbounded length. Most probability estimation methods require that there be a finite set of features on which the probability is conditioned. The standard way to handle this problem is to handcraft a finite set of features which provides a sufficient summary of the unbounded history (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2000). The probabilities are then assumed to be independent of all the infoimation about the history which is not captured by the chosen features. The difficulty with this approach is that the choice of features can have a large impact on the performance of the system, but it is not feasible to search the space of possible feature sets by hand. One alternative to choosing a finite set of features is to use kernel methods, which can handle unbounded 2We extended the left-corner parsing model in a few minor ways using grammar transforms. We replace Chomsky adjunction structures (i.e. structures of th</context>
+<context position="8319" citStr="Charniak, 2000" startWordPosition="1397" endWordPosition="1398">res (Collins, 2000). In this work we use a method for automatically inducing a finite set of features for representing the derivation history. The method is a form of multi-layered artificial neural network called Simple Synchrony Networks (Lane and Henderson, 2001; Henderson, 2000). The outputs of this network are probability estimates computed with a log-linear model (also known as a maximum entropy model), as is done in (Ratnaparkhi, 1999). Log-linear models have proved successful in a wide variety of applications, and are the inspiration behind one of the best current statistical parsers (Charniak, 2000). The difference from previous approaches is in the nature of the input to the log-linear model. We do not use handcrafted features, but instead we use a finite vector of real-valued features which are induced as part of the neural network training process. These induced features represent the information about the derivation history which the training process has decided is relevant to estimating the output probabilities. In neural networks these feature vectors are called the hidden layer activations, but for continuity with the previous discussion we will refer to them as the history featur</context>
+<context position="24548" citStr="Charniak, 2000" startWordPosition="4132" endWordPosition="4133">0 88.8 89.6 88.3 89.2 Table 1: Percentage labeled constituent recall and precision on the testing set. tical left-corner parser (Manning and Carpenter, 1997), and a PCFG (Charniak, 1997). The Tags model achieves performance which is better than any previously published results on parsing with a non-lexicalized model. The Tags model also does much better than the only other broad coverage neural network parser (Costa et al., 2001). The bottom panel of table 1 lists the results for the chosen lexicalized model (SSN-Freq&gt;200) and five recent statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2000; Collins, 2000; Bod, 2001). The performance of the lexicalized model falls in the middle of this range, only being beaten by the three best current parsers, which all achieve equivalent performance. The best current model (Collins, 2000) has only 6% less precision error and only 11% less recall error than the lexicalized model. The SSN parser achieves this result using much less lexical knowledge than other approaches, which all minimally use the words which occur at least 5 times, plus morphological features of the remaining words. It is also achieved without any explicit notion of lexical h</context>
+</contexts>
+<marker>Charniak, 2000</marker>
+<rawString>Eugene Charniak. 2000. A maximum-entropyinspired parser. In Proc. 1st Meeting of North American Chapter of Association for Computational Linguistics, pages 132-139, Seattle, Washington.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eugene Charniak</author>
+</authors>
+<title>Immediate-head parsing for language models.</title>
+<date>2001</date>
+<booktitle>In Proc. 39th Meeting of Association for Computational Linguistics,</booktitle>
+<pages>116--223</pages>
+<location>Toulouse</location>
+<contexts>
+<context position="877" citStr="Charniak, 2001" startWordPosition="128" endWordPosition="129">The neural network is used to estimate the parameters of a generative model of left-corner parsing, and these parameters are used to search for the most probable parse. The parser&apos;s performance (88.8% Fmeasure) is within 1% of the best current parsers for this task, despite using a small vocabulary size (512 inputs). Crucial to this success is the neural network architecture&apos;s ability to induce a finite representation of the unbounded parse history, and the biasing of this induction in a linguistically appropriate way. 1 Introduction Many statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2001) are based on a history-based probability model (Black et al., 1993), where the probability of each decision in a parse is conditioned on the previous decisions in the parse. A major challenge in this approach is choosing a representation of the parse history from which the probability for the next parser decision can be accurately estimated. Previous approaches have used a hand-crafted finite set of features to represent the unbounded parse history (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2001). In the work presented here, we automatically induce a finite set of features to represent the </context>
+</contexts>
+<marker>Charniak, 2001</marker>
+<rawString>Eugene Charniak. 2001. Immediate-head parsing for language models. In Proc. 39th Meeting of Association for Computational Linguistics, pages 116-223, Toulouse France.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+<author>Nigel Duffy</author>
+</authors>
+<title>New ranking algorithms for parsing and tagging: Kernels over discrete structures and the voted perceptron.</title>
+<date>2002</date>
+<booktitle>In Proc. 35th Meeting of Association for Computational Linguistics,</booktitle>
+<pages>263--270</pages>
+<contexts>
+<context position="7427" citStr="Collins and Duffy (2002)" startWordPosition="1246" endWordPosition="1249">he tree (becoming [X ... [mod Y • requiring nodes which are popped from the stack to choose between attaching with a normal link or a modifier link. We also compiled some frequent chains of non-branching nodes (such as [S [VP ...1]) into a single node with a new label (becoming [S-VP ...]). These transforms are undone before any evaluation is performed on the output trees. We do not believe these transforms have a major impact on performance, but we have not currently run tests without them. o ROOT 3 NP VP NNP/Mary 4 VBZ/runs 6 RB/often 132 feature sets, but then efficiency becomes a problem. Collins and Duffy (2002) define a kernel over parse trees and apply it to re-ranking the output of a parser, but the resulting feature space is restricted by the need to compute the kernel efficiently, and the results are not as good as Collins&apos; previous work on re-ranking using a finite set of features (Collins, 2000). In this work we use a method for automatically inducing a finite set of features for representing the derivation history. The method is a form of multi-layered artificial neural network called Simple Synchrony Networks (Lane and Henderson, 2001; Henderson, 2000). The outputs of this network are probab</context>
+</contexts>
+<marker>Collins, Duffy, 2002</marker>
+<rawString>Michael Collins and Nigel Duffy. 2002. New ranking algorithms for parsing and tagging: Kernels over discrete structures and the voted perceptron. In Proc. 35th Meeting of Association for Computational Linguistics, pages 263-270.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>Head-Driven Statistical Models for Natural Language Parsing.</title>
+<date>1999</date>
+<tech>Ph.D. thesis,</tech>
+<institution>University of Pennsylvania,</institution>
+<location>Philadelphia, PA.</location>
+<contexts>
+<context position="860" citStr="Collins, 1999" startWordPosition="126" endWordPosition="127">Penn Treebank. The neural network is used to estimate the parameters of a generative model of left-corner parsing, and these parameters are used to search for the most probable parse. The parser&apos;s performance (88.8% Fmeasure) is within 1% of the best current parsers for this task, despite using a small vocabulary size (512 inputs). Crucial to this success is the neural network architecture&apos;s ability to induce a finite representation of the unbounded parse history, and the biasing of this induction in a linguistically appropriate way. 1 Introduction Many statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2001) are based on a history-based probability model (Black et al., 1993), where the probability of each decision in a parse is conditioned on the previous decisions in the parse. A major challenge in this approach is choosing a representation of the parse history from which the probability for the next parser decision can be accurately estimated. Previous approaches have used a hand-crafted finite set of features to represent the unbounded parse history (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2001). In the work presented here, we automatically induce a finite set of features </context>
+<context position="6123" citStr="Collins, 1999" startWordPosition="1017" endWordPosition="1018">). 8, and 9).2 3 Inducing Features of the Derivation History The most important step in designing a statistical parser with a history-based probability model is choosing a method for estimating the parameters d,_1). The main difficulty with this estimation is that the history d1,..., di_1 is of unbounded length. Most probability estimation methods require that there be a finite set of features on which the probability is conditioned. The standard way to handle this problem is to handcraft a finite set of features which provides a sufficient summary of the unbounded history (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2000). The probabilities are then assumed to be independent of all the infoimation about the history which is not captured by the chosen features. The difficulty with this approach is that the choice of features can have a large impact on the performance of the system, but it is not feasible to search the space of possible feature sets by hand. One alternative to choosing a finite set of features is to use kernel methods, which can handle unbounded 2We extended the left-corner parsing model in a few minor ways using grammar transforms. We replace Chomsky adjunction structures (i.e.</context>
+<context position="23615" citStr="Collins, 1999" startWordPosition="3986" endWordPosition="3987">tags are included in the input to the system, but, for compatibility with other parsers, we did not use the hand-corrected tags which come with the corpus. We used a publicly available tagger (Ratnaparkhi, 1996) to tag the words and then used these in the input to the system. 6We found that 80 hidden units produced better performance than 60 or 100. Momentum was applied throughout training. Weight decay regularization was applied at the beginning of training but reduced to zero by the end of training. 7A11 our results are computed with the evalb program following the now-standard criteria in (Collins, 1999). Length&lt;40 All LR LP LR LP Costa-et-a101 NA NA 57.8 64.9 Manning&amp;Carpenter97 77.6 79.9 NA NA Charniak97 (PCFG) 71.2 75.3 70.1 74.3 SSN-Tags 83.9 84.9 83.3 84.3 Ratnaparkhi99 NA NA 86.3 87.5 Collins99 88.5 88.7 88.1 88.3 Charniak00 90.1 90.1 89.6 89.5 Collins00 90.1 90.4 89.6 89.9 Bod01 90.8 90.6 89.7 89.7 SSN-Freq&gt;200 88.8 89.6 88.3 89.2 Table 1: Percentage labeled constituent recall and precision on the testing set. tical left-corner parser (Manning and Carpenter, 1997), and a PCFG (Charniak, 1997). The Tags model achieves performance which is better than any previously published results on </context>
+</contexts>
+<marker>Collins, 1999</marker>
+<rawString>Michael Collins. 1999. Head-Driven Statistical Models for Natural Language Parsing. Ph.D. thesis, University of Pennsylvania, Philadelphia, PA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>Discriminative reranking for natural language parsing.</title>
+<date>2000</date>
+<booktitle>In Proc. 17th Int. Conf on Machine Learning,</booktitle>
+<pages>175--182</pages>
+<location>Stanford, CA.</location>
+<contexts>
+<context position="7723" citStr="Collins, 2000" startWordPosition="1300" endWordPosition="1301">ms are undone before any evaluation is performed on the output trees. We do not believe these transforms have a major impact on performance, but we have not currently run tests without them. o ROOT 3 NP VP NNP/Mary 4 VBZ/runs 6 RB/often 132 feature sets, but then efficiency becomes a problem. Collins and Duffy (2002) define a kernel over parse trees and apply it to re-ranking the output of a parser, but the resulting feature space is restricted by the need to compute the kernel efficiently, and the results are not as good as Collins&apos; previous work on re-ranking using a finite set of features (Collins, 2000). In this work we use a method for automatically inducing a finite set of features for representing the derivation history. The method is a form of multi-layered artificial neural network called Simple Synchrony Networks (Lane and Henderson, 2001; Henderson, 2000). The outputs of this network are probability estimates computed with a log-linear model (also known as a maximum entropy model), as is done in (Ratnaparkhi, 1999). Log-linear models have proved successful in a wide variety of applications, and are the inspiration behind one of the best current statistical parsers (Charniak, 2000). Th</context>
+<context position="24563" citStr="Collins, 2000" startWordPosition="4134" endWordPosition="4135"> 89.2 Table 1: Percentage labeled constituent recall and precision on the testing set. tical left-corner parser (Manning and Carpenter, 1997), and a PCFG (Charniak, 1997). The Tags model achieves performance which is better than any previously published results on parsing with a non-lexicalized model. The Tags model also does much better than the only other broad coverage neural network parser (Costa et al., 2001). The bottom panel of table 1 lists the results for the chosen lexicalized model (SSN-Freq&gt;200) and five recent statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2000; Collins, 2000; Bod, 2001). The performance of the lexicalized model falls in the middle of this range, only being beaten by the three best current parsers, which all achieve equivalent performance. The best current model (Collins, 2000) has only 6% less precision error and only 11% less recall error than the lexicalized model. The SSN parser achieves this result using much less lexical knowledge than other approaches, which all minimally use the words which occur at least 5 times, plus morphological features of the remaining words. It is also achieved without any explicit notion of lexical head. 7 Discussi</context>
+</contexts>
+<marker>Collins, 2000</marker>
+<rawString>Michael Collins. 2000. Discriminative reranking for natural language parsing. In Proc. 17th Int. Conf on Machine Learning, pages 175-182, Stanford, CA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F Costa</author>
+<author>V Lombardo</author>
+<author>P Frasconi</author>
+<author>G Soda</author>
+</authors>
+<title>Wide coverage incremental parsing by learning attachment preferences.</title>
+<date>2001</date>
+<booktitle>In Proc. of the Conf of the Italian Association for Artificial Intelligence.</booktitle>
+<contexts>
+<context position="2017" citStr="Costa et al., 2001" startWordPosition="299" endWordPosition="302">sented here, we automatically induce a finite set of features to represent the unbounded parse history. We perform this induction using an artificial neural network architecture, called Simple Synchrony Networks (SSNs) (Lane and Henderson, 2001; Henderson, 2000). Because this architecture is specifically designed for processing structures, it allows us to impose structurally specified and linguistically appropriate biases on the search for a good history representation. The resulting parser achieves performance far greater than previous approaches to neural network parsing (Ho and Chan, 1999; Costa et al., 2001), and only marginally below the current state-of-the-art for parsing the Penn Treebank. We propose a hybrid parsing system consisting of two components, a neural network which estimates the parameters of a probability model for phrase structure trees, and a statistical parser which searches for the most probable phrase structure tree given these parameters. We first present the probability model which is common to these two components, followed by the estimation method, the search method, and a discussion of the empirical results. 2 The Generative Probability Model The probability model we use</context>
+<context position="22956" citStr="Costa et al., 2001" startWordPosition="3872" endWordPosition="3875">ilar to the models Tags and Freq&gt;200, which had been trained and evaluated on the same training and validation sets. We trained two or three networks for each of the three models and chose the best one based on their validation performance. We then tested the best non-lexicalized and the best lexicalized models on the testing set.6 Standard measures of performance are shown in table 1.7 The top panel of table 1 lists the results for the non-lexicalized model (SSN-Tags) and the available results for three other models which only use part-of-speech tags as inputs, another neural network parser (Costa et al., 2001), an earlier statis5In these experiments the tags are included in the input to the system, but, for compatibility with other parsers, we did not use the hand-corrected tags which come with the corpus. We used a publicly available tagger (Ratnaparkhi, 1996) to tag the words and then used these in the input to the system. 6We found that 80 hidden units produced better performance than 60 or 100. Momentum was applied throughout training. Weight decay regularization was applied at the beginning of training but reduced to zero by the end of training. 7A11 our results are computed with the evalb pro</context>
+<context position="24367" citStr="Costa et al., 2001" startWordPosition="4104" endWordPosition="4107">SN-Tags 83.9 84.9 83.3 84.3 Ratnaparkhi99 NA NA 86.3 87.5 Collins99 88.5 88.7 88.1 88.3 Charniak00 90.1 90.1 89.6 89.5 Collins00 90.1 90.4 89.6 89.9 Bod01 90.8 90.6 89.7 89.7 SSN-Freq&gt;200 88.8 89.6 88.3 89.2 Table 1: Percentage labeled constituent recall and precision on the testing set. tical left-corner parser (Manning and Carpenter, 1997), and a PCFG (Charniak, 1997). The Tags model achieves performance which is better than any previously published results on parsing with a non-lexicalized model. The Tags model also does much better than the only other broad coverage neural network parser (Costa et al., 2001). The bottom panel of table 1 lists the results for the chosen lexicalized model (SSN-Freq&gt;200) and five recent statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2000; Collins, 2000; Bod, 2001). The performance of the lexicalized model falls in the middle of this range, only being beaten by the three best current parsers, which all achieve equivalent performance. The best current model (Collins, 2000) has only 6% less precision error and only 11% less recall error than the lexicalized model. The SSN parser achieves this result using much less lexical knowledge than other approac</context>
+</contexts>
+<marker>Costa, Lombardo, Frasconi, Soda, 2001</marker>
+<rawString>F. Costa, V. Lombardo, P. Frasconi, and G. Soda. 2001. Wide coverage incremental parsing by learning attachment preferences. In Proc. of the Conf of the Italian Association for Artificial Intelligence.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James Henderson</author>
+</authors>
+<title>A neural network parser that handles sparse data. In</title>
+<date>2000</date>
+<booktitle>Proc. 6th Int. Workshop on Parsing Technologies,</booktitle>
+<pages>123--134</pages>
+<location>Trento, Italy.</location>
+<contexts>
+<context position="1660" citStr="Henderson, 2000" startWordPosition="249" endWordPosition="250"> parse. A major challenge in this approach is choosing a representation of the parse history from which the probability for the next parser decision can be accurately estimated. Previous approaches have used a hand-crafted finite set of features to represent the unbounded parse history (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2001). In the work presented here, we automatically induce a finite set of features to represent the unbounded parse history. We perform this induction using an artificial neural network architecture, called Simple Synchrony Networks (SSNs) (Lane and Henderson, 2001; Henderson, 2000). Because this architecture is specifically designed for processing structures, it allows us to impose structurally specified and linguistically appropriate biases on the search for a good history representation. The resulting parser achieves performance far greater than previous approaches to neural network parsing (Ho and Chan, 1999; Costa et al., 2001), and only marginally below the current state-of-the-art for parsing the Penn Treebank. We propose a hybrid parsing system consisting of two components, a neural network which estimates the parameters of a probability model for phrase structur</context>
+<context position="7987" citStr="Henderson, 2000" startWordPosition="1343" endWordPosition="1344">n efficiency becomes a problem. Collins and Duffy (2002) define a kernel over parse trees and apply it to re-ranking the output of a parser, but the resulting feature space is restricted by the need to compute the kernel efficiently, and the results are not as good as Collins&apos; previous work on re-ranking using a finite set of features (Collins, 2000). In this work we use a method for automatically inducing a finite set of features for representing the derivation history. The method is a form of multi-layered artificial neural network called Simple Synchrony Networks (Lane and Henderson, 2001; Henderson, 2000). The outputs of this network are probability estimates computed with a log-linear model (also known as a maximum entropy model), as is done in (Ratnaparkhi, 1999). Log-linear models have proved successful in a wide variety of applications, and are the inspiration behind one of the best current statistical parsers (Charniak, 2000). The difference from previous approaches is in the nature of the input to the log-linear model. We do not use handcrafted features, but instead we use a finite vector of real-valued features which are induced as part of the neural network training process. These indu</context>
+</contexts>
+<marker>Henderson, 2000</marker>
+<rawString>James Henderson. 2000. A neural network parser that handles sparse data. In Proc. 6th Int. Workshop on Parsing Technologies, pages 123-134, Trento, Italy.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E K S Ho</author>
+<author>L W Chan</author>
+</authors>
+<title>How to design a connectionist holistic parser.</title>
+<date>1999</date>
+<journal>Neural Computation,</journal>
+<pages>11--8</pages>
+<contexts>
+<context position="1996" citStr="Ho and Chan, 1999" startWordPosition="295" endWordPosition="298">1). In the work presented here, we automatically induce a finite set of features to represent the unbounded parse history. We perform this induction using an artificial neural network architecture, called Simple Synchrony Networks (SSNs) (Lane and Henderson, 2001; Henderson, 2000). Because this architecture is specifically designed for processing structures, it allows us to impose structurally specified and linguistically appropriate biases on the search for a good history representation. The resulting parser achieves performance far greater than previous approaches to neural network parsing (Ho and Chan, 1999; Costa et al., 2001), and only marginally below the current state-of-the-art for parsing the Penn Treebank. We propose a hybrid parsing system consisting of two components, a neural network which estimates the parameters of a probability model for phrase structure trees, and a statistical parser which searches for the most probable phrase structure tree given these parameters. We first present the probability model which is common to these two components, followed by the estimation method, the search method, and a discussion of the empirical results. 2 The Generative Probability Model The pro</context>
+</contexts>
+<marker>Ho, Chan, 1999</marker>
+<rawString>E.K.S. Ho and L.W. Chan. 1999. How to design a connectionist holistic parser. Neural Computation, 11(8):1995-2016.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Hornik</author>
+<author>M Stinchcombe</author>
+<author>H White</author>
+</authors>
+<title>Multilayer feedforward networks are universal approximators.</title>
+<date>1989</date>
+<journal>Neural Networks,</journal>
+<pages>2--359</pages>
+<contexts>
+<context position="11490" citStr="Hornik et al., 1989" startWordPosition="1921" endWordPosition="1924">e biases on the search for a good set of history features. The main bias we have exploited in this work is the recency bias in training recursively defined neural networks. The only trained parameters of the mapping h are the parameters of the function g, which records a subset of the information from a set of previous history representations in a new history representation. The training process auto3As is standard, g is the sigmoid activation function applied to a weighted sum of its inputs. Multi-layered neural networks of this form can approximate arbitrary mappings from inputs to outputs (Hornik et al., 1989), whereas a loglinear model alone can only estimate probabilities where the category-conditioned probability distributions P(xidi) of the pre-defined inputs x are in a restricted form of the exponential family (Bishop, 1995). 4We use the cross-entropy error function, which ensures that the minimum of the error function converges to the desired probabilities as the amount of training data increases (Bishop, 1995). This implies that the minimum for any given dataset is an estimate of the true probabilities. We use the on-line version of Backpropagation to perform the gradient descent. 133 matica</context>
+</contexts>
+<marker>Hornik, Stinchcombe, White, 1989</marker>
+<rawString>K. Hornik, M. Stinchcombe, and H. White. 1989. Multilayer feedforward networks are universal approximators. Neural Networks, 2:359-366.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mark Johnson</author>
+</authors>
+<title>PCFG models of linguistic tree representations.</title>
+<date>1998</date>
+<journal>Computational Linguistics,</journal>
+<pages>24--4</pages>
+<contexts>
+<context position="15560" citStr="Johnson, 1998" startWordPosition="2598" endWordPosition="2599"> determines the inductive bias discussed in the previous section. The principle we apply when designing D(top,) and f (di,..., di_1) is that we want the inductive bias to reflect structural locality. For this reason, D(top) includes nodes which are structurally local to top,. These nodes are the left-corner ancestor of top, (which is below top, on the stack), top &apos;s left-corner child (its leftmost child, if any), and top &apos;s most recent child (which was top,_1, if any). For right-branching structures, the leftcorner ancestor is the parent, conditioning on which has been found to be beneficial (Johnson, 1998), as has conditioning on the left-corner child (Roark and Johnson, 1999). Because these inputs include the history features of both the leftcorner ancestor and the most recent child, a derivation step i always has access to the history features from the previous derivation step i — 1, and thus (by induction) any information from the entire previous derivation history could in principle be stored in the history features. Thus this model is making no a priori hard independence assumptions, just a priori soft biases. As mentioned above, D(top) also includes top, itself, which means that the input</context>
+</contexts>
+<marker>Johnson, 1998</marker>
+<rawString>Mark Johnson. 1998. PCFG models of linguistic tree representations. Computational Linguistics, 24(4):613-632.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Peter Lane</author>
+<author>James Henderson</author>
+</authors>
+<title>Incremental syntactic parsing of natural language corpora with simple synchrony networks.</title>
+<date>2001</date>
+<journal>IEEE Transactions on Knowledge and Data Engineering,</journal>
+<volume>13</volume>
+<pages>2--219</pages>
+<contexts>
+<context position="1642" citStr="Lane and Henderson, 2001" startWordPosition="244" endWordPosition="248"> previous decisions in the parse. A major challenge in this approach is choosing a representation of the parse history from which the probability for the next parser decision can be accurately estimated. Previous approaches have used a hand-crafted finite set of features to represent the unbounded parse history (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2001). In the work presented here, we automatically induce a finite set of features to represent the unbounded parse history. We perform this induction using an artificial neural network architecture, called Simple Synchrony Networks (SSNs) (Lane and Henderson, 2001; Henderson, 2000). Because this architecture is specifically designed for processing structures, it allows us to impose structurally specified and linguistically appropriate biases on the search for a good history representation. The resulting parser achieves performance far greater than previous approaches to neural network parsing (Ho and Chan, 1999; Costa et al., 2001), and only marginally below the current state-of-the-art for parsing the Penn Treebank. We propose a hybrid parsing system consisting of two components, a neural network which estimates the parameters of a probability model f</context>
+<context position="7969" citStr="Lane and Henderson, 2001" startWordPosition="1338" endWordPosition="1342"> 132 feature sets, but then efficiency becomes a problem. Collins and Duffy (2002) define a kernel over parse trees and apply it to re-ranking the output of a parser, but the resulting feature space is restricted by the need to compute the kernel efficiently, and the results are not as good as Collins&apos; previous work on re-ranking using a finite set of features (Collins, 2000). In this work we use a method for automatically inducing a finite set of features for representing the derivation history. The method is a form of multi-layered artificial neural network called Simple Synchrony Networks (Lane and Henderson, 2001; Henderson, 2000). The outputs of this network are probability estimates computed with a log-linear model (also known as a maximum entropy model), as is done in (Ratnaparkhi, 1999). Log-linear models have proved successful in a wide variety of applications, and are the inspiration behind one of the best current statistical parsers (Charniak, 2000). The difference from previous approaches is in the nature of the input to the log-linear model. We do not use handcrafted features, but instead we use a finite vector of real-valued features which are induced as part of the neural network training p</context>
+</contexts>
+<marker>Lane, Henderson, 2001</marker>
+<rawString>Peter Lane and James Henderson. 2001. Incremental syntactic parsing of natural language corpora with simple synchrony networks. IEEE Transactions on Knowledge and Data Engineering, 13 (2):219-231.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Christopher D Manning</author>
+<author>Bob Carpenter</author>
+</authors>
+<title>Probabilistic parsing using left corner language models.</title>
+<date>1997</date>
+<booktitle>In Proc. Int. Workshop on Parsing Technologies,</booktitle>
+<pages>147--158</pages>
+<contexts>
+<context position="4432" citStr="Manning and Carpenter, 1997" startWordPosition="698" endWordPosition="702">re the parameters of the parser&apos;s probability model. To define the parameters di_i) we need to choose the ordering of the decisions in a derivation, such as a top-down or shift-reduce ordering. The ordering which we use here is that of a form of left-corner parser (Rosenkrantz and Lewis, 1970). A left-corner parser decides to introduced a node into the parse tree after the subtree rooted at the node&apos;s first child has been fully parsed. Then the subtrees for the node&apos;s remaining children are parsed in their left-to-right order. We use the binarized version of a leftcorner parser, described in (Manning and Carpenter, 1997), where the parse of each non-leftmost child begins with the parent node predicting the child&apos;s leftmost terminal, and ends with the child&apos;s root nonterminal attaching to the parent. An example of this ordering is shown by the numbering on the left in figure 1. The process which generates a tree begins with a stack that contains a node labeled ROOT (step 0) and must end in the same configuration (step 9), as shown on the right of the figure. The possible derivation decisions are: predict the next tag-word pair and push it on the stack (steps 1, 4, and 6), replace the node on top of the stack w</context>
+<context position="24091" citStr="Manning and Carpenter, 1997" startWordPosition="4060" endWordPosition="4063"> but reduced to zero by the end of training. 7A11 our results are computed with the evalb program following the now-standard criteria in (Collins, 1999). Length&lt;40 All LR LP LR LP Costa-et-a101 NA NA 57.8 64.9 Manning&amp;Carpenter97 77.6 79.9 NA NA Charniak97 (PCFG) 71.2 75.3 70.1 74.3 SSN-Tags 83.9 84.9 83.3 84.3 Ratnaparkhi99 NA NA 86.3 87.5 Collins99 88.5 88.7 88.1 88.3 Charniak00 90.1 90.1 89.6 89.5 Collins00 90.1 90.4 89.6 89.9 Bod01 90.8 90.6 89.7 89.7 SSN-Freq&gt;200 88.8 89.6 88.3 89.2 Table 1: Percentage labeled constituent recall and precision on the testing set. tical left-corner parser (Manning and Carpenter, 1997), and a PCFG (Charniak, 1997). The Tags model achieves performance which is better than any previously published results on parsing with a non-lexicalized model. The Tags model also does much better than the only other broad coverage neural network parser (Costa et al., 2001). The bottom panel of table 1 lists the results for the chosen lexicalized model (SSN-Freq&gt;200) and five recent statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2000; Collins, 2000; Bod, 2001). The performance of the lexicalized model falls in the middle of this range, only being beaten by the three best cu</context>
+</contexts>
+<marker>Manning, Carpenter, 1997</marker>
+<rawString>Christopher D. Manning and Bob Carpenter. 1997. Probabilistic parsing using left corner language models. In Proc. Int. Workshop on Parsing Technologies, pages 147-158.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mitchell P Marcus</author>
+<author>Beatrice Santorini</author>
+<author>Mary Ann Marcinkiewicz</author>
+</authors>
+<title>Building a large annotated corpus of English: The Penn Treebank. Computational Linguistics,</title>
+<date>1993</date>
+<pages>19--2</pages>
+<contexts>
+<context position="21294" citStr="Marcus et al., 1993" startWordPosition="3599" endWordPosition="3602"> to be used for words which were not in the training set, and smoothing across tag-word pairs whose low frequency would prevent accurate learning by themselves. We do not do any morphological analysis of unknown words, although we would expect some improvement in performance if we did. A variety of frequency thresholds were tried, as reported in section 6. The same representation of tag-word pairs was used in the input as was used for prediction. 135 6 The Experimental Results The generality and efficiency of the above parsing model makes it possible to test a SSN parser on the Penn Treebank (Marcus et al., 1993), and thereby compare its performance directly to other statistical parsing models in the literature. To test the effects of varying vocabulary sizes on performance and tractability, we trained three different models. The simplest model (&amp;quot;Tags&amp;quot;) includes no words in the vocabulary, relying completely on the information provided by the part-of-speech tags of the words. The second model (&amp;quot;Freq&gt;200&amp;quot;) uses all tag-word pairs which occur at least 200 times in the training set. The remaining words were all treated as instances of the unknown-word. This resulted in a vocabulary size of 512 tag-word p</context>
+</contexts>
+<marker>Marcus, Santorini, Marcinkiewicz, 1993</marker>
+<rawString>Mitchell P. Marcus, Beatrice Santorini, and Mary Ann Marcinkiewicz. 1993. Building a large annotated corpus of English: The Penn Treebank. Computational Linguistics, 19(2):313-330.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adwait Ratnaparkhi</author>
+</authors>
+<title>A maximum entropy model for part-of-speech tagging.</title>
+<date>1996</date>
+<booktitle>In Proc. Conf on Empirical Methods in Natural Language Processing,</booktitle>
+<pages>133--142</pages>
+<location>Univ. of Pennsylvania, PA.</location>
+<contexts>
+<context position="23212" citStr="Ratnaparkhi, 1996" startWordPosition="3916" endWordPosition="3917">he best non-lexicalized and the best lexicalized models on the testing set.6 Standard measures of performance are shown in table 1.7 The top panel of table 1 lists the results for the non-lexicalized model (SSN-Tags) and the available results for three other models which only use part-of-speech tags as inputs, another neural network parser (Costa et al., 2001), an earlier statis5In these experiments the tags are included in the input to the system, but, for compatibility with other parsers, we did not use the hand-corrected tags which come with the corpus. We used a publicly available tagger (Ratnaparkhi, 1996) to tag the words and then used these in the input to the system. 6We found that 80 hidden units produced better performance than 60 or 100. Momentum was applied throughout training. Weight decay regularization was applied at the beginning of training but reduced to zero by the end of training. 7A11 our results are computed with the evalb program following the now-standard criteria in (Collins, 1999). Length&lt;40 All LR LP LR LP Costa-et-a101 NA NA 57.8 64.9 Manning&amp;Carpenter97 77.6 79.9 NA NA Charniak97 (PCFG) 71.2 75.3 70.1 74.3 SSN-Tags 83.9 84.9 83.3 84.3 Ratnaparkhi99 NA NA 86.3 87.5 Collin</context>
+</contexts>
+<marker>Ratnaparkhi, 1996</marker>
+<rawString>Adwait Ratnaparkhi 1996. A maximum entropy model for part-of-speech tagging. In Proc. Conf on Empirical Methods in Natural Language Processing, pages 133-142, Univ. of Pennsylvania, PA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adwait Ratnaparkhi</author>
+</authors>
+<title>Learning to parse natural language with maximum entropy models.</title>
+<date>1999</date>
+<booktitle>Machine Learning,</booktitle>
+<pages>34--151</pages>
+<contexts>
+<context position="845" citStr="Ratnaparkhi, 1999" startWordPosition="124" endWordPosition="125"> and tested on the Penn Treebank. The neural network is used to estimate the parameters of a generative model of left-corner parsing, and these parameters are used to search for the most probable parse. The parser&apos;s performance (88.8% Fmeasure) is within 1% of the best current parsers for this task, despite using a small vocabulary size (512 inputs). Crucial to this success is the neural network architecture&apos;s ability to induce a finite representation of the unbounded parse history, and the biasing of this induction in a linguistically appropriate way. 1 Introduction Many statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2001) are based on a history-based probability model (Black et al., 1993), where the probability of each decision in a parse is conditioned on the previous decisions in the parse. A major challenge in this approach is choosing a representation of the parse history from which the probability for the next parser decision can be accurately estimated. Previous approaches have used a hand-crafted finite set of features to represent the unbounded parse history (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2001). In the work presented here, we automatically induce a finite s</context>
+<context position="6108" citStr="Ratnaparkhi, 1999" startWordPosition="1014" endWordPosition="1016">ach decision (right). 8, and 9).2 3 Inducing Features of the Derivation History The most important step in designing a statistical parser with a history-based probability model is choosing a method for estimating the parameters d,_1). The main difficulty with this estimation is that the history d1,..., di_1 is of unbounded length. Most probability estimation methods require that there be a finite set of features on which the probability is conditioned. The standard way to handle this problem is to handcraft a finite set of features which provides a sufficient summary of the unbounded history (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2000). The probabilities are then assumed to be independent of all the infoimation about the history which is not captured by the chosen features. The difficulty with this approach is that the choice of features can have a large impact on the performance of the system, but it is not feasible to search the space of possible feature sets by hand. One alternative to choosing a finite set of features is to use kernel methods, which can handle unbounded 2We extended the left-corner parsing model in a few minor ways using grammar transforms. We replace Chomsky adjunction s</context>
+<context position="8150" citStr="Ratnaparkhi, 1999" startWordPosition="1370" endWordPosition="1371">ature space is restricted by the need to compute the kernel efficiently, and the results are not as good as Collins&apos; previous work on re-ranking using a finite set of features (Collins, 2000). In this work we use a method for automatically inducing a finite set of features for representing the derivation history. The method is a form of multi-layered artificial neural network called Simple Synchrony Networks (Lane and Henderson, 2001; Henderson, 2000). The outputs of this network are probability estimates computed with a log-linear model (also known as a maximum entropy model), as is done in (Ratnaparkhi, 1999). Log-linear models have proved successful in a wide variety of applications, and are the inspiration behind one of the best current statistical parsers (Charniak, 2000). The difference from previous approaches is in the nature of the input to the log-linear model. We do not use handcrafted features, but instead we use a finite vector of real-valued features which are induced as part of the neural network training process. These induced features represent the information about the derivation history which the training process has decided is relevant to estimating the output probabilities. In n</context>
+<context position="24517" citStr="Ratnaparkhi, 1999" startWordPosition="4128" endWordPosition="4129">01 90.8 90.6 89.7 89.7 SSN-Freq&gt;200 88.8 89.6 88.3 89.2 Table 1: Percentage labeled constituent recall and precision on the testing set. tical left-corner parser (Manning and Carpenter, 1997), and a PCFG (Charniak, 1997). The Tags model achieves performance which is better than any previously published results on parsing with a non-lexicalized model. The Tags model also does much better than the only other broad coverage neural network parser (Costa et al., 2001). The bottom panel of table 1 lists the results for the chosen lexicalized model (SSN-Freq&gt;200) and five recent statistical parsers (Ratnaparkhi, 1999; Collins, 1999; Charniak, 2000; Collins, 2000; Bod, 2001). The performance of the lexicalized model falls in the middle of this range, only being beaten by the three best current parsers, which all achieve equivalent performance. The best current model (Collins, 2000) has only 6% less precision error and only 11% less recall error than the lexicalized model. The SSN parser achieves this result using much less lexical knowledge than other approaches, which all minimally use the words which occur at least 5 times, plus morphological features of the remaining words. It is also achieved without a</context>
+</contexts>
+<marker>Ratnaparkhi, 1999</marker>
+<rawString>Adwait Ratnaparkhi. 1999. Learning to parse natural language with maximum entropy models. Machine Learning, 34:151-175.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Brian Roark</author>
+<author>Mark Johnson</author>
+</authors>
+<title>Efficient probabilistic top-down and left-corner parsing.</title>
+<date>1999</date>
+<booktitle>In Proc. 37th Meeting of Association for Computational Linguistics,</booktitle>
+<pages>421--428</pages>
+<contexts>
+<context position="15632" citStr="Roark and Johnson, 1999" startWordPosition="2607" endWordPosition="2610">on. The principle we apply when designing D(top,) and f (di,..., di_1) is that we want the inductive bias to reflect structural locality. For this reason, D(top) includes nodes which are structurally local to top,. These nodes are the left-corner ancestor of top, (which is below top, on the stack), top &apos;s left-corner child (its leftmost child, if any), and top &apos;s most recent child (which was top,_1, if any). For right-branching structures, the leftcorner ancestor is the parent, conditioning on which has been found to be beneficial (Johnson, 1998), as has conditioning on the left-corner child (Roark and Johnson, 1999). Because these inputs include the history features of both the leftcorner ancestor and the most recent child, a derivation step i always has access to the history features from the previous derivation step i — 1, and thus (by induction) any information from the entire previous derivation history could in principle be stored in the history features. Thus this model is making no a priori hard independence assumptions, just a priori soft biases. As mentioned above, D(top) also includes top, itself, which means that the inputs to g always include the history features for the most recent derivatio</context>
+</contexts>
+<marker>Roark, Johnson, 1999</marker>
+<rawString>Brian Roark and Mark Johnson. 1999. Efficient probabilistic top-down and left-corner parsing. In Proc. 37th Meeting of Association for Computational Linguistics, pages 421-428.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D J Rosenkrantz</author>
+<author>P M Lewis</author>
+</authors>
+<title>Deterministic left corner parsing.</title>
+<date>1970</date>
+<booktitle>In Proc. 11th Symposium on Switching and Automata Theory,</booktitle>
+<pages>139--152</pages>
+<contexts>
+<context position="4098" citStr="Rosenkrantz and Lewis, 1970" startWordPosition="642" endWordPosition="645">ous derivation decisions d1,..., d,_1, which is called the derivation history at step i. This allows us to use the chain rule for conditional probabilities to derive the probability of the entire derivation as the multiplication of the probabilities for each of its decisions. P (di ,..., = di_i) The probabilities P(dild1,..., d1)&apos; are the parameters of the parser&apos;s probability model. To define the parameters di_i) we need to choose the ordering of the decisions in a derivation, such as a top-down or shift-reduce ordering. The ordering which we use here is that of a form of left-corner parser (Rosenkrantz and Lewis, 1970). A left-corner parser decides to introduced a node into the parse tree after the subtree rooted at the node&apos;s first child has been fully parsed. Then the subtrees for the node&apos;s remaining children are parsed in their left-to-right order. We use the binarized version of a leftcorner parser, described in (Manning and Carpenter, 1997), where the parse of each non-leftmost child begins with the parent node predicting the child&apos;s leftmost terminal, and ends with the child&apos;s root nonterminal attaching to the parent. An example of this ordering is shown by the numbering on the left in figure 1. The </context>
+</contexts>
+<marker>Rosenkrantz, Lewis, 1970</marker>
+<rawString>D.J. Rosenkrantz and P.M. Lewis. 1970. Deterministic left corner parsing. In Proc. 11th Symposium on Switching and Automata Theory, pages 139-152.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

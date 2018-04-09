@@ -1,0 +1,1184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.009319">
+<title confidence="0.986627">
+Taming Structured Perceptrons on Wild Feature Vectors
+</title>
+<author confidence="0.993681">
+Ralf D. Brown
+</author>
+<affiliation confidence="0.995129">
+Carnegie Mellon University Language Technologies Institute
+</affiliation>
+<address confidence="0.588342">
+5000 Forbes Avenue, Pittsburgh PA 15213 USA
+</address>
+<email confidence="0.997189">
+ralf+@cs.cmu.edu
+</email>
+<sectionHeader confidence="0.993861" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999894176470588">
+Structured perceptrons are attractive due
+to their simplicity and speed, and have
+been used successfully for tuning the
+weights of binary features in a machine
+translation system. In attempting to apply
+them to tuning the weights of real-valued
+features with highly skewed distributions,
+we found that they did not work well. This
+paper describes a modification to the up-
+date step and compares the performance
+of the resulting algorithm to standard min-
+imum error-rate training (MERT). In ad-
+dition, preliminary results for combining
+MERT or structured-perceptron tuning of
+the log-linear feature weights with coordi-
+nate ascent of other translation system pa-
+rameters are presented.
+</bodyText>
+<sectionHeader confidence="0.998993" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999300171428572">
+Structured perceptrons are a relatively recent
+(Collins, 2002) update of the classic perceptron
+algorithm which permit the prediction of vec-
+tors of values. Initially developed for part of
+speech taggers, they have been applied to tuning
+the weights of the features in the log-linear mod-
+els used by statistical machine translation (Arun
+and Koehn, 2007), and found to have performance
+similar to the Margin-Infused Relaxed Algorithm
+(MIRA) by Crammer and Singer (2003; 2006) and
+Minimum-Error Rate Training (MERT) by Och
+(2003). Parameter tuning is an important aspect of
+current data-driven machine translation systems,
+as an improper selection of feature weights can
+dramatically reduce scores on evaluation metrics
+such as BLEU (Papineni et al., 2002) or METEOR
+(Banerjee and Lavie, 2005).
+When we recently added new features to the
+CMU-EBMT translation system (Brown, 1996;
+Brown, 2008)1, in addition to splitting a number of
+composite features into their components, our pre-
+vious method of parameter tuning via coordinate
+ascent2 became impractical. With now more than
+50 features partaking in the scoring model, MERT
+no longer seemed a good choice, as the common
+wisdom is that it is not able to reliably optimize
+more than about 20 features (Chiang et al., 2008).
+We had been using coordinate ascent because of
+a need to tune a substantial number of parameters
+which are not directly part of the log-linear model
+which can be tuned by MERT or similar methods.
+Our system generates a translation lattice by run-
+time lookup in the training corpus rather than us-
+ing a precomputed phrase table, so important pa-
+rameters include
+</bodyText>
+<listItem confidence="0.996019">
+• the size of the sample of retrieved training
+instances for a given input phrase which are
+aligned,
+• the weight of source features for ranking
+training instances during sampling, and
+• the minimum alignment score to accept a
+translation instance
+</listItem>
+<bodyText confidence="0.728554666666667">
+Decoder parameters which are important to tune,
+but which are generally not mentioned in the liter-
+ature include
+</bodyText>
+<listItem confidence="0.9925938">
+• how many alternative translations of a phrase
+to consider during decoding,
+• the size of the reordering window, and
+• the rank of the language model (4-gram, 5-
+gram, etc.)
+</listItem>
+<bodyText confidence="0.986995">
+In addition, it is desirable to tune parameters such
+as beam width to minimize translation time with-
+out degrading performance.
+</bodyText>
+<footnote confidence="0.99965075">
+1Source code for CMU-EBMT is available from
+http://cmu-ebmt.sourceforge.net.
+2Coordinate ascent is described in more detail in Sec-
+tion 7.
+</footnote>
+<page confidence="0.945936">
+384
+</page>
+<note confidence="0.9621955">
+Proceedings of the Joint 5th Workshop on Statistical Machine Translation and MetricsMATR, pages 384–391,
+Uppsala, Sweden, 15-16 July 2010. c�2010 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.999868">
+As a result of the non-model parameters, a full
+system tuning will involve multiple runs of the
+tuning algorithm for the feature weights, since the
+other parameters will affect the optimal weights.
+Thus, speed is an important consideration for any
+method to be used in this setting. The structured
+perceptron algorithm is ideally suited due to its
+speed, provided that it can produce competitive re-
+sults.
+</bodyText>
+<sectionHeader confidence="0.999781" genericHeader="introduction">
+2 Related Work
+</sectionHeader>
+<bodyText confidence="0.999971314285715">
+The perceptron algorithm (Rosenblatt, 1958) itself
+is over 50 years old, but variations such as voted
+and averaged perceptrons have gained popularity
+in the past ten years. In particular, Collins (2002)
+adapted the perceptron algorithm to structured
+prediction tasks such as part of speech tagging and
+noun phrase chunking. Arun and Koehn (2007)
+subsequently applied Collins’ structured percep-
+tron algorithm to the task of tuning feature weights
+in a statistical machine translation system, demon-
+strating the extreme scalability of the algorithm by
+applying it to vectors containing four to six mil-
+lion binary features. However, their work left open
+the question of how well structured perceptrons
+would deal with continuous-valued features. They
+were unable to apply a language model due to the
+lack of continuous-valued features and hence had
+to compare performance against a standard statis-
+tical machine translation (SMT) system which had
+been stripped of its language model, with a conse-
+quent loss of several BLEU points in performance.
+During the same period, Crammer et al (2003;
+2006) developed a number of “ultraconservative”
+learning algorithms, including MIRA, the Margin-
+Infused Relaxed Algorithm (which was also ap-
+plied to large binary feature vectors by Arun and
+Koehn) and variations of what they referred to as
+Passive-Aggressive algorithms including PA-I and
+PA-II. These algorithms have in common the no-
+tion of updating a weight vector “just enough” to
+account for a new training instance which is in-
+correctly predicted by the existing weight vector.
+In contrast, the perceptron algorithm aggressively
+updates the weight vector and relies on averaging
+effects over the whole of the training set.
+</bodyText>
+<sectionHeader confidence="0.987662" genericHeader="method">
+3 Structured Perceptrons
+</sectionHeader>
+<bodyText confidence="0.99995185">
+The structured perceptron algorithm can be ap-
+plied to tasks where the goal is to select the best
+among competing hypotheses, where each hypoth-
+esis has an associated vector of feature values and
+the score for a hypothesis is a linear combination
+of its feature values.
+Beginning with a zero vector for the feature
+weights, the structured perceptron algorithm it-
+erates through each element of the training set,
+updating the weight vector after processing each
+training instance. The training set is processed re-
+peatedly (each pass is known as a training epoch)
+until convergence. The update step is very sim-
+ple: if the best hypothesis according to the prod-
+uct of feature vector and weight vector is not the
+correct answer, add the difference between the fea-
+ture vectors of the correct answer and the model’s
+selected answer to the weight vector.
+Thus, the entire algorithm may be summarized
+with just two equations:
+</bodyText>
+<equation confidence="0.9999785">
+2U9 +— 0 (1)
+2U9+— 2U9 + (4boracle − 4btop1) (2)
+</equation>
+<bodyText confidence="0.99365225">
+where 4b,, is the feature vector (01, 02, ..., 0n) for
+hypothesis x.
+Repeated application of Equation 2 results in
+a weight vector which reflects the relative impor-
+tance (on average) of each feature to making the
+correct selection. Since selecting the best hypoth-
+esis is an arg max operation, the absolute mag-
+nitudes of the weights are not important.
+</bodyText>
+<sectionHeader confidence="0.921511" genericHeader="method">
+4 More Conservative Updates for
+</sectionHeader>
+<subsectionHeader confidence="0.683876">
+Structured Perceptrons
+</subsectionHeader>
+<bodyText confidence="0.999829">
+One issue which arises in using learning algo-
+rithms for machine translation is that there is no
+one correct answer. In addition, it may not even
+be possible for the MT system to generate the
+reference translation at all. This is commonly
+addressed by using the highest-scoring (by some
+metric such as BLEU) translation which the sys-
+tem can generate as a pseudo-oracle.
+Our initial implementation closely followed the
+description in (Arun and Koehn, 2007), includ-
+ing the refinement of using the objective-function
+score of the pseudo-oracle translation from the n-
+best list to modulate the learning rate of the update
+step, i.e.
+</bodyText>
+<equation confidence="0.969814">
+2U9+— 2U9 + 5Φoracle X (�oracle − 4btop1) (3)
+</equation>
+<bodyText confidence="0.937417">
+As can be seen, the difference between Equa-
+tions 2 and 3 is simply the additional factor of
+</bodyText>
+<footnote confidence="0.487055">
+5Φoracle.
+</footnote>
+<page confidence="0.998297">
+385
+</page>
+<bodyText confidence="0.999930193548387">
+While we initially used sentence-level
+smoothed BLEU as the objective function,
+we found it to perform very poorly (the full BLEU
+scores on the Haitian Creole tuning set were well
+below 0.10), and instead adopted the Rouge-S
+(skip bigrams) metric by Lin and Och (2004a)
+with a maximum skip distance of four words,
+which was found to best correlate with human
+quality judgements (Lin and Och, 2004b).
+In early testing, we found that both the feature
+weights and performance as measured by the av-
+erage objective score over the tuning set oscillated
+wildly. Analyzing the results, it became appar-
+ent that the update function was overly aggres-
+sive. Unlike the binary features used in (Arun
+and Koehn, 2007), our continuous-valued features
+have different operating ranges for each feature,
+e.g. the total distance moved as a result of reorder-
+ing could reach 100 on a long sentence, while the
+proportion of training instances with at least six
+words of adjacent context in the bilingual corpus
+is unlikely to exceed 0.05, even where sampling
+is biased toward training instances with adjacent
+context.
+The first attempt to address the disparity in op-
+erating ranges was to perform feature-wise nor-
+malization on the update. Instead of taking the
+simple difference in feature vectors between the
+n-best entry with the highest log-linear score and
+the one with the highest objective score, we con-
+struct 4bdiff such that
+</bodyText>
+<equation confidence="0.988436">
+Oi(diff) ← (Oi(oracle) −Oi(top1)) (4)
+r2
+</equation>
+<bodyText confidence="0.858336">
+where
+</bodyText>
+<equation confidence="0.997779">
+r ← max(0.01,maxj|Oi(j)|) (5)
+</equation>
+<bodyText confidence="0.99997285">
+i.e. we estimate the operating range by finding the
+n-best entry with the highest magnitude value of
+the feature, and then divide by the square of that
+magnitude since large feature values also magnify
+the effects of weight changes. Normalization is
+limited by clipping the normalization factor to be
+at least 0.01 so that features whose values are al-
+ways very near zero do not dominate the overall
+score.
+While the feature-wise normalization did
+largely control the wild swings in feature weights,
+it did not curb the oscillations in the objective
+scores and produced only a minor improvement in
+tuning results.
+We next looked at MIRA and related work
+on so-called Passive-Aggressive algorithms, and
+in particular at the update functions described in
+(Crammer et al., 2006). We decided on their PA-
+II update rule (PA-II being akin to 1-best MIRA),
+with which the learning step becomes
+</bodyText>
+<equation confidence="0.999099">
+w← UI + 6 × (�oracle − 41)top1) (6)
+</equation>
+<bodyText confidence="0.75152">
+where
+</bodyText>
+<equation confidence="0.961689">
+loss ← SΦoracle − SΦtop1 (7)
+loss
+� ←1 (8)
+oracle − btop1 ||2 + 2C
+</equation>
+<bodyText confidence="0.994611529411765">
+with C an “aggressiveness” parameter.
+This version of the update function produced
+the desired smooth changes in feature weights
+from iteration to iteration, though objective scores
+still do not converge. Allowing multiple passes
+through the tuning set before re-decoding with up-
+dated feature weights now frequently results in
+weights where the pseudo-oracle is the top-ranked
+translation in 80 to 90 percent of all sentences.
+None of our previous experiments had achieved
+even a fraction of this level due to the erratic be-
+havior of the feature weights. However, as the ex-
+treme overfitting necessary to achieve such high
+rankings of the oracle translation results in poor
+BLEU scores, we have since used only one pass
+over the tuning set before re-decoding with up-
+dated weights.
+</bodyText>
+<sectionHeader confidence="0.938471" genericHeader="method">
+5 The Final Algorithm
+</sectionHeader>
+<bodyText confidence="0.99998425">
+After the various attempts at taming the behav-
+ior of the structured perceptron approach just de-
+scribed, the final algorithm used for the experi-
+ments described below was
+</bodyText>
+<listItem confidence="0.964823">
+1. Structured perceptron, with
+2. passive-aggressive updates,
+3. run in semi-batch mode,
+4. using sentence-level modified Rouge-S4 as
+the objective function
+</listItem>
+<bodyText confidence="0.999858625">
+Semi-batch mode here means that while the per-
+ceptron algorithm updates the weight vector af-
+ter each sentence, those updates are not commu-
+nicated to the decoder until the end of a complete
+pass through the tuning set. An exception is made
+for the very first iteration, as it starts with uniform
+weights of 10−9 (rather than the conventional zero,
+which would cause problems with decoding). This
+</bodyText>
+<page confidence="0.994529">
+386
+</page>
+<bodyText confidence="0.999964285714286">
+permits the exact determination of the overall ob-
+jective score for the weight vector which is even-
+tually returned as the tuned optimal weights, and
+permits parallelization of the decoding (though the
+latter has not yet been implemented).
+We slightly modified the Rouge-S scoring func-
+tion to use the generalized F-measure
+</bodyText>
+<equation confidence="0.999877">
+_ (1 + Q2) x precision x recall
+F� (9)
+Q2 � precision + recall
+</equation>
+<bodyText confidence="0.999727833333333">
+instead of the standard F1, allowing us to give
+more weight to recall over precision by increas-
+ing Q above 1.0. This change was prompted by
+the observation that the tuning process strongly
+favored shorter outputs, resulting in substantial
+brevity penalties from BLEU.
+</bodyText>
+<sectionHeader confidence="0.999771" genericHeader="method">
+6 Experiments
+</sectionHeader>
+<bodyText confidence="0.999970702380953">
+We present the results of experiments on three
+data sets in the next section. The data sets
+are English-to-Haitian, French-to-English, and
+Czech-to-English.
+The English-to-Haitian system was built using
+the data released by Carnegie Mellon University
+(2010). It consists of a medical phrasebook, a
+glossary, and a modest amount of newswire text,
+each available as a set of sentence pairs in En-
+glish and Haitian Creole. For training, we used
+all of the glossary, all but the last 300 phrase pairs
+of the medical phrasebook (these had previously
+been used for development and testing of a “toy”
+system), and the first 12,500 sentence pairs of the
+newswire text. Tuning was performed using the
+next 217 sentence pairs of the newswire text, and
+the test set consisted of the final 800 sentence pairs
+of the newswire text. The target language model
+was built solely from the target half of the training
+corpus, as we did not have any additional Haitian
+Creole text.
+The French-to-English system was built using
+the Europarl (Koehn, 2005) version 3 data for
+French and English. As is usual practice, text from
+the fourth quarter of 2000 was omitted from the
+training set. Tuning was performed using 200 sen-
+tences from the “devtest2006” file and all 2000
+sentences of “test2007” were used as the final test
+set. Two target language models were built and
+interpolated during decoding; the first was trained
+on the target half of the bilingal corpus, and the
+second was built using the Canadian Hansards text
+released by ISI (Natural Language Group, 2001).
+The Czech-to-English system was built us-
+ing the parallel data made available for the
+2010 Workshop on Statistical Machine Transla-
+tion (WMT10). The target language model was
+built from the target half of the bilingual training
+corpus. Tuning was performed on a 200-sentence
+subset of the “news-2008-test” data, and all 2525
+sentences of the “news-2009-test” data were used
+as unseen test data. As these experiments were
+the very first time that the CMU-EBMT system
+was applied to Czech, there are undoubtedly nu-
+merous pre-processing and training improvements
+which will increase scores above the values pre-
+sented here.
+Parameter tuning was performed using CMERT
+0.5, the reimplemented MERT program included
+with recent releases of the MOSES translation
+system (specifically, the version included with
+the 2010-04-01 release), the annealing-based op-
+timizer included with Cunei (Phillips and Brown,
+2009; Phillips, 2010), and the Structured Percep-
+tron optimizer. Feature weights were initialized
+to a uniform value of 1.0 for MERT and 10−9
+for annealing and Perceptron (since the usual zero
+causes problems for the decoder). Both versions
+of MERT were permitted to run for 15 iterations
+or until features weights converged and remained
+(nearly) unchanged from one iteration to the next,
+using merged n-best lists from the current and the
+three most recent prior iterations. Annealing was
+run with gamma values from 0.25 to 4.0, skipping
+the entropy phase. The Structured Perceptron was
+allowed to run for 18 iterations and to choose the
+weights from the iteration which resulted in the
+highest average Rouge-S score for the top trans-
+lation in the n-best list. For French-English, this
+proved to be the sixth iteration, while for English-
+Haitian it was the twelfth. We have found that the
+objective score increases for the first six to eight
+iterations of SP, after which it fluctuates with no
+trend up or down (but occasionally setting a new
+high, which is why we decided to run 18 itera-
+tions).
+For French-English, we determined the best
+value of Q for the Rouge-S scoring to be 1.5,
+and the best value of the aggressiveness parame-
+ter C to be 0.1, using a 40-sentence subset of the
+French-English tuning set, and then applied those
+value for the full tuning set. For English-Haitian,
+we used Q = 1.2 and C = 0.01 (lower values
+of C provide more smoothing and overall smaller
+</bodyText>
+<page confidence="0.996248">
+387
+</page>
+<bodyText confidence="0.99979875">
+updates, which is necessary for sparse or noisy
+data). Due to limited time prior to submission, the
+English-Haitian values for Q and C were re-used
+for Czech, with no attempt at tuning.
+</bodyText>
+<sectionHeader confidence="0.641063" genericHeader="method">
+7 Combining Log-Linear Tuning with
+Coordinate Ascent
+</sectionHeader>
+<bodyText confidence="0.999990717647059">
+As noted in the introduction, translation systems
+using SMT-style decoders incorporate various fea-
+tures that affect performance (and/or speed), but
+which do not contribute directly to the log-linear
+scoring model. Thus, neither MERT nor the struc-
+tured perceptron training presented in this paper is
+a complete solution for parameter tuning.
+The CMU-EBMT system has long used a coor-
+dinate ascent approach to parameter tuning. Each
+parameter is varied in turn, with the MT system
+performing a translation for each setting, and the
+value which produces the best score is retained
+while the next parameter is varied. If the best
+scoring value is the highest or lowest in the list of
+values to be checked, the range is extended; like-
+wise, unless the interval between adjacent values
+is already very small, the intervals on each side
+of the highest-scoring value (which is not one of
+the extremes) is divided in half and the two addi-
+tional points are evaluated. This process continues
+until convergence (cycling through all parameters
+without changing any of them) or until a pre-set
+maximum number of parameter combinations is
+scored. Naturally, the approach becomes slower
+as the number of parameters increases, but it was
+still (barely) practical with 20 to 25 parameters.
+A recent change in the internals of CMU-EBMT
+led to a decomposition of multiple composite
+scores and the addition of numerous others, bal-
+looning the total number of tunable parameters to
+more than 60. Fortunately, most of the tunable
+parameters are feature weights, which can all be
+treated as a unit, leaving only about a dozen fea-
+tures for coordinate ascent.
+The tuning program operates by calling an eval-
+uation script which in turn invokes the machine
+translation on a modified configuration file pro-
+vided by the tuner and returns the score corre-
+sponding to the given parameter settings. When
+given an optional flag, the evaluation script first
+invokes either MERT or SP to further adjust the
+parameters before performing the actual evalua-
+tion, and modifies the given configuration file ac-
+cordingly. The tuner reads the modified parame-
+ters from the configuration file and stores then for
+further use.
+Both MERT and SP can produce settings which
+actually decrease the resulting BLEU score, since
+they are optimizing toward a surrogate metric. If
+the evaluation score after an invocation of MERT
+or SP is less than 0.98 times the previous best
+score, the parameter settings are rolled back; oth-
+erwise, the best score is set to the evaluation score.
+This permits MERT/SP to move the parameters
+to a different space if necessary, without allowing
+them to substantially degrade overall scores.
+There was time for only one experiment involv-
+ing complete tuning, as summarized in Table 4.
+Starting with the Haitian-Creole feature weights
+found for the results in Table 1, the tuner ran-
+domly perturbed the non-feature-weight parame-
+ters by a small amount (up to 2% relative) twenty
+times, then started coordinate ascent from the best-
+scoring of those 20 trials. The tuner requested a
+MERT/SP run before ascending on the first pa-
+rameter, and after every fourth parameter was pro-
+cessed thereafter. Because both MERT and SP
+started from previously-tuned feature weights, the
+number of iterations was reduced from 15 to 4 for
+MERT and from 18 to 5 for SP. The maximum
+number of parameter combinations for coordinate
+ascent was set to 750, which is approximately four
+cycles through all parameters (the exact number of
+combinations per cycle varies, as the tuner can add
+new combinations by extended the range which is
+searched or adding intermediate points around a
+maximum).
+In Table 4, the three different Perceptron en-
+tries refer to the results starting from the pre-
+vious experiment’s feature weights (“Perceptron
+1”), starting from the results of the complete tun-
+ing (“Perceptron 2”), and starting from uniform
+feature weights (“Perceptron 3”). The third run
+was stopped before convergence due to the loom-
+ing submission deadline.
+</bodyText>
+<sectionHeader confidence="0.999725" genericHeader="evaluation">
+8 Results
+</sectionHeader>
+<bodyText confidence="0.999826625">
+Tables 1, 2, and 3 present the results of running the
+tuning methods on the English-Haitian, French-
+English, and Czech-English data sets, respectively.
+Performance is shown both in terms of the time re-
+quired to perform a tuning run as well as the BLEU
+score achieved using the resulting feature weights.
+Structured perceptrons are the clear winner for
+speed, thanks to the simplicity of the algorithm.
+</bodyText>
+<page confidence="0.995093">
+388
+</page>
+<table confidence="0.998605666666667">
+Method Run-Time Iter BLEU (dev) BLEU (test) #words / ratio
+CMERT 0.5 73m 5 0.0993 –
+new MERT 58m 3 0.0964 –
+CMERT 0.51 138m 15 0.1073 0.0966 22298 / 1.213x
+new MERT1 187m 15 0.1516 0.1347 17375 / 0.945x
+Perceptron 22m 18 0.1619 0.1534 15565 / 0.847x
+</table>
+<tableCaption confidence="0.9566295">
+1 omitting several unused features, as noted in the text
+Table 1: English-to-Haitian tuning performance
+</tableCaption>
+<table confidence="0.9998848">
+Method Run-Time Iter BLEU (dev) BLEU (test) #words / ratio
+CMERT 0.5 3h53m 15 0.12952 0.13927 100875 / 1.709x
+new MERT 5h52m 15 0.22533 0.23315 60354 / 1.023x
+Annealing 6h46m - 0.25017 0.25943 58518 / 0.992x
+Perceptron 1h23m 18 0.24214 0.26048 57408 / 0.973x
+</table>
+<tableCaption confidence="0.999308">
+Table 2: French-to-English tuning performance
+</tableCaption>
+<bodyText confidence="0.999958742424243">
+While MERT takes two to three times as long to
+process ten random starting points as it does to
+decode the test set, SP is three orders of magni-
+tude faster than decoding. As a result, SP tuning
+requires one-third or less of the time that MERT
+does, even though we used 18 iterations of SP
+compared to 15 for MERT. Note that the time dif-
+ference between the two versions of MERT is in
+part due to different amounts of time spent decod-
+ing as a result of the different feature weights.
+MERT unexpectedly has considerable difficulty
+with our new feature set, as can be seen by
+its much lower BLEU scores, particularly in the
+case of CMERT. An analysis of the actual fea-
+ture weights produced by MERT shows that it
+places nearly all of the mass on a single feature,
+and that the feature receiving the bulk of the mass
+changes from iteration to iteration. In contrast, SP
+produces BLEU scores consistent with those pro-
+duced by pure coordinate ascent prior to the pro-
+liferation of features.
+We believe that the difference in performance
+between the two versions of MERT is due pri-
+marily to the simple difference in output format:
+CMERT 0.5 prints its tuned weights using a fixed-
+point format having six digits after the decimal
+point, while the new MERT program prints us-
+ing scientific notation. Because the tuned weight
+vector is highly skewed, most features have low
+weights after L1 normalization, and thus CMERT
+truncated many weights to zero (and indeed, loses
+significant digits for any features assigned weights
+less than 0.1), including such critical weights as
+length features and language model scores. We
+suspect that this preservation of significant digits
+contributes substantially to the improved BLEU
+scores Bertoldi et al (2009) reported for the new
+implementation compared to CMERT.
+The features which, at one time or another, re-
+ceive the bulk of the mass have one thing in com-
+mon: for most translations, they have a default
+value, and in a small proportion of cases they have
+a value which varies from the default by only a
+small amount. Initially, most such features had
+a default value of zero in CMU-EBMT, but this
+meant that the line optimization in MERT had ab-
+solutely no constraint on raising the weight of the
+feature, and thus obtaining feature vectors where
+one feature has 1018 or even 1020 times the weight
+of any other feature. The same problem occurs
+with features that are unused but have a small jit-
+ter in their values due to rounding errors, for ex-
+ample, if there are no document boundaries (as is
+the case for the Haitian data described previously),
+the document-similarity score may be 1.000000
+for 99% of the arcs in the translation lattices and
+0.999999 for the remainder. Offsetting the mostly-
+zero features so that their default value is 1 or -1
+(depending on the sense of the feature) and elim-
+inating unused features mitigated but did not en-
+tirely solve the problem. In Table 1, two results are
+shown for both CMERT and new MERT; the first
+includes all 52 features while the second excludes
+five features which are not used in a baseline-
+trained CMU-EBMT system. In the former case,
+both programs placed all the mass on a single fea-
+</bodyText>
+<page confidence="0.995761">
+389
+</page>
+<table confidence="0.995036333333333">
+Method Run-Time Iter BLEU (dev) BLEU (test)
+new MERT 56m 15 0.0584 0.0743
+Perceptron 14m 18 0.0830 0.1163
+</table>
+<tableCaption confidence="0.986213">
+Table 3: Czech-to-English tuning performance
+</tableCaption>
+<table confidence="0.999901">
+Method Run-Time BLEU (dev) BLEU (test) length ratio
+new MERT 48h 0.1821 0.1633 0.942
+Perceptron 1 25h 0.1675 0.1547 0.833
+Perceptron 2 38h 0.1738 0.1597 0.837
+Perceptron 3 12h* 0.1705 0.1647 0.939
+</table>
+<tableCaption confidence="0.8906645">
+* truncated run (see text)
+Table 4: English-to-Haitian tuning performance (including coordinate ascent)
+</tableCaption>
+<bodyText confidence="0.999099513513514">
+ture and left all the others at 10−14 or less (dis-
+played as 0.000000 in the case of CMERT).
+The full tuning runs summarized in Table 4
+show that SP is often competitive with MERT
+while running more quickly, but still requires fur-
+ther analysis to determine the causes of variability
+in its performance. One initial conclusion from
+examining the logs of the SP runs is that weight
+updates are perhaps too conservative when ap-
+plied in conjunction with coordinate ascent. While
+MERT frequently shifted settings in response to
+changes in the non-feature parameters, SP rarely
+does so, typically preferring to retain the exist-
+ing feature weights as the best setting encountered
+during the five iterations performed at each invo-
+cation. The “Perceptron 3” run starting with small
+uniform feature weights resulted from the obser-
+vation that a first, buggy attempt at integration
+reached tuning-set BLEU scores in excess of 0.18
+before early termination. The bug in question was
+that many of the feature weights were initially read
+in from the configuration file as zero rather than
+the correct value.
+As shown in the rightmost column of Tables 1,
+2 and 4, the Perceptron algorithm tends toward
+short output, yielding translations which are about
+97% as long as the reference translation in French-
+English, a mere 85% as long for English-Haitian,
+and even shorter than that in two of three Czech
+runs. This tendency towards short translations
+prompted the inclusion of the Q parameter –
+the French-English output was originally much
+shorter, but Q has little effect on Haitian given the
+sparse training data. The extremely long output
+for CMERT on French-English is due to a large
+number of zero weights, including those for length
+features.
+</bodyText>
+<sectionHeader confidence="0.985894" genericHeader="conclusions">
+9 Conclusion and Future Work
+</sectionHeader>
+<bodyText confidence="0.999951454545455">
+Structured perceptrons with passive-aggressive
+updates are a viable alternative to the usual MERT
+feature-weight tuning, particularly where the num-
+ber of features exceeds that which MERT can
+reliably handle, or when some of the features
+have characteristics which confuse MERT. Struc-
+tured perceptrons are also a good alternative where
+speed is important, such as in a hybrid tuning
+scheme which alternates between (re-)tuning the
+log-linear model and performing coordinate ascent
+on parameters which do not directly contribute
+weight to the log-linear model.
+We have thus far implemented two objective
+functions which operate on individual sentences
+without regard for choices made on other sen-
+tences. When the final evaluation metric incorpo-
+rates global statistics, however, an objective func-
+tion which takes them into account is desirable.
+For example, when using BLEU, it makes a big
+difference whether individual sentences are both
+longer and shorter than the reference or system-
+atically shorter than the reference, but these two
+cases can not be distinguished by single-sentence
+objective functions. Our plan is to implement a
+windowed or moving-average version of BLEU as
+in (Chiang et al., 2008).
+We also plan to further speed up the tuning pro-
+cess by parallelizing the decoding of the sentences
+in the tuning set. As we have used a semi-batch
+update method which leaves the decoder’s weights
+unchanged for an entire pass through the tuning
+set, there is no data dependency between individ-
+ual sentences, allowing them to be decoded in par-
+</bodyText>
+<page confidence="0.991042">
+390
+</page>
+<bodyText confidence="0.9999006">
+allel. The perceptron algorithm itself remains se-
+quential, but as it is three orders of magnitude
+faster than the decoding, this will have negligible
+impact on overall speedup factors until hundreds
+of CPUs are used for simultaneous decoding.
+</bodyText>
+<sectionHeader confidence="0.989886" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999656468085107">
+Abhishek Arun and Phillip Koehn. 2007. Online
+Learning Methods for Discriminative Training of
+Phrase Based Statistical Machine Translation. In
+Proceedings of the Eleventh Machine Translation
+Summit (MT Summit XI).
+Satanjeev Banerjee and Alon Lavie. 2005. METEOR:
+An Automatic Metric for MT Evaluation with Im-
+proved Correlation with Human Judgements. In
+Proceedings of the Workshop on Intrinsic and Ex-
+trinsic Evaluation Measures for MT and/or Summa-
+rization at the 43rd Annual Meeting of the Asso-
+ciation for Computational Linguistics (ACL-2005),
+June.
+Nicola Bertoldi, Barry Haddow, and Jean-Baptiste
+Fouet. 2009. Improved Minimum Error Rate Train-
+ing in Moses. The Prague Bulletin of Mathematical
+Linguistics, pages 1–11, February.
+Ralf D. Brown. 1996. Example-Based Machine
+Translation in the PANGLOSS System. In Proceed-
+ings of the Sixteenth International Conference on
+Computational Linguistics, pages 169–174, Copen-
+hagen, Denmark. http://www.cs.cmu.edu-
+/˜ralf/papers.html.
+Ralf D. Brown. 2008. Exploiting Document-
+Level Context for Data-Driven Machine Trans-
+lation. In Proceedings of the Eighth Con-
+ference of the Association for Machine Trans-
+lation in the Americas (AMTA-2008), Octo-
+ber. http://www.amtaweb.org/papers/-
+2.02 Brown.pdf.
+Carnegie Mellon University. 2010. Public release of
+haitian-creole language data, January. http://-
+www.speech.cs.cmu.edu/haitian/text.
+David Chiang, Yuval Marton, and Philis Resnik. 2008.
+Online Large-Margin Training of Syntactic and
+Structural Translation Features. In Proceedings of
+the Conference on Empirical Methods in Natural
+Langauge Processing (EMNLP-2008), pages 224–
+233, October.
+Michael Collins. 2002. Discriminative Training
+Methods for Hidden Markov Models: Theory and
+Experiments with Perceptron Algorithms. In Pro-
+ceedings of EMNLP-2002. http://people.-
+csail.mit.edu/mcollins/papers/-
+tagperc.pdf.
+Koby Crammer, Ofer Deke, Joseph Keshet, Shai
+Shalev-Shwartz, and Yoram Singer. 2006. Online
+Passive-Aggressive Algorithms. The Journal of Ma-
+chine Learning Research, 7:551–585, December.
+Koby Cranmer and Yoram Singer. 2003. Ultraconser-
+vative Online Algorithms for Multiclass Problems.
+The Journal of Machine Learning Research, 3:951–
+991, March.
+Philipp Koehn. 2005. Europarl: A Parallel Corpus for
+Statistical Machine Translation. In Proceedings of
+the Tenth Machine Translation Summit (MT Summix
+X), pages 79–86.
+Chin-Yew Lin and Franz Joseph Och. 2004a. Au-
+tomatic Evaluation of Machine Translation Qual-
+ity using Longest Common Subsequence and Skip-
+Bigram Statistics. In Proceedings of ACL-2004.
+Chin-Yew Lin and Franz Joseph Och. 2004b. OR-
+ANGE: A Method for Evaluating Automatic Evalu-
+ation Metrics for Machine Translation. In Proceed-
+ings of the 20th International Conference on Com-
+putational Linguistics (COLING 2004).
+USC Information Sciences Institute Natural Language
+Group. 2001. Aligned Hansards of the 36th Par-
+liament of Canada, Release 2001-1a. http://-
+www.isi.edu/natural-language/-
+download/hansard/.
+Franz Josef Och. 2003. Minimum Error Rate Training
+in Statistical Machine Translation. In Proceedings
+of the 41st Meeting of the Association for Computa-
+tional Linguistics (ACL-2003), Sapporo, Japan, July
+6–7.
+Kishore Papineni, Salim Roukos, Todd Ward, and
+Wei-Jing Zhu. 2002. BLEU: a Method for Au-
+tomatic Evaluation of Machine Translation. In
+Proceedings of the 40th Annual Meeting of the
+Association for Computational Linguistics, July.
+http://acl.ldc.upenn.edu/P/P02/.
+Aaron B. Phillips and Ralf D. Brown. 2009. Cunei
+Machine Translation Platform: System Descrip-
+tion. In Proceedings of the Third Workshop on
+Example-Based Machine Translation, Dublin, Ire-
+land, November.
+Aaron B. Phillips. 2010. The Cunei Machine Trans-
+lation Platform for WMT’10. In Proceedings of the
+ACL 2010 Joint Fifth Workshop on Statistical Ma-
+chine Translation and Metrics MATR, July.
+F. Rosenblatt. 1958. The Perceptron: A Probabilistic
+Model for Information Storage and Organization in
+the Brain. Psychological Review, 65:386–408.
+</reference>
+<page confidence="0.998725">
+391
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.988968">
+<title confidence="0.999962">Taming Structured Perceptrons on Wild Feature Vectors</title>
+<author confidence="0.999763">D Ralf</author>
+<affiliation confidence="0.997424">Carnegie Mellon University Language Technologies</affiliation>
+<address confidence="0.999968">5000 Forbes Avenue, Pittsburgh PA 15213</address>
+<email confidence="0.998886">ralf+@cs.cmu.edu</email>
+<abstract confidence="0.999594222222222">Structured perceptrons are attractive due to their simplicity and speed, and have been used successfully for tuning the weights of binary features in a machine translation system. In attempting to apply them to tuning the weights of real-valued features with highly skewed distributions, we found that they did not work well. This paper describes a modification to the update step and compares the performance of the resulting algorithm to standard minimum error-rate training (MERT). In addition, preliminary results for combining MERT or structured-perceptron tuning of the log-linear feature weights with coordinate ascent of other translation system parameters are presented.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Abhishek Arun</author>
+<author>Phillip Koehn</author>
+</authors>
+<title>Online Learning Methods for Discriminative Training of Phrase Based Statistical Machine Translation.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the Eleventh Machine Translation</booktitle>
+<location>Summit (MT Summit XI).</location>
+<contexts>
+<context position="1244" citStr="Arun and Koehn, 2007" startWordPosition="182" endWordPosition="185"> algorithm to standard minimum error-rate training (MERT). In addition, preliminary results for combining MERT or structured-perceptron tuning of the log-linear feature weights with coordinate ascent of other translation system parameters are presented. 1 Introduction Structured perceptrons are a relatively recent (Collins, 2002) update of the classic perceptron algorithm which permit the prediction of vectors of values. Initially developed for part of speech taggers, they have been applied to tuning the weights of the features in the log-linear models used by statistical machine translation (Arun and Koehn, 2007), and found to have performance similar to the Margin-Infused Relaxed Algorithm (MIRA) by Crammer and Singer (2003; 2006) and Minimum-Error Rate Training (MERT) by Och (2003). Parameter tuning is an important aspect of current data-driven machine translation systems, as an improper selection of feature weights can dramatically reduce scores on evaluation metrics such as BLEU (Papineni et al., 2002) or METEOR (Banerjee and Lavie, 2005). When we recently added new features to the CMU-EBMT translation system (Brown, 1996; Brown, 2008)1, in addition to splitting a number of composite features into</context>
+<context position="4277" citStr="Arun and Koehn (2007)" startWordPosition="664" endWordPosition="667">the other parameters will affect the optimal weights. Thus, speed is an important consideration for any method to be used in this setting. The structured perceptron algorithm is ideally suited due to its speed, provided that it can produce competitive results. 2 Related Work The perceptron algorithm (Rosenblatt, 1958) itself is over 50 years old, but variations such as voted and averaged perceptrons have gained popularity in the past ten years. In particular, Collins (2002) adapted the perceptron algorithm to structured prediction tasks such as part of speech tagging and noun phrase chunking. Arun and Koehn (2007) subsequently applied Collins’ structured perceptron algorithm to the task of tuning feature weights in a statistical machine translation system, demonstrating the extreme scalability of the algorithm by applying it to vectors containing four to six million binary features. However, their work left open the question of how well structured perceptrons would deal with continuous-valued features. They were unable to apply a language model due to the lack of continuous-valued features and hence had to compare performance against a standard statistical machine translation (SMT) system which had bee</context>
+<context position="7492" citStr="Arun and Koehn, 2007" startWordPosition="1185" endWordPosition="1188">electing the best hypothesis is an arg max operation, the absolute magnitudes of the weights are not important. 4 More Conservative Updates for Structured Perceptrons One issue which arises in using learning algorithms for machine translation is that there is no one correct answer. In addition, it may not even be possible for the MT system to generate the reference translation at all. This is commonly addressed by using the highest-scoring (by some metric such as BLEU) translation which the system can generate as a pseudo-oracle. Our initial implementation closely followed the description in (Arun and Koehn, 2007), including the refinement of using the objective-function score of the pseudo-oracle translation from the nbest list to modulate the learning rate of the update step, i.e. 2U9+— 2U9 + 5Φoracle X (�oracle − 4btop1) (3) As can be seen, the difference between Equations 2 and 3 is simply the additional factor of 5Φoracle. 385 While we initially used sentence-level smoothed BLEU as the objective function, we found it to perform very poorly (the full BLEU scores on the Haitian Creole tuning set were well below 0.10), and instead adopted the Rouge-S (skip bigrams) metric by Lin and Och (2004a) with </context>
+</contexts>
+<marker>Arun, Koehn, 2007</marker>
+<rawString>Abhishek Arun and Phillip Koehn. 2007. Online Learning Methods for Discriminative Training of Phrase Based Statistical Machine Translation. In Proceedings of the Eleventh Machine Translation Summit (MT Summit XI).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Satanjeev Banerjee</author>
+<author>Alon Lavie</author>
+</authors>
+<title>METEOR: An Automatic Metric for MT Evaluation with Improved Correlation with Human Judgements.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the Workshop on Intrinsic and Extrinsic Evaluation Measures for MT and/or Summarization at the 43rd Annual Meeting of the Association for Computational Linguistics (ACL-2005),</booktitle>
+<contexts>
+<context position="1682" citStr="Banerjee and Lavie, 2005" startWordPosition="247" endWordPosition="250"> developed for part of speech taggers, they have been applied to tuning the weights of the features in the log-linear models used by statistical machine translation (Arun and Koehn, 2007), and found to have performance similar to the Margin-Infused Relaxed Algorithm (MIRA) by Crammer and Singer (2003; 2006) and Minimum-Error Rate Training (MERT) by Och (2003). Parameter tuning is an important aspect of current data-driven machine translation systems, as an improper selection of feature weights can dramatically reduce scores on evaluation metrics such as BLEU (Papineni et al., 2002) or METEOR (Banerjee and Lavie, 2005). When we recently added new features to the CMU-EBMT translation system (Brown, 1996; Brown, 2008)1, in addition to splitting a number of composite features into their components, our previous method of parameter tuning via coordinate ascent2 became impractical. With now more than 50 features partaking in the scoring model, MERT no longer seemed a good choice, as the common wisdom is that it is not able to reliably optimize more than about 20 features (Chiang et al., 2008). We had been using coordinate ascent because of a need to tune a substantial number of parameters which are not directly </context>
+</contexts>
+<marker>Banerjee, Lavie, 2005</marker>
+<rawString>Satanjeev Banerjee and Alon Lavie. 2005. METEOR: An Automatic Metric for MT Evaluation with Improved Correlation with Human Judgements. In Proceedings of the Workshop on Intrinsic and Extrinsic Evaluation Measures for MT and/or Summarization at the 43rd Annual Meeting of the Association for Computational Linguistics (ACL-2005), June.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Nicola Bertoldi</author>
+<author>Barry Haddow</author>
+<author>Jean-Baptiste Fouet</author>
+</authors>
+<title>Improved Minimum Error Rate Training in Moses. The Prague Bulletin of Mathematical Linguistics,</title>
+<date>2009</date>
+<pages>1--11</pages>
+<contexts>
+<context position="23451" citStr="Bertoldi et al (2009)" startWordPosition="3831" endWordPosition="3834">format: CMERT 0.5 prints its tuned weights using a fixedpoint format having six digits after the decimal point, while the new MERT program prints using scientific notation. Because the tuned weight vector is highly skewed, most features have low weights after L1 normalization, and thus CMERT truncated many weights to zero (and indeed, loses significant digits for any features assigned weights less than 0.1), including such critical weights as length features and language model scores. We suspect that this preservation of significant digits contributes substantially to the improved BLEU scores Bertoldi et al (2009) reported for the new implementation compared to CMERT. The features which, at one time or another, receive the bulk of the mass have one thing in common: for most translations, they have a default value, and in a small proportion of cases they have a value which varies from the default by only a small amount. Initially, most such features had a default value of zero in CMU-EBMT, but this meant that the line optimization in MERT had absolutely no constraint on raising the weight of the feature, and thus obtaining feature vectors where one feature has 1018 or even 1020 times the weight of any o</context>
+</contexts>
+<marker>Bertoldi, Haddow, Fouet, 2009</marker>
+<rawString>Nicola Bertoldi, Barry Haddow, and Jean-Baptiste Fouet. 2009. Improved Minimum Error Rate Training in Moses. The Prague Bulletin of Mathematical Linguistics, pages 1–11, February.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ralf D Brown</author>
+</authors>
+<title>Example-Based Machine Translation in the PANGLOSS System.</title>
+<date>1996</date>
+<booktitle>In Proceedings of the Sixteenth International Conference on Computational Linguistics,</booktitle>
+<pages>169--174</pages>
+<location>Copenhagen, Denmark. http://www.cs.cmu.edu/˜ralf/papers.html.</location>
+<contexts>
+<context position="1767" citStr="Brown, 1996" startWordPosition="262" endWordPosition="263"> in the log-linear models used by statistical machine translation (Arun and Koehn, 2007), and found to have performance similar to the Margin-Infused Relaxed Algorithm (MIRA) by Crammer and Singer (2003; 2006) and Minimum-Error Rate Training (MERT) by Och (2003). Parameter tuning is an important aspect of current data-driven machine translation systems, as an improper selection of feature weights can dramatically reduce scores on evaluation metrics such as BLEU (Papineni et al., 2002) or METEOR (Banerjee and Lavie, 2005). When we recently added new features to the CMU-EBMT translation system (Brown, 1996; Brown, 2008)1, in addition to splitting a number of composite features into their components, our previous method of parameter tuning via coordinate ascent2 became impractical. With now more than 50 features partaking in the scoring model, MERT no longer seemed a good choice, as the common wisdom is that it is not able to reliably optimize more than about 20 features (Chiang et al., 2008). We had been using coordinate ascent because of a need to tune a substantial number of parameters which are not directly part of the log-linear model which can be tuned by MERT or similar methods. Our syste</context>
+</contexts>
+<marker>Brown, 1996</marker>
+<rawString>Ralf D. Brown. 1996. Example-Based Machine Translation in the PANGLOSS System. In Proceedings of the Sixteenth International Conference on Computational Linguistics, pages 169–174, Copenhagen, Denmark. http://www.cs.cmu.edu/˜ralf/papers.html.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ralf D Brown</author>
+</authors>
+<title>Exploiting DocumentLevel Context for Data-Driven Machine Translation.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the Eighth Conference of the Association for Machine Translation in the Americas (AMTA-2008), October. http://www.amtaweb.org/papers/-2.02 Brown.pdf.</booktitle>
+<contexts>
+<context position="1781" citStr="Brown, 2008" startWordPosition="264" endWordPosition="265">inear models used by statistical machine translation (Arun and Koehn, 2007), and found to have performance similar to the Margin-Infused Relaxed Algorithm (MIRA) by Crammer and Singer (2003; 2006) and Minimum-Error Rate Training (MERT) by Och (2003). Parameter tuning is an important aspect of current data-driven machine translation systems, as an improper selection of feature weights can dramatically reduce scores on evaluation metrics such as BLEU (Papineni et al., 2002) or METEOR (Banerjee and Lavie, 2005). When we recently added new features to the CMU-EBMT translation system (Brown, 1996; Brown, 2008)1, in addition to splitting a number of composite features into their components, our previous method of parameter tuning via coordinate ascent2 became impractical. With now more than 50 features partaking in the scoring model, MERT no longer seemed a good choice, as the common wisdom is that it is not able to reliably optimize more than about 20 features (Chiang et al., 2008). We had been using coordinate ascent because of a need to tune a substantial number of parameters which are not directly part of the log-linear model which can be tuned by MERT or similar methods. Our system generates a </context>
+</contexts>
+<marker>Brown, 2008</marker>
+<rawString>Ralf D. Brown. 2008. Exploiting DocumentLevel Context for Data-Driven Machine Translation. In Proceedings of the Eighth Conference of the Association for Machine Translation in the Americas (AMTA-2008), October. http://www.amtaweb.org/papers/-2.02 Brown.pdf.</rawString>
+</citation>
+<citation valid="true">
+<title>Public release of haitian-creole language data,</title>
+<date>2010</date>
+<institution>Carnegie Mellon University.</institution>
+<note>http://-www.speech.cs.cmu.edu/haitian/text.</note>
+<contexts>
+<context position="12746" citStr="(2010)" startWordPosition="2053" endWordPosition="2053">ure _ (1 + Q2) x precision x recall F� (9) Q2 � precision + recall instead of the standard F1, allowing us to give more weight to recall over precision by increasing Q above 1.0. This change was prompted by the observation that the tuning process strongly favored shorter outputs, resulting in substantial brevity penalties from BLEU. 6 Experiments We present the results of experiments on three data sets in the next section. The data sets are English-to-Haitian, French-to-English, and Czech-to-English. The English-to-Haitian system was built using the data released by Carnegie Mellon University (2010). It consists of a medical phrasebook, a glossary, and a modest amount of newswire text, each available as a set of sentence pairs in English and Haitian Creole. For training, we used all of the glossary, all but the last 300 phrase pairs of the medical phrasebook (these had previously been used for development and testing of a “toy” system), and the first 12,500 sentence pairs of the newswire text. Tuning was performed using the next 217 sentence pairs of the newswire text, and the test set consisted of the final 800 sentence pairs of the newswire text. The target language model was built sol</context>
+</contexts>
+<marker>2010</marker>
+<rawString>Carnegie Mellon University. 2010. Public release of haitian-creole language data, January. http://-www.speech.cs.cmu.edu/haitian/text.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Chiang</author>
+<author>Yuval Marton</author>
+<author>Philis Resnik</author>
+</authors>
+<title>Online Large-Margin Training of Syntactic and Structural Translation Features.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the Conference on Empirical Methods in Natural Langauge Processing (EMNLP-2008),</booktitle>
+<pages>224--233</pages>
+<contexts>
+<context position="2160" citStr="Chiang et al., 2008" startWordPosition="326" endWordPosition="329">feature weights can dramatically reduce scores on evaluation metrics such as BLEU (Papineni et al., 2002) or METEOR (Banerjee and Lavie, 2005). When we recently added new features to the CMU-EBMT translation system (Brown, 1996; Brown, 2008)1, in addition to splitting a number of composite features into their components, our previous method of parameter tuning via coordinate ascent2 became impractical. With now more than 50 features partaking in the scoring model, MERT no longer seemed a good choice, as the common wisdom is that it is not able to reliably optimize more than about 20 features (Chiang et al., 2008). We had been using coordinate ascent because of a need to tune a substantial number of parameters which are not directly part of the log-linear model which can be tuned by MERT or similar methods. Our system generates a translation lattice by runtime lookup in the training corpus rather than using a precomputed phrase table, so important parameters include • the size of the sample of retrieved training instances for a given input phrase which are aligned, • the weight of source features for ranking training instances during sampling, and • the minimum alignment score to accept a translation i</context>
+<context position="28295" citStr="Chiang et al., 2008" startWordPosition="4630" endWordPosition="4633">ented two objective functions which operate on individual sentences without regard for choices made on other sentences. When the final evaluation metric incorporates global statistics, however, an objective function which takes them into account is desirable. For example, when using BLEU, it makes a big difference whether individual sentences are both longer and shorter than the reference or systematically shorter than the reference, but these two cases can not be distinguished by single-sentence objective functions. Our plan is to implement a windowed or moving-average version of BLEU as in (Chiang et al., 2008). We also plan to further speed up the tuning process by parallelizing the decoding of the sentences in the tuning set. As we have used a semi-batch update method which leaves the decoder’s weights unchanged for an entire pass through the tuning set, there is no data dependency between individual sentences, allowing them to be decoded in par390 allel. The perceptron algorithm itself remains sequential, but as it is three orders of magnitude faster than the decoding, this will have negligible impact on overall speedup factors until hundreds of CPUs are used for simultaneous decoding. References</context>
+</contexts>
+<marker>Chiang, Marton, Resnik, 2008</marker>
+<rawString>David Chiang, Yuval Marton, and Philis Resnik. 2008. Online Large-Margin Training of Syntactic and Structural Translation Features. In Proceedings of the Conference on Empirical Methods in Natural Langauge Processing (EMNLP-2008), pages 224– 233, October.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>Discriminative Training Methods for Hidden Markov Models: Theory and Experiments with Perceptron Algorithms.</title>
+<date>2002</date>
+<booktitle>In Proceedings of EMNLP-2002.</booktitle>
+<pages>http://people.-csail.mit.edu/mcollins/papers/-tagperc.pdf.</pages>
+<contexts>
+<context position="954" citStr="Collins, 2002" startWordPosition="137" endWordPosition="138">res in a machine translation system. In attempting to apply them to tuning the weights of real-valued features with highly skewed distributions, we found that they did not work well. This paper describes a modification to the update step and compares the performance of the resulting algorithm to standard minimum error-rate training (MERT). In addition, preliminary results for combining MERT or structured-perceptron tuning of the log-linear feature weights with coordinate ascent of other translation system parameters are presented. 1 Introduction Structured perceptrons are a relatively recent (Collins, 2002) update of the classic perceptron algorithm which permit the prediction of vectors of values. Initially developed for part of speech taggers, they have been applied to tuning the weights of the features in the log-linear models used by statistical machine translation (Arun and Koehn, 2007), and found to have performance similar to the Margin-Infused Relaxed Algorithm (MIRA) by Crammer and Singer (2003; 2006) and Minimum-Error Rate Training (MERT) by Och (2003). Parameter tuning is an important aspect of current data-driven machine translation systems, as an improper selection of feature weight</context>
+<context position="4134" citStr="Collins (2002)" startWordPosition="644" endWordPosition="645">ult of the non-model parameters, a full system tuning will involve multiple runs of the tuning algorithm for the feature weights, since the other parameters will affect the optimal weights. Thus, speed is an important consideration for any method to be used in this setting. The structured perceptron algorithm is ideally suited due to its speed, provided that it can produce competitive results. 2 Related Work The perceptron algorithm (Rosenblatt, 1958) itself is over 50 years old, but variations such as voted and averaged perceptrons have gained popularity in the past ten years. In particular, Collins (2002) adapted the perceptron algorithm to structured prediction tasks such as part of speech tagging and noun phrase chunking. Arun and Koehn (2007) subsequently applied Collins’ structured perceptron algorithm to the task of tuning feature weights in a statistical machine translation system, demonstrating the extreme scalability of the algorithm by applying it to vectors containing four to six million binary features. However, their work left open the question of how well structured perceptrons would deal with continuous-valued features. They were unable to apply a language model due to the lack o</context>
+</contexts>
+<marker>Collins, 2002</marker>
+<rawString>Michael Collins. 2002. Discriminative Training Methods for Hidden Markov Models: Theory and Experiments with Perceptron Algorithms. In Proceedings of EMNLP-2002. http://people.-csail.mit.edu/mcollins/papers/-tagperc.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Koby Crammer</author>
+<author>Ofer Deke</author>
+<author>Joseph Keshet</author>
+<author>Shai Shalev-Shwartz</author>
+<author>Yoram Singer</author>
+</authors>
+<title>Online Passive-Aggressive Algorithms.</title>
+<date>2006</date>
+<journal>The Journal of Machine Learning Research,</journal>
+<pages>7--551</pages>
+<contexts>
+<context position="10077" citStr="Crammer et al., 2006" startWordPosition="1611" endWordPosition="1614">agnitude since large feature values also magnify the effects of weight changes. Normalization is limited by clipping the normalization factor to be at least 0.01 so that features whose values are always very near zero do not dominate the overall score. While the feature-wise normalization did largely control the wild swings in feature weights, it did not curb the oscillations in the objective scores and produced only a minor improvement in tuning results. We next looked at MIRA and related work on so-called Passive-Aggressive algorithms, and in particular at the update functions described in (Crammer et al., 2006). We decided on their PAII update rule (PA-II being akin to 1-best MIRA), with which the learning step becomes w← UI + 6 × (�oracle − 41)top1) (6) where loss ← SΦoracle − SΦtop1 (7) loss � ←1 (8) oracle − btop1 ||2 + 2C with C an “aggressiveness” parameter. This version of the update function produced the desired smooth changes in feature weights from iteration to iteration, though objective scores still do not converge. Allowing multiple passes through the tuning set before re-decoding with updated feature weights now frequently results in weights where the pseudo-oracle is the top-ranked tra</context>
+</contexts>
+<marker>Crammer, Deke, Keshet, Shalev-Shwartz, Singer, 2006</marker>
+<rawString>Koby Crammer, Ofer Deke, Joseph Keshet, Shai Shalev-Shwartz, and Yoram Singer. 2006. Online Passive-Aggressive Algorithms. The Journal of Machine Learning Research, 7:551–585, December.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Koby Cranmer</author>
+<author>Yoram Singer</author>
+</authors>
+<title>Ultraconservative Online Algorithms for Multiclass Problems.</title>
+<date>2003</date>
+<journal>The Journal of Machine Learning Research,</journal>
+<volume>3</volume>
+<pages>991</pages>
+<marker>Cranmer, Singer, 2003</marker>
+<rawString>Koby Cranmer and Yoram Singer. 2003. Ultraconservative Online Algorithms for Multiclass Problems. The Journal of Machine Learning Research, 3:951– 991, March.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Philipp Koehn</author>
+</authors>
+<title>Europarl: A Parallel Corpus for Statistical Machine Translation.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the Tenth Machine Translation Summit (MT Summix X),</booktitle>
+<pages>79--86</pages>
+<contexts>
+<context position="13521" citStr="Koehn, 2005" startWordPosition="2186" endWordPosition="2187">or training, we used all of the glossary, all but the last 300 phrase pairs of the medical phrasebook (these had previously been used for development and testing of a “toy” system), and the first 12,500 sentence pairs of the newswire text. Tuning was performed using the next 217 sentence pairs of the newswire text, and the test set consisted of the final 800 sentence pairs of the newswire text. The target language model was built solely from the target half of the training corpus, as we did not have any additional Haitian Creole text. The French-to-English system was built using the Europarl (Koehn, 2005) version 3 data for French and English. As is usual practice, text from the fourth quarter of 2000 was omitted from the training set. Tuning was performed using 200 sentences from the “devtest2006” file and all 2000 sentences of “test2007” were used as the final test set. Two target language models were built and interpolated during decoding; the first was trained on the target half of the bilingal corpus, and the second was built using the Canadian Hansards text released by ISI (Natural Language Group, 2001). The Czech-to-English system was built using the parallel data made available for the</context>
+</contexts>
+<marker>Koehn, 2005</marker>
+<rawString>Philipp Koehn. 2005. Europarl: A Parallel Corpus for Statistical Machine Translation. In Proceedings of the Tenth Machine Translation Summit (MT Summix X), pages 79–86.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chin-Yew Lin</author>
+<author>Franz Joseph Och</author>
+</authors>
+<title>Automatic Evaluation of Machine Translation Quality using Longest Common Subsequence and SkipBigram Statistics.</title>
+<date>2004</date>
+<booktitle>In Proceedings of ACL-2004.</booktitle>
+<contexts>
+<context position="8084" citStr="Lin and Och (2004" startWordPosition="1287" endWordPosition="1290">in (Arun and Koehn, 2007), including the refinement of using the objective-function score of the pseudo-oracle translation from the nbest list to modulate the learning rate of the update step, i.e. 2U9+— 2U9 + 5Φoracle X (�oracle − 4btop1) (3) As can be seen, the difference between Equations 2 and 3 is simply the additional factor of 5Φoracle. 385 While we initially used sentence-level smoothed BLEU as the objective function, we found it to perform very poorly (the full BLEU scores on the Haitian Creole tuning set were well below 0.10), and instead adopted the Rouge-S (skip bigrams) metric by Lin and Och (2004a) with a maximum skip distance of four words, which was found to best correlate with human quality judgements (Lin and Och, 2004b). In early testing, we found that both the feature weights and performance as measured by the average objective score over the tuning set oscillated wildly. Analyzing the results, it became apparent that the update function was overly aggressive. Unlike the binary features used in (Arun and Koehn, 2007), our continuous-valued features have different operating ranges for each feature, e.g. the total distance moved as a result of reordering could reach 100 on a long </context>
+</contexts>
+<marker>Lin, Och, 2004</marker>
+<rawString>Chin-Yew Lin and Franz Joseph Och. 2004a. Automatic Evaluation of Machine Translation Quality using Longest Common Subsequence and SkipBigram Statistics. In Proceedings of ACL-2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chin-Yew Lin</author>
+<author>Franz Joseph Och</author>
+</authors>
+<title>ORANGE: A Method for Evaluating Automatic Evaluation Metrics for Machine Translation.</title>
+<date>2004</date>
+<booktitle>In Proceedings of the 20th International Conference on Computational Linguistics (COLING</booktitle>
+<contexts>
+<context position="8084" citStr="Lin and Och (2004" startWordPosition="1287" endWordPosition="1290">in (Arun and Koehn, 2007), including the refinement of using the objective-function score of the pseudo-oracle translation from the nbest list to modulate the learning rate of the update step, i.e. 2U9+— 2U9 + 5Φoracle X (�oracle − 4btop1) (3) As can be seen, the difference between Equations 2 and 3 is simply the additional factor of 5Φoracle. 385 While we initially used sentence-level smoothed BLEU as the objective function, we found it to perform very poorly (the full BLEU scores on the Haitian Creole tuning set were well below 0.10), and instead adopted the Rouge-S (skip bigrams) metric by Lin and Och (2004a) with a maximum skip distance of four words, which was found to best correlate with human quality judgements (Lin and Och, 2004b). In early testing, we found that both the feature weights and performance as measured by the average objective score over the tuning set oscillated wildly. Analyzing the results, it became apparent that the update function was overly aggressive. Unlike the binary features used in (Arun and Koehn, 2007), our continuous-valued features have different operating ranges for each feature, e.g. the total distance moved as a result of reordering could reach 100 on a long </context>
+</contexts>
+<marker>Lin, Och, 2004</marker>
+<rawString>Chin-Yew Lin and Franz Joseph Och. 2004b. ORANGE: A Method for Evaluating Automatic Evaluation Metrics for Machine Translation. In Proceedings of the 20th International Conference on Computational Linguistics (COLING 2004).</rawString>
+</citation>
+<citation valid="true">
+<date>2001</date>
+<booktitle>Aligned Hansards of the 36th Parliament of Canada, Release</booktitle>
+<institution>USC Information Sciences Institute Natural Language Group.</institution>
+<note>http://-www.isi.edu/natural-language/-download/hansard/.</note>
+<marker>2001</marker>
+<rawString>USC Information Sciences Institute Natural Language Group. 2001. Aligned Hansards of the 36th Parliament of Canada, Release 2001-1a. http://-www.isi.edu/natural-language/-download/hansard/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Josef Och</author>
+</authors>
+<title>Minimum Error Rate Training in Statistical Machine Translation.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the 41st Meeting of the Association for Computational Linguistics (ACL-2003),</booktitle>
+<location>Sapporo, Japan,</location>
+<contexts>
+<context position="1418" citStr="Och (2003)" startWordPosition="210" endWordPosition="211">rdinate ascent of other translation system parameters are presented. 1 Introduction Structured perceptrons are a relatively recent (Collins, 2002) update of the classic perceptron algorithm which permit the prediction of vectors of values. Initially developed for part of speech taggers, they have been applied to tuning the weights of the features in the log-linear models used by statistical machine translation (Arun and Koehn, 2007), and found to have performance similar to the Margin-Infused Relaxed Algorithm (MIRA) by Crammer and Singer (2003; 2006) and Minimum-Error Rate Training (MERT) by Och (2003). Parameter tuning is an important aspect of current data-driven machine translation systems, as an improper selection of feature weights can dramatically reduce scores on evaluation metrics such as BLEU (Papineni et al., 2002) or METEOR (Banerjee and Lavie, 2005). When we recently added new features to the CMU-EBMT translation system (Brown, 1996; Brown, 2008)1, in addition to splitting a number of composite features into their components, our previous method of parameter tuning via coordinate ascent2 became impractical. With now more than 50 features partaking in the scoring model, MERT no l</context>
+</contexts>
+<marker>Och, 2003</marker>
+<rawString>Franz Josef Och. 2003. Minimum Error Rate Training in Statistical Machine Translation. In Proceedings of the 41st Meeting of the Association for Computational Linguistics (ACL-2003), Sapporo, Japan, July 6–7.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kishore Papineni</author>
+<author>Salim Roukos</author>
+<author>Todd Ward</author>
+<author>Wei-Jing Zhu</author>
+</authors>
+<title>BLEU: a Method for Automatic Evaluation of Machine Translation.</title>
+<date>2002</date>
+<booktitle>In Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics,</booktitle>
+<contexts>
+<context position="1645" citStr="Papineni et al., 2002" startWordPosition="241" endWordPosition="244">on of vectors of values. Initially developed for part of speech taggers, they have been applied to tuning the weights of the features in the log-linear models used by statistical machine translation (Arun and Koehn, 2007), and found to have performance similar to the Margin-Infused Relaxed Algorithm (MIRA) by Crammer and Singer (2003; 2006) and Minimum-Error Rate Training (MERT) by Och (2003). Parameter tuning is an important aspect of current data-driven machine translation systems, as an improper selection of feature weights can dramatically reduce scores on evaluation metrics such as BLEU (Papineni et al., 2002) or METEOR (Banerjee and Lavie, 2005). When we recently added new features to the CMU-EBMT translation system (Brown, 1996; Brown, 2008)1, in addition to splitting a number of composite features into their components, our previous method of parameter tuning via coordinate ascent2 became impractical. With now more than 50 features partaking in the scoring model, MERT no longer seemed a good choice, as the common wisdom is that it is not able to reliably optimize more than about 20 features (Chiang et al., 2008). We had been using coordinate ascent because of a need to tune a substantial number </context>
+</contexts>
+<marker>Papineni, Roukos, Ward, Zhu, 2002</marker>
+<rawString>Kishore Papineni, Salim Roukos, Todd Ward, and Wei-Jing Zhu. 2002. BLEU: a Method for Automatic Evaluation of Machine Translation. In Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics, July. http://acl.ldc.upenn.edu/P/P02/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Aaron B Phillips</author>
+<author>Ralf D Brown</author>
+</authors>
+<title>Cunei Machine Translation Platform: System Description.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the Third Workshop on Example-Based Machine Translation,</booktitle>
+<location>Dublin, Ireland,</location>
+<contexts>
+<context position="14937" citStr="Phillips and Brown, 2009" startWordPosition="2407" endWordPosition="2410">set of the “news-2008-test” data, and all 2525 sentences of the “news-2009-test” data were used as unseen test data. As these experiments were the very first time that the CMU-EBMT system was applied to Czech, there are undoubtedly numerous pre-processing and training improvements which will increase scores above the values presented here. Parameter tuning was performed using CMERT 0.5, the reimplemented MERT program included with recent releases of the MOSES translation system (specifically, the version included with the 2010-04-01 release), the annealing-based optimizer included with Cunei (Phillips and Brown, 2009; Phillips, 2010), and the Structured Perceptron optimizer. Feature weights were initialized to a uniform value of 1.0 for MERT and 10−9 for annealing and Perceptron (since the usual zero causes problems for the decoder). Both versions of MERT were permitted to run for 15 iterations or until features weights converged and remained (nearly) unchanged from one iteration to the next, using merged n-best lists from the current and the three most recent prior iterations. Annealing was run with gamma values from 0.25 to 4.0, skipping the entropy phase. The Structured Perceptron was allowed to run fo</context>
+</contexts>
+<marker>Phillips, Brown, 2009</marker>
+<rawString>Aaron B. Phillips and Ralf D. Brown. 2009. Cunei Machine Translation Platform: System Description. In Proceedings of the Third Workshop on Example-Based Machine Translation, Dublin, Ireland, November.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Aaron B Phillips</author>
+</authors>
+<title>The Cunei Machine Translation Platform for WMT’10.</title>
+<date>2010</date>
+<booktitle>In Proceedings of the ACL 2010 Joint Fifth Workshop on Statistical Machine Translation and Metrics MATR,</booktitle>
+<contexts>
+<context position="14954" citStr="Phillips, 2010" startWordPosition="2411" endWordPosition="2412">” data, and all 2525 sentences of the “news-2009-test” data were used as unseen test data. As these experiments were the very first time that the CMU-EBMT system was applied to Czech, there are undoubtedly numerous pre-processing and training improvements which will increase scores above the values presented here. Parameter tuning was performed using CMERT 0.5, the reimplemented MERT program included with recent releases of the MOSES translation system (specifically, the version included with the 2010-04-01 release), the annealing-based optimizer included with Cunei (Phillips and Brown, 2009; Phillips, 2010), and the Structured Perceptron optimizer. Feature weights were initialized to a uniform value of 1.0 for MERT and 10−9 for annealing and Perceptron (since the usual zero causes problems for the decoder). Both versions of MERT were permitted to run for 15 iterations or until features weights converged and remained (nearly) unchanged from one iteration to the next, using merged n-best lists from the current and the three most recent prior iterations. Annealing was run with gamma values from 0.25 to 4.0, skipping the entropy phase. The Structured Perceptron was allowed to run for 18 iterations a</context>
+</contexts>
+<marker>Phillips, 2010</marker>
+<rawString>Aaron B. Phillips. 2010. The Cunei Machine Translation Platform for WMT’10. In Proceedings of the ACL 2010 Joint Fifth Workshop on Statistical Machine Translation and Metrics MATR, July.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F Rosenblatt</author>
+</authors>
+<title>The Perceptron: A Probabilistic Model for Information Storage and Organization in the Brain. Psychological Review,</title>
+<date>1958</date>
+<pages>65--386</pages>
+<contexts>
+<context position="3975" citStr="Rosenblatt, 1958" startWordPosition="618" endWordPosition="619">hop on Statistical Machine Translation and MetricsMATR, pages 384–391, Uppsala, Sweden, 15-16 July 2010. c�2010 Association for Computational Linguistics As a result of the non-model parameters, a full system tuning will involve multiple runs of the tuning algorithm for the feature weights, since the other parameters will affect the optimal weights. Thus, speed is an important consideration for any method to be used in this setting. The structured perceptron algorithm is ideally suited due to its speed, provided that it can produce competitive results. 2 Related Work The perceptron algorithm (Rosenblatt, 1958) itself is over 50 years old, but variations such as voted and averaged perceptrons have gained popularity in the past ten years. In particular, Collins (2002) adapted the perceptron algorithm to structured prediction tasks such as part of speech tagging and noun phrase chunking. Arun and Koehn (2007) subsequently applied Collins’ structured perceptron algorithm to the task of tuning feature weights in a statistical machine translation system, demonstrating the extreme scalability of the algorithm by applying it to vectors containing four to six million binary features. However, their work lef</context>
+</contexts>
+<marker>Rosenblatt, 1958</marker>
+<rawString>F. Rosenblatt. 1958. The Perceptron: A Probabilistic Model for Information Storage and Organization in the Brain. Psychological Review, 65:386–408.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

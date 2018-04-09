@@ -1,0 +1,1397 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000403">
+<title confidence="0.99437">
+A Word-to-Word Model of Translational Equivalence
+</title>
+<author confidence="0.994659">
+I. Dan Melamed
+</author>
+<affiliation confidence="0.9985455">
+Dept. of Computer and Information Science
+University of Pennsylvania
+</affiliation>
+<address confidence="0.762562">
+Philadelphia, PA, 19104, U.S.A.
+</address>
+<email confidence="0.999454">
+melamed@unagi.cis.upenn.edu
+</email>
+<sectionHeader confidence="0.980167" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999944916666667">
+Many multilingual NLP applications need
+to translate words between different lan-
+guages, but cannot afford the computa-
+tional expense of inducing or applying a full
+translation model. For these applications,
+we have designed a fast algorithm for esti-
+mating a partial translation model, which
+accounts for translational equivalence only
+at the word level . The model&apos;s preci-
+sion/recall trade-off can be directly con-
+trolled via one threshold parameter. This
+feature makes the model more suitable for
+applications that are not fully statistical.
+The model&apos;s hidden parameters can be eas-
+ily conditioned on information extrinsic to
+the model, providing an easy way to inte-
+grate pre-existing knowledge such as part-
+of-speech, dictionaries, word order, etc..
+Our model can link word tokens in paral-
+lel texts as well as other translation mod-
+els in the literature. Unlike other transla-
+tion models, it can automatically produce
+dictionary-sized translation lexicons, and it
+can do so with over 99% accuracy.
+</bodyText>
+<sectionHeader confidence="0.997334" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999956333333333">
+Over the past decade, researchers at IBM have devel-
+oped a series of increasingly sophisticated statistical
+models for machine translation (Brown et al., 1988;
+Brown et al., 1990; Brown et al., 1993a). However,
+the IBM models, which attempt to capture a broad
+range of translation phenomena, are computation-
+ally expensive to apply. Table look-up using an ex-
+plicit translation lexicon is sufficient and preferable
+for many multilingual NLP applications, including
+&amp;quot;crummy&amp;quot; MT on the World Wide Web (Church
+&amp; Hovy, 1993), certain machine-assisted translation
+tools (e.g. (Macklovitch, 1994; Melamed, 1996b)),
+concordancing for bilingual lexicography (Catizone
+et al., 1993; Gale &amp; Church, 1991), computer-
+assisted language learning, corpus linguistics (Melby.
+1981), and cross-lingual information retrieval (Oard
+&amp; Dorr, 1996).
+In this paper, we present a fast method for in-
+ducing accurate translation lexicons. The method
+assumes that words are translated one-to-one. This
+assumption reduces the explanatory power of our
+model in comparison to the IBM models, but, as
+shown in Section 3.1, it helps us to avoid what we
+call indirect associations, a major source of errors in
+other models. Section 3.1 also shows how the one-
+to-one assumption enables us to use a new greedy
+competitive linking algorithm for re-estimating the
+model&apos;s parameters, instead of more expensive algo-
+rithms that consider a much larger set of word cor-
+respondence possibilities. The model uses two hid-
+den parameters to estimate the confidence of its own
+predictions. The confidence estimates enable direct
+control of the balance between the model&apos;s preci-
+sion and recall via a simple threshold. The hidden
+parameters can be conditioned on prior knowledge
+about the bitext to improve the model&apos;s accuracy.
+</bodyText>
+<sectionHeader confidence="0.654969" genericHeader="introduction">
+2 Co-occurrence
+</sectionHeader>
+<bodyText confidence="0.999868785714286">
+With the exception of (Fung, 1995b), previous
+methods for automatically constructing statistical
+translation models begin by looking at word co-
+occurrence frequencies in bitexts (Gale &amp; Church,
+1991; Kumano &amp; Hirakawa, 1994; Fung, 1995a;
+Melamed, 1995). A bitext comprises a pair of texts
+in two languages, where each text is a translation
+of the other. Word co-occurrence can be defined in
+various ways. The most common way is to divide
+each half of the bitext into an equal number of seg-
+ments and to align the segments so that each pair of
+segments Si and Ti are translations of each other
+(Gale &amp; Church, 1991; Melamed, 1996a). Then,
+two word tokens (u, v) are said to co-occur in the
+</bodyText>
+<page confidence="0.994938">
+490
+</page>
+<note confidence="0.833232875">
+aligned segment pair i if u E Si and v E T. The
+co-occurrence relation can also be based on distance
+in a bitext space, which is a more general represen-
+tations of bitext correspondence (Dagan et al., 1993;
+Resnik &amp; Melamed, 1997), or it can be restricted to
+words pairs that satisfy some matching predicate,
+which can be extrinsic to the model (Melamed, 1995;
+Melamed, 1997).
+</note>
+<sectionHeader confidence="0.93041" genericHeader="method">
+3 The Basic Word-to-Word Model
+</sectionHeader>
+<bodyText confidence="0.927043142857143">
+Our translation model consists of the hidden param-
+eters A+ and )c, and likelihood ratios L(u, v). The
+two hidden parameters are the probabilities of the
+model generating true and false positives in the data.
+L(u, v) represents the likelihood that u and v can
+be mutual translations. For each co-occurring pair of
+word types u and v, these likelihoods are initially set
+proportional to their co-occurrence frequency („,v)
+and inversely proportional to their marginal frequen-
+cies n(u) and n(v) 1, following (Dunning, 1993)2.
+When the L(u, v) are re-estimated, the model&apos;s hid-
+den parameters come into play.
+After initialization, the model induction algorithm
+iterates:
+</bodyText>
+<listItem confidence="0.990839285714286">
+1. Find a set of &amp;quot;links&amp;quot; among word tokens in the
+bitext, using the likelihood ratios and the com-
+petitive linking algorithm.
+2. Use the links to re-estimate A+, A—, and the
+likelihood ratios.
+3. Repeat from Step 1 until the model converges
+to the desired degree.
+</listItem>
+<bodyText confidence="0.967139666666667">
+The competitive linking algorithm and its one-to-one
+assumption are detailed in Section 3.1. Section 3.1
+explains how to re-estimate the model parameters.
+</bodyText>
+<subsectionHeader confidence="0.999315">
+3.1 Competitive Linking Algorithm
+</subsectionHeader>
+<bodyText confidence="0.9026846875">
+The competitive linking algorithm is designed to
+overcome the problem of indirect associations, illus-
+trated in Figure 1. The sequences of u&apos;s and v&apos;s
+represent corresponding regions of a bitext. If uk
+and vk co-occur much more often than expected by
+chance, then any reasonable model will deem them
+likely to be mutual translations. If uk and vk are
+indeed mutual translations, then their tendency to
+&apos;The co-occurrence frequency of a word type pair is
+simply the number of times the pair co-occurs in the
+corpus. However, n(u) = Ev n(u,v), which is not the
+same as the frequency of u, because each token of u can
+co-occur with several differentv&apos;s.
+2We could just as easily use other symmetric &amp;quot;asso-
+ciation&amp;quot; measures, such as 02 (Gale &amp; Church, 1991) or
+the Dice coefficient (Smadja, 1992).
+</bodyText>
+<figure confidence="0.984219333333333">
+• • 46-0&amp;quot;&apos; 1-k+1 •
+s&amp;quot;
+• • V k-1 V k Vk+1 • • •
+</figure>
+<figureCaption confidence="0.99249625">
+Figure 1: uk and vk often co-occur, as do uk and
+uk+1. The direct association between uk and vk, and
+the direct association between uk and uk+i give rise
+to an indirect association between vk and uk+1.
+</figureCaption>
+<bodyText confidence="0.997979739130435">
+co-occur is called a direct association. Now, sup-
+pose that uk and uk±i often co-occur within their
+language. Then vk and uk+i will also co-occur more
+often than expected by chance. The arrow connect-
+ing vk and uk±i in Figure 1 represents an indirect
+association, since the association between vk and
+uk±i arises only by virtue of the association between
+each of them and uk . Models of translational equiv-
+alence that are ignorant of indirect associations have
+&amp;quot;a tendency ... to be confused by collocates&amp;quot; (Dagan
+et al., 1993).
+Fortunately, indirect associations are usually not
+difficult to identify, because they tend to be weaker
+than the direct associations on which they are based
+(Melamed, 1996c). The majority of indirect associ-
+ations can be filtered out by a simple competition
+heuristic: Whenever several word tokens ui in one
+half of the bitext co-occur with a particular word to-
+ken v in the other half of the bitext, the word that is
+most likely to be v&apos;s translation is the one for which
+the likelihood L(u, v) of translational equivalence is
+highest. The competitive linking algorithm imple-
+ments this heuristic:
+</bodyText>
+<listItem confidence="0.990608555555555">
+1. Discard all likelihood scores for word types
+deemed unlikely to be mutual translations, i.e.
+all L(u, v) &lt; 1. This step significantly reduces
+the computational burden of the algorithm. It
+is analogous to the step in other translation
+model induction algorithms that sets all prob-
+abilities below a certain threshold to negligible
+values (Brown et al., 1990; Dagan et al., 1993;
+Chen, 1996). To retain word type pairs that
+are at least twice as likely to be mutual transla-
+tions than not, the threshold can be raised to 2.
+Conversely, the threshold can be lowered to buy
+more coverage at the cost of a larger model that
+will converge more slowly.
+2. Sort all remaining likelihood estimates L(u, v)
+from highest to lowest.
+3. Find u and v such that the likelihood ratio
+L(u, v) is highest. Token pairs of these types
+</listItem>
+<page confidence="0.998318">
+491
+</page>
+<figureCaption confidence="0.995554">
+Figure 2: Variables used to estimate the model parameters.
+</figureCaption>
+<equation confidence="0.997408333333333">
+n(u,v) = frequency of co-occurrence between word types u and v
+N = E(u,v) n(u.v) = total number of co-occurrences in the bitext
+k(u,v) frequency of links between word types u and v
+E(u,v) k(u.v) = total number of links in the bitext
+= Pr( mutual translations I co-occurrence)
+A = Pr( link I co-occurrence)
+A+ = Pr( link I co-occurrence of mutual translations)
+A- = Pr( link I co-occurrence of not mutual translations)
+B(kIn,p) = Pr( kln,p), where k has a binomial distribution with parameters n and p
+</equation>
+<bodyText confidence="0.92136">
+N.B.: A and A- need not sum to 1, because they are conditioned on different events.
+would be the winners in any competitions in-
+volving u or v.
+</bodyText>
+<listItem confidence="0.96774275">
+4. Link all token pairs (u, v) in the bitext.
+5. The one-to-one assumption means that linked
+words cannot be linked again. Therefore, re-
+move all linked word tokens from their respec-
+tive texts.
+6. If there is another co-occurring word token pair
+(u, v) such that L(u, v) exists, then repeat from
+Step 3.
+</listItem>
+<bodyText confidence="0.999966">
+The competitive linking algorithm is more greedy
+than algorithms that try to find a set of link types
+that are jointly most probable over some segment of
+the bitext. In practice, our linking algorithm can be
+implemented so that its worst-case running time is
+0(/m), where 1 and m are the lengths of the aligned
+segments.
+The simplicity of the competitive linking algo-
+rithm depends on the one-to-one assumption:
+Each word translates to at most one other word.
+Certainly, there are cases where this assumption is
+false. We prefer not to model those cases, in order to
+achieve higher accuracy with less effort on the cases
+where the assumption is true.
+</bodyText>
+<subsectionHeader confidence="0.999214">
+3.2 Parameter Estimation
+</subsectionHeader>
+<bodyText confidence="0.999588631578947">
+The purpose of the competitive linking algorithm is
+to help us re-estimate the model parameters. The
+variables that we use in our estimation are summa-
+rized in Figure 2. The linking algorithm produces a
+set of links between word tokens in the bitext. We
+define a link token to be an ordered pair of word
+tokens, one from each half of the bitext. A link
+type is an ordered pair of word types. Let n(,,v) be
+the co-occurrence frequency of u and v and k(u,v) be
+the number of links between tokens of u and v3. An
+&apos;Note that k(u,„) depends on the linking algorithm,
+but n(„,„.) is a constant property of the bitext.
+important property of the competitive linking algo-
+rithm is that the ratio k(uv)/n(u) tends to be very
+high if u and v are mutual translations, and quite
+low if they are not. The bimodality of this ratio
+for several values of n(u,v) is illustrated in Figure 3.
+This figure was plotted after the model&apos;s first iter-
+ation over 300000 aligned sentence pairs from the
+</bodyText>
+<figureCaption confidence="0.999156666666667">
+Figure 3: A fragment of the joint frequency
+(k()/n(),n(u,v)). Note that the frequencies are
+plotted on a log scale — the bimodality is quite sharp.
+</figureCaption>
+<bodyText confidence="0.9998295625">
+Canadian Hansard bitext. Note that the frequencies
+are plotted on a log scale — the bimodality is quite
+sharp.
+The linking algorithm creates all the links of a
+given type independently of each other, so the num-
+ber k(„,„) of links connecting word types u and v
+has a binomial distribution with parameters n(„,v)
+and p(„,v). If u and v are mutual translations, then
+P(u,v) tends to a relatively high probability, which we
+will call A+. If u and v are not mutual translations,
+then p(u,„) tends to a very low probability, which
+we will call A. A+ and A- correspond to the two
+peaks in the frequency distribution of k(„,,)/n(u,v)
+in Figure 2. The two parameters can also be inter-
+preted as the percentage of true and false positives.
+If the translation in the bitext is consistent and the
+</bodyText>
+<page confidence="0.993204">
+492
+</page>
+<bodyText confidence="0.999880222222222">
+model is accurate; then A+ should be near 1 and A-
+should be near 0.
+To find the most probable values of the hidden
+model parameters A+ and A-, we adopt the standard
+method of maximum likelihood estimation, and find
+the values that maximize the probability of the link
+frequency distributions. The one-to-one assumption
+implies independence between different link types,
+so that
+</bodyText>
+<equation confidence="0.98947">
+Pr(linksjmodel) =11Pr(k(u,v)in(um, A+ , A- ).
+11,V
+(1)
+</equation>
+<bodyText confidence="0.9814629">
+The factors on the right-hand side of Equation 1 can
+be written explicitly with the help of a mixture co-
+efficient. Let r be the probability that an arbitrary
+co-occurring pair of word types are mutual transla-
+tions. Let B(kin,p) denote the probability that k
+links are observed out of n co-occurrences, where k
+has a binomial distribution with parameters n and p.
+Then the probability that u and v are linked k(u,v)
+times out of n(u,v) co-occurrences is a mixture of two
+binomials:
+</bodyText>
+<equation confidence="0.998388333333333">
+Pr(k(u,v)In(u,v), A+ , A-) (2)
+rB(k(u,v)in(um, A+)
++ (1 - r)B(k(u,v)In(u,v), A- )
+</equation>
+<bodyText confidence="0.999538625">
+One more variable allows us to express T in terms
+of A+ and A- : Let A be the probability that an arbi-
+trary co-occuring pair of word tokens will be linked,
+regardless of whether they are mutual translations.
+Since T is constant over all word types, it also repre-
+sents the probability that an arbitrary co-occurring
+pair of word tokens are mutual translations. There-
+fore,
+</bodyText>
+<equation confidence="0.913693">
+A = rA+ + (1 - r)A-. (3)
+</equation>
+<bodyText confidence="0.736402333333333">
+A can also be estimated empirically. Let K be the
+total number of links in the bitext and let N be the
+total number of co-occuring word token pairs: K =
+</bodyText>
+<equation confidence="0.998939">
+E(u,v) k(u,v), N = (.,v) n(u,v). By definition,
+A = KIN. (4)
+</equation>
+<bodyText confidence="0.5649235">
+Equating the right-hand sides of Equations (3) and
+(4) and rearranging the terms, we get:
+</bodyText>
+<equation confidence="0.9994665">
+T = K IN - A-
+A+ - A- • (5)
+</equation>
+<bodyText confidence="0.9537656">
+Since r is now a function of A+ and A-, only the
+latter two variables represent degrees of freedom in
+the model.
+The probability function expressed by Equations 1
+and 2 has many local maxima. In practice, these
+</bodyText>
+<table confidence="0.991322529411765">
+log Pr(data I model) in millions
+-1.2
+40,,,,,,&apos; /I/4r &apos;P. 4014.1.411.11141;t4n\
+, ..5- :20:r , • r o •&apos;■//// 4 14;44 a 1 I bla &apos; . -
+- 1 A
+6
+-1. ...&amp;quot;:&amp;quot;
+\
+-1.8 VP
+0.0040.002)
+06 0.65 07 075 0.18/6
+0.008
+n X-
+)1+ 0 8 0 85
+0.01
+&amp;quot;&apos;&apos;n
+0.95
+</table>
+<figureCaption confidence="0.997156">
+Figure 4: Pr(linksimodel) has only one global max-
+imum in the region of interest.
+</figureCaption>
+<bodyText confidence="0.775900263157895">
+local maxima are like pebbles on a mountain, in-
+visible at low resolution. We computed Equation 1
+over various combinations of A+ and A- after the
+model&apos;s first iteration over 300000 aligned sentence
+pairs from the Canadian Hansard bitext. Figure 4
+shows that the region of interest in the parameter
+space, where 1 &gt; A+ &gt; A &gt; A- &gt; 0, has only one
+clearly visible global maximum. This global maxi-
+mum can be found by standard hill-climbing meth-
+ods, as long as the step size is large enough to avoid
+getting stuck on the pebbles.
+Given estimates for A+ and A- , we can compute
+B(ku,v Inu,v, A+) and B(ku,vin„,v, A- ). These are
+probabilities that ku,v) links were generated by an
+algorithm that generates correct links and by an al-
+gorithm that generates incorrect links, respectively,
+out of n(„,,v) co-occurrences. The ratio of these prob-
+abilities is the likelihood ratio in favor of u and v
+being mutual translations, for all u and v:
+</bodyText>
+<equation confidence="0.956064666666667">
+L(u, v) - B (ku&apos;,Inu&apos; , A+)
+(6)
+B(ku,vin„,v, A-) •
+</equation>
+<sectionHeader confidence="0.931296" genericHeader="method">
+4 Class-Based Word-to-Word
+Models
+</sectionHeader>
+<bodyText confidence="0.9998284375">
+In the basic word-to-word model, the hidden param-
+eters A+ and A- depend only on the distributions of
+link frequencies generated by the competitive link-
+ing algorithm. More accurate models can be induced
+by taking into account various features of the linked
+tokens. For example, frequent words are translated
+less consistently than rare words (Melamed, 1997).
+To account for this difference, we can estimate sep-
+arate values of A+ and A- for different ranges of
+n(„,v). Similarly, the hidden parameters can be con-
+ditioned on the linked parts of speech. Word order
+can be taken into account by conditioning the hid-
+den parameters on the relative positions of linked
+word tokens in their respective sentences. Just as
+easily, we can model links that coincide with en-
+tries in a pre-existing translation lexicon separately
+</bodyText>
+<page confidence="0.997146">
+493
+</page>
+<bodyText confidence="0.999891714285714">
+from those that do not. This method of incorporat-
+ing dictionary information seems simpler than the
+method proposed by Brown et al. for their models
+(Brown et al., 1993b). When the hidden parameters
+are conditioned on different link classes, the estima-
+tion method does not change; it is just repeated for
+each link class.
+</bodyText>
+<sectionHeader confidence="0.995392" genericHeader="evaluation">
+5 Evaluation
+</sectionHeader>
+<bodyText confidence="0.999845190476191">
+A word-to-word model of translational equivalence
+can be evaluated either over types or over tokens.
+It is impossible to replicate the experiments used to
+evaluate other translation models in the literature,
+because neither the models nor the programs that
+induce them are generally available. For each kind
+of evaluation, we have found one case where we can
+come close.
+We induced a two-class word-to-word model of
+translational equivalence from 13 million words of
+the Canadian Hansards, aligned using the method
+in (Gale &amp; Church, 1991). One class repre-
+sented content-word links and the other represented
+function-word links4. Link types with negative
+log-likelihood were discarded after each iteration.
+Both classes&apos; parameters converged after six it-
+erations. The value of class-based models was
+demonstrated by the differences between the hid-
+den parameters for the two classes. (),)c) con-
+verged at (.78,.00016) for content-class links and at
+(.43,.000094) for function-class links.
+</bodyText>
+<subsectionHeader confidence="0.986984">
+5.1 Link Types
+</subsectionHeader>
+<bodyText confidence="0.992432214285714">
+The most direct way to evaluate the link types in
+a word-level model of translational equivalence is to
+treat each link type as a candidate translation lexi-
+con entry, and to measure precision and recall. This
+evaluation criterion carries much practical import,
+because many of the applications mentioned in Sec-
+tion 1 depend on accurate broad-coverage transla-
+tion lexicons. Machine readable bilingual dictionar-
+ies, even when they are available, have only limited
+coverage and rarely include domain-specific terms
+(Resnik &amp; Melamed, 1997).
+We define the recall of a word-to-word translation
+model as the fraction of the bitext vocabulary repre-
+sented in the model. Translation model precision is
+a more thorny issue, because people disagree about
+the degree to which context should play a role in
+judgements of translational equivalence. We hand-
+evaluated the precision of the link types in our model
+in the context of the bitext from which the model
+4Since function words can be identified by table look-
+up, no POS-tagger was involved.
+was induced, using a simple bilingual concordancer.
+A link type (u, v) was considered correct if u and v
+ever co-occurred as direct translations of each other.
+Where the one-to-one assumption failed, but a link
+type captured part of a correct translation, it was
+judged &amp;quot;incomplete.&amp;quot; Whether incomplete links are
+correct or incorrect depends on the application.
+</bodyText>
+<figure confidence="0.394794">
+% recall
+</figure>
+<figureCaption confidence="0.99939">
+Figure 5: Link type precision with 95% confidence
+intervals at varying levels of recall.
+</figureCaption>
+<bodyText confidence="0.999785466666667">
+We evaluated five random samples of 100 link
+types each at three levels of recall. For our bitext,
+recall of 36%, 46% and 90% corresponded to trans-
+lation lexicons containing 32274, 43075 and 88633
+words, respectively. Figure 5 shows the precision of
+the model with 95% confidence intervals. The upper
+curve represents precision when incomplete links are
+considered correct, and the lower when they are con-
+sidered incorrect. On the former metric, our model
+can generate translation lexicons with precision and
+recall both exceeding 90%, as well as dictionary-
+sized translation lexicons that are over 99% correct.
+Though some have tried, it is not clear how to
+extract such accurate lexicons from other published
+translation models. Part of the difficulty stems from
+the implicit assumption in other models that each
+word has only one sense. Each word is assigned the
+same unit of probability mass, which the model dis-
+tributes over all candidate translations. The correct
+translations of a word that has several correct trans-
+lations will be assigned a lower probability than the
+correct translation of a word that has only one cor-
+rect translation. This imbalance foils thresholding
+strategies, clever as they might be (Gale &amp; Church,
+1991; Wu &amp; Xia, 1994; Chen, 1996). The likelihoods
+in the word-to-word model remain unnormalized, so
+they do not compete.
+The word-to-word model maintains high preci-
+sion even given much less training data. Resnik
+&amp; Melamed (1997) report that the model produced
+</bodyText>
+<figure confidence="0.996250117647059">
+(99.2%)
+incomplete = correct
+(92.8%)
+(91.6%)
+-.1(89:F%)
+100
+98
+96
+94
+92
+zfi, 90
+88
+86
+84
+36 46
+90
+incomplete = incorrect-----1(86.8%)
+</figure>
+<page confidence="0.998549">
+494
+</page>
+<bodyText confidence="0.999792">
+translation lexicons with 94% precision and 30% re-
+call, when trained on French/English software man-
+uals totaling about 400,000 words. The model
+was also used to induce a translation lexicon from
+a 6200-word corpus of French/English weather re-
+ports. Nasr (1997) reported that the translation
+lexicon that our model induced from this tiny bitext
+accounted for 30% of the word types with precision
+between 84% and 90%. Recall drops when there is
+less training data, because the model refuses to make
+predictions that it cannot make with confidence. For
+many applications, this is the desired behavior.
+</bodyText>
+<subsectionHeader confidence="0.981548">
+5.2 Link Tokens
+</subsectionHeader>
+<table confidence="0.993682888888889">
+type of error errors made by errors made
+IBM Model 2 by our model
+wrong link 32 7
+missing link 12 36
+partial link 7 10
+class conflict — 5
+tokenization 3 2
+paraphrase 39 36
+TOTAL 93 96
+</table>
+<tableCaption confidence="0.9894135">
+Table 1: Erroneous link tokens generated by two
+translation models.
+</tableCaption>
+<bodyText confidence="0.998491226415094">
+The most detailed evaluation of link tokens to
+date was performed by (Macklovitch &amp; Hannan,
+1996), who trained Brown et al.&apos;s Model 2 on 74
+million words of the Canadian Hansards. These au-
+thors kindly provided us with the links generated
+by that model in 51 aligned sentences from a held-
+out test set. We generated links in the same 51
+sentences using our two-class word-to-word model,
+and manually evaluated the content-word links from
+both models. The IBM models are directional; i.e.
+they posit the English words that gave rise to each
+French word, but ignore the distribution of the En-
+glish words. Therefore, we ignored English words
+that were linked to nothing.
+The errors are classified in Table 1. The &amp;quot;wrong
+link&amp;quot; and &amp;quot;missing link&amp;quot; error categories should be
+self-explanatory. &amp;quot;Partial links&amp;quot; are those where one
+French word resulted from multiple English words,
+but the model only links the French word to one of
+its English sources. &amp;quot;Class conflict&amp;quot; errors resulted
+from our model&apos;s refusal to link content words with
+function words. Usually, this is the desired behavior,
+but words like English auxiliary verbs are sometimes
+used as content words, giving rise to content words
+in French. Such errors could be overcome by a model
+that classifies each word token, for example using a
+part-of-speech tagger, instead of assigning the same
+class to all tokens of a given type. The bitext pre-
+processor for our word-to-word model split hyphen-
+ated words, but Macklovitch &amp; Hannan&apos;s preproces-
+sor did not. In some cases, hyphenated words were
+easier to link correctly; in other cases they were more
+difficult. Both models made some errors because of
+this tokenization problem, albeit in different places.
+The &amp;quot;paraphrase&amp;quot; category covers all link errors that
+resulted from paraphrases in the translation. Nei-
+ther IBM&apos;s Model 2 nor our model is capable of link-
+ing multi-word sequences to multi-word sequences,
+and this was the biggest source of error for both
+models.
+The test sample contained only about 400 content
+words5, and the links for both models were evaluated
+post-hoc by only one evaluator. Nevertheless, it ap-
+pears that our word-to-word model with only two
+link classes does not perform any worse than IBM&apos;s
+Model 2, even though the word-to-word model was
+trained on less than one fifth the amount of data that
+was used to train the IBM model. Since it doesn&apos;t
+store indirect associations, our word-to-word model
+contained an average of 4.5 French words for every
+English word. Such a compact model requires rel-
+atively little computational effort to induce and to
+apply.
+</bodyText>
+<figure confidence="0.942498">
+screaming
+winds
+and
+dangerous
+sea
+conditions
+</figure>
+<figureCaption confidence="0.894185">
+Figure 6: An example of the different sorts of er-
+rors made by the word-to-word model and the IBM
+Model 2. Solid lines are links made by both mod-
+els; dashes lines are links made by the IBM model
+</figureCaption>
+<footnote confidence="0.6526376">
+only. Only content-class links are shown. Neither
+model makes the correct links (dechaines,screaming)
+and (demontee, dangerous).
+5The exact number depends on the tokenization
+method.
+</footnote>
+<figure confidence="0.9436778">
+des
+vents
+-
+dechaines
+et
+</figure>
+<page confidence="0.998621">
+495
+</page>
+<bodyText confidence="0.9999835">
+In addition to the quantitative differences between
+the word-to-word model and the IBM model, there
+is an important qualitative difference, illustrated in
+Figure 6. As shown in Table 1, the most common
+kind of error for the word-to-word model was a miss-
+ing link, whereas the most common error for IBM&apos;s
+Model 2 was a wrong link. Missing links are more in-
+formative: they indicate where the model has failed.
+The level at which the model trusts its own judge-
+ment can be varied directly by changing the likeli-
+hood cutoff in Step 1 of the competitive linking algo-
+rithm. Each application of the word-to-word model
+can choose its own balance between link token pre-
+cision and recall. An application that calls on the
+word-to-word model to link words in a bitext could
+treat unlinked words differently from linked words,
+and avoid basing subsequent decisions on uncertain
+inputs. It is not clear how the precision/recall trade-
+off can be controlled in the IBM models.
+One advantage that Brown et al.&apos;s Model 1 has
+over our word-to-word model is that their objec-
+tive function has no local maxima. By using the
+EM algorithm (Dempster et al., 1977), they can
+guarantee convergence towards the globally opti-
+mum parameter set. In contrast, the dynamic na-
+ture of the competitive linking algorithm changes
+the Pr(datalmodel) in a non-monotonic fashion. We
+have adopted the simple heuristic that the model
+&amp;quot;has converged&amp;quot; when this probability stops increas-
+ing.
+</bodyText>
+<sectionHeader confidence="0.998519" genericHeader="conclusions">
+6 Conclusion
+</sectionHeader>
+<bodyText confidence="0.999979676470588">
+Many multilingual NLP applications need to trans-
+late words between different languages, but cannot
+afford the computational expense of modeling the
+full range of translation phenomena. For these ap-
+plications, we have designed a fast algorithm for esti-
+mating word-to-word models of translational equiv-
+alence. The estimation method uses a pair of hid-
+den parameters to measure the model&apos;s uncertainty,
+and avoids making decisions that it&apos;s not likely to
+make correctly. The hidden parameters can be con-
+ditioned on information extrinsic to the model, pro-
+viding an easy way to integrate pre-existing knowl-
+edge.
+So far we have only implemented a two-class
+model, to exploit the differences in translation con-
+sistency between content words and function words.
+This relatively simple two-class model linked word
+tokens in parallel texts as accurately as other trans-
+lation models in the literature, despite being trained
+on only one fifth as much data. Unlike other transla-
+tion models, the word-to-word model can automat-
+ically produce dictionary-sized translation lexicons,
+and it can do so with over 99% accuracy.
+Even better accuracy can be achieved with a more
+fine-grained link class structure. Promising features
+for classification include part of speech, frequency
+of co-occurrence, relative word position, and trans-
+lational entropy (Melamed, 1997). Another inter-
+esting extension is to broaden the definition of a
+&amp;quot;word&amp;quot; to include multi-word lexical units (Smadja,
+1992). If such units can be identified a priori, their
+translations can be estimated without modifying the
+word-to-word model. In this manner, the model can
+account for a wider range of translation phenomena.
+</bodyText>
+<sectionHeader confidence="0.989961" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.999568909090909">
+The French/English software manuals were provided
+by Gary Adams of Sun MicroSystems Laboratories.
+The weather bitext was prepared at the University
+of Montreal, under the direction of Richard Kit-
+tredge. Thanks to Alexis Nasr for hand-evaluating
+the weather translation lexicon. Thanks also to Mike
+Collins, George Foster, Mitch Marcus, Lyle Ungar,
+and three anonymous reviewers for helpful com-
+ments. This research was supported by an equip-
+ment grant from Sun MicroSystems and by ARPA
+Contract #N66001-94C-6043.
+</bodyText>
+<sectionHeader confidence="0.995799" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.989278304347826">
+P. F. Brown, J. Cocke, S. Della Pietra, V. Della
+Pietra, F. Jelinek, R. Mercer, &amp; P. Roossin, &amp;quot;A
+Statistical Approach to Language Translation,&amp;quot;
+Proceedings of the 12th International Conference
+on Computational Linguistics, Budapest, Hun-
+gary, 1988.
+P. F. Brown, J. Cocke, S. Della Pietra, V. Della
+Pietra, F. Jelinek, R. Mercer, &amp; P. Roossin,
+&amp;quot;A Statistical Approach to Machine Translation,&amp;quot;
+Computational Linguistics 16(2), 1990.
+P. F. Brown, V. J. Della Pietra, S. A. Della Pietra
+&amp; R. L. Mercer, &amp;quot;The Mathematics of Statisti-
+cal Machine Translation: Parameter Estimation,&amp;quot;
+Computational Linguistics 19(2), 1993.
+P. F. Brown, S. A. Della Pietra, V. J. Della Pietra,
+M. J. Goldsmith, J. Hajic, R. L. Mercer &amp; S. Mo-
+hanty, &amp;quot;But Dictionaries are Data Too,&amp;quot; Proceed-
+ings of the A RPA HLT Workshop, Princeton, NJ,
+1993.
+R. Catizone, G. Russell &amp; S. Warwick &amp;quot;Deriving
+Translation Data from Bilingual Texts,&amp;quot; Proceed-
+ings of the First International Lexical Acquisition
+Workshop, Detroit, MI, 1993.
+</reference>
+<page confidence="0.98899">
+496
+</page>
+<reference confidence="0.999391978723404">
+S. Chen, Building Probabilistic Models for Natu-
+ral Language, Ph.D. Thesis, Harvard University,
+1996.
+K. W. Church &amp; E. H. Hovy, &amp;quot;Good Applications for
+Crummy Machine Translation,&amp;quot; Machine Transla-
+tion 8, 1993.
+I. Dagan, K. Church, SZ W. Gale, &amp;quot;Robust Word
+Alignment for Machine Aided Translation,&amp;quot; Pro-
+ceedings of the Workshop on Very Large Corpora:
+Academic and Industrial Perspectives, Columbus,
+OH, 1993.
+A. P. Dempster, N. M. Laird &amp; D. B. Rubin, &amp;quot;Maxi-
+mum likelihood from incomplete data via the EM
+algorithm,&amp;quot; Journal of the Royal Statistical Soci-
+ety 34(B), 1977.
+T. Dunning, &amp;quot;Accurate Methods for the Statistics
+of Surprise and Coincidence,&amp;quot; Computational Lin-
+guistics 19(1), 1993.
+P. Fling, &amp;quot;Compiling Bilingual Lexicon Entries from
+a Non-Parallel English-Chinese Corpus,&amp;quot; Proceed-
+ings of the Third Workshop on Very Large Cor-
+pora, Boston, MA, 1995a.
+P. Fung, &amp;quot;A Pattern Matching Method for Find-
+ing Noun and Proper Noun Translations from
+Noisy Parallel Corpora,&amp;quot; Proceedings of the 33rd
+Annual Meeting of the Association for Computa-
+tional Linguistics, Boston, MA, 1995b.
+W. Gale &amp; K. W. Church, &amp;quot;A Program for Align-
+ing Sentences in Bilingual Corpora&amp;quot; Proceedings
+of the 29th Annual Meeting of the Association for
+Computational Linguistics, Berkeley, CA, 1991.
+W. Gale &amp; K. W. Church, &amp;quot;Identifying Word Corre-
+spondences in Parallel Texts,&amp;quot; Proceedings of the
+DARPA SNL Workshop, 1991.
+A. Kumano &amp; H. Hiralcawa, &amp;quot;Building an MT Dic-
+tionary from Parallel Texts Based on Linguistic
+and Statistical Information,&amp;quot; Proceedings of the
+15th International Conference on Computational
+Linguistics, Kyoto, Japan, 1994.
+E. Macklovitch &amp;quot;Using Bi-textual Alignment for
+Translation Validation: The TransCheck Sys-
+tem,&amp;quot; Proceedings of the 1st Conference of the As-
+sociation for Machine Translation in the Ameri-
+cas, Columbia, MD, 1994.
+E. Macklovitch &amp; M.-L. Hannan, &amp;quot;Line &apos;Em Up: Ad-
+vances in Alignment Technology and their Impact
+on Translation Support Tools,&amp;quot; 2nd Conference
+of the Association for Machine Translation in the
+Americas, Montreal, Canada, 1996.
+I. D. Melamed &amp;quot;Automatic Evaluation and Uniform
+Filter Cascades for Inducing N-best Translation
+Lexicons,&amp;quot; Proceedings of the Third Workshop on
+Very Large Corpora, Boston, MA, 1995.
+I. D. Melamed, &amp;quot;A Geometric Approach to Mapping
+Bitext Correspondence,&amp;quot; Proceedings of the First
+Conference on Empirical Methods in Natural Lan-
+guage Processing, Philadelphia, PA, 1996a.
+I. D. Melamed &amp;quot;Automatic Detection of Omissions
+in Translations,&amp;quot; Proceedings of the 16th Interna-
+tional Conference on Computational Linguistics,
+Copenhagen, Denmark, 1996b.
+I. D Melamed, &amp;quot;Automatic Construction of Clean
+Broad-Coverage Translation Lexicons,&amp;quot; 2nd Con-
+ference of the Association for Machine Transla-
+tion in the Americas, Montreal, Canada, 1996c.
+I. D. Melamed, &amp;quot;Measuring Semantic Entropy,&amp;quot; Pro-
+ceedings of the SIGLEX Workshop on Tagging
+Text with Lexical Semantics, Washington, DC,
+1997.
+I. D. Melamed, &amp;quot;A Portable Algorithm for Mapping
+Bitext Correspondence,&amp;quot; Proceedings of the 35th
+Conference of the Association for Computational
+Linguistics, Madrid, Spain, 1997. (in this volume)
+A . Melby, &amp;quot;A Bilingual Concordance System and its
+Use in Linguistic Studies,&amp;quot; Proceedings of the En-
+glish LACUS Forum, Columbia, SC, 1981.
+A . Nasr, personal communication, 1997.
+P. Resnik &amp; I. D. Melamed, &amp;quot;Semi-Automatic Acqui-
+sition of Domain-Specific Translation Lexicons,&amp;quot;
+Proceedings of the 7th ACL Conference on Ap-
+plied Natural Language Processing, Washington,
+DC, 1997.
+. W. Oard &amp; B. J. Dorr, &amp;quot;A Survey of Multilingual
+Text Retrieval, UMIACS TR-96-19, University of
+Maryland, College Park, MD, 1996.
+F. Smadja, &amp;quot;How to Compile a Bilingual Collo-
+cational Lexicon Automatically,&amp;quot; Proceedings of
+the AAAI Workshop on Statistically-Based NLP
+Techniques, 1992.
+. Wu &amp; X. Xia, &amp;quot;Learning an English-Chinese
+Lexicon from a Parallel Corpus,&amp;quot; Proceedings of
+the First Conference of the Association for Ma-
+chine Translation in the Americas, Columbia,
+MD, 1994.
+</reference>
+<page confidence="0.998443">
+497
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.983418">
+<title confidence="0.999257">A Word-to-Word Model of Translational Equivalence</title>
+<author confidence="0.999891">I Dan Melamed</author>
+<affiliation confidence="0.999904">Dept. of Computer and Information Science University of Pennsylvania</affiliation>
+<address confidence="0.997749">Philadelphia, PA, 19104, U.S.A.</address>
+<email confidence="0.999817">melamed@unagi.cis.upenn.edu</email>
+<abstract confidence="0.99946084">Many multilingual NLP applications need to translate words between different languages, but cannot afford the computational expense of inducing or applying a full translation model. For these applications, we have designed a fast algorithm for estimating a partial translation model, which accounts for translational equivalence only at the word level . The model&apos;s precision/recall trade-off can be directly controlled via one threshold parameter. This feature makes the model more suitable for applications that are not fully statistical. The model&apos;s hidden parameters can be easily conditioned on information extrinsic to the model, providing an easy way to integrate pre-existing knowledge such as partof-speech, dictionaries, word order, etc.. Our model can link word tokens in parallel texts as well as other translation models in the literature. Unlike other translation models, it can automatically produce dictionary-sized translation lexicons, and it can do so with over 99% accuracy.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>P F Brown</author>
+<author>J Cocke</author>
+<author>S Della Pietra</author>
+<author>V Della Pietra</author>
+<author>F Jelinek</author>
+<author>R Mercer</author>
+<author>P Roossin</author>
+</authors>
+<title>A Statistical Approach to Language Translation,&amp;quot;</title>
+<date>1988</date>
+<booktitle>Proceedings of the 12th International Conference on Computational Linguistics,</booktitle>
+<location>Budapest, Hungary,</location>
+<contexts>
+<context position="1370" citStr="Brown et al., 1988" startWordPosition="201" endWordPosition="204">l&apos;s hidden parameters can be easily conditioned on information extrinsic to the model, providing an easy way to integrate pre-existing knowledge such as partof-speech, dictionaries, word order, etc.. Our model can link word tokens in parallel texts as well as other translation models in the literature. Unlike other translation models, it can automatically produce dictionary-sized translation lexicons, and it can do so with over 99% accuracy. 1 Introduction Over the past decade, researchers at IBM have developed a series of increasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1</context>
+</contexts>
+<marker>Brown, Cocke, Pietra, Pietra, Jelinek, Mercer, Roossin, 1988</marker>
+<rawString>P. F. Brown, J. Cocke, S. Della Pietra, V. Della Pietra, F. Jelinek, R. Mercer, &amp; P. Roossin, &amp;quot;A Statistical Approach to Language Translation,&amp;quot; Proceedings of the 12th International Conference on Computational Linguistics, Budapest, Hungary, 1988.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P F Brown</author>
+<author>J Cocke</author>
+<author>S Della Pietra</author>
+<author>V Della Pietra</author>
+<author>F Jelinek</author>
+<author>R Mercer</author>
+<author>P Roossin</author>
+</authors>
+<title>A Statistical Approach to Machine Translation,&amp;quot;</title>
+<date>1990</date>
+<journal>Computational Linguistics</journal>
+<volume>16</volume>
+<issue>2</issue>
+<contexts>
+<context position="1390" citStr="Brown et al., 1990" startWordPosition="205" endWordPosition="208">s can be easily conditioned on information extrinsic to the model, providing an easy way to integrate pre-existing knowledge such as partof-speech, dictionaries, word order, etc.. Our model can link word tokens in parallel texts as well as other translation models in the literature. Unlike other translation models, it can automatically produce dictionary-sized translation lexicons, and it can do so with over 99% accuracy. 1 Introduction Over the past decade, researchers at IBM have developed a series of increasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-ling</context>
+<context position="7741" citStr="Brown et al., 1990" startWordPosition="1256" endWordPosition="1259">ith a particular word token v in the other half of the bitext, the word that is most likely to be v&apos;s translation is the one for which the likelihood L(u, v) of translational equivalence is highest. The competitive linking algorithm implements this heuristic: 1. Discard all likelihood scores for word types deemed unlikely to be mutual translations, i.e. all L(u, v) &lt; 1. This step significantly reduces the computational burden of the algorithm. It is analogous to the step in other translation model induction algorithms that sets all probabilities below a certain threshold to negligible values (Brown et al., 1990; Dagan et al., 1993; Chen, 1996). To retain word type pairs that are at least twice as likely to be mutual translations than not, the threshold can be raised to 2. Conversely, the threshold can be lowered to buy more coverage at the cost of a larger model that will converge more slowly. 2. Sort all remaining likelihood estimates L(u, v) from highest to lowest. 3. Find u and v such that the likelihood ratio L(u, v) is highest. Token pairs of these types 491 Figure 2: Variables used to estimate the model parameters. n(u,v) = frequency of co-occurrence between word types u and v N = E(u,v) n(u.v</context>
+</contexts>
+<marker>Brown, Cocke, Pietra, Pietra, Jelinek, Mercer, Roossin, 1990</marker>
+<rawString>P. F. Brown, J. Cocke, S. Della Pietra, V. Della Pietra, F. Jelinek, R. Mercer, &amp; P. Roossin, &amp;quot;A Statistical Approach to Machine Translation,&amp;quot; Computational Linguistics 16(2), 1990.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P F Brown</author>
+<author>V J Della Pietra</author>
+<author>S A Della Pietra</author>
+<author>R L Mercer</author>
+</authors>
+<title>The Mathematics of Statistical Machine Translation: Parameter Estimation,&amp;quot;</title>
+<date>1993</date>
+<journal>Computational Linguistics</journal>
+<volume>19</volume>
+<issue>2</issue>
+<contexts>
+<context position="1410" citStr="Brown et al., 1993" startWordPosition="209" endWordPosition="212">itioned on information extrinsic to the model, providing an easy way to integrate pre-existing knowledge such as partof-speech, dictionaries, word order, etc.. Our model can link word tokens in parallel texts as well as other translation models in the literature. Unlike other translation models, it can automatically produce dictionary-sized translation lexicons, and it can do so with over 99% accuracy. 1 Introduction Over the past decade, researchers at IBM have developed a series of increasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-lingual information retr</context>
+<context position="16043" citStr="Brown et al., 1993" startWordPosition="2741" endWordPosition="2744"> for this difference, we can estimate separate values of A+ and A- for different ranges of n(„,v). Similarly, the hidden parameters can be conditioned on the linked parts of speech. Word order can be taken into account by conditioning the hidden parameters on the relative positions of linked word tokens in their respective sentences. Just as easily, we can model links that coincide with entries in a pre-existing translation lexicon separately 493 from those that do not. This method of incorporating dictionary information seems simpler than the method proposed by Brown et al. for their models (Brown et al., 1993b). When the hidden parameters are conditioned on different link classes, the estimation method does not change; it is just repeated for each link class. 5 Evaluation A word-to-word model of translational equivalence can be evaluated either over types or over tokens. It is impossible to replicate the experiments used to evaluate other translation models in the literature, because neither the models nor the programs that induce them are generally available. For each kind of evaluation, we have found one case where we can come close. We induced a two-class word-to-word model of translational equ</context>
+</contexts>
+<marker>Brown, Pietra, Pietra, Mercer, 1993</marker>
+<rawString>P. F. Brown, V. J. Della Pietra, S. A. Della Pietra &amp; R. L. Mercer, &amp;quot;The Mathematics of Statistical Machine Translation: Parameter Estimation,&amp;quot; Computational Linguistics 19(2), 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P F Brown</author>
+<author>S A Della Pietra</author>
+<author>V J Della Pietra</author>
+<author>M J Goldsmith</author>
+<author>J Hajic</author>
+<author>R L Mercer</author>
+<author>S Mohanty</author>
+</authors>
+<title>But Dictionaries are Data Too,&amp;quot;</title>
+<date>1993</date>
+<booktitle>Proceedings of the A RPA HLT Workshop,</booktitle>
+<location>Princeton, NJ,</location>
+<contexts>
+<context position="1410" citStr="Brown et al., 1993" startWordPosition="209" endWordPosition="212">itioned on information extrinsic to the model, providing an easy way to integrate pre-existing knowledge such as partof-speech, dictionaries, word order, etc.. Our model can link word tokens in parallel texts as well as other translation models in the literature. Unlike other translation models, it can automatically produce dictionary-sized translation lexicons, and it can do so with over 99% accuracy. 1 Introduction Over the past decade, researchers at IBM have developed a series of increasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-lingual information retr</context>
+<context position="16043" citStr="Brown et al., 1993" startWordPosition="2741" endWordPosition="2744"> for this difference, we can estimate separate values of A+ and A- for different ranges of n(„,v). Similarly, the hidden parameters can be conditioned on the linked parts of speech. Word order can be taken into account by conditioning the hidden parameters on the relative positions of linked word tokens in their respective sentences. Just as easily, we can model links that coincide with entries in a pre-existing translation lexicon separately 493 from those that do not. This method of incorporating dictionary information seems simpler than the method proposed by Brown et al. for their models (Brown et al., 1993b). When the hidden parameters are conditioned on different link classes, the estimation method does not change; it is just repeated for each link class. 5 Evaluation A word-to-word model of translational equivalence can be evaluated either over types or over tokens. It is impossible to replicate the experiments used to evaluate other translation models in the literature, because neither the models nor the programs that induce them are generally available. For each kind of evaluation, we have found one case where we can come close. We induced a two-class word-to-word model of translational equ</context>
+</contexts>
+<marker>Brown, Pietra, Pietra, Goldsmith, Hajic, Mercer, Mohanty, 1993</marker>
+<rawString>P. F. Brown, S. A. Della Pietra, V. J. Della Pietra, M. J. Goldsmith, J. Hajic, R. L. Mercer &amp; S. Mohanty, &amp;quot;But Dictionaries are Data Too,&amp;quot; Proceedings of the A RPA HLT Workshop, Princeton, NJ, 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Catizone</author>
+<author>G Russell</author>
+<author>S Warwick</author>
+</authors>
+<title>Deriving Translation Data from Bilingual Texts,&amp;quot;</title>
+<date>1993</date>
+<booktitle>Proceedings of the First International Lexical Acquisition Workshop,</booktitle>
+<location>Detroit, MI,</location>
+<contexts>
+<context position="1882" citStr="Catizone et al., 1993" startWordPosition="275" endWordPosition="278">veloped a series of increasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-lingual information retrieval (Oard &amp; Dorr, 1996). In this paper, we present a fast method for inducing accurate translation lexicons. The method assumes that words are translated one-to-one. This assumption reduces the explanatory power of our model in comparison to the IBM models, but, as shown in Section 3.1, it helps us to avoid what we call indirect associations, a major source of errors in other models. Section 3.1 also shows how the oneto-one assumption enables us to use a new greedy </context>
+</contexts>
+<marker>Catizone, Russell, Warwick, 1993</marker>
+<rawString>R. Catizone, G. Russell &amp; S. Warwick &amp;quot;Deriving Translation Data from Bilingual Texts,&amp;quot; Proceedings of the First International Lexical Acquisition Workshop, Detroit, MI, 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Chen</author>
+</authors>
+<title>Building Probabilistic Models for Natural Language,</title>
+<date>1996</date>
+<tech>Ph.D. Thesis,</tech>
+<institution>Harvard University,</institution>
+<contexts>
+<context position="7774" citStr="Chen, 1996" startWordPosition="1264" endWordPosition="1265">er half of the bitext, the word that is most likely to be v&apos;s translation is the one for which the likelihood L(u, v) of translational equivalence is highest. The competitive linking algorithm implements this heuristic: 1. Discard all likelihood scores for word types deemed unlikely to be mutual translations, i.e. all L(u, v) &lt; 1. This step significantly reduces the computational burden of the algorithm. It is analogous to the step in other translation model induction algorithms that sets all probabilities below a certain threshold to negligible values (Brown et al., 1990; Dagan et al., 1993; Chen, 1996). To retain word type pairs that are at least twice as likely to be mutual translations than not, the threshold can be raised to 2. Conversely, the threshold can be lowered to buy more coverage at the cost of a larger model that will converge more slowly. 2. Sort all remaining likelihood estimates L(u, v) from highest to lowest. 3. Find u and v such that the likelihood ratio L(u, v) is highest. Token pairs of these types 491 Figure 2: Variables used to estimate the model parameters. n(u,v) = frequency of co-occurrence between word types u and v N = E(u,v) n(u.v) = total number of co-occurrence</context>
+<context position="19968" citStr="Chen, 1996" startWordPosition="3365" endWordPosition="3366">w to extract such accurate lexicons from other published translation models. Part of the difficulty stems from the implicit assumption in other models that each word has only one sense. Each word is assigned the same unit of probability mass, which the model distributes over all candidate translations. The correct translations of a word that has several correct translations will be assigned a lower probability than the correct translation of a word that has only one correct translation. This imbalance foils thresholding strategies, clever as they might be (Gale &amp; Church, 1991; Wu &amp; Xia, 1994; Chen, 1996). The likelihoods in the word-to-word model remain unnormalized, so they do not compete. The word-to-word model maintains high precision even given much less training data. Resnik &amp; Melamed (1997) report that the model produced (99.2%) incomplete = correct (92.8%) (91.6%) -.1(89:F%) 100 98 96 94 92 zfi, 90 88 86 84 36 46 90 incomplete = incorrect-----1(86.8%) 494 translation lexicons with 94% precision and 30% recall, when trained on French/English software manuals totaling about 400,000 words. The model was also used to induce a translation lexicon from a 6200-word corpus of French/English we</context>
+</contexts>
+<marker>Chen, 1996</marker>
+<rawString>S. Chen, Building Probabilistic Models for Natural Language, Ph.D. Thesis, Harvard University, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K W Church</author>
+<author>E H Hovy</author>
+</authors>
+<title>Good Applications for Crummy Machine Translation,&amp;quot;</title>
+<date>1993</date>
+<journal>Machine Translation</journal>
+<volume>8</volume>
+<contexts>
+<context position="1730" citStr="Church &amp; Hovy, 1993" startWordPosition="258" endWordPosition="261">produce dictionary-sized translation lexicons, and it can do so with over 99% accuracy. 1 Introduction Over the past decade, researchers at IBM have developed a series of increasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-lingual information retrieval (Oard &amp; Dorr, 1996). In this paper, we present a fast method for inducing accurate translation lexicons. The method assumes that words are translated one-to-one. This assumption reduces the explanatory power of our model in comparison to the IBM models, but, as shown in Section 3.1, it helps us to avoid what we c</context>
+</contexts>
+<marker>Church, Hovy, 1993</marker>
+<rawString>K. W. Church &amp; E. H. Hovy, &amp;quot;Good Applications for Crummy Machine Translation,&amp;quot; Machine Translation 8, 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Dagan</author>
+<author>K Church</author>
+<author>SZ W Gale</author>
+</authors>
+<title>Robust Word Alignment for Machine Aided Translation,&amp;quot;</title>
+<date>1993</date>
+<booktitle>Proceedings of the Workshop on Very Large Corpora: Academic and Industrial Perspectives,</booktitle>
+<location>Columbus, OH,</location>
+<contexts>
+<context position="3897" citStr="Dagan et al., 1993" startWordPosition="610" endWordPosition="613">r of texts in two languages, where each text is a translation of the other. Word co-occurrence can be defined in various ways. The most common way is to divide each half of the bitext into an equal number of segments and to align the segments so that each pair of segments Si and Ti are translations of each other (Gale &amp; Church, 1991; Melamed, 1996a). Then, two word tokens (u, v) are said to co-occur in the 490 aligned segment pair i if u E Si and v E T. The co-occurrence relation can also be based on distance in a bitext space, which is a more general representations of bitext correspondence (Dagan et al., 1993; Resnik &amp; Melamed, 1997), or it can be restricted to words pairs that satisfy some matching predicate, which can be extrinsic to the model (Melamed, 1995; Melamed, 1997). 3 The Basic Word-to-Word Model Our translation model consists of the hidden parameters A+ and )c, and likelihood ratios L(u, v). The two hidden parameters are the probabilities of the model generating true and false positives in the data. L(u, v) represents the likelihood that u and v can be mutual translations. For each co-occurring pair of word types u and v, these likelihoods are initially set proportional to their co-occ</context>
+<context position="6784" citStr="Dagan et al., 1993" startWordPosition="1099" endWordPosition="1102">ect association between uk and uk+i give rise to an indirect association between vk and uk+1. co-occur is called a direct association. Now, suppose that uk and uk±i often co-occur within their language. Then vk and uk+i will also co-occur more often than expected by chance. The arrow connecting vk and uk±i in Figure 1 represents an indirect association, since the association between vk and uk±i arises only by virtue of the association between each of them and uk . Models of translational equivalence that are ignorant of indirect associations have &amp;quot;a tendency ... to be confused by collocates&amp;quot; (Dagan et al., 1993). Fortunately, indirect associations are usually not difficult to identify, because they tend to be weaker than the direct associations on which they are based (Melamed, 1996c). The majority of indirect associations can be filtered out by a simple competition heuristic: Whenever several word tokens ui in one half of the bitext co-occur with a particular word token v in the other half of the bitext, the word that is most likely to be v&apos;s translation is the one for which the likelihood L(u, v) of translational equivalence is highest. The competitive linking algorithm implements this heuristic: 1</context>
+</contexts>
+<marker>Dagan, Church, Gale, 1993</marker>
+<rawString>I. Dagan, K. Church, SZ W. Gale, &amp;quot;Robust Word Alignment for Machine Aided Translation,&amp;quot; Proceedings of the Workshop on Very Large Corpora: Academic and Industrial Perspectives, Columbus, OH, 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A P Dempster</author>
+<author>N M Laird</author>
+<author>D B Rubin</author>
+</authors>
+<title>Maximum likelihood from incomplete data via the EM algorithm,&amp;quot;</title>
+<date>1977</date>
+<journal>Journal of the Royal Statistical Society</journal>
+<volume>34</volume>
+<contexts>
+<context position="25371" citStr="Dempster et al., 1977" startWordPosition="4268" endWordPosition="4271">off in Step 1 of the competitive linking algorithm. Each application of the word-to-word model can choose its own balance between link token precision and recall. An application that calls on the word-to-word model to link words in a bitext could treat unlinked words differently from linked words, and avoid basing subsequent decisions on uncertain inputs. It is not clear how the precision/recall tradeoff can be controlled in the IBM models. One advantage that Brown et al.&apos;s Model 1 has over our word-to-word model is that their objective function has no local maxima. By using the EM algorithm (Dempster et al., 1977), they can guarantee convergence towards the globally optimum parameter set. In contrast, the dynamic nature of the competitive linking algorithm changes the Pr(datalmodel) in a non-monotonic fashion. We have adopted the simple heuristic that the model &amp;quot;has converged&amp;quot; when this probability stops increasing. 6 Conclusion Many multilingual NLP applications need to translate words between different languages, but cannot afford the computational expense of modeling the full range of translation phenomena. For these applications, we have designed a fast algorithm for estimating word-to-word models </context>
+</contexts>
+<marker>Dempster, Laird, Rubin, 1977</marker>
+<rawString>A. P. Dempster, N. M. Laird &amp; D. B. Rubin, &amp;quot;Maximum likelihood from incomplete data via the EM algorithm,&amp;quot; Journal of the Royal Statistical Society 34(B), 1977.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Dunning</author>
+</authors>
+<title>Accurate Methods for the Statistics of Surprise and Coincidence,&amp;quot;</title>
+<date>1993</date>
+<journal>Computational Linguistics</journal>
+<volume>19</volume>
+<issue>1</issue>
+<contexts>
+<context position="4620" citStr="Dunning, 1993" startWordPosition="729" endWordPosition="730"> can be extrinsic to the model (Melamed, 1995; Melamed, 1997). 3 The Basic Word-to-Word Model Our translation model consists of the hidden parameters A+ and )c, and likelihood ratios L(u, v). The two hidden parameters are the probabilities of the model generating true and false positives in the data. L(u, v) represents the likelihood that u and v can be mutual translations. For each co-occurring pair of word types u and v, these likelihoods are initially set proportional to their co-occurrence frequency („,v) and inversely proportional to their marginal frequencies n(u) and n(v) 1, following (Dunning, 1993)2. When the L(u, v) are re-estimated, the model&apos;s hidden parameters come into play. After initialization, the model induction algorithm iterates: 1. Find a set of &amp;quot;links&amp;quot; among word tokens in the bitext, using the likelihood ratios and the competitive linking algorithm. 2. Use the links to re-estimate A+, A—, and the likelihood ratios. 3. Repeat from Step 1 until the model converges to the desired degree. The competitive linking algorithm and its one-to-one assumption are detailed in Section 3.1. Section 3.1 explains how to re-estimate the model parameters. 3.1 Competitive Linking Algorithm Th</context>
+</contexts>
+<marker>Dunning, 1993</marker>
+<rawString>T. Dunning, &amp;quot;Accurate Methods for the Statistics of Surprise and Coincidence,&amp;quot; Computational Linguistics 19(1), 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Fling</author>
+</authors>
+<title>Compiling Bilingual Lexicon Entries from a Non-Parallel English-Chinese Corpus,&amp;quot;</title>
+<date>1995</date>
+<booktitle>Proceedings of the Third Workshop on Very Large Corpora,</booktitle>
+<location>Boston, MA,</location>
+<marker>Fling, 1995</marker>
+<rawString>P. Fling, &amp;quot;Compiling Bilingual Lexicon Entries from a Non-Parallel English-Chinese Corpus,&amp;quot; Proceedings of the Third Workshop on Very Large Corpora, Boston, MA, 1995a.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Fung</author>
+</authors>
+<title>A Pattern Matching Method for Finding Noun and Proper Noun Translations from Noisy Parallel Corpora,&amp;quot;</title>
+<date>1995</date>
+<booktitle>Proceedings of the 33rd Annual Meeting of the Association for Computational Linguistics,</booktitle>
+<location>Boston, MA,</location>
+<contexts>
+<context position="3035" citStr="Fung, 1995" startWordPosition="459" endWordPosition="460"> the oneto-one assumption enables us to use a new greedy competitive linking algorithm for re-estimating the model&apos;s parameters, instead of more expensive algorithms that consider a much larger set of word correspondence possibilities. The model uses two hidden parameters to estimate the confidence of its own predictions. The confidence estimates enable direct control of the balance between the model&apos;s precision and recall via a simple threshold. The hidden parameters can be conditioned on prior knowledge about the bitext to improve the model&apos;s accuracy. 2 Co-occurrence With the exception of (Fung, 1995b), previous methods for automatically constructing statistical translation models begin by looking at word cooccurrence frequencies in bitexts (Gale &amp; Church, 1991; Kumano &amp; Hirakawa, 1994; Fung, 1995a; Melamed, 1995). A bitext comprises a pair of texts in two languages, where each text is a translation of the other. Word co-occurrence can be defined in various ways. The most common way is to divide each half of the bitext into an equal number of segments and to align the segments so that each pair of segments Si and Ti are translations of each other (Gale &amp; Church, 1991; Melamed, 1996a). The</context>
+</contexts>
+<marker>Fung, 1995</marker>
+<rawString>P. Fung, &amp;quot;A Pattern Matching Method for Finding Noun and Proper Noun Translations from Noisy Parallel Corpora,&amp;quot; Proceedings of the 33rd Annual Meeting of the Association for Computational Linguistics, Boston, MA, 1995b.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W Gale</author>
+<author>K W Church</author>
+</authors>
+<title>A Program for Aligning Sentences in Bilingual Corpora&amp;quot;</title>
+<date>1991</date>
+<booktitle>Proceedings of the 29th Annual Meeting of the Association for Computational Linguistics,</booktitle>
+<location>Berkeley, CA,</location>
+<contexts>
+<context position="1904" citStr="Gale &amp; Church, 1991" startWordPosition="279" endWordPosition="282">reasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-lingual information retrieval (Oard &amp; Dorr, 1996). In this paper, we present a fast method for inducing accurate translation lexicons. The method assumes that words are translated one-to-one. This assumption reduces the explanatory power of our model in comparison to the IBM models, but, as shown in Section 3.1, it helps us to avoid what we call indirect associations, a major source of errors in other models. Section 3.1 also shows how the oneto-one assumption enables us to use a new greedy competitive linking al</context>
+<context position="3199" citStr="Gale &amp; Church, 1991" startWordPosition="479" endWordPosition="482">algorithms that consider a much larger set of word correspondence possibilities. The model uses two hidden parameters to estimate the confidence of its own predictions. The confidence estimates enable direct control of the balance between the model&apos;s precision and recall via a simple threshold. The hidden parameters can be conditioned on prior knowledge about the bitext to improve the model&apos;s accuracy. 2 Co-occurrence With the exception of (Fung, 1995b), previous methods for automatically constructing statistical translation models begin by looking at word cooccurrence frequencies in bitexts (Gale &amp; Church, 1991; Kumano &amp; Hirakawa, 1994; Fung, 1995a; Melamed, 1995). A bitext comprises a pair of texts in two languages, where each text is a translation of the other. Word co-occurrence can be defined in various ways. The most common way is to divide each half of the bitext into an equal number of segments and to align the segments so that each pair of segments Si and Ti are translations of each other (Gale &amp; Church, 1991; Melamed, 1996a). Then, two word tokens (u, v) are said to co-occur in the 490 aligned segment pair i if u E Si and v E T. The co-occurrence relation can also be based on distance in a </context>
+<context position="5969" citStr="Gale &amp; Church, 1991" startWordPosition="950" endWordPosition="953">ces of u&apos;s and v&apos;s represent corresponding regions of a bitext. If uk and vk co-occur much more often than expected by chance, then any reasonable model will deem them likely to be mutual translations. If uk and vk are indeed mutual translations, then their tendency to &apos;The co-occurrence frequency of a word type pair is simply the number of times the pair co-occurs in the corpus. However, n(u) = Ev n(u,v), which is not the same as the frequency of u, because each token of u can co-occur with several differentv&apos;s. 2We could just as easily use other symmetric &amp;quot;association&amp;quot; measures, such as 02 (Gale &amp; Church, 1991) or the Dice coefficient (Smadja, 1992). • • 46-0&amp;quot;&apos; 1-k+1 • s&amp;quot; • • V k-1 V k Vk+1 • • • Figure 1: uk and vk often co-occur, as do uk and uk+1. The direct association between uk and vk, and the direct association between uk and uk+i give rise to an indirect association between vk and uk+1. co-occur is called a direct association. Now, suppose that uk and uk±i often co-occur within their language. Then vk and uk+i will also co-occur more often than expected by chance. The arrow connecting vk and uk±i in Figure 1 represents an indirect association, since the association between vk and uk±i arises</context>
+<context position="16749" citStr="Gale &amp; Church, 1991" startWordPosition="2853" endWordPosition="2856">on method does not change; it is just repeated for each link class. 5 Evaluation A word-to-word model of translational equivalence can be evaluated either over types or over tokens. It is impossible to replicate the experiments used to evaluate other translation models in the literature, because neither the models nor the programs that induce them are generally available. For each kind of evaluation, we have found one case where we can come close. We induced a two-class word-to-word model of translational equivalence from 13 million words of the Canadian Hansards, aligned using the method in (Gale &amp; Church, 1991). One class represented content-word links and the other represented function-word links4. Link types with negative log-likelihood were discarded after each iteration. Both classes&apos; parameters converged after six iterations. The value of class-based models was demonstrated by the differences between the hidden parameters for the two classes. (),)c) converged at (.78,.00016) for content-class links and at (.43,.000094) for function-class links. 5.1 Link Types The most direct way to evaluate the link types in a word-level model of translational equivalence is to treat each link type as a candida</context>
+<context position="19939" citStr="Gale &amp; Church, 1991" startWordPosition="3357" endWordPosition="3360">h some have tried, it is not clear how to extract such accurate lexicons from other published translation models. Part of the difficulty stems from the implicit assumption in other models that each word has only one sense. Each word is assigned the same unit of probability mass, which the model distributes over all candidate translations. The correct translations of a word that has several correct translations will be assigned a lower probability than the correct translation of a word that has only one correct translation. This imbalance foils thresholding strategies, clever as they might be (Gale &amp; Church, 1991; Wu &amp; Xia, 1994; Chen, 1996). The likelihoods in the word-to-word model remain unnormalized, so they do not compete. The word-to-word model maintains high precision even given much less training data. Resnik &amp; Melamed (1997) report that the model produced (99.2%) incomplete = correct (92.8%) (91.6%) -.1(89:F%) 100 98 96 94 92 zfi, 90 88 86 84 36 46 90 incomplete = incorrect-----1(86.8%) 494 translation lexicons with 94% precision and 30% recall, when trained on French/English software manuals totaling about 400,000 words. The model was also used to induce a translation lexicon from a 6200-wor</context>
+</contexts>
+<marker>Gale, Church, 1991</marker>
+<rawString>W. Gale &amp; K. W. Church, &amp;quot;A Program for Aligning Sentences in Bilingual Corpora&amp;quot; Proceedings of the 29th Annual Meeting of the Association for Computational Linguistics, Berkeley, CA, 1991.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W Gale</author>
+<author>K W Church</author>
+</authors>
+<title>Identifying Word Correspondences in Parallel Texts,&amp;quot;</title>
+<date>1991</date>
+<booktitle>Proceedings of the DARPA SNL Workshop,</booktitle>
+<contexts>
+<context position="1904" citStr="Gale &amp; Church, 1991" startWordPosition="279" endWordPosition="282">reasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-lingual information retrieval (Oard &amp; Dorr, 1996). In this paper, we present a fast method for inducing accurate translation lexicons. The method assumes that words are translated one-to-one. This assumption reduces the explanatory power of our model in comparison to the IBM models, but, as shown in Section 3.1, it helps us to avoid what we call indirect associations, a major source of errors in other models. Section 3.1 also shows how the oneto-one assumption enables us to use a new greedy competitive linking al</context>
+<context position="3199" citStr="Gale &amp; Church, 1991" startWordPosition="479" endWordPosition="482">algorithms that consider a much larger set of word correspondence possibilities. The model uses two hidden parameters to estimate the confidence of its own predictions. The confidence estimates enable direct control of the balance between the model&apos;s precision and recall via a simple threshold. The hidden parameters can be conditioned on prior knowledge about the bitext to improve the model&apos;s accuracy. 2 Co-occurrence With the exception of (Fung, 1995b), previous methods for automatically constructing statistical translation models begin by looking at word cooccurrence frequencies in bitexts (Gale &amp; Church, 1991; Kumano &amp; Hirakawa, 1994; Fung, 1995a; Melamed, 1995). A bitext comprises a pair of texts in two languages, where each text is a translation of the other. Word co-occurrence can be defined in various ways. The most common way is to divide each half of the bitext into an equal number of segments and to align the segments so that each pair of segments Si and Ti are translations of each other (Gale &amp; Church, 1991; Melamed, 1996a). Then, two word tokens (u, v) are said to co-occur in the 490 aligned segment pair i if u E Si and v E T. The co-occurrence relation can also be based on distance in a </context>
+<context position="5969" citStr="Gale &amp; Church, 1991" startWordPosition="950" endWordPosition="953">ces of u&apos;s and v&apos;s represent corresponding regions of a bitext. If uk and vk co-occur much more often than expected by chance, then any reasonable model will deem them likely to be mutual translations. If uk and vk are indeed mutual translations, then their tendency to &apos;The co-occurrence frequency of a word type pair is simply the number of times the pair co-occurs in the corpus. However, n(u) = Ev n(u,v), which is not the same as the frequency of u, because each token of u can co-occur with several differentv&apos;s. 2We could just as easily use other symmetric &amp;quot;association&amp;quot; measures, such as 02 (Gale &amp; Church, 1991) or the Dice coefficient (Smadja, 1992). • • 46-0&amp;quot;&apos; 1-k+1 • s&amp;quot; • • V k-1 V k Vk+1 • • • Figure 1: uk and vk often co-occur, as do uk and uk+1. The direct association between uk and vk, and the direct association between uk and uk+i give rise to an indirect association between vk and uk+1. co-occur is called a direct association. Now, suppose that uk and uk±i often co-occur within their language. Then vk and uk+i will also co-occur more often than expected by chance. The arrow connecting vk and uk±i in Figure 1 represents an indirect association, since the association between vk and uk±i arises</context>
+<context position="16749" citStr="Gale &amp; Church, 1991" startWordPosition="2853" endWordPosition="2856">on method does not change; it is just repeated for each link class. 5 Evaluation A word-to-word model of translational equivalence can be evaluated either over types or over tokens. It is impossible to replicate the experiments used to evaluate other translation models in the literature, because neither the models nor the programs that induce them are generally available. For each kind of evaluation, we have found one case where we can come close. We induced a two-class word-to-word model of translational equivalence from 13 million words of the Canadian Hansards, aligned using the method in (Gale &amp; Church, 1991). One class represented content-word links and the other represented function-word links4. Link types with negative log-likelihood were discarded after each iteration. Both classes&apos; parameters converged after six iterations. The value of class-based models was demonstrated by the differences between the hidden parameters for the two classes. (),)c) converged at (.78,.00016) for content-class links and at (.43,.000094) for function-class links. 5.1 Link Types The most direct way to evaluate the link types in a word-level model of translational equivalence is to treat each link type as a candida</context>
+<context position="19939" citStr="Gale &amp; Church, 1991" startWordPosition="3357" endWordPosition="3360">h some have tried, it is not clear how to extract such accurate lexicons from other published translation models. Part of the difficulty stems from the implicit assumption in other models that each word has only one sense. Each word is assigned the same unit of probability mass, which the model distributes over all candidate translations. The correct translations of a word that has several correct translations will be assigned a lower probability than the correct translation of a word that has only one correct translation. This imbalance foils thresholding strategies, clever as they might be (Gale &amp; Church, 1991; Wu &amp; Xia, 1994; Chen, 1996). The likelihoods in the word-to-word model remain unnormalized, so they do not compete. The word-to-word model maintains high precision even given much less training data. Resnik &amp; Melamed (1997) report that the model produced (99.2%) incomplete = correct (92.8%) (91.6%) -.1(89:F%) 100 98 96 94 92 zfi, 90 88 86 84 36 46 90 incomplete = incorrect-----1(86.8%) 494 translation lexicons with 94% precision and 30% recall, when trained on French/English software manuals totaling about 400,000 words. The model was also used to induce a translation lexicon from a 6200-wor</context>
+</contexts>
+<marker>Gale, Church, 1991</marker>
+<rawString>W. Gale &amp; K. W. Church, &amp;quot;Identifying Word Correspondences in Parallel Texts,&amp;quot; Proceedings of the DARPA SNL Workshop, 1991.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Kumano</author>
+<author>H Hiralcawa</author>
+</authors>
+<title>Building an MT Dictionary from Parallel Texts Based on Linguistic and Statistical Information,&amp;quot;</title>
+<date>1994</date>
+<booktitle>Proceedings of the 15th International Conference on Computational Linguistics, Kyoto,</booktitle>
+<marker>Kumano, Hiralcawa, 1994</marker>
+<rawString>A. Kumano &amp; H. Hiralcawa, &amp;quot;Building an MT Dictionary from Parallel Texts Based on Linguistic and Statistical Information,&amp;quot; Proceedings of the 15th International Conference on Computational Linguistics, Kyoto, Japan, 1994.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Macklovitch</author>
+</authors>
+<title>Using Bi-textual Alignment for Translation Validation: The TransCheck System,&amp;quot;</title>
+<date>1994</date>
+<booktitle>Proceedings of the 1st Conference of the Association for Machine Translation in the Americas,</booktitle>
+<location>Columbia, MD,</location>
+<contexts>
+<context position="1799" citStr="Macklovitch, 1994" startWordPosition="267" endWordPosition="268">r 99% accuracy. 1 Introduction Over the past decade, researchers at IBM have developed a series of increasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-lingual information retrieval (Oard &amp; Dorr, 1996). In this paper, we present a fast method for inducing accurate translation lexicons. The method assumes that words are translated one-to-one. This assumption reduces the explanatory power of our model in comparison to the IBM models, but, as shown in Section 3.1, it helps us to avoid what we call indirect associations, a major source of errors in other models. </context>
+</contexts>
+<marker>Macklovitch, 1994</marker>
+<rawString>E. Macklovitch &amp;quot;Using Bi-textual Alignment for Translation Validation: The TransCheck System,&amp;quot; Proceedings of the 1st Conference of the Association for Machine Translation in the Americas, Columbia, MD, 1994.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Macklovitch</author>
+<author>M-L Hannan</author>
+</authors>
+<title>Line &apos;Em Up: Advances in Alignment Technology and their Impact on Translation Support Tools,&amp;quot;</title>
+<date>1996</date>
+<booktitle>2nd Conference of the Association for Machine Translation in the Americas,</booktitle>
+<location>Montreal, Canada,</location>
+<contexts>
+<context position="21298" citStr="Macklovitch &amp; Hannan, 1996" startWordPosition="3586" endWordPosition="3589">bitext accounted for 30% of the word types with precision between 84% and 90%. Recall drops when there is less training data, because the model refuses to make predictions that it cannot make with confidence. For many applications, this is the desired behavior. 5.2 Link Tokens type of error errors made by errors made IBM Model 2 by our model wrong link 32 7 missing link 12 36 partial link 7 10 class conflict — 5 tokenization 3 2 paraphrase 39 36 TOTAL 93 96 Table 1: Erroneous link tokens generated by two translation models. The most detailed evaluation of link tokens to date was performed by (Macklovitch &amp; Hannan, 1996), who trained Brown et al.&apos;s Model 2 on 74 million words of the Canadian Hansards. These authors kindly provided us with the links generated by that model in 51 aligned sentences from a heldout test set. We generated links in the same 51 sentences using our two-class word-to-word model, and manually evaluated the content-word links from both models. The IBM models are directional; i.e. they posit the English words that gave rise to each French word, but ignore the distribution of the English words. Therefore, we ignored English words that were linked to nothing. The errors are classified in Ta</context>
+</contexts>
+<marker>Macklovitch, Hannan, 1996</marker>
+<rawString>E. Macklovitch &amp; M.-L. Hannan, &amp;quot;Line &apos;Em Up: Advances in Alignment Technology and their Impact on Translation Support Tools,&amp;quot; 2nd Conference of the Association for Machine Translation in the Americas, Montreal, Canada, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I D Melamed</author>
+</authors>
+<title>Automatic Evaluation and Uniform Filter Cascades for Inducing N-best Translation Lexicons,&amp;quot;</title>
+<date>1995</date>
+<booktitle>Proceedings of the Third Workshop on Very Large Corpora,</booktitle>
+<location>Boston, MA,</location>
+<contexts>
+<context position="3253" citStr="Melamed, 1995" startWordPosition="489" endWordPosition="490">ndence possibilities. The model uses two hidden parameters to estimate the confidence of its own predictions. The confidence estimates enable direct control of the balance between the model&apos;s precision and recall via a simple threshold. The hidden parameters can be conditioned on prior knowledge about the bitext to improve the model&apos;s accuracy. 2 Co-occurrence With the exception of (Fung, 1995b), previous methods for automatically constructing statistical translation models begin by looking at word cooccurrence frequencies in bitexts (Gale &amp; Church, 1991; Kumano &amp; Hirakawa, 1994; Fung, 1995a; Melamed, 1995). A bitext comprises a pair of texts in two languages, where each text is a translation of the other. Word co-occurrence can be defined in various ways. The most common way is to divide each half of the bitext into an equal number of segments and to align the segments so that each pair of segments Si and Ti are translations of each other (Gale &amp; Church, 1991; Melamed, 1996a). Then, two word tokens (u, v) are said to co-occur in the 490 aligned segment pair i if u E Si and v E T. The co-occurrence relation can also be based on distance in a bitext space, which is a more general representations </context>
+</contexts>
+<marker>Melamed, 1995</marker>
+<rawString>I. D. Melamed &amp;quot;Automatic Evaluation and Uniform Filter Cascades for Inducing N-best Translation Lexicons,&amp;quot; Proceedings of the Third Workshop on Very Large Corpora, Boston, MA, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I D Melamed</author>
+</authors>
+<title>A Geometric Approach to Mapping Bitext Correspondence,&amp;quot;</title>
+<date>1996</date>
+<booktitle>Proceedings of the First Conference on Empirical Methods in Natural Language Processing,</booktitle>
+<location>Philadelphia, PA,</location>
+<contexts>
+<context position="1814" citStr="Melamed, 1996" startWordPosition="269" endWordPosition="270">ntroduction Over the past decade, researchers at IBM have developed a series of increasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-lingual information retrieval (Oard &amp; Dorr, 1996). In this paper, we present a fast method for inducing accurate translation lexicons. The method assumes that words are translated one-to-one. This assumption reduces the explanatory power of our model in comparison to the IBM models, but, as shown in Section 3.1, it helps us to avoid what we call indirect associations, a major source of errors in other models. Section 3.1 als</context>
+<context position="3628" citStr="Melamed, 1996" startWordPosition="560" endWordPosition="561">ption of (Fung, 1995b), previous methods for automatically constructing statistical translation models begin by looking at word cooccurrence frequencies in bitexts (Gale &amp; Church, 1991; Kumano &amp; Hirakawa, 1994; Fung, 1995a; Melamed, 1995). A bitext comprises a pair of texts in two languages, where each text is a translation of the other. Word co-occurrence can be defined in various ways. The most common way is to divide each half of the bitext into an equal number of segments and to align the segments so that each pair of segments Si and Ti are translations of each other (Gale &amp; Church, 1991; Melamed, 1996a). Then, two word tokens (u, v) are said to co-occur in the 490 aligned segment pair i if u E Si and v E T. The co-occurrence relation can also be based on distance in a bitext space, which is a more general representations of bitext correspondence (Dagan et al., 1993; Resnik &amp; Melamed, 1997), or it can be restricted to words pairs that satisfy some matching predicate, which can be extrinsic to the model (Melamed, 1995; Melamed, 1997). 3 The Basic Word-to-Word Model Our translation model consists of the hidden parameters A+ and )c, and likelihood ratios L(u, v). The two hidden parameters are </context>
+<context position="6958" citStr="Melamed, 1996" startWordPosition="1127" endWordPosition="1128">within their language. Then vk and uk+i will also co-occur more often than expected by chance. The arrow connecting vk and uk±i in Figure 1 represents an indirect association, since the association between vk and uk±i arises only by virtue of the association between each of them and uk . Models of translational equivalence that are ignorant of indirect associations have &amp;quot;a tendency ... to be confused by collocates&amp;quot; (Dagan et al., 1993). Fortunately, indirect associations are usually not difficult to identify, because they tend to be weaker than the direct associations on which they are based (Melamed, 1996c). The majority of indirect associations can be filtered out by a simple competition heuristic: Whenever several word tokens ui in one half of the bitext co-occur with a particular word token v in the other half of the bitext, the word that is most likely to be v&apos;s translation is the one for which the likelihood L(u, v) of translational equivalence is highest. The competitive linking algorithm implements this heuristic: 1. Discard all likelihood scores for word types deemed unlikely to be mutual translations, i.e. all L(u, v) &lt; 1. This step significantly reduces the computational burden of th</context>
+</contexts>
+<marker>Melamed, 1996</marker>
+<rawString>I. D. Melamed, &amp;quot;A Geometric Approach to Mapping Bitext Correspondence,&amp;quot; Proceedings of the First Conference on Empirical Methods in Natural Language Processing, Philadelphia, PA, 1996a.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I D</author>
+</authors>
+<title>Melamed &amp;quot;Automatic Detection of Omissions in Translations,&amp;quot;</title>
+<date>1996</date>
+<booktitle>Proceedings of the 16th International Conference on Computational Linguistics,</booktitle>
+<location>Copenhagen, Denmark,</location>
+<marker>D, 1996</marker>
+<rawString>I. D. Melamed &amp;quot;Automatic Detection of Omissions in Translations,&amp;quot; Proceedings of the 16th International Conference on Computational Linguistics, Copenhagen, Denmark, 1996b.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I D Melamed</author>
+</authors>
+<title>Automatic Construction of Clean Broad-Coverage Translation Lexicons,&amp;quot;</title>
+<date>1996</date>
+<booktitle>2nd Conference of the Association for Machine Translation in the Americas,</booktitle>
+<location>Montreal, Canada,</location>
+<contexts>
+<context position="1814" citStr="Melamed, 1996" startWordPosition="269" endWordPosition="270">ntroduction Over the past decade, researchers at IBM have developed a series of increasingly sophisticated statistical models for machine translation (Brown et al., 1988; Brown et al., 1990; Brown et al., 1993a). However, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-lingual information retrieval (Oard &amp; Dorr, 1996). In this paper, we present a fast method for inducing accurate translation lexicons. The method assumes that words are translated one-to-one. This assumption reduces the explanatory power of our model in comparison to the IBM models, but, as shown in Section 3.1, it helps us to avoid what we call indirect associations, a major source of errors in other models. Section 3.1 als</context>
+<context position="3628" citStr="Melamed, 1996" startWordPosition="560" endWordPosition="561">ption of (Fung, 1995b), previous methods for automatically constructing statistical translation models begin by looking at word cooccurrence frequencies in bitexts (Gale &amp; Church, 1991; Kumano &amp; Hirakawa, 1994; Fung, 1995a; Melamed, 1995). A bitext comprises a pair of texts in two languages, where each text is a translation of the other. Word co-occurrence can be defined in various ways. The most common way is to divide each half of the bitext into an equal number of segments and to align the segments so that each pair of segments Si and Ti are translations of each other (Gale &amp; Church, 1991; Melamed, 1996a). Then, two word tokens (u, v) are said to co-occur in the 490 aligned segment pair i if u E Si and v E T. The co-occurrence relation can also be based on distance in a bitext space, which is a more general representations of bitext correspondence (Dagan et al., 1993; Resnik &amp; Melamed, 1997), or it can be restricted to words pairs that satisfy some matching predicate, which can be extrinsic to the model (Melamed, 1995; Melamed, 1997). 3 The Basic Word-to-Word Model Our translation model consists of the hidden parameters A+ and )c, and likelihood ratios L(u, v). The two hidden parameters are </context>
+<context position="6958" citStr="Melamed, 1996" startWordPosition="1127" endWordPosition="1128">within their language. Then vk and uk+i will also co-occur more often than expected by chance. The arrow connecting vk and uk±i in Figure 1 represents an indirect association, since the association between vk and uk±i arises only by virtue of the association between each of them and uk . Models of translational equivalence that are ignorant of indirect associations have &amp;quot;a tendency ... to be confused by collocates&amp;quot; (Dagan et al., 1993). Fortunately, indirect associations are usually not difficult to identify, because they tend to be weaker than the direct associations on which they are based (Melamed, 1996c). The majority of indirect associations can be filtered out by a simple competition heuristic: Whenever several word tokens ui in one half of the bitext co-occur with a particular word token v in the other half of the bitext, the word that is most likely to be v&apos;s translation is the one for which the likelihood L(u, v) of translational equivalence is highest. The competitive linking algorithm implements this heuristic: 1. Discard all likelihood scores for word types deemed unlikely to be mutual translations, i.e. all L(u, v) &lt; 1. This step significantly reduces the computational burden of th</context>
+</contexts>
+<marker>Melamed, 1996</marker>
+<rawString>I. D Melamed, &amp;quot;Automatic Construction of Clean Broad-Coverage Translation Lexicons,&amp;quot; 2nd Conference of the Association for Machine Translation in the Americas, Montreal, Canada, 1996c.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I D Melamed</author>
+</authors>
+<title>Measuring Semantic Entropy,&amp;quot;</title>
+<date>1997</date>
+<booktitle>Proceedings of the SIGLEX Workshop on Tagging Text with Lexical Semantics,</booktitle>
+<location>Washington, DC,</location>
+<contexts>
+<context position="3922" citStr="Melamed, 1997" startWordPosition="616" endWordPosition="617">where each text is a translation of the other. Word co-occurrence can be defined in various ways. The most common way is to divide each half of the bitext into an equal number of segments and to align the segments so that each pair of segments Si and Ti are translations of each other (Gale &amp; Church, 1991; Melamed, 1996a). Then, two word tokens (u, v) are said to co-occur in the 490 aligned segment pair i if u E Si and v E T. The co-occurrence relation can also be based on distance in a bitext space, which is a more general representations of bitext correspondence (Dagan et al., 1993; Resnik &amp; Melamed, 1997), or it can be restricted to words pairs that satisfy some matching predicate, which can be extrinsic to the model (Melamed, 1995; Melamed, 1997). 3 The Basic Word-to-Word Model Our translation model consists of the hidden parameters A+ and )c, and likelihood ratios L(u, v). The two hidden parameters are the probabilities of the model generating true and false positives in the data. L(u, v) represents the likelihood that u and v can be mutual translations. For each co-occurring pair of word types u and v, these likelihoods are initially set proportional to their co-occurrence frequency („,v) a</context>
+<context position="15413" citStr="Melamed, 1997" startWordPosition="2636" endWordPosition="2637">links, respectively, out of n(„,,v) co-occurrences. The ratio of these probabilities is the likelihood ratio in favor of u and v being mutual translations, for all u and v: L(u, v) - B (ku&apos;,Inu&apos; , A+) (6) B(ku,vin„,v, A-) • 4 Class-Based Word-to-Word Models In the basic word-to-word model, the hidden parameters A+ and A- depend only on the distributions of link frequencies generated by the competitive linking algorithm. More accurate models can be induced by taking into account various features of the linked tokens. For example, frequent words are translated less consistently than rare words (Melamed, 1997). To account for this difference, we can estimate separate values of A+ and A- for different ranges of n(„,v). Similarly, the hidden parameters can be conditioned on the linked parts of speech. Word order can be taken into account by conditioning the hidden parameters on the relative positions of linked word tokens in their respective sentences. Just as easily, we can model links that coincide with entries in a pre-existing translation lexicon separately 493 from those that do not. This method of incorporating dictionary information seems simpler than the method proposed by Brown et al. for th</context>
+<context position="17748" citStr="Melamed, 1997" startWordPosition="3003" endWordPosition="3004">ent-class links and at (.43,.000094) for function-class links. 5.1 Link Types The most direct way to evaluate the link types in a word-level model of translational equivalence is to treat each link type as a candidate translation lexicon entry, and to measure precision and recall. This evaluation criterion carries much practical import, because many of the applications mentioned in Section 1 depend on accurate broad-coverage translation lexicons. Machine readable bilingual dictionaries, even when they are available, have only limited coverage and rarely include domain-specific terms (Resnik &amp; Melamed, 1997). We define the recall of a word-to-word translation model as the fraction of the bitext vocabulary represented in the model. Translation model precision is a more thorny issue, because people disagree about the degree to which context should play a role in judgements of translational equivalence. We handevaluated the precision of the link types in our model in the context of the bitext from which the model 4Since function words can be identified by table lookup, no POS-tagger was involved. was induced, using a simple bilingual concordancer. A link type (u, v) was considered correct if u and v</context>
+<context position="20164" citStr="Melamed (1997)" startWordPosition="3395" endWordPosition="3396">rd is assigned the same unit of probability mass, which the model distributes over all candidate translations. The correct translations of a word that has several correct translations will be assigned a lower probability than the correct translation of a word that has only one correct translation. This imbalance foils thresholding strategies, clever as they might be (Gale &amp; Church, 1991; Wu &amp; Xia, 1994; Chen, 1996). The likelihoods in the word-to-word model remain unnormalized, so they do not compete. The word-to-word model maintains high precision even given much less training data. Resnik &amp; Melamed (1997) report that the model produced (99.2%) incomplete = correct (92.8%) (91.6%) -.1(89:F%) 100 98 96 94 92 zfi, 90 88 86 84 36 46 90 incomplete = incorrect-----1(86.8%) 494 translation lexicons with 94% precision and 30% recall, when trained on French/English software manuals totaling about 400,000 words. The model was also used to induce a translation lexicon from a 6200-word corpus of French/English weather reports. Nasr (1997) reported that the translation lexicon that our model induced from this tiny bitext accounted for 30% of the word types with precision between 84% and 90%. Recall drops w</context>
+<context position="27038" citStr="Melamed, 1997" startWordPosition="4523" endWordPosition="4524">s and function words. This relatively simple two-class model linked word tokens in parallel texts as accurately as other translation models in the literature, despite being trained on only one fifth as much data. Unlike other translation models, the word-to-word model can automatically produce dictionary-sized translation lexicons, and it can do so with over 99% accuracy. Even better accuracy can be achieved with a more fine-grained link class structure. Promising features for classification include part of speech, frequency of co-occurrence, relative word position, and translational entropy (Melamed, 1997). Another interesting extension is to broaden the definition of a &amp;quot;word&amp;quot; to include multi-word lexical units (Smadja, 1992). If such units can be identified a priori, their translations can be estimated without modifying the word-to-word model. In this manner, the model can account for a wider range of translation phenomena. Acknowledgements The French/English software manuals were provided by Gary Adams of Sun MicroSystems Laboratories. The weather bitext was prepared at the University of Montreal, under the direction of Richard Kittredge. Thanks to Alexis Nasr for hand-evaluating the weather</context>
+</contexts>
+<marker>Melamed, 1997</marker>
+<rawString>I. D. Melamed, &amp;quot;Measuring Semantic Entropy,&amp;quot; Proceedings of the SIGLEX Workshop on Tagging Text with Lexical Semantics, Washington, DC, 1997.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I D Melamed</author>
+</authors>
+<title>A Portable Algorithm for Mapping Bitext Correspondence,&amp;quot;</title>
+<date>1997</date>
+<booktitle>Proceedings of the 35th Conference of the Association for Computational Linguistics,</booktitle>
+<location>Madrid,</location>
+<note>(in this volume)</note>
+<contexts>
+<context position="3922" citStr="Melamed, 1997" startWordPosition="616" endWordPosition="617">where each text is a translation of the other. Word co-occurrence can be defined in various ways. The most common way is to divide each half of the bitext into an equal number of segments and to align the segments so that each pair of segments Si and Ti are translations of each other (Gale &amp; Church, 1991; Melamed, 1996a). Then, two word tokens (u, v) are said to co-occur in the 490 aligned segment pair i if u E Si and v E T. The co-occurrence relation can also be based on distance in a bitext space, which is a more general representations of bitext correspondence (Dagan et al., 1993; Resnik &amp; Melamed, 1997), or it can be restricted to words pairs that satisfy some matching predicate, which can be extrinsic to the model (Melamed, 1995; Melamed, 1997). 3 The Basic Word-to-Word Model Our translation model consists of the hidden parameters A+ and )c, and likelihood ratios L(u, v). The two hidden parameters are the probabilities of the model generating true and false positives in the data. L(u, v) represents the likelihood that u and v can be mutual translations. For each co-occurring pair of word types u and v, these likelihoods are initially set proportional to their co-occurrence frequency („,v) a</context>
+<context position="15413" citStr="Melamed, 1997" startWordPosition="2636" endWordPosition="2637">links, respectively, out of n(„,,v) co-occurrences. The ratio of these probabilities is the likelihood ratio in favor of u and v being mutual translations, for all u and v: L(u, v) - B (ku&apos;,Inu&apos; , A+) (6) B(ku,vin„,v, A-) • 4 Class-Based Word-to-Word Models In the basic word-to-word model, the hidden parameters A+ and A- depend only on the distributions of link frequencies generated by the competitive linking algorithm. More accurate models can be induced by taking into account various features of the linked tokens. For example, frequent words are translated less consistently than rare words (Melamed, 1997). To account for this difference, we can estimate separate values of A+ and A- for different ranges of n(„,v). Similarly, the hidden parameters can be conditioned on the linked parts of speech. Word order can be taken into account by conditioning the hidden parameters on the relative positions of linked word tokens in their respective sentences. Just as easily, we can model links that coincide with entries in a pre-existing translation lexicon separately 493 from those that do not. This method of incorporating dictionary information seems simpler than the method proposed by Brown et al. for th</context>
+<context position="17748" citStr="Melamed, 1997" startWordPosition="3003" endWordPosition="3004">ent-class links and at (.43,.000094) for function-class links. 5.1 Link Types The most direct way to evaluate the link types in a word-level model of translational equivalence is to treat each link type as a candidate translation lexicon entry, and to measure precision and recall. This evaluation criterion carries much practical import, because many of the applications mentioned in Section 1 depend on accurate broad-coverage translation lexicons. Machine readable bilingual dictionaries, even when they are available, have only limited coverage and rarely include domain-specific terms (Resnik &amp; Melamed, 1997). We define the recall of a word-to-word translation model as the fraction of the bitext vocabulary represented in the model. Translation model precision is a more thorny issue, because people disagree about the degree to which context should play a role in judgements of translational equivalence. We handevaluated the precision of the link types in our model in the context of the bitext from which the model 4Since function words can be identified by table lookup, no POS-tagger was involved. was induced, using a simple bilingual concordancer. A link type (u, v) was considered correct if u and v</context>
+<context position="20164" citStr="Melamed (1997)" startWordPosition="3395" endWordPosition="3396">rd is assigned the same unit of probability mass, which the model distributes over all candidate translations. The correct translations of a word that has several correct translations will be assigned a lower probability than the correct translation of a word that has only one correct translation. This imbalance foils thresholding strategies, clever as they might be (Gale &amp; Church, 1991; Wu &amp; Xia, 1994; Chen, 1996). The likelihoods in the word-to-word model remain unnormalized, so they do not compete. The word-to-word model maintains high precision even given much less training data. Resnik &amp; Melamed (1997) report that the model produced (99.2%) incomplete = correct (92.8%) (91.6%) -.1(89:F%) 100 98 96 94 92 zfi, 90 88 86 84 36 46 90 incomplete = incorrect-----1(86.8%) 494 translation lexicons with 94% precision and 30% recall, when trained on French/English software manuals totaling about 400,000 words. The model was also used to induce a translation lexicon from a 6200-word corpus of French/English weather reports. Nasr (1997) reported that the translation lexicon that our model induced from this tiny bitext accounted for 30% of the word types with precision between 84% and 90%. Recall drops w</context>
+<context position="27038" citStr="Melamed, 1997" startWordPosition="4523" endWordPosition="4524">s and function words. This relatively simple two-class model linked word tokens in parallel texts as accurately as other translation models in the literature, despite being trained on only one fifth as much data. Unlike other translation models, the word-to-word model can automatically produce dictionary-sized translation lexicons, and it can do so with over 99% accuracy. Even better accuracy can be achieved with a more fine-grained link class structure. Promising features for classification include part of speech, frequency of co-occurrence, relative word position, and translational entropy (Melamed, 1997). Another interesting extension is to broaden the definition of a &amp;quot;word&amp;quot; to include multi-word lexical units (Smadja, 1992). If such units can be identified a priori, their translations can be estimated without modifying the word-to-word model. In this manner, the model can account for a wider range of translation phenomena. Acknowledgements The French/English software manuals were provided by Gary Adams of Sun MicroSystems Laboratories. The weather bitext was prepared at the University of Montreal, under the direction of Richard Kittredge. Thanks to Alexis Nasr for hand-evaluating the weather</context>
+</contexts>
+<marker>Melamed, 1997</marker>
+<rawString>I. D. Melamed, &amp;quot;A Portable Algorithm for Mapping Bitext Correspondence,&amp;quot; Proceedings of the 35th Conference of the Association for Computational Linguistics, Madrid, Spain, 1997. (in this volume)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A</author>
+</authors>
+<title>A Bilingual Concordance System and its Use in Linguistic Studies,&amp;quot;</title>
+<date>1981</date>
+<booktitle>Proceedings of the English LACUS Forum,</booktitle>
+<location>Columbia, SC,</location>
+<marker>A, 1981</marker>
+<rawString>A . Melby, &amp;quot;A Bilingual Concordance System and its Use in Linguistic Studies,&amp;quot; Proceedings of the English LACUS Forum, Columbia, SC, 1981.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>personal communication Nasr</author>
+</authors>
+<title>Semi-Automatic Acquisition of Domain-Specific Translation Lexicons,&amp;quot;</title>
+<date>1997</date>
+<booktitle>Proceedings of the 7th ACL Conference on Applied Natural Language Processing,</booktitle>
+<location>Washington, DC,</location>
+<contexts>
+<context position="20594" citStr="Nasr (1997)" startWordPosition="3465" endWordPosition="3466">ds in the word-to-word model remain unnormalized, so they do not compete. The word-to-word model maintains high precision even given much less training data. Resnik &amp; Melamed (1997) report that the model produced (99.2%) incomplete = correct (92.8%) (91.6%) -.1(89:F%) 100 98 96 94 92 zfi, 90 88 86 84 36 46 90 incomplete = incorrect-----1(86.8%) 494 translation lexicons with 94% precision and 30% recall, when trained on French/English software manuals totaling about 400,000 words. The model was also used to induce a translation lexicon from a 6200-word corpus of French/English weather reports. Nasr (1997) reported that the translation lexicon that our model induced from this tiny bitext accounted for 30% of the word types with precision between 84% and 90%. Recall drops when there is less training data, because the model refuses to make predictions that it cannot make with confidence. For many applications, this is the desired behavior. 5.2 Link Tokens type of error errors made by errors made IBM Model 2 by our model wrong link 32 7 missing link 12 36 partial link 7 10 class conflict — 5 tokenization 3 2 paraphrase 39 36 TOTAL 93 96 Table 1: Erroneous link tokens generated by two translation m</context>
+</contexts>
+<marker>Nasr, 1997</marker>
+<rawString>A . Nasr, personal communication, 1997. P. Resnik &amp; I. D. Melamed, &amp;quot;Semi-Automatic Acquisition of Domain-Specific Translation Lexicons,&amp;quot; Proceedings of the 7th ACL Conference on Applied Natural Language Processing, Washington, DC, 1997.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W Oard</author>
+<author>B J Dorr</author>
+</authors>
+<title>A Survey of Multilingual Text Retrieval,</title>
+<date>1996</date>
+<tech>UMIACS TR-96-19,</tech>
+<institution>University of Maryland,</institution>
+<location>College Park, MD,</location>
+<contexts>
+<context position="2035" citStr="Oard &amp; Dorr, 1996" startWordPosition="295" endWordPosition="298">ever, the IBM models, which attempt to capture a broad range of translation phenomena, are computationally expensive to apply. Table look-up using an explicit translation lexicon is sufficient and preferable for many multilingual NLP applications, including &amp;quot;crummy&amp;quot; MT on the World Wide Web (Church &amp; Hovy, 1993), certain machine-assisted translation tools (e.g. (Macklovitch, 1994; Melamed, 1996b)), concordancing for bilingual lexicography (Catizone et al., 1993; Gale &amp; Church, 1991), computerassisted language learning, corpus linguistics (Melby. 1981), and cross-lingual information retrieval (Oard &amp; Dorr, 1996). In this paper, we present a fast method for inducing accurate translation lexicons. The method assumes that words are translated one-to-one. This assumption reduces the explanatory power of our model in comparison to the IBM models, but, as shown in Section 3.1, it helps us to avoid what we call indirect associations, a major source of errors in other models. Section 3.1 also shows how the oneto-one assumption enables us to use a new greedy competitive linking algorithm for re-estimating the model&apos;s parameters, instead of more expensive algorithms that consider a much larger set of word corr</context>
+</contexts>
+<marker>Oard, Dorr, 1996</marker>
+<rawString>. W. Oard &amp; B. J. Dorr, &amp;quot;A Survey of Multilingual Text Retrieval, UMIACS TR-96-19, University of Maryland, College Park, MD, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F Smadja</author>
+</authors>
+<title>How to Compile a Bilingual Collocational Lexicon Automatically,&amp;quot;</title>
+<date>1992</date>
+<booktitle>Proceedings of the AAAI Workshop on Statistically-Based NLP Techniques,</booktitle>
+<contexts>
+<context position="6008" citStr="Smadja, 1992" startWordPosition="958" endWordPosition="959">ions of a bitext. If uk and vk co-occur much more often than expected by chance, then any reasonable model will deem them likely to be mutual translations. If uk and vk are indeed mutual translations, then their tendency to &apos;The co-occurrence frequency of a word type pair is simply the number of times the pair co-occurs in the corpus. However, n(u) = Ev n(u,v), which is not the same as the frequency of u, because each token of u can co-occur with several differentv&apos;s. 2We could just as easily use other symmetric &amp;quot;association&amp;quot; measures, such as 02 (Gale &amp; Church, 1991) or the Dice coefficient (Smadja, 1992). • • 46-0&amp;quot;&apos; 1-k+1 • s&amp;quot; • • V k-1 V k Vk+1 • • • Figure 1: uk and vk often co-occur, as do uk and uk+1. The direct association between uk and vk, and the direct association between uk and uk+i give rise to an indirect association between vk and uk+1. co-occur is called a direct association. Now, suppose that uk and uk±i often co-occur within their language. Then vk and uk+i will also co-occur more often than expected by chance. The arrow connecting vk and uk±i in Figure 1 represents an indirect association, since the association between vk and uk±i arises only by virtue of the association betw</context>
+<context position="27161" citStr="Smadja, 1992" startWordPosition="4542" endWordPosition="4543">nslation models in the literature, despite being trained on only one fifth as much data. Unlike other translation models, the word-to-word model can automatically produce dictionary-sized translation lexicons, and it can do so with over 99% accuracy. Even better accuracy can be achieved with a more fine-grained link class structure. Promising features for classification include part of speech, frequency of co-occurrence, relative word position, and translational entropy (Melamed, 1997). Another interesting extension is to broaden the definition of a &amp;quot;word&amp;quot; to include multi-word lexical units (Smadja, 1992). If such units can be identified a priori, their translations can be estimated without modifying the word-to-word model. In this manner, the model can account for a wider range of translation phenomena. Acknowledgements The French/English software manuals were provided by Gary Adams of Sun MicroSystems Laboratories. The weather bitext was prepared at the University of Montreal, under the direction of Richard Kittredge. Thanks to Alexis Nasr for hand-evaluating the weather translation lexicon. Thanks also to Mike Collins, George Foster, Mitch Marcus, Lyle Ungar, and three anonymous reviewers f</context>
+</contexts>
+<marker>Smadja, 1992</marker>
+<rawString>F. Smadja, &amp;quot;How to Compile a Bilingual Collocational Lexicon Automatically,&amp;quot; Proceedings of the AAAI Workshop on Statistically-Based NLP Techniques, 1992.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Wu</author>
+<author>X Xia</author>
+</authors>
+<title>Learning an English-Chinese Lexicon from a Parallel Corpus,&amp;quot;</title>
+<date>1994</date>
+<booktitle>Proceedings of the First Conference of the Association for Machine Translation in the Americas,</booktitle>
+<location>Columbia, MD,</location>
+<contexts>
+<context position="19955" citStr="Wu &amp; Xia, 1994" startWordPosition="3361" endWordPosition="3364"> is not clear how to extract such accurate lexicons from other published translation models. Part of the difficulty stems from the implicit assumption in other models that each word has only one sense. Each word is assigned the same unit of probability mass, which the model distributes over all candidate translations. The correct translations of a word that has several correct translations will be assigned a lower probability than the correct translation of a word that has only one correct translation. This imbalance foils thresholding strategies, clever as they might be (Gale &amp; Church, 1991; Wu &amp; Xia, 1994; Chen, 1996). The likelihoods in the word-to-word model remain unnormalized, so they do not compete. The word-to-word model maintains high precision even given much less training data. Resnik &amp; Melamed (1997) report that the model produced (99.2%) incomplete = correct (92.8%) (91.6%) -.1(89:F%) 100 98 96 94 92 zfi, 90 88 86 84 36 46 90 incomplete = incorrect-----1(86.8%) 494 translation lexicons with 94% precision and 30% recall, when trained on French/English software manuals totaling about 400,000 words. The model was also used to induce a translation lexicon from a 6200-word corpus of Fren</context>
+</contexts>
+<marker>Wu, Xia, 1994</marker>
+<rawString>. Wu &amp; X. Xia, &amp;quot;Learning an English-Chinese Lexicon from a Parallel Corpus,&amp;quot; Proceedings of the First Conference of the Association for Machine Translation in the Americas, Columbia, MD, 1994.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

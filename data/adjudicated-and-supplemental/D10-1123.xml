@@ -1,0 +1,1644 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.010688">
+<title confidence="0.987846">
+Identifying Functional Relations in Web Text
+</title>
+<author confidence="0.994082">
+Thomas Lin, Mausam, Oren Etzioni
+</author>
+<affiliation confidence="0.972286">
+Turing Center
+University of Washington
+</affiliation>
+<address confidence="0.757945">
+Seattle, WA 98195, USA
+</address>
+<email confidence="0.999739">
+{tlin,mausam,etzioni}@cs.washington.edu
+</email>
+<sectionHeader confidence="0.9986" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999628666666666">
+Determining whether a textual phrase denotes
+a functional relation (i.e., a relation that maps
+each domain element to a unique range el-
+ement) is useful for numerous NLP tasks
+such as synonym resolution and contradic-
+tion detection. Previous work on this prob-
+lem has relied on either counting methods or
+lexico-syntactic patterns. However, determin-
+ing whether a relation is functional, by ana-
+lyzing mentions of the relation in a corpus,
+is challenging due to ambiguity, synonymy,
+anaphora, and other linguistic phenomena.
+We present the LEIBNIZ system that over-
+comes these challenges by exploiting the syn-
+ergy between the Web corpus and freely-
+available knowledge resources such as Free-
+base. It first computes multiple typedfunction-
+ality scores, representing functionality of the
+relation phrase when its arguments are con-
+strained to specific types. It then aggregates
+these scores to predict the global functionality
+for the phrase. LEIBNIZ outperforms previ-
+ous work, increasing area under the precision-
+recall curve from 0.61 to 0.88. We utilize
+LEIBNIZ to generate the first public reposi-
+tory of automatically-identified functional re-
+lations.
+</bodyText>
+<sectionHeader confidence="0.999624" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999875827586207">
+The paradigm of Open Information Extraction (IE)
+(Banko et al., 2007; Banko and Etzioni, 2008) has
+scaled extraction technology to the massive set of
+relations expressed in Web text. However, additional
+work is needed to better understand these relations,
+and to place them in richer semantic structures. A
+step in that direction is identifying the properties of
+these relations, e.g., symmetry, transitivity and our
+focus in this paper – functionality. We refer to this
+problem as functionality identi�cation.
+A binary relation is functional if, for a given arg1,
+there is exactly one unique value for arg2. Exam-
+ples of functional relations are father, death date,
+birth city, etc. We define a relation phrase to be
+functional if all semantic relations commonly ex-
+pressed by that phrase are functional. For exam-
+ple, we say that the phrase ‘was born in’ denotes
+a functional relation, because the different seman-
+tic relations expressed by the phrase (e.g., birth city,
+birth year, etc.) are all functional.
+Knowing that a relation is functional is helpful
+for numerous NLP inference tasks. Previous work
+has used functionality for the tasks of contradiction
+detection (Ritter et al., 2008), quantifier scope dis-
+ambiguation (Srinivasan and Yates, 2009), and syn-
+onym resolution (Yates and Etzioni, 2009). It could
+also aid in other tasks such as ontology generation
+and information extraction. For example, consider
+two sentences from a contradiction detection task:
+</bodyText>
+<listItem confidence="0.99975">
+(1) “George Washington was born in Virginia.” and
+(2) “George Washington was born in Texas.”
+</listItem>
+<bodyText confidence="0.9980935">
+As Ritter et al. (2008) points out, we can only de-
+termine that the two sentences are contradictory if
+we know that the semantic relation referred to by
+the phrase ‘was born in’ is functional, and that both
+Virginia and Texas are distinct states.
+Automatic functionality identification is essential
+when dealing with a large number of relations as in
+Open IE, or in complex domains where expert help
+</bodyText>
+<page confidence="0.919749">
+1266
+</page>
+<note confidence="0.9200435">
+Proceedings of the 2010 Conference on Empirical Methods in Natural Language Processing, pages 1266–1276,
+MIT, Massachusetts, USA, 9-11 October 2010. c�2010 Association for Computational Linguistics
+</note>
+<figureCaption confidence="0.943165">
+Figure 1: Our system, LEIBNIZ, uses the Web and Free-
+base to determine functionality of Web relations.
+</figureCaption>
+<bodyText confidence="0.999901962962963">
+is scarce or expensive (e.g., biomedical texts). This
+paper tackles automatic functionality identification
+using Web text. While functionality identification
+has been utilized as a module in various NLP sys-
+tems, this is the first paper to focus exclusively on
+functionality identification as a bona fide NLP infer-
+ence task.
+It is natural to identify functions based on triples
+extracted from text instead of analyzing sentences
+directly. Thus, as our input, we utilize tuples ex-
+tracted by TEXTRUNNER (Banko and Etzioni, 2008)
+when run over a corpus of 500 million webpages.
+TEXTRUNNER maps sentences to tuples of the form
+&lt;arg1, relation phrase, arg2&gt; and enables our
+LEIBNIZ system to focus on the problem of decid-
+ing whether the relation phrase is a function.
+The naive approach, which classifies a relation
+phrase as non-functional if several arg1s have multi-
+ple arg2s in our extraction set, fails due to several
+reasons: synonymy – a unique entity may be re-
+ferred by multiple strings, polysemy of both entities
+and relations – a unique string may refer to multiple
+entities/relations, metaphorical usage, extraction er-
+rors and more. These phenomena conspire to make
+the functionality determination task inherently sta-
+tistical and surprisingly challenging.
+In addition, a functional relation phrase may ap-
+pear non-functional until we consider the types of its
+arguments. In our ‘was born in’ example, &lt;George
+Washington, was born in, 1732&gt; does not contradict
+&lt;George Washington, was born in, Virginia&gt; even
+though we see two distinct arg2s for the same arg1.
+To solve functionality identification, we need to con-
+sider typed relations where the relations analyzed
+are constrained to have specific argument types.
+We develop several approaches to overcome these
+challenges. Our first scheme employs approximate
+argument merging to overcome the synonymy and
+anaphora problems. Our second approach, DIS-
+TRDIFF, takes a statistical view of the problem
+and learns a separator for the typical count dis-
+tributions of functional versus non-functional rela-
+tions. Finally, our third and most successful scheme,
+CLEANLISTS, identifies and processes a cleaner
+subset of the data by intersecting the corpus with en-
+tities in a secondary knowledge-base (in our case,
+Freebase (Metaweb Technologies, 2009)). Utiliz-
+ing pre-defined types, CLEANLISTS first identifies
+typed functionality for suitable types for that rela-
+tion phrase, and then combines them to output a final
+functionality label. LEIBNIZ, a hybrid of CLEAN-
+LISTS and DISTRDIFF, returns state-of-the-art re-
+sults for our task.
+Our work makes the following contributions:
+</bodyText>
+<listItem confidence="0.9962338">
+1. We identify several linguistic phenomena that
+make the problem of corpus-based functional-
+ity identification surprisingly difficult.
+2. We designed and implemented three novel
+techniques for identifying functionality based
+on instance-based counting, distributional dif-
+ferences, and use of external knowledge bases.
+3. Our best method, LEIBNIZ, outperforms the
+existing approaches by wide margins, increas-
+ing area under the precision-recall curve from
+0.61 to 0.88. It is also capable of distinguishing
+functionality of typed relation phrases, when
+the arguments are restricted to specific types.
+4. Utilizing LEIBNIZ, we created the first public
+repository of functional relations.1
+</listItem>
+<sectionHeader confidence="0.999653" genericHeader="related work">
+2 Related Work
+</sectionHeader>
+<bodyText confidence="0.999933875">
+There is a recent surge in large knowledge bases
+constructed by human collaboration such as Free-
+base (Metaweb Technologies, 2009) and VerbNet
+(Kipper-Schuler, 2005). VerbNet annotates its
+verbs with several properties but not functionality.
+Freebase does annotate some relations with an ‘is
+unique’ property, which is similar to functionality,
+but the number of relations in Freebase is still much
+</bodyText>
+<footnote confidence="0.9465895">
+1available at http://www.cs.washington.edu/
+research/leibniz
+</footnote>
+<figure confidence="0.990343235294118">
+Functionality prediction for Web relations
+Web
+Corpus
+Distributional
+Difference
+functionality scores (typed)
+instances per relation
+IE
+Combination Policy
+Assertions
+Clean
+Lists
+Freebase
+type
+lists
+1267
+Rudy Giuliani visited:
+Florida
+a famous cheesesteak restaurant
+South Carolina the Florida Everglades
+Boca Raton Synagogue
+Republican headquarters
+Philadelphia
+George Washington was born in:
+Michigan
+Virginia
+Westmoreland County
+a town
+1732
+February
+Colonial Beach, Virginia
+the British colony of Virginia
+a plantation
+America
+</figure>
+<figureCaption confidence="0.998451">
+Figure 2: Sample arg2 values for a non-functional relation (visited) vs. a functional relation (was born in) illustrate
+the challenge in discriminating functionality from Web text.
+</figureCaption>
+<bodyText confidence="0.998561813559322">
+smaller than the hundreds of thousands of relations
+existing on the Web, necessitating automatic ap-
+proaches to functionality identification.
+Discovering functional dependencies has been
+recognized as an important database analysis tech-
+nique (Huhtala et al., 1999; Yao and Hamilton,
+2008), but the database community does not address
+any of the linguistic phenomena which make this
+a challenging problem in NLP. Three groups of re-
+searchers have studied functionality identification in
+the context of natural language.
+AuContraire (Ritter et al., 2008) is a contradic-
+tion detection system that also learns relation func-
+tionality. Their approach combines a probabilis-
+tic model based on (Downey et al., 2005) with es-
+timates on whether each arg1 is ambiguous. The
+estimates are used to weight each arg1’s contri-
+bution to an overall functionality score for each
+relation. Both argument-ambiguity and relation-
+functionality are jointly estimated using an EM-like
+method. While elegant, AuContraire requires sub-
+stantial hand-engineered knowledge, which limits
+the scalability of their approach.
+Lexico-syntactic patterns: Srinivasan and Yates
+(2009) disambiguate a quantifier’s scope by first
+making judgments about relation functionality. For
+functionality, they look for numeric phrases follow-
+ing the relation. For example, the presence of the nu-
+meric term ‘four’ in the sentence “the fire destroyed
+four shops” suggests that destroyed is not functional,
+since the same arg1 can destroy multiple things.
+The key problem with this approach is that it often
+assigns different functionality labels for the present
+tense and past tense phrases of the same semantic re-
+lation. For example, it will consider ‘lived in’ to be
+non-functional, but ‘lives in’ to be functional, since
+we rarely say “someone lives in many cities”. Since
+both these phrases refer to the same semantic rela-
+tion this approach has low precision. Moreover, it
+performs poorly for relation phrases that naturally
+expect numbers as the target argument (e.g., ‘has an
+atomic number of’).
+While these lexico-syntactic patterns do not per-
+form as well for our task, they are well-suited for
+identifying whether a verb phrase can take multiple
+objects or not. This can be understood as a function-
+ality property of the verb phrase within a sentence,
+as opposed to functionality of the semantic relation
+the phrase represents.
+WIE: In a preliminary study, Popescu (2007) ap-
+plies an instance based counting approach, but her
+relations require manually annotated type restric-
+tions, which makes the approach less scalable.
+Finally, functionality is just one property of rela-
+tions that can be learned from text. A number of
+other studies (Guarino and Welty, 2004; Volker et
+al., 2005; Culotta et al., 2006) have examined detect-
+ing other relation properties from text and applying
+them to tasks such as ontology cleaning.
+</bodyText>
+<sectionHeader confidence="0.999671" genericHeader="method">
+3 Challenges for Functionality Identification
+</sectionHeader>
+<bodyText confidence="0.999789066666667">
+A functional binary relation r is formally defined as
+one such that Vx, y1, y2 : r(x, y1)nr(x, y2) ==&gt;- y1 =
+y2. We define a relation string to be functional if all
+semantic relations commonly expressed by the rela-
+tion string are individually functional. Thus, under
+our definition, ‘was born in’ and ‘died in’ are func-
+tional, even though they can take different arg2s for
+the same arg1, e.g., year, city, state, country, etc.
+The definition of a functional relation suggests a
+naive instance-based counting algorithm for identi-
+fying functionality. “Look for the number of arg2s
+for each arg1. If all (or most) arg1s have exactly one
+arg2, label the relation phrase functional, else, non-
+functional.” Unfortunately, this naive algorithm fails
+for our task exposing several linguistic phenomena
+</bodyText>
+<page confidence="0.95262">
+1268
+</page>
+<bodyText confidence="0.96762685">
+that make our problem hard (see Figure 2):
+Synonymy: Various arg2s for the same arg1 may
+refer to the same entity. This makes many func-
+tional relations seem non-functional. For instance,
+&lt;George Washington, was born in, Virginia&gt; and
+&lt;George Washington, was born in, the British
+colony of Virginia&gt; are not in conflict. Other
+examples of synonyms include ‘Windy City’ and
+‘Chicago’; ‘3rd March’ and ’03/03’, etc.
+Anaphora: An entity can be referred to by using
+several phrases. For instance, &lt;George Washington,
+was born in, a town&gt; does not conflict with his be-
+ing born in ‘Colonial Beach, Virginia’, since ‘town’
+is an anaphora for his city of birth. Other examples
+include ‘The US President’ for ‘George W. Bush’,
+and ‘the superpower’ to refer to ‘United States’. The
+effect is similar to that of synonyms – many relations
+incorrectly appear non-functional.
+Argument Ambiguity: &lt;George Washington, was
+born in, ‘Kortrijk, Belgium’&gt; in addition to his be-
+ing born in ‘Virginia’ suggests that ‘was born in’
+is non-functional. However, the real cause is that
+‘George Washington’ is ambiguous and refers to dif-
+ferent people. This ambiguity gets more pronounced
+if the person is referred to just by their first (or last
+name), e.g., ‘Clinton’ is commonly used to refer to
+both Hillary and Bill Clinton.
+Relation Phrase Ambiguity: A relation phrase can
+have several senses. For instance ‘weighs 80 kilos’
+is a different weighs than ‘weighs his options’.
+Type Restrictions: A closely related problem
+is type-variations in the argument. E.g., &lt;George
+Washington, was born in, America&gt; vs. &lt;George
+Washington, born in, Virginia&gt; both use the same
+sense of ‘was born in’ but refer to different semantic
+relations – one that takes a country in arg2, and the
+other that takes a state. Moreover, different argu-
+ment types may result in different functionality la-
+bels. For example, ‘published in’ is functional if the
+arg2 is a year, but non-functional if it is a language,
+since a book could be published in many languages.
+We refer to this finer notion of functionality as typed
+functionality.
+Data Sparsity: There is limited data for more ob-
+scure relations instances and non-functional relation
+phrases appear functional due to lack of evidence.
+Textually Functional Relations: Last but not least,
+some relations that are not functional may appear
+functional in text. An example is ‘collects’. We col-
+lect many things, but rarely mention it in text. Usu-
+ally, someone’s collection is mentioned in text only
+when it makes the news. We name such relations
+textually functional. Even though we could build
+techniques to reduce the impact of other phenomena,
+no instance based counting scheme could overcome
+the challenge posed by textually functional relations.
+Finally, we note that our functionality predictor
+operates over tuples generated by an Open IE sys-
+tem. The extractors are not perfect and their errors
+can also complicate our analysis.
+</bodyText>
+<sectionHeader confidence="0.998384" genericHeader="method">
+4 Algorithms
+</sectionHeader>
+<bodyText confidence="0.999992933333333">
+To overcome these challenges, we design three al-
+gorithms. Our first algorithm, IBC, applies several
+rules to determine whether two arg2s are equal. Our
+second algorithm, DISTRDIFF, takes a statistical ap-
+proach, and tries to learn a discriminator between
+typical count distributions for functional and non-
+functional relations. Our final approach, CLEAN-
+LISTS, applies counting over a cleaner subset of the
+corpus, which is generated based on entities present
+in a secondary KB such as Freebase.
+From this section onwards, we gloss over the dis-
+tinction between a semantic relation and a relation
+phrase, since our algorithms do not have access to
+relations and operate only at the phrase level. We
+use ‘relation’ to refer to the phrases.
+</bodyText>
+<subsectionHeader confidence="0.990949">
+4.1 Instance Based Counting (IBC)
+</subsectionHeader>
+<bodyText confidence="0.998225785714286">
+For each relation, IBC computes a global function-
+ality score by aggregating local functionality scores
+for each arg1. The local functionality for each arg1
+computes the fraction of arg2 pairs that refer to the
+same entity. To operationalize this computation we
+need to identify which arg2s co-refer. Moreover, we
+also need to pick an aggregation strategy to combine
+local functionality scores.
+Data Cleaning: Common nouns in arg1s are of-
+ten anaphoras for other entities. For example, &lt;the
+company, was headquartered in, ...&gt; refers to dif-
+ferent companies in different extractions. To combat
+this, IBC restricts arg1s to proper nouns. Secondly,
+to counter extraction errors and data bias, it retains
+</bodyText>
+<page confidence="0.994505">
+1269
+</page>
+<figureCaption confidence="0.9979695">
+Figure 3: IBC judges that Colonial Beach and Westmore-
+land County, Virginia refer to the same entity.
+</figureCaption>
+<bodyText confidence="0.99985305">
+an extraction only once per unique sentence. This
+reduces the disproportionately large frequencies of
+some assertions that are generated from a single ar-
+ticle published at multiple websites. Similarly, it al-
+lows an extraction only once per website url. More-
+over, it filters out any arg1 that does not appear at
+least 10 times with that relation.
+Equality Checking: This key component judges
+if two arg2s refer to the same entity. It first em-
+ploys weak typing by disallowing equality checks
+across common nouns, proper nouns, dates and
+numbers. This mitigates the relation ambiguity
+problem, since we never compare ‘born in(1732)’
+and ‘born in(Virginia)’. Within the same category it
+judges two arg2s to co-refer if they share a content
+word. It also performs a connected component anal-
+ysis (Hopcraft and Tarjan, 1973) to take a transitive
+closure of arg2s judged equal (see Figure 3).
+For example, for the relation ‘was named after’
+and arg1=‘Bluetooth’ our corpus has three arg2s:
+‘Harald Bluetooth’, ‘Harald Bluetooth, the King of
+Denmark’ and ‘the King of Denmark’. Our equal-
+ity method judges all three as referring to the same
+entity. Note that this is a heuristic approach, which
+could make mistakes. But for an error, there needs
+to be extractions with the same arg1, relation and
+similar arg2s. Such cases exist, but are not com-
+mon. Our equality checking mitigates the problems
+of anaphora, synonymy as well as some typing.
+Aggregation: We try several methods to aggre-
+gate local functionality scores for each arg1 into a
+global score for the relation. These include, a simple
+average, a weighted average weighted by frequency
+of each arg1, a weighted average weighted by log
+of frequency of each arg1, and a Bayesian approach
+that estimates the probability that a relation is func-
+tional using statistics over a small development set.
+Overall, the log-weighting works the best: it assigns
+a higher score for popular arguments, but not so high
+that it drowns out all the other evidence.
+</bodyText>
+<subsectionHeader confidence="0.825901">
+4.2 DISTRDIFF
+</subsectionHeader>
+<bodyText confidence="0.99996788372093">
+Our second algorithm, DISTRDIFF, takes a purely
+statistical, discriminative view of the problem. It
+recognizes that, due to aforementioned reasons,
+whether a relation is functional or not, there are
+bound to be several arg1s that look locally functional
+and several that look locally non-functional. The
+difference is in the number of such arg1s – a func-
+tional relation will have more of the former type.
+DISTRDIFF studies the count distributions for a
+small development set of functional relations (and
+similarly for non-functional) and attempts to build
+a separator between the two. As an illustration,
+Figure 4(a) plots the arg2 counts for various arg1s
+for a functional relation (‘is headquartered in’).
+Each curve represents a unique arg1. For an arg1,
+the x-axis represents the rank (based on frequency)
+of arg2s and y-axis represents the normalized fre-
+quency of the arg2. For example, if an arg1 is found
+with just one arg2, then x=1 will match with y=1
+(the first point has all the mass) and x=2 will match
+with y=0. If, on the other hand, an arg1 is found
+with five arg2s, say, appearing ten times each, then
+the first five x-points will map to 0.2 and the sixth
+point will map to 0.
+We illustrate the same plot for a non-functional
+relation (‘visited’) in Figure 4(b). It is evident from
+the two figures that, as one would expect, curves for
+most arg1s die early in case of a functional relation,
+whereas the lower ranked arg2s are more densely
+populated in case of a non-functional relation.
+We aggregate this information using slope of the
+best-fit line for each arg1 curve. For functional re-
+lations, the best-fit lines have steep slopes, whereas
+for non-functional the lines are flatter. We bucket the
+slopes in integer bins and count the fraction of arg1s
+appearing in each bin. This lets us aggregate the
+information into a single slope-distribution for each
+relation. Bold lines in Figure 4(c) illustrate the aver-
+age slope-distributions, averaged over ten sample re-
+lations of each kind – dashed for non-functional and
+solid for functional. Most non-functional relations
+have a much higher probability of arg1s with low
+magnitude slopes, whereas functional relations are
+</bodyText>
+<figure confidence="0.934899272727273">
+George Washington was born in:
+February
+Colonial
+Beach
+Westmoreland County, Virginia
+February 1732
+Colonial
+Beach,
+Virginia
+1732
+1270
+</figure>
+<figureCaption confidence="0.997568666666667">
+Figure 4: DISTRDIFF: Arg2 count distributions fall more sharply for (a) a sample functional relation, than (b) a
+sample non-functional relation. (c) The distance of aggregated slope-distributions from average slope-distributions
+can be used to predict the functionality.
+</figureCaption>
+<figure confidence="0.986619777777778">
+visited (not functional)
+is headquartered in (functional)
+Average Slope Distributions
+1 2 3 4 5 6 7 8 9 10
+Result Position
+1 2 3 4 5 6 7 8 9 10
+Result Position
+0 1 2 3 4 10
+Floor(|Slope|)
+Argument 2 Mass
+100%
+90%
+80%
+40%
+70%
+60%
+50%
+30%
+20%
+10%
+0%
+Argument 2 Mass
+100%
+90%
+80%
+40%
+70%
+60%
+50%
+30%
+20%
+10%
+0%
+Mass
+100%
+90%
+80%
+40%
+70%
+60%
+50%
+30%
+20%
+10%
+0%
+</figure>
+<bodyText confidence="0.9029234">
+functional average
+nonfunctional average
+was born on (sample func)
+visited (sample nonfunc)
+the opposite. Notice that the aggregated curve for
+‘visited’ in the figure is closer to the average curve
+for non-functional than to functional and vice-versa
+for ‘was born on’.
+We plot the aggregated slope-distributions for
+each relation and use the distance from average dis-
+tributions as a means to predict the functionality. We
+use KL divergence (Kullback and Leibler, 1951) to
+compute the distance between two distributions. We
+score a relation’s functionality in three ways using:
+(1) KLFUNC, its distance from average functional
+slope-distribution F,,,,,g, (2) KLDIFF, its distance
+from average functional minus its distance from av-
+erage non-functional N,,,,,g, and (3) average of these
+two scores. For a relation with slope distribution R,
+the scores are computed as:
+</bodyText>
+<equation confidence="0.9979365">
+KLFUNC = Ei R(i)ln R(i)
+F���(i)
+KLDIFF = KLFUNC - (Ei R(i)ln R(i)
+N���(i))
+</equation>
+<bodyText confidence="0.9996945">
+Section 5.2 compares the three scoring functions.
+A purely statistical approach is resilient to noisy
+data, and does not need to explicitly account for the
+various issues we detailed earlier. A disadvantage
+is that it cannot handle relation ambiguity and type
+restrictions. Moreover, we may need to relearn the
+separator if applying DISTRDIFF to a corpus with
+very different count distributions.
+</bodyText>
+<subsectionHeader confidence="0.937052">
+4.3 CLEANLISTS
+</subsectionHeader>
+<bodyText confidence="0.9999778">
+Our third algorithm, CLEANLISTS, is based on the
+intuition that for identifying functionality we need
+not reason over all the data in our corpus; instead,
+a small but cleaner subset of the data may work
+best. This clean subset should ideally be free of syn-
+onyms, ambiguities and anaphora, and be typed.
+Several knowledge-bases such as Wordnet,
+Wikipedia, and Freebase (Fellbaum, 1998;
+Wikipedia, 2004; Metaweb Technologies, 2009),
+are readily and freely available and they all provide
+clean typed lists of entities. In our experiments
+CLEANLISTS employs Freebase as a source of
+clean lists, but we could use any of these or other
+domain-specific ontologies such as SNOMED
+(Price and Spackman, 2000) as well.
+CLEANLISTS takes the intersection of Freebase
+entities with our corpus to generate a clean subset for
+functionality analysis. Freebase currently has over
+12 million entities in over 1,000 typed lists. Thus,
+this intersection retains significant portions of the
+useful data, and gets rid of most of anaphora and
+synonymy issues. Moreover, by matching against
+typed lists, many relation ambiguities are separated
+as well, since ambiguous relations often take dif-
+ferent types in the arguments (e.g., ‘ran(Distance)’
+vs. ‘ran(Company)’). To mitigate the effect of argu-
+ment ambiguity, we additionally get rid of instances
+in which arg1s match multiple names in the Freebase
+list of names.
+As an example, consider the ‘was born in’ rela-
+tion. CLEANLISTS will remove instances with only
+‘Clinton’ in arg1, since it matches multiple people
+in Freebase. It will treat the different types, e.g.,
+cities, states, countries, months separately and ana-
+lyze the functionality for each of these individually.
+</bodyText>
+<page confidence="0.978459">
+1271
+</page>
+<bodyText confidence="0.999971046153846">
+By intersecting the relation data with argument lists
+for these types, we will be left with a smaller, but
+much cleaner, subset of relation data, one for each
+type. CLEANLISTS analyzes each subset using sim-
+ple, instance based counting and computes a typed
+functionality score for each type. Thus, it first com-
+putes typed functionality for each relation.
+There are two subtleties in applying this algo-
+rithm. First, we need to identify the set of types to
+consider for each relation. Our algorithm currently
+picks the types that occur most in each relation’s
+observed data. In the future, we could also use a
+selectional preferences system (Ritter et al., 2010;
+Kozareva and Hovy, 2010). Note that we remove
+Freebase types such as Written Work from consid-
+eration for containing many entities whose primary
+senses are not that type. For example, both ‘Al Gore’
+and ‘William Clinton’ are also names of books, but
+references in text to these are rarely a reference to
+the written work sense.
+Secondly, an argument could belong to multiple
+Freebase lists. For example, ‘California’ is both a
+city and a state. We apply a simple heuristic: if a
+string appears in multiple lists under consideration,
+we assign it to the smallest of the lists (the list of
+cities is much larger than states). This simple heuris-
+tic usually assigns an argument to its intended type.
+On a development set, the error rate of this heuristic
+is &lt;4%, though it varies a bit depending on the types
+involved.
+CLEANLISTS determines the overall functional-
+ity of a relation string by aggregating the scores for
+each type. It outputs functional if a majority of typed
+senses for the relation are functional. For example,
+CLEANLISTS judges ‘was born in’ to be functional,
+since all relevant type restrictions are individually
+typed functional – everyone is born in exactly one
+country, city, state, month, etc.
+CLEANLISTS has a much higher precision due to
+the intersection with clean lists, though at some cost
+of recall. The reason for lower recall is that the ap-
+proach has a bias towards types that are easy to enu-
+merate. It does not have different distances (e.g., 50
+kms, 20 miles, etc.) in its lists. Moreover, arguments
+that do not correspond to a noun cannot be handled.
+For example, in the sentence, “He weighed eating
+a cheeseburger against eating a salad”, the arg2 of
+‘weighed’ can’t be matched to a Freebase list. To
+increase the recall we back off to DISTRDIFF in the
+cases when CLEANLISTS is unable to make a pre-
+diction. This combination gives the best balance of
+precision and recall for our task. We name our final
+system LEIBNIZ.
+One current limitation is that using only those
+arg2s that exactly match clean lists leaves out some
+good data (e.g., a tuple with an arg2 of ‘Univ of
+Wash’ will not match against a list of universities
+that spells it as ‘University of Washington’). Be-
+cause we have access to entity types, using typed
+equality checkers (Prager et al., 2007) with the clean
+lists would allow us to recapture much of this useful
+data. Moreover, the knowledge of functions could
+apply to building new type nanotheories and reduce
+considerable manual effort. We wish to study this in
+the future.
+</bodyText>
+<sectionHeader confidence="0.999385" genericHeader="method">
+5 Evaluation
+</sectionHeader>
+<bodyText confidence="0.999926777777778">
+In our evaluation, we wish to answer three ques-
+tions: (1) How do our three approaches, Instance
+Based Counting (IBC), DISTRDIFF, and CLEAN-
+LISTS, compare on the functionality identification
+task? (2) How does our final system, LEIBNIZ,
+compare against the existing state of the art tech-
+niques? (3) How well is LEIBNIZ able to identify
+typed functionality for different types in the same
+relation phrase?
+</bodyText>
+<subsectionHeader confidence="0.94862">
+5.1 Dataset
+</subsectionHeader>
+<bodyText confidence="0.999667823529412">
+For our experiments we test on the set of 887 re-
+lations used by Ritter et al. (2008) in their exper-
+iments. We use the Open IE corpus generated by
+running TEXTRUNNER on 500 million high quality
+Webpages (Banko and Etzioni, 2008) as the source
+of instance data for these relations. Extractor and
+corpus differences lead to some relations not occur-
+ring (or not occurring with sufficient frequency to
+properly analyze, i.e., &gt; 5 arg1 with &gt; 10 evidence),
+leaving a dataset of 629 relations on which to test.
+Two human experts tagged these relations for
+functionality. Tagging the functionality of relation
+phrases can be a bit subjective, as it requires the
+experts to imagine the various senses of a phrase
+and judge functionality over all those senses. The
+inter-annotator agreement between the experts was
+95.5%. We limit ourselves to the subset of the data
+</bodyText>
+<page confidence="0.988313">
+1272
+</page>
+<figure confidence="0.993406228571429">
+Distr. Diff. Scoring Functions
+0 0.2 0.4 0.6 0.8 1
+Recall
+Internal Methods Comparison
+0 0.2 0.4 0.6 0.8 1
+Recall
+KLfunc
+KLdiff
+Average
+Precision 1
+0.9
+0.8
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+0.1
+0
+Precision
+0.9
+0.8
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+0.1
+0
+1
+IBC
+Distr. Diff.
+CleanLists
+</figure>
+<figureCaption confidence="0.998025">
+Figure 5: (a) The best scoring method for DISTRDIFF averages KLFUNC and KLDIFF. (b) CLEANLISTS performs
+significantly better than DISTRDIFF, which performs significantly better than IBC.
+</figureCaption>
+<bodyText confidence="0.999514">
+on which the two experts agreed (a subset of 601
+relation phrases).
+</bodyText>
+<subsectionHeader confidence="0.995742">
+5.2 Internal Comparisons
+</subsectionHeader>
+<bodyText confidence="0.999962888888889">
+First, we compare the three scoring functions for
+DISTRDIFF. We vary the score thresholds to gener-
+ate the different points on the precision-recall curves
+for each of the three. Figure 5(a) plots these curves.
+It is evident that the hybrid scoring function, i.e.,
+one which is an average of KLFUNC (distance from
+average functional) and KLDIFF (distance from av-
+erage functional minus distance from average non-
+functional) performs the best. We use this scoring in
+the further experiments involving DISTRDIFF.
+Next, we compare our three algorithms on
+the dataset. Figure 5(b) reports the results.
+CLEANLISTS outperforms DISTRDIFF by vast mar-
+gins, covering a 33.5% additional area under the
+precision-recall curve. Overall, CLEANLISTS finds
+the very high precision points, because of its use of
+clean data. However, it is unable to make 23.1% of
+the predictions, primarily because the intersection
+between the corpus and Freebase entities results in
+very little data for those relations. DISTRDIFF per-
+forms better than IBC, due to its statistical nature,
+but the issues described in Section 3 plague both
+these systems much more than CLEANLISTS.
+To increase the recall LEIBNIZ uses a combina-
+tion of DISTRDIFF and CLEANLISTS, in which the
+algorithm backs off to DISTRDIFF if CLEANLISTS
+is unable to output a prediction.
+</bodyText>
+<subsectionHeader confidence="0.997209">
+5.3 External Comparisons
+</subsectionHeader>
+<bodyText confidence="0.99995328125">
+We next compare LEIBNIZ against the existing state
+of the art approaches. Our competitors are AuCon-
+traire and NumericTerms (Ritter et al., 2008; Srini-
+vasan and Yates, 2009). Because we use the Au-
+Contraire dataset, we report the results from their
+best performing system. We reimplement a version
+of NumericTerms using their list of numeric quanti-
+fiers and extraction patterns that best correspond to
+our relation format. We run our implementation of
+NumericTerms on a dataset of 100 million English
+sentences from a crawl of high quality Webpages to
+generate the functionality labels.
+Figure 6(a) reports the results of this experiment.
+We find that LEIBNIZ outperforms AuContraire by
+vast margins covering an additional 44% area in the
+precision-recall curve. AuContraire’s AUC is 0.61
+whereas LEIBNIZ covers 0.88. A Bootstrap Per-
+centile Test (Keller et al., 2005) on F1 score found
+the improvement of our techniques over AuCon-
+traire to be statistically significant at α = 0.05. Nu-
+mericTerms does not perform well, because it makes
+decisions based only on the local evidence in a sen-
+tence, and does not integrate the knowledge from
+different occurrences of the same relation. It returns
+many false positives, such as ‘lives in’, which ap-
+pear functional to the lexico-syntactic pattern, but
+are clearly non-functional, e.g., one could live in
+many places over a lifetime.
+An example of a LEIBNIZ error is the ‘repre-
+sented’ relation. LEIBNIZ classifies this as func-
+tional, because it finds several strongly functional
+senses (e.g., when a person represents a country),
+</bodyText>
+<page confidence="0.972152">
+1273
+</page>
+<figure confidence="0.997598085714286">
+External Comparison Typed Functionality
+Precision
+0.9
+0.8
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+0.1
+0
+1
+Precision
+0.9
+0.8
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+0.1
+0
+1
+AuContraire
+NumericTerms
+Leibniz
+AuContraire
+NumericTerms
+Leibniz
+0 0.2 0.4 0.6 0.8 1
+Recall
+0 0.2 0.4 0.6 0.8 1
+Recall
+</figure>
+<figureCaption confidence="0.989354666666667">
+Figure 6: (a) LEIBNIZ, which is a hybrid of CLEANLISTS and DISTRDIFF, achieves 0.88 AUC and outperforms the
+0.61 AUC from AuContraire (Ritter et al., 2008) and the 0.05 AUC from NumericTerms (Srinivasan and Yates, 2009).
+(b) LEIBNIZ is able to tease apart different senses of polysemous relations much better than other systems.
+</figureCaption>
+<bodyText confidence="0.997256">
+but the human experts might have had some non-
+functional senses in mind while labeling.
+</bodyText>
+<subsectionHeader confidence="0.958186">
+5.4 Typed Functionality
+</subsectionHeader>
+<bodyText confidence="0.999941947368421">
+Next, we conduct a study of the typed functional-
+ity task. We test on ten common polysemous re-
+lations, each having both a functional and a non-
+functional sense. An example is the ‘was pub-
+lished in’ relation. If arg2 is a year it is func-
+tional, e.g. &lt;Harry Potter 5, was published in,
+2003&gt;. However, ‘was published in(Language)’
+is not functional, e.g. &lt;Harry Potter 5, was pub-
+lished in, [French / Spanish / English]&gt;. Simi-
+larly, ‘will become(Company)’ is functional because
+when a company is renamed, it transitions away
+from the old name exactly once, e.g. &lt;Cingular,
+will become, AT&amp;T Wireless&gt;. However, ‘will be-
+come(government title)’ is not functional, because
+people can hold different offices in their life, e.g.,
+&lt;Obama, will become, [Senator/ President]&gt;.
+In this experiment, a simple baseline of predict-
+ing the same label for the two types of each rela-
+tion achieves a precision of 0.5. Figure 6(b) presents
+the results of this study. AuContraire achieves a flat
+0.5, since it cannot distinguish between types. Nu-
+mericTerms can be modified to distinguish between
+basic types – check the word just after the numeric
+term to see whether it matches the type name. For
+example, the modified NumericTerms will search
+the Web for instances of “was published in [nu-
+meric term] years” vs. “was published in [numeric
+term] languages”. This scheme works better when
+the type name is simple (e.g., languages) rather than
+complex (e.g., government titles).
+LEIBNIZ performs the best and is able to tease
+apart the functionality of various types very well.
+When LEIBNIZ did not work, it was generally be-
+cause of textual functionality, which is a larger issue
+for typed functionality than general functionality. Of
+course, these results are merely suggestive – we per-
+form a larger-scale experiment and generate a repos-
+itory of typed functions next.
+</bodyText>
+<sectionHeader confidence="0.988642" genericHeader="method">
+6 A Repository of Functional Relations
+</sectionHeader>
+<bodyText confidence="0.999616181818182">
+We now report on a repository of typed functional
+relations generated automatically by applying LEIB-
+NIZ to a large collection of relation phrases. Instead
+of starting with the most frequent relations from
+TEXTRUNNER, we use OCCAM’s relations (Fader
+et al., 2010) because they are more specific. For in-
+stance, where TEXTRUNNER outputs an underspec-
+ified tuple, &lt;Gold, has, an atomic number of 79&gt;,
+OCCAM extracts &lt;Gold, has an atomic number of,
+79&gt;. OCCAM enables LEIBNIZ to identify far more
+functional relations than TEXTRUNNER.
+</bodyText>
+<subsectionHeader confidence="0.998819">
+6.1 Addressing Evidence Sparsity
+</subsectionHeader>
+<bodyText confidence="0.9999">
+Scaling up to a large collection of typed relations
+requires us to consider the size of our data sets. For
+example, consider which relation is more likely to be
+functional—a relation with 10 instances all of which
+indicate functionality versus a relation with 100 in-
+stances where 95 behave functionally.
+To address this problem, we adapt the likelihood
+ratio approach from Schoenmackers et al. (2010).
+</bodyText>
+<page confidence="0.979944">
+1274
+</page>
+<bodyText confidence="0.999953666666667">
+For a typed relation with n instances, f of which in-
+dicate functionality, the G-test (Dunning, 1993), G
+= 2*(f*ln(f/k)+(n-f)*ln((n-f)/(n-k))), provides a mea-
+sure for the likelihood that the relation is not func-
+tional. Here k denotes the evidence indicating func-
+tionality for the case where the relation is not func-
+tional. Setting k = n*0.25 worked well for us. This
+G-score replaces our previous metric for scoring
+functional relations.
+</bodyText>
+<subsectionHeader confidence="0.9996">
+6.2 Evaluation of the Repository
+</subsectionHeader>
+<bodyText confidence="0.999973580645161">
+In CLEANLISTS a factor that affects the quality of
+the results is the exact set of lists that is used. If
+the lists are not clean, results get noisy. For exam-
+ple, Freebase’s list of films contains 73,000 entries,
+many of which (e.g., ”Egg”) are not films in their pri-
+mary senses. Even with heuristics such as assigning
+terms to their smallest lists and disqualifying dictio-
+nary words that occur from large type lists, there is
+still significant noise left.
+Using LEIBNIZ with a set of 35 clean lists on
+OCCAM’s extraction corpus, we generated a repos-
+itory of 5,520 typed functional relations. To eval-
+uate this resource a human expert tagged a random
+subset of the top 1,000 relations. Of these relations
+22% were either ill-formed or had non-sensical type
+constraints. From the well-formed typed relations
+the precision was estimated to be 0.8. About half
+the errors were due to textual functionality and the
+rest were LEIBNIZ errors. Some examples of good
+functions found include isTheSequelTo(videogame)
+and areTheBirthstoneFor(month). An example of
+a textually functional relation found is wasThe-
+FounderOf(company).
+This is the first public repository of automatically-
+identified functional relations. Scaling up our data
+set forced us to confront new sources of noise in-
+cluding extractor errors, errors due to mismatched
+types, and errors due to sparse evidence. Still, our
+initial results are encouraging and we hope that our
+resource will be valuable as a baseline for future
+work.
+</bodyText>
+<sectionHeader confidence="0.999505" genericHeader="conclusions">
+7 Conclusions
+</sectionHeader>
+<bodyText confidence="0.999973081081081">
+Functionality identification is an important subtask
+for Web-scale information extraction and other ma-
+chine reading tasks. We study the problem of pre-
+dicting the functionality of a relation phrase auto-
+matically from Web text. We presented three algo-
+rithms for this task: (1) instance-based counting, (2)
+DISTRDIFF, which takes a statistical approach and
+discriminatively classifies the relations using aver-
+age arg-distributions, and (3) CLEANLISTS, which
+performs instance based counting on a subset of
+clean data generated by intersection of the corpus
+with a knowledge-base like Freebase.
+Our best approach, LEIBNIZ, is a hybrid of
+DISTRDIFF and CLEANLISTS, and outperforms
+the existing state-of-the-art approaches by covering
+44% more area under the precision-recall curve. We
+also observe that an important sub-component of
+identifying a functional relation phrase is identifying
+typed functionality, i.e., functionality when the ar-
+guments of the relation phrase are type-constrained.
+Because CLEANLISTS is able to use typed lists, it
+can successfully identify typed functionality.
+We run our techniques on a large set of relations to
+output a first repository of typed functional relations.
+We release this list for further use by the research
+community.2
+Future Work: Functionality is one of the sev-
+eral properties a relation can possess. Others in-
+clude selectional preferences, transitivity (Schoen-
+mackers et al., 2008), mutual exclusion, symme-
+try, etc. These properties are very useful in increas-
+ing our understanding about these Open IE relation
+strings. We believe that the general principles devel-
+oped in this work, for example, connecting the Open
+IE knowledge with an existing knowledge resource,
+will come in very handy in identifying these other
+properties.
+</bodyText>
+<sectionHeader confidence="0.998021" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.998373444444444">
+We would like to thank Alan Ritter, Alex Yates and
+Anthony Fader for access to their data sets. We
+would like to thank Stephen Soderland, Yoav Artzi,
+and the anonymous reviewers for helpful comments
+on previous drafts. This research was supported
+in part by NSF grant IIS-0803481, ONR grant
+N00014-08-1-0431, DARPA contract FA8750-09-
+C-0179, a NDSEG Fellowship, and carried out at
+the University of Washington’s Turing Center.
+</bodyText>
+<footnote confidence="0.9935585">
+2available at http://www.cs.washington.edu/
+research/leibniz
+</footnote>
+<page confidence="0.993153">
+1275
+</page>
+<sectionHeader confidence="0.998291" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999793957446808">
+M. Banko and O. Etzioni. 2008. The tradeoffs between
+open and traditional relation extraction. In Proceed-
+ings of the 46th Annual Meeting of the Association for
+Computational Linguistics (ACL).
+M. Banko, M. Cafarella, S. Soderland, M. Broadhead,
+and O. Etzioni. 2007. Open information extraction
+from the web. In Proceedings of the 20th International
+Joint Conference on Artificial Intelligence (IJCAI).
+A. Culotta, A. McCallum, and J. Betz. 2006. Integrating
+probabilistic extraction models and data mining to dis-
+cover relations and patterns in text. In Proceedings of
+the HLT-NAACL.
+D. Downey, O. Etzioni, and S. Soderland. 2005. A prob-
+abilistic model of redundancy in information extrac-
+tion. In Proceedings of the 19th International Joint
+Conference on Artificial Intelligence (IJCAI).
+T. Dunning. 1993. Accurate methods for the statistics of
+surprise and coincidence. In Computational Linguis-
+tics, volume 19.
+A. Fader, O. Etzioni, and S. Soderland. 2010. Identi-
+fying well-specified relations for open information ex-
+traction. (In preparation).
+C. Fellbaum, editor. 1998. WordNet: An Electronic Lex-
+ical Database. MIT Press, Cambridge, MA.
+N. Guarino and C. Welty. 2004. An overview of On-
+toClean. In Handbook of Ontologies in Information
+Systems, pages 151–172.
+J. Hopcraft and R. Tarjan. 1973. Efficient algorithms
+for graph manipulation. Communications of the ACM,
+16:372–378.
+Y. Huhtala, J. K¨arkk¨ainen, P. Porkka, and H. Toivonen.
+1999. TANE: An efficient algorithm for discover-
+ing functional and approximate dependencies. In The
+Computer Journal.
+M. Keller, S. Bengio, and S.Y. Wong. 2005. Bench-
+marking non-parametric statistical tests. In Advances
+in Neural Information Processing Systems (NIPS) 18.
+K. Kipper-Schuler. 2005. Verbnet: A broad-coverage,
+comprehensive verb lexicon. In Ph.D. thesis. Univer-
+sity of Pennsylvania.
+Z. Kozareva and E. Hovy. 2010. Learning arguments
+and supertypes of semantic relations using recursive
+patterns. In Proceedings of the 48th Annual Meeting of
+the Association for Computational Linguistics (ACL).
+S. Kullback and R.A. Leibler. 1951. On information
+and sufficiency. Annals of Mathematical Statistics,
+22(1):79–86.
+Metaweb Technologies. 2009. Freebase data dumps. In
+http://download.freebase.com/datadumps/.
+A-M. Popescu. 2007. Information extraction from un-
+structured web text. In Ph.D. thesis. University of
+Washington.
+J. Prager, S. Luger, and J. Chu-Carroll. 2007. Type nan-
+otheories: a framework for term comparison. In Pro-
+ceedings of the 16th ACM Conference on Information
+and Knowledge Management (CIKM).
+C. Price and K. Spackman. 2000. SNOMED clincal
+terms. In British Journal of Healthcare Computing &amp;
+Information Management, volume 17.
+A. Ritter, D. Downey, S. Soderland, and O. Etzioni.
+2008. It’s a contradiction - no, it’s not: A case study
+using functional relations. In Proceedings of the 2008
+Conference on Empirical Methods in Natural Lan-
+guage Processing (EMNLP).
+A. Ritter, Mausam, and O. Etzioni. 2010. A latent dirich-
+let allocation method for selectional preferences. In
+Proceedings of the 48th Annual Meeting of the Associ-
+ation for Computational Linguistics (ACL).
+S. Schoenmackers, O. Etzioni, and D. Weld. 2008. Scal-
+ing textual inference to the web. In Proceedings of
+the 2008 Conference on Empirical Methods in Natural
+Language Processing (EMNLP).
+S. Schoenmackers, J. Davis, O. Etzioni, and D. Weld.
+2010. Learning first-order horn clauses from web text.
+In Proceedings of the 2010 Conference on Empirical
+Methods in Natural Language Processing (EMNLP).
+P. Srinivasan and A. Yates. 2009. Quantifier scope
+disambiguation using extracted pragmatic knowledge:
+Preliminary results. In Proceedings of the 2009 Con-
+ference on Empirical Methods in Natural Language
+Processing (EMNLP).
+J. Volker, D. Vrandecic, and Y. Sure. 2005. Auto-
+matic evaluation of ontologies (AEON). In Proceed-
+ings of the 4th International Semantic Web Conference
+(ISWC).
+Wikipedia. 2004. Wikipedia: The free encyclopedia. In
+http://www.wikipedia.org. Wikimedia Foundation.
+H. Yao and H. Hamilton. 2008. Mining functional de-
+pendencies from data. In Data Mining and Knowledge
+Discovery.
+A. Yates and O. Etzioni. 2009. Unsupervised methods
+for determining object and relation synonyms on the
+web. In Journal of Artificial Intelligence Research,
+volume 34, pages 255–296.
+</reference>
+<page confidence="0.991126">
+1276
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.753772">
+<title confidence="0.999123">Identifying Functional Relations in Web Text</title>
+<author confidence="0.999705">Thomas Lin</author>
+<author confidence="0.999705">Oren Mausam</author>
+<affiliation confidence="0.916292">Turing University of</affiliation>
+<address confidence="0.999529">Seattle, WA 98195,</address>
+<abstract confidence="0.9966315">Determining whether a textual phrase denotes functional relation a relation that maps each domain element to a unique range element) is useful for numerous NLP tasks such as synonym resolution and contradiction detection. Previous work on this problem has relied on either counting methods or lexico-syntactic patterns. However, determining whether a relation is functional, by analyzing mentions of the relation in a corpus, is challenging due to ambiguity, synonymy, anaphora, and other linguistic phenomena. present the that overcomes these challenges by exploiting the synergy between the Web corpus and freelyavailable knowledge resources such as Free- It first computes multiple typedfunctionrepresenting functionality of the relation phrase when its arguments are constrained to specific types. It then aggregates these scores to predict the global functionality the phrase. previous work, increasing area under the precisionrecall curve from 0.61 to 0.88. We utilize generate the first public repository of automatically-identified functional relations.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>M Banko</author>
+<author>O Etzioni</author>
+</authors>
+<title>The tradeoffs between open and traditional relation extraction.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 46th Annual Meeting of the Association for Computational Linguistics (ACL).</booktitle>
+<contexts>
+<context position="1440" citStr="Banko and Etzioni, 2008" startWordPosition="210" endWordPosition="213">pus and freelyavailable knowledge resources such as Freebase. It first computes multiple typedfunctionality scores, representing functionality of the relation phrase when its arguments are constrained to specific types. It then aggregates these scores to predict the global functionality for the phrase. LEIBNIZ outperforms previous work, increasing area under the precisionrecall curve from 0.61 to 0.88. We utilize LEIBNIZ to generate the first public repository of automatically-identified functional relations. 1 Introduction The paradigm of Open Information Extraction (IE) (Banko et al., 2007; Banko and Etzioni, 2008) has scaled extraction technology to the massive set of relations expressed in Web text. However, additional work is needed to better understand these relations, and to place them in richer semantic structures. A step in that direction is identifying the properties of these relations, e.g., symmetry, transitivity and our focus in this paper – functionality. We refer to this problem as functionality identi�cation. A binary relation is functional if, for a given arg1, there is exactly one unique value for arg2. Examples of functional relations are father, death date, birth city, etc. We define a</context>
+<context position="4133" citStr="Banko and Etzioni, 2008" startWordPosition="632" endWordPosition="635">ure 1: Our system, LEIBNIZ, uses the Web and Freebase to determine functionality of Web relations. is scarce or expensive (e.g., biomedical texts). This paper tackles automatic functionality identification using Web text. While functionality identification has been utilized as a module in various NLP systems, this is the first paper to focus exclusively on functionality identification as a bona fide NLP inference task. It is natural to identify functions based on triples extracted from text instead of analyzing sentences directly. Thus, as our input, we utilize tuples extracted by TEXTRUNNER (Banko and Etzioni, 2008) when run over a corpus of 500 million webpages. TEXTRUNNER maps sentences to tuples of the form &lt;arg1, relation phrase, arg2&gt; and enables our LEIBNIZ system to focus on the problem of deciding whether the relation phrase is a function. The naive approach, which classifies a relation phrase as non-functional if several arg1s have multiple arg2s in our extraction set, fails due to several reasons: synonymy – a unique entity may be referred by multiple strings, polysemy of both entities and relations – a unique string may refer to multiple entities/relations, metaphorical usage, extraction error</context>
+<context position="28174" citStr="Banko and Etzioni, 2008" startWordPosition="4467" endWordPosition="4470"> we wish to answer three questions: (1) How do our three approaches, Instance Based Counting (IBC), DISTRDIFF, and CLEANLISTS, compare on the functionality identification task? (2) How does our final system, LEIBNIZ, compare against the existing state of the art techniques? (3) How well is LEIBNIZ able to identify typed functionality for different types in the same relation phrase? 5.1 Dataset For our experiments we test on the set of 887 relations used by Ritter et al. (2008) in their experiments. We use the Open IE corpus generated by running TEXTRUNNER on 500 million high quality Webpages (Banko and Etzioni, 2008) as the source of instance data for these relations. Extractor and corpus differences lead to some relations not occurring (or not occurring with sufficient frequency to properly analyze, i.e., &gt; 5 arg1 with &gt; 10 evidence), leaving a dataset of 629 relations on which to test. Two human experts tagged these relations for functionality. Tagging the functionality of relation phrases can be a bit subjective, as it requires the experts to imagine the various senses of a phrase and judge functionality over all those senses. The inter-annotator agreement between the experts was 95.5%. We limit oursel</context>
+</contexts>
+<marker>Banko, Etzioni, 2008</marker>
+<rawString>M. Banko and O. Etzioni. 2008. The tradeoffs between open and traditional relation extraction. In Proceedings of the 46th Annual Meeting of the Association for Computational Linguistics (ACL).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Banko</author>
+<author>M Cafarella</author>
+<author>S Soderland</author>
+<author>M Broadhead</author>
+<author>O Etzioni</author>
+</authors>
+<title>Open information extraction from the web.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 20th International Joint Conference on Artificial Intelligence (IJCAI).</booktitle>
+<contexts>
+<context position="1414" citStr="Banko et al., 2007" startWordPosition="206" endWordPosition="209"> between the Web corpus and freelyavailable knowledge resources such as Freebase. It first computes multiple typedfunctionality scores, representing functionality of the relation phrase when its arguments are constrained to specific types. It then aggregates these scores to predict the global functionality for the phrase. LEIBNIZ outperforms previous work, increasing area under the precisionrecall curve from 0.61 to 0.88. We utilize LEIBNIZ to generate the first public repository of automatically-identified functional relations. 1 Introduction The paradigm of Open Information Extraction (IE) (Banko et al., 2007; Banko and Etzioni, 2008) has scaled extraction technology to the massive set of relations expressed in Web text. However, additional work is needed to better understand these relations, and to place them in richer semantic structures. A step in that direction is identifying the properties of these relations, e.g., symmetry, transitivity and our focus in this paper – functionality. We refer to this problem as functionality identi�cation. A binary relation is functional if, for a given arg1, there is exactly one unique value for arg2. Examples of functional relations are father, death date, bi</context>
+</contexts>
+<marker>Banko, Cafarella, Soderland, Broadhead, Etzioni, 2007</marker>
+<rawString>M. Banko, M. Cafarella, S. Soderland, M. Broadhead, and O. Etzioni. 2007. Open information extraction from the web. In Proceedings of the 20th International Joint Conference on Artificial Intelligence (IJCAI).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Culotta</author>
+<author>A McCallum</author>
+<author>J Betz</author>
+</authors>
+<title>Integrating probabilistic extraction models and data mining to discover relations and patterns in text.</title>
+<date>2006</date>
+<booktitle>In Proceedings of the HLT-NAACL.</booktitle>
+<contexts>
+<context position="10845" citStr="Culotta et al., 2006" startWordPosition="1633" endWordPosition="1636">l-suited for identifying whether a verb phrase can take multiple objects or not. This can be understood as a functionality property of the verb phrase within a sentence, as opposed to functionality of the semantic relation the phrase represents. WIE: In a preliminary study, Popescu (2007) applies an instance based counting approach, but her relations require manually annotated type restrictions, which makes the approach less scalable. Finally, functionality is just one property of relations that can be learned from text. A number of other studies (Guarino and Welty, 2004; Volker et al., 2005; Culotta et al., 2006) have examined detecting other relation properties from text and applying them to tasks such as ontology cleaning. 3 Challenges for Functionality Identification A functional binary relation r is formally defined as one such that Vx, y1, y2 : r(x, y1)nr(x, y2) ==&gt;- y1 = y2. We define a relation string to be functional if all semantic relations commonly expressed by the relation string are individually functional. Thus, under our definition, ‘was born in’ and ‘died in’ are functional, even though they can take different arg2s for the same arg1, e.g., year, city, state, country, etc. The definiti</context>
+</contexts>
+<marker>Culotta, McCallum, Betz, 2006</marker>
+<rawString>A. Culotta, A. McCallum, and J. Betz. 2006. Integrating probabilistic extraction models and data mining to discover relations and patterns in text. In Proceedings of the HLT-NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Downey</author>
+<author>O Etzioni</author>
+<author>S Soderland</author>
+</authors>
+<title>A probabilistic model of redundancy in information extraction.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the 19th International Joint Conference on Artificial Intelligence (IJCAI).</booktitle>
+<contexts>
+<context position="8797" citStr="Downey et al., 2005" startWordPosition="1313" endWordPosition="1316">ng automatic approaches to functionality identification. Discovering functional dependencies has been recognized as an important database analysis technique (Huhtala et al., 1999; Yao and Hamilton, 2008), but the database community does not address any of the linguistic phenomena which make this a challenging problem in NLP. Three groups of researchers have studied functionality identification in the context of natural language. AuContraire (Ritter et al., 2008) is a contradiction detection system that also learns relation functionality. Their approach combines a probabilistic model based on (Downey et al., 2005) with estimates on whether each arg1 is ambiguous. The estimates are used to weight each arg1’s contribution to an overall functionality score for each relation. Both argument-ambiguity and relationfunctionality are jointly estimated using an EM-like method. While elegant, AuContraire requires substantial hand-engineered knowledge, which limits the scalability of their approach. Lexico-syntactic patterns: Srinivasan and Yates (2009) disambiguate a quantifier’s scope by first making judgments about relation functionality. For functionality, they look for numeric phrases following the relation. </context>
+</contexts>
+<marker>Downey, Etzioni, Soderland, 2005</marker>
+<rawString>D. Downey, O. Etzioni, and S. Soderland. 2005. A probabilistic model of redundancy in information extraction. In Proceedings of the 19th International Joint Conference on Artificial Intelligence (IJCAI).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Dunning</author>
+</authors>
+<title>Accurate methods for the statistics of surprise and coincidence.</title>
+<date>1993</date>
+<booktitle>In Computational Linguistics,</booktitle>
+<volume>19</volume>
+<contexts>
+<context position="35916" citStr="Dunning, 1993" startWordPosition="5728" endWordPosition="5729">nables LEIBNIZ to identify far more functional relations than TEXTRUNNER. 6.1 Addressing Evidence Sparsity Scaling up to a large collection of typed relations requires us to consider the size of our data sets. For example, consider which relation is more likely to be functional—a relation with 10 instances all of which indicate functionality versus a relation with 100 instances where 95 behave functionally. To address this problem, we adapt the likelihood ratio approach from Schoenmackers et al. (2010). 1274 For a typed relation with n instances, f of which indicate functionality, the G-test (Dunning, 1993), G = 2*(f*ln(f/k)+(n-f)*ln((n-f)/(n-k))), provides a measure for the likelihood that the relation is not functional. Here k denotes the evidence indicating functionality for the case where the relation is not functional. Setting k = n*0.25 worked well for us. This G-score replaces our previous metric for scoring functional relations. 6.2 Evaluation of the Repository In CLEANLISTS a factor that affects the quality of the results is the exact set of lists that is used. If the lists are not clean, results get noisy. For example, Freebase’s list of films contains 73,000 entries, many of which (e.</context>
+</contexts>
+<marker>Dunning, 1993</marker>
+<rawString>T. Dunning. 1993. Accurate methods for the statistics of surprise and coincidence. In Computational Linguistics, volume 19.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Fader</author>
+<author>O Etzioni</author>
+<author>S Soderland</author>
+</authors>
+<title>Identifying well-specified relations for open information extraction.</title>
+<date>2010</date>
+<note>(In preparation).</note>
+<contexts>
+<context position="35109" citStr="Fader et al., 2010" startWordPosition="5597" endWordPosition="5600">f various types very well. When LEIBNIZ did not work, it was generally because of textual functionality, which is a larger issue for typed functionality than general functionality. Of course, these results are merely suggestive – we perform a larger-scale experiment and generate a repository of typed functions next. 6 A Repository of Functional Relations We now report on a repository of typed functional relations generated automatically by applying LEIBNIZ to a large collection of relation phrases. Instead of starting with the most frequent relations from TEXTRUNNER, we use OCCAM’s relations (Fader et al., 2010) because they are more specific. For instance, where TEXTRUNNER outputs an underspecified tuple, &lt;Gold, has, an atomic number of 79&gt;, OCCAM extracts &lt;Gold, has an atomic number of, 79&gt;. OCCAM enables LEIBNIZ to identify far more functional relations than TEXTRUNNER. 6.1 Addressing Evidence Sparsity Scaling up to a large collection of typed relations requires us to consider the size of our data sets. For example, consider which relation is more likely to be functional—a relation with 10 instances all of which indicate functionality versus a relation with 100 instances where 95 behave functional</context>
+</contexts>
+<marker>Fader, Etzioni, Soderland, 2010</marker>
+<rawString>A. Fader, O. Etzioni, and S. Soderland. 2010. Identifying well-specified relations for open information extraction. (In preparation).</rawString>
+</citation>
+<citation valid="true">
+<title>WordNet: An Electronic Lexical Database.</title>
+<date>1998</date>
+<editor>C. Fellbaum, editor.</editor>
+<publisher>MIT Press,</publisher>
+<location>Cambridge, MA.</location>
+<marker>1998</marker>
+<rawString>C. Fellbaum, editor. 1998. WordNet: An Electronic Lexical Database. MIT Press, Cambridge, MA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Guarino</author>
+<author>C Welty</author>
+</authors>
+<title>An overview of OntoClean.</title>
+<date>2004</date>
+<booktitle>In Handbook of Ontologies in Information Systems,</booktitle>
+<pages>151--172</pages>
+<contexts>
+<context position="10801" citStr="Guarino and Welty, 2004" startWordPosition="1625" endWordPosition="1628">not perform as well for our task, they are well-suited for identifying whether a verb phrase can take multiple objects or not. This can be understood as a functionality property of the verb phrase within a sentence, as opposed to functionality of the semantic relation the phrase represents. WIE: In a preliminary study, Popescu (2007) applies an instance based counting approach, but her relations require manually annotated type restrictions, which makes the approach less scalable. Finally, functionality is just one property of relations that can be learned from text. A number of other studies (Guarino and Welty, 2004; Volker et al., 2005; Culotta et al., 2006) have examined detecting other relation properties from text and applying them to tasks such as ontology cleaning. 3 Challenges for Functionality Identification A functional binary relation r is formally defined as one such that Vx, y1, y2 : r(x, y1)nr(x, y2) ==&gt;- y1 = y2. We define a relation string to be functional if all semantic relations commonly expressed by the relation string are individually functional. Thus, under our definition, ‘was born in’ and ‘died in’ are functional, even though they can take different arg2s for the same arg1, e.g., y</context>
+</contexts>
+<marker>Guarino, Welty, 2004</marker>
+<rawString>N. Guarino and C. Welty. 2004. An overview of OntoClean. In Handbook of Ontologies in Information Systems, pages 151–172.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Hopcraft</author>
+<author>R Tarjan</author>
+</authors>
+<title>Efficient algorithms for graph manipulation.</title>
+<date>1973</date>
+<journal>Communications of the ACM,</journal>
+<pages>16--372</pages>
+<contexts>
+<context position="17140" citStr="Hopcraft and Tarjan, 1973" startWordPosition="2643" endWordPosition="2646">Similarly, it allows an extraction only once per website url. Moreover, it filters out any arg1 that does not appear at least 10 times with that relation. Equality Checking: This key component judges if two arg2s refer to the same entity. It first employs weak typing by disallowing equality checks across common nouns, proper nouns, dates and numbers. This mitigates the relation ambiguity problem, since we never compare ‘born in(1732)’ and ‘born in(Virginia)’. Within the same category it judges two arg2s to co-refer if they share a content word. It also performs a connected component analysis (Hopcraft and Tarjan, 1973) to take a transitive closure of arg2s judged equal (see Figure 3). For example, for the relation ‘was named after’ and arg1=‘Bluetooth’ our corpus has three arg2s: ‘Harald Bluetooth’, ‘Harald Bluetooth, the King of Denmark’ and ‘the King of Denmark’. Our equality method judges all three as referring to the same entity. Note that this is a heuristic approach, which could make mistakes. But for an error, there needs to be extractions with the same arg1, relation and similar arg2s. Such cases exist, but are not common. Our equality checking mitigates the problems of anaphora, synonymy as well as</context>
+</contexts>
+<marker>Hopcraft, Tarjan, 1973</marker>
+<rawString>J. Hopcraft and R. Tarjan. 1973. Efficient algorithms for graph manipulation. Communications of the ACM, 16:372–378.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Huhtala</author>
+<author>J K¨arkk¨ainen</author>
+<author>P Porkka</author>
+<author>H Toivonen</author>
+</authors>
+<title>TANE: An efficient algorithm for discovering functional and approximate dependencies.</title>
+<date>1999</date>
+<journal>In The Computer Journal.</journal>
+<marker>Huhtala, K¨arkk¨ainen, Porkka, Toivonen, 1999</marker>
+<rawString>Y. Huhtala, J. K¨arkk¨ainen, P. Porkka, and H. Toivonen. 1999. TANE: An efficient algorithm for discovering functional and approximate dependencies. In The Computer Journal.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Keller</author>
+<author>S Bengio</author>
+<author>S Y Wong</author>
+</authors>
+<title>Benchmarking non-parametric statistical tests.</title>
+<date>2005</date>
+<booktitle>In Advances in Neural Information Processing Systems (NIPS) 18.</booktitle>
+<contexts>
+<context position="31557" citStr="Keller et al., 2005" startWordPosition="5011" endWordPosition="5014">r best performing system. We reimplement a version of NumericTerms using their list of numeric quantifiers and extraction patterns that best correspond to our relation format. We run our implementation of NumericTerms on a dataset of 100 million English sentences from a crawl of high quality Webpages to generate the functionality labels. Figure 6(a) reports the results of this experiment. We find that LEIBNIZ outperforms AuContraire by vast margins covering an additional 44% area in the precision-recall curve. AuContraire’s AUC is 0.61 whereas LEIBNIZ covers 0.88. A Bootstrap Percentile Test (Keller et al., 2005) on F1 score found the improvement of our techniques over AuContraire to be statistically significant at α = 0.05. NumericTerms does not perform well, because it makes decisions based only on the local evidence in a sentence, and does not integrate the knowledge from different occurrences of the same relation. It returns many false positives, such as ‘lives in’, which appear functional to the lexico-syntactic pattern, but are clearly non-functional, e.g., one could live in many places over a lifetime. An example of a LEIBNIZ error is the ‘represented’ relation. LEIBNIZ classifies this as funct</context>
+</contexts>
+<marker>Keller, Bengio, Wong, 2005</marker>
+<rawString>M. Keller, S. Bengio, and S.Y. Wong. 2005. Benchmarking non-parametric statistical tests. In Advances in Neural Information Processing Systems (NIPS) 18.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Kipper-Schuler</author>
+</authors>
+<title>Verbnet: A broad-coverage, comprehensive verb lexicon.</title>
+<date>2005</date>
+<booktitle>In Ph.D. thesis.</booktitle>
+<institution>University of Pennsylvania.</institution>
+<contexts>
+<context position="7089" citStr="Kipper-Schuler, 2005" startWordPosition="1077" endWordPosition="1078">ounting, distributional differences, and use of external knowledge bases. 3. Our best method, LEIBNIZ, outperforms the existing approaches by wide margins, increasing area under the precision-recall curve from 0.61 to 0.88. It is also capable of distinguishing functionality of typed relation phrases, when the arguments are restricted to specific types. 4. Utilizing LEIBNIZ, we created the first public repository of functional relations.1 2 Related Work There is a recent surge in large knowledge bases constructed by human collaboration such as Freebase (Metaweb Technologies, 2009) and VerbNet (Kipper-Schuler, 2005). VerbNet annotates its verbs with several properties but not functionality. Freebase does annotate some relations with an ‘is unique’ property, which is similar to functionality, but the number of relations in Freebase is still much 1available at http://www.cs.washington.edu/ research/leibniz Functionality prediction for Web relations Web Corpus Distributional Difference functionality scores (typed) instances per relation IE Combination Policy Assertions Clean Lists Freebase type lists 1267 Rudy Giuliani visited: Florida a famous cheesesteak restaurant South Carolina the Florida Everglades Bo</context>
+</contexts>
+<marker>Kipper-Schuler, 2005</marker>
+<rawString>K. Kipper-Schuler. 2005. Verbnet: A broad-coverage, comprehensive verb lexicon. In Ph.D. thesis. University of Pennsylvania.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Z Kozareva</author>
+<author>E Hovy</author>
+</authors>
+<title>Learning arguments and supertypes of semantic relations using recursive patterns.</title>
+<date>2010</date>
+<booktitle>In Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics (ACL).</booktitle>
+<contexts>
+<context position="25019" citStr="Kozareva and Hovy, 2010" startWordPosition="3926" endWordPosition="3929">ese types, we will be left with a smaller, but much cleaner, subset of relation data, one for each type. CLEANLISTS analyzes each subset using simple, instance based counting and computes a typed functionality score for each type. Thus, it first computes typed functionality for each relation. There are two subtleties in applying this algorithm. First, we need to identify the set of types to consider for each relation. Our algorithm currently picks the types that occur most in each relation’s observed data. In the future, we could also use a selectional preferences system (Ritter et al., 2010; Kozareva and Hovy, 2010). Note that we remove Freebase types such as Written Work from consideration for containing many entities whose primary senses are not that type. For example, both ‘Al Gore’ and ‘William Clinton’ are also names of books, but references in text to these are rarely a reference to the written work sense. Secondly, an argument could belong to multiple Freebase lists. For example, ‘California’ is both a city and a state. We apply a simple heuristic: if a string appears in multiple lists under consideration, we assign it to the smallest of the lists (the list of cities is much larger than states). T</context>
+</contexts>
+<marker>Kozareva, Hovy, 2010</marker>
+<rawString>Z. Kozareva and E. Hovy. 2010. Learning arguments and supertypes of semantic relations using recursive patterns. In Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics (ACL).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Kullback</author>
+<author>R A Leibler</author>
+</authors>
+<title>On information and sufficiency.</title>
+<date>1951</date>
+<journal>Annals of Mathematical Statistics,</journal>
+<volume>22</volume>
+<issue>1</issue>
+<contexts>
+<context position="21746" citStr="Kullback and Leibler, 1951" startWordPosition="3410" endWordPosition="3413">Mass 100% 90% 80% 40% 70% 60% 50% 30% 20% 10% 0% Argument 2 Mass 100% 90% 80% 40% 70% 60% 50% 30% 20% 10% 0% Mass 100% 90% 80% 40% 70% 60% 50% 30% 20% 10% 0% functional average nonfunctional average was born on (sample func) visited (sample nonfunc) the opposite. Notice that the aggregated curve for ‘visited’ in the figure is closer to the average curve for non-functional than to functional and vice-versa for ‘was born on’. We plot the aggregated slope-distributions for each relation and use the distance from average distributions as a means to predict the functionality. We use KL divergence (Kullback and Leibler, 1951) to compute the distance between two distributions. We score a relation’s functionality in three ways using: (1) KLFUNC, its distance from average functional slope-distribution F,,,,,g, (2) KLDIFF, its distance from average functional minus its distance from average non-functional N,,,,,g, and (3) average of these two scores. For a relation with slope distribution R, the scores are computed as: KLFUNC = Ei R(i)ln R(i) F���(i) KLDIFF = KLFUNC - (Ei R(i)ln R(i) N���(i)) Section 5.2 compares the three scoring functions. A purely statistical approach is resilient to noisy data, and does not need t</context>
+</contexts>
+<marker>Kullback, Leibler, 1951</marker>
+<rawString>S. Kullback and R.A. Leibler. 1951. On information and sufficiency. Annals of Mathematical Statistics, 22(1):79–86.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Metaweb Technologies</author>
+</authors>
+<title>Freebase data dumps.</title>
+<date>2009</date>
+<note>In http://download.freebase.com/datadumps/.</note>
+<contexts>
+<context position="5899" citStr="Technologies, 2009" startWordPosition="907" endWordPosition="908">onstrained to have specific argument types. We develop several approaches to overcome these challenges. Our first scheme employs approximate argument merging to overcome the synonymy and anaphora problems. Our second approach, DISTRDIFF, takes a statistical view of the problem and learns a separator for the typical count distributions of functional versus non-functional relations. Finally, our third and most successful scheme, CLEANLISTS, identifies and processes a cleaner subset of the data by intersecting the corpus with entities in a secondary knowledge-base (in our case, Freebase (Metaweb Technologies, 2009)). Utilizing pre-defined types, CLEANLISTS first identifies typed functionality for suitable types for that relation phrase, and then combines them to output a final functionality label. LEIBNIZ, a hybrid of CLEANLISTS and DISTRDIFF, returns state-of-the-art results for our task. Our work makes the following contributions: 1. We identify several linguistic phenomena that make the problem of corpus-based functionality identification surprisingly difficult. 2. We designed and implemented three novel techniques for identifying functionality based on instance-based counting, distributional differe</context>
+<context position="23059" citStr="Technologies, 2009" startWordPosition="3615" endWordPosition="3616">not handle relation ambiguity and type restrictions. Moreover, we may need to relearn the separator if applying DISTRDIFF to a corpus with very different count distributions. 4.3 CLEANLISTS Our third algorithm, CLEANLISTS, is based on the intuition that for identifying functionality we need not reason over all the data in our corpus; instead, a small but cleaner subset of the data may work best. This clean subset should ideally be free of synonyms, ambiguities and anaphora, and be typed. Several knowledge-bases such as Wordnet, Wikipedia, and Freebase (Fellbaum, 1998; Wikipedia, 2004; Metaweb Technologies, 2009), are readily and freely available and they all provide clean typed lists of entities. In our experiments CLEANLISTS employs Freebase as a source of clean lists, but we could use any of these or other domain-specific ontologies such as SNOMED (Price and Spackman, 2000) as well. CLEANLISTS takes the intersection of Freebase entities with our corpus to generate a clean subset for functionality analysis. Freebase currently has over 12 million entities in over 1,000 typed lists. Thus, this intersection retains significant portions of the useful data, and gets rid of most of anaphora and synonymy i</context>
+</contexts>
+<marker>Technologies, 2009</marker>
+<rawString>Metaweb Technologies. 2009. Freebase data dumps. In http://download.freebase.com/datadumps/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A-M Popescu</author>
+</authors>
+<title>Information extraction from unstructured web text.</title>
+<date>2007</date>
+<booktitle>In Ph.D. thesis.</booktitle>
+<institution>University of Washington.</institution>
+<contexts>
+<context position="10513" citStr="Popescu (2007)" startWordPosition="1581" endWordPosition="1582">ies”. Since both these phrases refer to the same semantic relation this approach has low precision. Moreover, it performs poorly for relation phrases that naturally expect numbers as the target argument (e.g., ‘has an atomic number of’). While these lexico-syntactic patterns do not perform as well for our task, they are well-suited for identifying whether a verb phrase can take multiple objects or not. This can be understood as a functionality property of the verb phrase within a sentence, as opposed to functionality of the semantic relation the phrase represents. WIE: In a preliminary study, Popescu (2007) applies an instance based counting approach, but her relations require manually annotated type restrictions, which makes the approach less scalable. Finally, functionality is just one property of relations that can be learned from text. A number of other studies (Guarino and Welty, 2004; Volker et al., 2005; Culotta et al., 2006) have examined detecting other relation properties from text and applying them to tasks such as ontology cleaning. 3 Challenges for Functionality Identification A functional binary relation r is formally defined as one such that Vx, y1, y2 : r(x, y1)nr(x, y2) ==&gt;- y1 </context>
+</contexts>
+<marker>Popescu, 2007</marker>
+<rawString>A-M. Popescu. 2007. Information extraction from unstructured web text. In Ph.D. thesis. University of Washington.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Prager</author>
+<author>S Luger</author>
+<author>J Chu-Carroll</author>
+</authors>
+<title>Type nanotheories: a framework for term comparison.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 16th ACM Conference on Information and Knowledge Management (CIKM).</booktitle>
+<contexts>
+<context position="27284" citStr="Prager et al., 2007" startWordPosition="4317" endWordPosition="4320">he arg2 of ‘weighed’ can’t be matched to a Freebase list. To increase the recall we back off to DISTRDIFF in the cases when CLEANLISTS is unable to make a prediction. This combination gives the best balance of precision and recall for our task. We name our final system LEIBNIZ. One current limitation is that using only those arg2s that exactly match clean lists leaves out some good data (e.g., a tuple with an arg2 of ‘Univ of Wash’ will not match against a list of universities that spells it as ‘University of Washington’). Because we have access to entity types, using typed equality checkers (Prager et al., 2007) with the clean lists would allow us to recapture much of this useful data. Moreover, the knowledge of functions could apply to building new type nanotheories and reduce considerable manual effort. We wish to study this in the future. 5 Evaluation In our evaluation, we wish to answer three questions: (1) How do our three approaches, Instance Based Counting (IBC), DISTRDIFF, and CLEANLISTS, compare on the functionality identification task? (2) How does our final system, LEIBNIZ, compare against the existing state of the art techniques? (3) How well is LEIBNIZ able to identify typed functionalit</context>
+</contexts>
+<marker>Prager, Luger, Chu-Carroll, 2007</marker>
+<rawString>J. Prager, S. Luger, and J. Chu-Carroll. 2007. Type nanotheories: a framework for term comparison. In Proceedings of the 16th ACM Conference on Information and Knowledge Management (CIKM).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Price</author>
+<author>K Spackman</author>
+</authors>
+<title>SNOMED clincal terms.</title>
+<date>2000</date>
+<journal>In British Journal of Healthcare Computing &amp; Information Management,</journal>
+<volume>17</volume>
+<contexts>
+<context position="23328" citStr="Price and Spackman, 2000" startWordPosition="3657" endWordPosition="3660">ifying functionality we need not reason over all the data in our corpus; instead, a small but cleaner subset of the data may work best. This clean subset should ideally be free of synonyms, ambiguities and anaphora, and be typed. Several knowledge-bases such as Wordnet, Wikipedia, and Freebase (Fellbaum, 1998; Wikipedia, 2004; Metaweb Technologies, 2009), are readily and freely available and they all provide clean typed lists of entities. In our experiments CLEANLISTS employs Freebase as a source of clean lists, but we could use any of these or other domain-specific ontologies such as SNOMED (Price and Spackman, 2000) as well. CLEANLISTS takes the intersection of Freebase entities with our corpus to generate a clean subset for functionality analysis. Freebase currently has over 12 million entities in over 1,000 typed lists. Thus, this intersection retains significant portions of the useful data, and gets rid of most of anaphora and synonymy issues. Moreover, by matching against typed lists, many relation ambiguities are separated as well, since ambiguous relations often take different types in the arguments (e.g., ‘ran(Distance)’ vs. ‘ran(Company)’). To mitigate the effect of argument ambiguity, we additio</context>
+</contexts>
+<marker>Price, Spackman, 2000</marker>
+<rawString>C. Price and K. Spackman. 2000. SNOMED clincal terms. In British Journal of Healthcare Computing &amp; Information Management, volume 17.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Ritter</author>
+<author>D Downey</author>
+<author>S Soderland</author>
+<author>O Etzioni</author>
+</authors>
+<title>It’s a contradiction - no, it’s not: A case study using functional relations.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing (EMNLP).</booktitle>
+<contexts>
+<context position="2535" citStr="Ritter et al., 2008" startWordPosition="385" endWordPosition="388">e is exactly one unique value for arg2. Examples of functional relations are father, death date, birth city, etc. We define a relation phrase to be functional if all semantic relations commonly expressed by that phrase are functional. For example, we say that the phrase ‘was born in’ denotes a functional relation, because the different semantic relations expressed by the phrase (e.g., birth city, birth year, etc.) are all functional. Knowing that a relation is functional is helpful for numerous NLP inference tasks. Previous work has used functionality for the tasks of contradiction detection (Ritter et al., 2008), quantifier scope disambiguation (Srinivasan and Yates, 2009), and synonym resolution (Yates and Etzioni, 2009). It could also aid in other tasks such as ontology generation and information extraction. For example, consider two sentences from a contradiction detection task: (1) “George Washington was born in Virginia.” and (2) “George Washington was born in Texas.” As Ritter et al. (2008) points out, we can only determine that the two sentences are contradictory if we know that the semantic relation referred to by the phrase ‘was born in’ is functional, and that both Virginia and Texas are di</context>
+<context position="8643" citStr="Ritter et al., 2008" startWordPosition="1288" endWordPosition="1291">lustrate the challenge in discriminating functionality from Web text. smaller than the hundreds of thousands of relations existing on the Web, necessitating automatic approaches to functionality identification. Discovering functional dependencies has been recognized as an important database analysis technique (Huhtala et al., 1999; Yao and Hamilton, 2008), but the database community does not address any of the linguistic phenomena which make this a challenging problem in NLP. Three groups of researchers have studied functionality identification in the context of natural language. AuContraire (Ritter et al., 2008) is a contradiction detection system that also learns relation functionality. Their approach combines a probabilistic model based on (Downey et al., 2005) with estimates on whether each arg1 is ambiguous. The estimates are used to weight each arg1’s contribution to an overall functionality score for each relation. Both argument-ambiguity and relationfunctionality are jointly estimated using an EM-like method. While elegant, AuContraire requires substantial hand-engineered knowledge, which limits the scalability of their approach. Lexico-syntactic patterns: Srinivasan and Yates (2009) disambigu</context>
+<context position="28031" citStr="Ritter et al. (2008)" startWordPosition="4443" endWordPosition="4446"> building new type nanotheories and reduce considerable manual effort. We wish to study this in the future. 5 Evaluation In our evaluation, we wish to answer three questions: (1) How do our three approaches, Instance Based Counting (IBC), DISTRDIFF, and CLEANLISTS, compare on the functionality identification task? (2) How does our final system, LEIBNIZ, compare against the existing state of the art techniques? (3) How well is LEIBNIZ able to identify typed functionality for different types in the same relation phrase? 5.1 Dataset For our experiments we test on the set of 887 relations used by Ritter et al. (2008) in their experiments. We use the Open IE corpus generated by running TEXTRUNNER on 500 million high quality Webpages (Banko and Etzioni, 2008) as the source of instance data for these relations. Extractor and corpus differences lead to some relations not occurring (or not occurring with sufficient frequency to properly analyze, i.e., &gt; 5 arg1 with &gt; 10 evidence), leaving a dataset of 629 relations on which to test. Two human experts tagged these relations for functionality. Tagging the functionality of relation phrases can be a bit subjective, as it requires the experts to imagine the various</context>
+<context position="30835" citStr="Ritter et al., 2008" startWordPosition="4898" endWordPosition="4901">rily because the intersection between the corpus and Freebase entities results in very little data for those relations. DISTRDIFF performs better than IBC, due to its statistical nature, but the issues described in Section 3 plague both these systems much more than CLEANLISTS. To increase the recall LEIBNIZ uses a combination of DISTRDIFF and CLEANLISTS, in which the algorithm backs off to DISTRDIFF if CLEANLISTS is unable to output a prediction. 5.3 External Comparisons We next compare LEIBNIZ against the existing state of the art approaches. Our competitors are AuContraire and NumericTerms (Ritter et al., 2008; Srinivasan and Yates, 2009). Because we use the AuContraire dataset, we report the results from their best performing system. We reimplement a version of NumericTerms using their list of numeric quantifiers and extraction patterns that best correspond to our relation format. We run our implementation of NumericTerms on a dataset of 100 million English sentences from a crawl of high quality Webpages to generate the functionality labels. Figure 6(a) reports the results of this experiment. We find that LEIBNIZ outperforms AuContraire by vast margins covering an additional 44% area in the precis</context>
+<context position="32680" citStr="Ritter et al., 2008" startWordPosition="5201" endWordPosition="5204">me. An example of a LEIBNIZ error is the ‘represented’ relation. LEIBNIZ classifies this as functional, because it finds several strongly functional senses (e.g., when a person represents a country), 1273 External Comparison Typed Functionality Precision 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0 1 Precision 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0 1 AuContraire NumericTerms Leibniz AuContraire NumericTerms Leibniz 0 0.2 0.4 0.6 0.8 1 Recall 0 0.2 0.4 0.6 0.8 1 Recall Figure 6: (a) LEIBNIZ, which is a hybrid of CLEANLISTS and DISTRDIFF, achieves 0.88 AUC and outperforms the 0.61 AUC from AuContraire (Ritter et al., 2008) and the 0.05 AUC from NumericTerms (Srinivasan and Yates, 2009). (b) LEIBNIZ is able to tease apart different senses of polysemous relations much better than other systems. but the human experts might have had some nonfunctional senses in mind while labeling. 5.4 Typed Functionality Next, we conduct a study of the typed functionality task. We test on ten common polysemous relations, each having both a functional and a nonfunctional sense. An example is the ‘was published in’ relation. If arg2 is a year it is functional, e.g. &lt;Harry Potter 5, was published in, 2003&gt;. However, ‘was published in</context>
+</contexts>
+<marker>Ritter, Downey, Soderland, Etzioni, 2008</marker>
+<rawString>A. Ritter, D. Downey, S. Soderland, and O. Etzioni. 2008. It’s a contradiction - no, it’s not: A case study using functional relations. In Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing (EMNLP).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Ritter</author>
+<author>Mausam</author>
+<author>O Etzioni</author>
+</authors>
+<title>A latent dirichlet allocation method for selectional preferences.</title>
+<date>2010</date>
+<booktitle>In Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics (ACL).</booktitle>
+<contexts>
+<context position="24993" citStr="Ritter et al., 2010" startWordPosition="3922" endWordPosition="3925">argument lists for these types, we will be left with a smaller, but much cleaner, subset of relation data, one for each type. CLEANLISTS analyzes each subset using simple, instance based counting and computes a typed functionality score for each type. Thus, it first computes typed functionality for each relation. There are two subtleties in applying this algorithm. First, we need to identify the set of types to consider for each relation. Our algorithm currently picks the types that occur most in each relation’s observed data. In the future, we could also use a selectional preferences system (Ritter et al., 2010; Kozareva and Hovy, 2010). Note that we remove Freebase types such as Written Work from consideration for containing many entities whose primary senses are not that type. For example, both ‘Al Gore’ and ‘William Clinton’ are also names of books, but references in text to these are rarely a reference to the written work sense. Secondly, an argument could belong to multiple Freebase lists. For example, ‘California’ is both a city and a state. We apply a simple heuristic: if a string appears in multiple lists under consideration, we assign it to the smallest of the lists (the list of cities is m</context>
+</contexts>
+<marker>Ritter, Mausam, Etzioni, 2010</marker>
+<rawString>A. Ritter, Mausam, and O. Etzioni. 2010. A latent dirichlet allocation method for selectional preferences. In Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics (ACL).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Schoenmackers</author>
+<author>O Etzioni</author>
+<author>D Weld</author>
+</authors>
+<title>Scaling textual inference to the web.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing (EMNLP).</booktitle>
+<contexts>
+<context position="39213" citStr="Schoenmackers et al., 2008" startWordPosition="6235" endWordPosition="6239">n important sub-component of identifying a functional relation phrase is identifying typed functionality, i.e., functionality when the arguments of the relation phrase are type-constrained. Because CLEANLISTS is able to use typed lists, it can successfully identify typed functionality. We run our techniques on a large set of relations to output a first repository of typed functional relations. We release this list for further use by the research community.2 Future Work: Functionality is one of the several properties a relation can possess. Others include selectional preferences, transitivity (Schoenmackers et al., 2008), mutual exclusion, symmetry, etc. These properties are very useful in increasing our understanding about these Open IE relation strings. We believe that the general principles developed in this work, for example, connecting the Open IE knowledge with an existing knowledge resource, will come in very handy in identifying these other properties. Acknowledgements We would like to thank Alan Ritter, Alex Yates and Anthony Fader for access to their data sets. We would like to thank Stephen Soderland, Yoav Artzi, and the anonymous reviewers for helpful comments on previous drafts. This research was</context>
+</contexts>
+<marker>Schoenmackers, Etzioni, Weld, 2008</marker>
+<rawString>S. Schoenmackers, O. Etzioni, and D. Weld. 2008. Scaling textual inference to the web. In Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing (EMNLP).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Schoenmackers</author>
+<author>J Davis</author>
+<author>O Etzioni</author>
+<author>D Weld</author>
+</authors>
+<title>Learning first-order horn clauses from web text.</title>
+<date>2010</date>
+<booktitle>In Proceedings of the 2010 Conference on Empirical Methods in Natural Language Processing (EMNLP).</booktitle>
+<contexts>
+<context position="35809" citStr="Schoenmackers et al. (2010)" startWordPosition="5708" endWordPosition="5711">n underspecified tuple, &lt;Gold, has, an atomic number of 79&gt;, OCCAM extracts &lt;Gold, has an atomic number of, 79&gt;. OCCAM enables LEIBNIZ to identify far more functional relations than TEXTRUNNER. 6.1 Addressing Evidence Sparsity Scaling up to a large collection of typed relations requires us to consider the size of our data sets. For example, consider which relation is more likely to be functional—a relation with 10 instances all of which indicate functionality versus a relation with 100 instances where 95 behave functionally. To address this problem, we adapt the likelihood ratio approach from Schoenmackers et al. (2010). 1274 For a typed relation with n instances, f of which indicate functionality, the G-test (Dunning, 1993), G = 2*(f*ln(f/k)+(n-f)*ln((n-f)/(n-k))), provides a measure for the likelihood that the relation is not functional. Here k denotes the evidence indicating functionality for the case where the relation is not functional. Setting k = n*0.25 worked well for us. This G-score replaces our previous metric for scoring functional relations. 6.2 Evaluation of the Repository In CLEANLISTS a factor that affects the quality of the results is the exact set of lists that is used. If the lists are not</context>
+</contexts>
+<marker>Schoenmackers, Davis, Etzioni, Weld, 2010</marker>
+<rawString>S. Schoenmackers, J. Davis, O. Etzioni, and D. Weld. 2010. Learning first-order horn clauses from web text. In Proceedings of the 2010 Conference on Empirical Methods in Natural Language Processing (EMNLP).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Srinivasan</author>
+<author>A Yates</author>
+</authors>
+<title>Quantifier scope disambiguation using extracted pragmatic knowledge: Preliminary results.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing (EMNLP).</booktitle>
+<contexts>
+<context position="2597" citStr="Srinivasan and Yates, 2009" startWordPosition="393" endWordPosition="396">ctional relations are father, death date, birth city, etc. We define a relation phrase to be functional if all semantic relations commonly expressed by that phrase are functional. For example, we say that the phrase ‘was born in’ denotes a functional relation, because the different semantic relations expressed by the phrase (e.g., birth city, birth year, etc.) are all functional. Knowing that a relation is functional is helpful for numerous NLP inference tasks. Previous work has used functionality for the tasks of contradiction detection (Ritter et al., 2008), quantifier scope disambiguation (Srinivasan and Yates, 2009), and synonym resolution (Yates and Etzioni, 2009). It could also aid in other tasks such as ontology generation and information extraction. For example, consider two sentences from a contradiction detection task: (1) “George Washington was born in Virginia.” and (2) “George Washington was born in Texas.” As Ritter et al. (2008) points out, we can only determine that the two sentences are contradictory if we know that the semantic relation referred to by the phrase ‘was born in’ is functional, and that both Virginia and Texas are distinct states. Automatic functionality identification is essen</context>
+<context position="9233" citStr="Srinivasan and Yates (2009)" startWordPosition="1373" endWordPosition="1376">ge. AuContraire (Ritter et al., 2008) is a contradiction detection system that also learns relation functionality. Their approach combines a probabilistic model based on (Downey et al., 2005) with estimates on whether each arg1 is ambiguous. The estimates are used to weight each arg1’s contribution to an overall functionality score for each relation. Both argument-ambiguity and relationfunctionality are jointly estimated using an EM-like method. While elegant, AuContraire requires substantial hand-engineered knowledge, which limits the scalability of their approach. Lexico-syntactic patterns: Srinivasan and Yates (2009) disambiguate a quantifier’s scope by first making judgments about relation functionality. For functionality, they look for numeric phrases following the relation. For example, the presence of the numeric term ‘four’ in the sentence “the fire destroyed four shops” suggests that destroyed is not functional, since the same arg1 can destroy multiple things. The key problem with this approach is that it often assigns different functionality labels for the present tense and past tense phrases of the same semantic relation. For example, it will consider ‘lived in’ to be non-functional, but ‘lives in</context>
+<context position="30864" citStr="Srinivasan and Yates, 2009" startWordPosition="4902" endWordPosition="4906">rsection between the corpus and Freebase entities results in very little data for those relations. DISTRDIFF performs better than IBC, due to its statistical nature, but the issues described in Section 3 plague both these systems much more than CLEANLISTS. To increase the recall LEIBNIZ uses a combination of DISTRDIFF and CLEANLISTS, in which the algorithm backs off to DISTRDIFF if CLEANLISTS is unable to output a prediction. 5.3 External Comparisons We next compare LEIBNIZ against the existing state of the art approaches. Our competitors are AuContraire and NumericTerms (Ritter et al., 2008; Srinivasan and Yates, 2009). Because we use the AuContraire dataset, we report the results from their best performing system. We reimplement a version of NumericTerms using their list of numeric quantifiers and extraction patterns that best correspond to our relation format. We run our implementation of NumericTerms on a dataset of 100 million English sentences from a crawl of high quality Webpages to generate the functionality labels. Figure 6(a) reports the results of this experiment. We find that LEIBNIZ outperforms AuContraire by vast margins covering an additional 44% area in the precision-recall curve. AuContraire</context>
+<context position="32744" citStr="Srinivasan and Yates, 2009" startWordPosition="5211" endWordPosition="5214">lation. LEIBNIZ classifies this as functional, because it finds several strongly functional senses (e.g., when a person represents a country), 1273 External Comparison Typed Functionality Precision 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0 1 Precision 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0 1 AuContraire NumericTerms Leibniz AuContraire NumericTerms Leibniz 0 0.2 0.4 0.6 0.8 1 Recall 0 0.2 0.4 0.6 0.8 1 Recall Figure 6: (a) LEIBNIZ, which is a hybrid of CLEANLISTS and DISTRDIFF, achieves 0.88 AUC and outperforms the 0.61 AUC from AuContraire (Ritter et al., 2008) and the 0.05 AUC from NumericTerms (Srinivasan and Yates, 2009). (b) LEIBNIZ is able to tease apart different senses of polysemous relations much better than other systems. but the human experts might have had some nonfunctional senses in mind while labeling. 5.4 Typed Functionality Next, we conduct a study of the typed functionality task. We test on ten common polysemous relations, each having both a functional and a nonfunctional sense. An example is the ‘was published in’ relation. If arg2 is a year it is functional, e.g. &lt;Harry Potter 5, was published in, 2003&gt;. However, ‘was published in(Language)’ is not functional, e.g. &lt;Harry Potter 5, was publish</context>
+</contexts>
+<marker>Srinivasan, Yates, 2009</marker>
+<rawString>P. Srinivasan and A. Yates. 2009. Quantifier scope disambiguation using extracted pragmatic knowledge: Preliminary results. In Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing (EMNLP).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Volker</author>
+<author>D Vrandecic</author>
+<author>Y Sure</author>
+</authors>
+<title>Automatic evaluation of ontologies (AEON).</title>
+<date>2005</date>
+<booktitle>In Proceedings of the 4th International Semantic Web Conference (ISWC).</booktitle>
+<contexts>
+<context position="10822" citStr="Volker et al., 2005" startWordPosition="1629" endWordPosition="1632">ur task, they are well-suited for identifying whether a verb phrase can take multiple objects or not. This can be understood as a functionality property of the verb phrase within a sentence, as opposed to functionality of the semantic relation the phrase represents. WIE: In a preliminary study, Popescu (2007) applies an instance based counting approach, but her relations require manually annotated type restrictions, which makes the approach less scalable. Finally, functionality is just one property of relations that can be learned from text. A number of other studies (Guarino and Welty, 2004; Volker et al., 2005; Culotta et al., 2006) have examined detecting other relation properties from text and applying them to tasks such as ontology cleaning. 3 Challenges for Functionality Identification A functional binary relation r is formally defined as one such that Vx, y1, y2 : r(x, y1)nr(x, y2) ==&gt;- y1 = y2. We define a relation string to be functional if all semantic relations commonly expressed by the relation string are individually functional. Thus, under our definition, ‘was born in’ and ‘died in’ are functional, even though they can take different arg2s for the same arg1, e.g., year, city, state, cou</context>
+</contexts>
+<marker>Volker, Vrandecic, Sure, 2005</marker>
+<rawString>J. Volker, D. Vrandecic, and Y. Sure. 2005. Automatic evaluation of ontologies (AEON). In Proceedings of the 4th International Semantic Web Conference (ISWC).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Wikipedia</author>
+</authors>
+<title>Wikipedia: The free encyclopedia.</title>
+<date>2004</date>
+<booktitle>In http://www.wikipedia.org. Wikimedia Foundation.</booktitle>
+<contexts>
+<context position="23030" citStr="Wikipedia, 2004" startWordPosition="3612" endWordPosition="3613">sadvantage is that it cannot handle relation ambiguity and type restrictions. Moreover, we may need to relearn the separator if applying DISTRDIFF to a corpus with very different count distributions. 4.3 CLEANLISTS Our third algorithm, CLEANLISTS, is based on the intuition that for identifying functionality we need not reason over all the data in our corpus; instead, a small but cleaner subset of the data may work best. This clean subset should ideally be free of synonyms, ambiguities and anaphora, and be typed. Several knowledge-bases such as Wordnet, Wikipedia, and Freebase (Fellbaum, 1998; Wikipedia, 2004; Metaweb Technologies, 2009), are readily and freely available and they all provide clean typed lists of entities. In our experiments CLEANLISTS employs Freebase as a source of clean lists, but we could use any of these or other domain-specific ontologies such as SNOMED (Price and Spackman, 2000) as well. CLEANLISTS takes the intersection of Freebase entities with our corpus to generate a clean subset for functionality analysis. Freebase currently has over 12 million entities in over 1,000 typed lists. Thus, this intersection retains significant portions of the useful data, and gets rid of mo</context>
+</contexts>
+<marker>Wikipedia, 2004</marker>
+<rawString>Wikipedia. 2004. Wikipedia: The free encyclopedia. In http://www.wikipedia.org. Wikimedia Foundation.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>H Yao</author>
+<author>H Hamilton</author>
+</authors>
+<title>Mining functional dependencies from data.</title>
+<date>2008</date>
+<booktitle>In Data Mining and Knowledge Discovery.</booktitle>
+<contexts>
+<context position="8380" citStr="Yao and Hamilton, 2008" startWordPosition="1248" endWordPosition="1251">ngton was born in: Michigan Virginia Westmoreland County a town 1732 February Colonial Beach, Virginia the British colony of Virginia a plantation America Figure 2: Sample arg2 values for a non-functional relation (visited) vs. a functional relation (was born in) illustrate the challenge in discriminating functionality from Web text. smaller than the hundreds of thousands of relations existing on the Web, necessitating automatic approaches to functionality identification. Discovering functional dependencies has been recognized as an important database analysis technique (Huhtala et al., 1999; Yao and Hamilton, 2008), but the database community does not address any of the linguistic phenomena which make this a challenging problem in NLP. Three groups of researchers have studied functionality identification in the context of natural language. AuContraire (Ritter et al., 2008) is a contradiction detection system that also learns relation functionality. Their approach combines a probabilistic model based on (Downey et al., 2005) with estimates on whether each arg1 is ambiguous. The estimates are used to weight each arg1’s contribution to an overall functionality score for each relation. Both argument-ambigui</context>
+</contexts>
+<marker>Yao, Hamilton, 2008</marker>
+<rawString>H. Yao and H. Hamilton. 2008. Mining functional dependencies from data. In Data Mining and Knowledge Discovery.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Yates</author>
+<author>O Etzioni</author>
+</authors>
+<title>Unsupervised methods for determining object and relation synonyms on the web.</title>
+<date>2009</date>
+<journal>In Journal of Artificial Intelligence Research,</journal>
+<volume>34</volume>
+<pages>255--296</pages>
+<contexts>
+<context position="2647" citStr="Yates and Etzioni, 2009" startWordPosition="401" endWordPosition="404"> etc. We define a relation phrase to be functional if all semantic relations commonly expressed by that phrase are functional. For example, we say that the phrase ‘was born in’ denotes a functional relation, because the different semantic relations expressed by the phrase (e.g., birth city, birth year, etc.) are all functional. Knowing that a relation is functional is helpful for numerous NLP inference tasks. Previous work has used functionality for the tasks of contradiction detection (Ritter et al., 2008), quantifier scope disambiguation (Srinivasan and Yates, 2009), and synonym resolution (Yates and Etzioni, 2009). It could also aid in other tasks such as ontology generation and information extraction. For example, consider two sentences from a contradiction detection task: (1) “George Washington was born in Virginia.” and (2) “George Washington was born in Texas.” As Ritter et al. (2008) points out, we can only determine that the two sentences are contradictory if we know that the semantic relation referred to by the phrase ‘was born in’ is functional, and that both Virginia and Texas are distinct states. Automatic functionality identification is essential when dealing with a large number of relations</context>
+</contexts>
+<marker>Yates, Etzioni, 2009</marker>
+<rawString>A. Yates and O. Etzioni. 2009. Unsupervised methods for determining object and relation synonyms on the web. In Journal of Artificial Intelligence Research, volume 34, pages 255–296.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

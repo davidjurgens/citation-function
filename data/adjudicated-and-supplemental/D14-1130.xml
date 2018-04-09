@@ -1,0 +1,2190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000007">
+<note confidence="0.80683425">
+Human Effort and Machine Learnability in Computer Aided Translation
+Spence Green, Sida Wang, Jason Chuang,* Jeffrey Heer,* Sebastian Schuster,
+and Christopher D. Manning
+Computer Science Department, Stanford University
+</note>
+<email confidence="0.943662">
+{spenceg,sidaw,sebschu,manning}@stanford.edu
+</email>
+<affiliation confidence="0.944768">
+*Computer Science Department, University of Washington
+</affiliation>
+<email confidence="0.997009">
+{jcchuang,jheer}@uw.edu
+</email>
+<sectionHeader confidence="0.994771" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.99982088">
+Analyses of computer aided translation typi-
+cally focus on either frontend interfaces and
+human effort, or backend translation and
+machine learnability of corrections. How-
+ever, this distinction is artificial in prac-
+tice since the frontend and backend must
+work in concert. We present the first holis-
+tic, quantitative evaluation of these issues
+by contrasting two assistive modes: post-
+editing and interactive machine translation
+(MT). We describe a new translator inter-
+face, extensive modifications to a phrase-
+based MT system, and a novel objective
+function for re-tuning to human correc-
+tions. Evaluation with professional bilin-
+gual translators shows that post-edit is faster
+than interactive at the cost of translation
+quality for French-English and English-
+German. However, re-tuning the MT sys-
+tem to interactive output leads to larger, sta-
+tistically significant reductions in HTER
+versus re-tuning to post-edit. Analysis
+shows that tuning directly to HTER results
+in fine-grained corrections to subsequent
+machine output.
+</bodyText>
+<sectionHeader confidence="0.998883" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999979833333334">
+The goal of machine translation has always been to
+reduce human effort, whether by partial assistance
+or by outright replacement. However, preoccupa-
+tion with the latter—fully automatic translation—at
+the exclusion of the former has been a feature of
+the research community since its first nascent steps
+in the 1950s. Pessimistic about progress during
+that decade and future prospects, Bar-Hillel (1960,
+p.3) argued that more attention should be paid to a
+“machine-post-editor partnership,” whose decisive
+problem is “the region of optimality in the contin-
+uum of possible divisions of labor.” Today, with
+human-quality, fully automatic machine translation
+(MT) elusive still, that decades-old recommenda-
+tion remains current.
+This paper is the first to look at both sides of
+the partnership in a single user study. We compare
+two common flavors of machine-assisted transla-
+tion: post-editing and interactive MT. We analyze
+professional, bilingual translators working in both
+modes, looking first at user productivity. Does the
+additional machine assistance available in the inter-
+active mode affect translation time and/or quality?
+Then we turn to the machine side of the part-
+nership. The user study results in corrections to
+the baseline MT output. Do these corrections help
+the MT system, and can it learn from them quickly
+enough to help the user? We perform a re-tuning
+experiment in which we directly optimize human
+Translation Edit Rate (HTER), which correlates
+highly with human judgments of fluency and ade-
+quacy (Snover et al., 2006). It is also an intuitive
+measure of human effort, making fine distinctions
+between 0 (no editing) and 1 (complete rewrite).
+We designed a new user interface (UI) for the
+experiment. The interface places demands on the
+MT backend—not the other way around. The most
+significant new MT system features are prefix de-
+coding, for translation completion based on a user
+prefix; and dynamic phrase table augmentation, to
+handle target out-of-vocabulary (OOV) words. Dis-
+criminative re-tuning is accomplished with a novel
+cross-entropy objective function.
+We report three main findings: (1) post-editing
+is faster than interactive MT, corroborating Koehn
+(2009a); (2) interactive MT yields higher quality
+translation when baseline MT quality is high; and
+(3) re-tuning to interactive feedback leads to larger
+held-out HTER gains relative to post-edit. Together
+these results show that a human-centered approach
+to computer aided translation (CAT) may involve
+tradeoffs between human effort and machine
+learnability. For example, if speed is the top
+priority, then a design geared toward post-editing
+</bodyText>
+<page confidence="0.91917">
+1225
+</page>
+<note confidence="0.9468765">
+Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 1225–1236,
+October 25-29, 2014, Doha, Qatar. c�2014 Association for Computational Linguistics
+</note>
+<figure confidence="0.9968516">
+A
+B
+C
+E
+D
+</figure>
+<figureCaption confidence="0.999759">
+Figure 1: Main translation interface. The user sees the full document context, with French source inputs
+</figureCaption>
+<bodyText confidence="0.952075894736842">
+(A) interleaved with suggested English translations (B). The sentence in focus is indicated by the blue
+rectangle, which can be moved via two hot keys. Source coverage (C) of the user prefix—shaded in
+blue—updates as the user works, as do autocomplete suggestions (D) and a full completion (E).
+is appropriate. However, if reductions in HTER
+ultimately correspond to lower human effort, then
+investing slightly more time in the interactive mode,
+which results in more learnable output, may be op-
+timal. Mixed UI designs may offer a compromise.
+Code and data from our experiments are available at:
+http://nlp.stanford.edu/software/phrasal/
+A holistic comparison with human subjects nec-
+essarily involves many moving parts. Section 2
+briefly describes the interface, focusing on NLP
+components. Section 3 describes changes to the
+backend MT system. Section 4 explains the user
+study, and reports human translation time and qual-
+ity results. Section 5 describes the MT re-tuning
+experiment. Analysis (section 6) and related work
+(section 7) round out the paper.
+</bodyText>
+<sectionHeader confidence="0.938532" genericHeader="introduction">
+2 New Translator User Interface
+</sectionHeader>
+<bodyText confidence="0.999846833333333">
+Figure 1 shows the translator interface, which is
+designed for expert, bilingual translators. Previ-
+ous studies have shown that expert translators work
+and type quickly (Carl, 2010), so the interface is
+designed to be very responsive, and to be primar-
+ily operated by the keyboard. Most aids can be
+accessed via either typing or four hot keys. The
+current design focuses on the point of text entry
+and does not include conventional translator work-
+bench features such as workflow management, spell
+checking, and text formatting tools.
+In the trivial post-edit mode, the interactive aids
+are disabled and a 1-best translation pre-populates
+the text entry box.
+We have described the HCI-specific motivations
+for and contributions of this new interface in Green
+et al. (2014c). This section focuses on interface
+elements built on NLP components.
+</bodyText>
+<subsectionHeader confidence="0.991539">
+2.1 UI Overview and Walkthrough
+</subsectionHeader>
+<bodyText confidence="0.998898952380952">
+We categorized interactions into three groups:
+source comprehension: word lookups, source cov-
+erage highlighting; target gisting: 1-best transla-
+tion, real-time target completion; target genera-
+tion: real-time autocomplete, target reordering, in-
+sert complete translation. The interaction designs
+are novel; those in italic have, to our knowledge,
+never appeared in a translation workbench.
+Source word lookup When the user hovers over
+a source word, a menu of up to four ranked trans-
+lation suggestions appears (Figure 2). The menu
+is populated by a phrase-table query of the word
+plus one token of left context. This query usually
+returns in under 50ms. The width of the horizontal
+bars indicates confidence, with the most confident
+suggestion ‘regularly’ placed at the bottom, near-
+est to the cursor. The user can insert a translation
+suggestion by clicking.
+Source coverage highlighting The source cover-
+age feature (Figure 1C) helps the user quickly find
+untranslated words in the source. The interaction is
+</bodyText>
+<page confidence="0.995247">
+1226
+</page>
+<figureCaption confidence="0.8790785">
+Figure 2: Source word lookup and target autocom-
+plete menus. The menus show different suggestions.
+</figureCaption>
+<bodyText confidence="0.991889813559322">
+The word lookup menu (top) is not dependent on the
+target context Teachers, whereas the autocomplete
+dropdown (bottom) is.
+based on the word alignments between source and
+target generated by the MT system. We found that
+the raw alignments are too noisy to show users, so
+the UI filters them with phrase-level heuristics.
+1-best translation The most common use of MT
+output is gisting (Koehn, 2010, p.21). The gray text
+below each black source input shows the best MT
+system output (Figure 1B).
+Real-time target completion When the user ex-
+tends the black prefix, the gray text will update to
+the most probable completion (Figure 1E). This up-
+date comes from decoding under the full translation
+model. All previous systems performed inference
+in a word lattice.
+Real-time autocomplete The autocomplete
+dropdown at the point of text entry is the main
+translation aid (Figures 1D and 2). Each real-time
+update actually contains a distinct 10-best list for
+the full source input. The UI builds up a trie from
+these 10-best lists. Up to four distinct suggestions
+are then shown at the point of translation. The
+suggestion length is based on a syntactic parse of
+the fixed source input. As an offline, pre-processing
+step, we parse each source input with Stanford
+CoreNLP (Manning et al., 2014). The UI combines
+those parses with word alignments from the full
+translation suggestions to project syntactic con-
+stituents to each item on the n-best list. Syntactic
+projection is a very old idea that underlies many
+MT systems (see: Hwa et al. (2002)). Here we
+make novel use of it for suggestion prediction
+filtering.1 Presently, we project noun phrases,
+verb phrases (minus the verbal arguments), and
+prepositional phrases. Crucially, these units are
+natural to humans, unlike statistical target phrases.
+Target Reordering Carl (2010) showed that ex-
+pert translators tend to adopt local planning: they
+read a few words ahead and then translate in a
+roughly online fashion. However, word order differ-
+ences between languages will necessarily require
+longer range planning and movement. To that end,
+the UI supports keyboard-based reordering. Sup-
+pose that the user wants to move a span in gray
+text to the insertion position for editing. Typing
+the prefix of this string will update the autocom-
+plete dropdown with matching strings from the gray
+text. Consequently, sometimes the autocomplete
+dropdown will contain suggestions from several
+positions in the full suggested translation.
+Insert complete translation The user can insert
+the full completion via a hot key. Notice that if
+the user presses this hot key immediately, all gray
+text becomes black, and the interface effectively
+switches to post-edit mode. This feature greatly ac-
+celerates translation when the MT is mostly correct,
+and the user only wants to make a few changes.
+</bodyText>
+<subsectionHeader confidence="0.999132">
+2.2 User Activity Logging
+</subsectionHeader>
+<bodyText confidence="0.999980222222222">
+A web application serves the Javascript-based in-
+terface, relays translation requests to the MT sys-
+tem, and logs user records to a database. Each user
+record is a tuple of the form (f, ˆe, h, u), where f
+is the source sequence, eˆ is the latest 1-best ma-
+chine translation of f, h is the correction of ˆe, and
+u is the log of interaction events during the transla-
+tion session. Our evaluation corpora also include
+independently generated references e for each f.
+</bodyText>
+<sectionHeader confidence="0.999367" genericHeader="method">
+3 Interactive MT Backend
+</sectionHeader>
+<bodyText confidence="0.994017333333333">
+Now we describe modifications to Phrasal (Green
+et al., 2014b), the phrase-based MT system that sup-
+ports the interface. Phrasal follows the log-linear
+approach to phrase-based translation (Och and Ney,
+2004) in which the decision rule has the familiar
+linear form
+</bodyText>
+<equation confidence="0.970159">
+eˆ = arg max wTO(e, f) (1)
+e
+</equation>
+<footnote confidence="0.999289666666667">
+1The classic TransType system included a probabilistic
+prediction length component (Foster et al., 2002), but we find
+that the simpler projection technique works well in practice.
+</footnote>
+<page confidence="0.994892">
+1227
+</page>
+<bodyText confidence="0.994658">
+where w E Rd is the model weight vector and
+φ(·) E Rd is a feature map.
+</bodyText>
+<subsectionHeader confidence="0.998711">
+3.1 Decoding
+</subsectionHeader>
+<bodyText confidence="0.9999861">
+The default Phrasal search algorithm is cube prun-
+ing (Huang and Chiang, 2007). In the post-edit con-
+dition, search is executed as usual for each source
+input, and the 1-best output is inserted into the tar-
+get textbox. However, in interactive mode, the full
+search algorithm is executed each time the user
+modifies the partial translation. Machine sugges-
+tions eˆ must match user prefix h. Define indicator
+function pref(ˆe, h) to return true if eˆ begins with
+h, and false otherwise. Eq. 1 becomes:
+</bodyText>
+<equation confidence="0.9898255">
+eˆ = arg max wTφ(e, f) (2)
+e s.t. pref(e,h)
+</equation>
+<bodyText confidence="0.999943636363637">
+Cube pruning can be straightforwardly modified to
+satisfy this constraint by simple string matching of
+candidate translations. Also, the pop limit must be
+suspended until at least one legal candidate appears
+on each beam, or the priority queue of candidates is
+exhausted. We call this technique prefix decoding.2
+There is another problem. Human translators are
+likely to insert unknown target words, including
+new vocabulary, misspellings, and typographical
+errors. They might also reorder source text so as to
+violate the phrase-based distortion limit. To solve
+these problems, we perform dynamic phrase table
+augmentation, adding new synthetic rules specific
+to each search. Rules allowing any source word to
+align with any unseen or ungeneratable (due to the
+distortion limit) target word are created.3 These
+synthetic rules are given rule scores lower than any
+other rules in the set of queried rules for that source
+input f. Then candidates are allowed to compete
+on the beam. Candidates with spurious alignments
+will likely be pruned in favor of those that only turn
+to synthetic rules as a last resort.
+</bodyText>
+<subsectionHeader confidence="0.999591">
+3.2 Tuning
+</subsectionHeader>
+<bodyText confidence="0.948220684210526">
+We choose BLEU (Papineni et al., 2002) for base-
+line tuning to independent references, and HTER
+for re-tuning to human corrections. Our rationale
+is as follows: Cer et al. (2010) showed that BLEU-
+tuned systems score well across automatic metrics
+and also correlate with human judgment better than
+2Och et al. (2003) describe a similar algorithm for word
+graphs.
+3Ortiz-Martínez et al. (2009) describe a related technique
+in which all source and target words can align, with scores set
+by smoothing.
+systems tuned to other metrics. Conversely, sys-
+tems tuned to edit-distance-based metrics like TER
+tend to produce short translations that are heavily
+penalized by other metrics.
+When human corrections become available, we
+switch to HTER, which correlates with human judg-
+ment and is an interpretable measure of editing
+effort. Whereas TER is computed as TER(e, ˆe),
+HTER is HTER(h, ˆe). HBLEU is an alternative,
+but since BLEU is invariant to some permutations
+(Callison-Burch et al., 2006), it is less interpretable.
+We find that it also does not work as well in practice.
+We previously proposed a fast, online tuning al-
+gorithm (Green et al., 2013b) based on AdaGrad
+(Duchi et al., 2011). The default loss function is
+expected error (EE) (Och, 2003; Cherry and Foster,
+2012). Expected BLEU is an example of EE, which
+we found to be unstable when switching metrics.
+This may result from direct incorporation of the
+error metric into the gradient computation.
+To solve this problem, we propose a cross-
+entropy loss which, to our knowledge, is new in
+MT. Let Eˆ = {ˆei}ni=1 be an n-best list ranked
+by a gold metric G(e, ˆe) &gt; 0. Assume we
+have a preference of a higher G (e.g., BLEU or
+1−HTER). Define the model distribution over Eˆ
+as q(ˆe|f) a exp[wTφ(ˆe, f)] normalized so that
+</bodyText>
+<equation confidence="0.898880666666667">
+E
+ˆec Eˆ q(ˆe|f) = 1; q indicates how much the model
+prefers each translation. Similarly, define p(ˆe|f)
+based on any function of the gold metric so that
+E
+ˆec Eˆ p(ˆe|f) = 1; p indicates how much the met-
+</equation>
+<bodyText confidence="0.9999384">
+ric prefers each translation. We choose a DCG-
+style4 parameterization that skews the p distribu-
+tion toward higher-ranked items on the n-best list:
+p(ˆei|f) a G(e, ˆei)/ log(1 + i) for the ith ranked
+item. The cross-entropy (CE) loss function is:
+</bodyText>
+<equation confidence="0.989862">
+`CE(w; E) = Ep(ˆe|f)[− log(q(ˆe|f)] (3)
+</equation>
+<bodyText confidence="0.999679333333333">
+It turns out that if p is simply the posterior distribu-
+tion of the metric, then this loss is related to the log
+of the standard EE loss:5
+</bodyText>
+<equation confidence="0.989536">
+`EE(w; E) = − log[Ep(ˆe|f)[q(ˆe|f)]] (4)
+</equation>
+<bodyText confidence="0.99982075">
+We can show that `CE &gt; `EE by applying Jensen’s
+inequality to the function − log(·). So minimizing
+`CE also minimizes a convex upper bound of the
+log expected error. This convexity given the n-
+</bodyText>
+<footnote confidence="0.9905514">
+4Discounted cumulative gain (DCG) is widely used in infor-
+mation retrieval learning-to-rank settings. n-best MT learning
+is standardly formulated as a ranking task.
+5For expected error, p(ˆei) = G(e, ˆei) is not usually nor-
+malized. Normalizing p adds a negligible constant.
+</footnote>
+<page confidence="0.992559">
+1228
+</page>
+<bodyText confidence="0.999983142857143">
+best list does not mean that the overall MT tuning
+loss is convex, since the n-best list contents and
+order depend on the parameters w. However, all
+regret bounds and other guarantees of online con-
+vex optimization would now apply in the CE case
+since CE,t(wt−1; Et) is convex for each t. This
+is attractive compared to expected error, which is
+non-convex even given the n-best list. We empiri-
+cally observed that CE converges faster and is less
+sensitive to hyperparameters than EE.
+Faster decoding trick We found that online tun-
+ing also permits a trick that speeds up decoding
+during deployment. Whereas the Phrasal default
+beam size is 1,200, we were able to reduce the beam
+size to 800 and run the tuner longer to achieve the
+same level of translation quality. For example, at
+the default beam size for French-English, the algo-
+rithm converges after 12 iterations, whereas at the
+lower beam size it achieves that level after 20 itera-
+tions. In our experience, batch tuning algorithms
+seem to be more sensitive to the beam size.
+</bodyText>
+<subsectionHeader confidence="0.998869">
+3.3 Feature Templates
+</subsectionHeader>
+<bodyText confidence="0.99377896">
+The baseline system contains 19 dense feature tem-
+plates: the nine Moses (Koehn et al., 2007) baseline
+features, the eight-feature hierarchical lexicalized
+re-ordering model of Galley and Manning (2008),
+the (log) count of each rule in the bitext, and an
+indicator for unique rules. We found that sparse
+features, while improving translation quality, came
+at the cost of slower decoding due to feature extrac-
+tion and inner products with a higher dimensional
+feature map 0. During prototyping, we observed
+that users found the system to be sluggish unless
+it responded in approximately 300ms or less. This
+budget restricted us to dense features.
+When re-tuning to corrections, we extract fea-
+tures from the user logs u and add them to the
+baseline dense model. For each tuning input f,
+the MT system produces candidate derivations d =
+(f, ˆe, a), where a is a word alignment. The user log
+u also contains the last MT derivation6 accepted
+by the user du = (f, ˆeu, au). We extract features
+by comparing d and du. The heuristic we take is
+intersection: 0(d) ← 0(d) ∩ 0(du).
+Lexicalized and class-based alignments Con-
+sider the alignment in Figure 3. We find that
+user derivations often contain many unigram rules,
+</bodyText>
+<footnote confidence="0.9700515">
+6Extracting features from intermediate user editing actions
+is an interesting direction for future work.
+</footnote>
+<figureCaption confidence="0.696251">
+Figure 3: User translation word alignment obtained
+via prefix decoding and dynamic phrase table aug-
+mentation.
+</figureCaption>
+<bodyText confidence="0.999037">
+which are less powerful than larger phrases, but
+nonetheless provide high-precision lexical choice
+information. We fire indicators for both unigram
+links and multiword cliques. We also fire class-
+based versions of this feature.
+Source OOV blanket Source OOVs are usually
+more frequent when adapting to a new domain. In
+the case of European languages—our experimental
+setting—many of the words simply transfer to the
+target, so the issue is where to position them. In Fig-
+ure 3, the proper noun tarceva is unknown, so the de-
+coder OOV model generates an identity translation
+rule. We add features in which the source word is
+concatenated with the left, right, and left/right con-
+texts in the target, e.g., {&lt;s&gt;-tarceva, tarceva-
+was, &lt;s&gt;-tarceva-was}. We also add versions
+with target words mapped to classes.
+</bodyText>
+<subsectionHeader confidence="0.992372">
+3.4 Differences from Previous Work
+</subsectionHeader>
+<bodyText confidence="0.999975133333334">
+Our backend innovations support the UI and enable
+feature-based learning from human corrections. In
+contrast, most previous work on incremental MT
+learning has focused on extracting new translation
+rules, language model updating, and modifying
+translation model probabilities (see: Denkowski
+et al. (2014a)). We regard these features as ad-
+ditive to our own work: certainly extracting new,
+unseen rules should help translation in a new do-
+main. Moreover, to our knowledge, all previous
+work on updating the weight vector w has consid-
+ered simulated post-editing, in which the indepen-
+dent references e are substituted for corrections h.
+Here we extract features from and re-tune to actual
+corrections to the baseline MT output.
+</bodyText>
+<figure confidence="0.690988428571429">
+tarceva
+parvient
+ainsi
+A
+stopper
+la
+croissance
+</figure>
+<page confidence="0.984425">
+1229
+</page>
+<sectionHeader confidence="0.988321" genericHeader="method">
+4 Translation User Study
+</sectionHeader>
+<bodyText confidence="0.999908088235294">
+We conducted a human translation experiment with
+a 2 (translation conditions) × n (source sentences)
+mixed design, where n depended on the language
+pair. Translation conditions (post-edit and interac-
+tive) and source sentences were the independent
+variables (factors). Experimental subjects saw all
+factor levels, but not all combinations, since one
+exposure to a sentence would influence another.
+Subjects completed the experiment remotely on
+their own hardware. They received personalized
+login credentials for the translation interface, which
+administered the experiment. Subjects first com-
+pleted a demographic questionnaire about prior ex-
+perience with CAT and language proficiency. Next,
+they completed a training module that included a
+4-minute tutorial video and a practice “sandbox” for
+developing proficiency with the UI. Then subjects
+completed the translation experiment. Finally, they
+completed an exit questionnaire.
+Unlike the experiment of Koehn (2009a), sub-
+jects were under time pressure. An idle timer pre-
+vented subjects from pausing for more than three
+minutes while the translator interface was open.
+This constraint eliminates a source of confound in
+the timing analysis.
+We randomized the order of translation condi-
+tions and the assignment of sentences to conditions.
+At most five sentences appeared per screen, and
+those sentences appeared in the source document
+order. Subjects could move among sentences within
+a screen, but could not revise previous screens. Sub-
+jects received untimed breaks both between trans-
+lation conditions and after about every five screens
+within a translation condition.
+</bodyText>
+<subsectionHeader confidence="0.995189">
+4.1 Linguistic Materials
+</subsectionHeader>
+<bodyText confidence="0.999419846153846">
+We chose two language pairs: French-English (Fr-
+En) and English-German (En-De). Anecdotally,
+French-English is an easy language pair for MT,
+whereas English-German is very hard due to re-
+ordering and complex German morphology.
+We chose three text genres: software, medical,
+and informal news. The software text came from
+the graphical interfaces of Autodesk AutoCAD and
+Adobe Photoshop. The medical text was a drug re-
+view from the European Medicines Agency. These
+two data sets came from TAUS7 and included inde-
+pendent reference translations. The informal news
+text came from the WMT 2013 shared task test set
+</bodyText>
+<footnote confidence="0.852584">
+7http://www.tausdata.org/
+</footnote>
+<bodyText confidence="0.993851">
+(Bojar et al., 2013). The evaluation corpus was con-
+structed from equal proportions of the three genres.
+The Fr-En dataset contained 3,003 source tokens
+(150 segments); the En-De dataset contained 3,002
+(173 segments). As a rule of thumb, a human trans-
+lator averages about 2,700 source tokens per day
+(Ray, 2013, p.36), so the experiment was designed
+to replicate a slightly demanding work day.
+</bodyText>
+<subsectionHeader confidence="0.999937">
+4.2 Selection of Subjects
+</subsectionHeader>
+<bodyText confidence="0.999989">
+For each language pair, we recruited 16 profes-
+sional, freelance translators on Proz, which is the
+largest online translation community.8 We posted
+ads for both language pairs at a fixed rate of $0.085
+per source word, an average rate in the industry. In
+addition, we paid $10 to each translator for complet-
+ing the training module. All subjects had significant
+prior experience with a CAT workbench.
+</bodyText>
+<subsectionHeader confidence="0.753767">
+4.3 Results
+</subsectionHeader>
+<bodyText confidence="0.999959636363636">
+We analyze the translation conditions in terms of
+two response variables: time and quality. We ex-
+cluded one Fr-En subject and two En-De subjects
+from the models. One subject misunderstood the in-
+structions of the experiment and proceeded without
+clarification; another skipped the training module
+entirely. The third subject had a technical problem
+that prevented logging. Finally, we also filtered
+segment-level sessions for which the log of transla-
+tion time was greater than 2.5 standard deviations
+from the mean.
+</bodyText>
+<subsubsectionHeader confidence="0.709257">
+4.3.1 Translation Time
+</subsubsectionHeader>
+<bodyText confidence="0.997737117647059">
+We analyze time with a linear mixed effects model
+(LMEM) estimated with the lme4 (Bates, 2007) R
+package. When experimental factors are sampled
+from larger populations—e.g., humans, sentences,
+words—LMEMs are more robust to type II errors
+(see: Baayen et al. (2008)). The log-transformed
+time is the response variable and translation condi-
+tion is the main independent variable. The maximal
+random effects structure (Barr et al., 2013) contains
+intercepts for subject, sentence id, and text genre,
+each with random slopes for translation condition.
+We found significant main effects for translation
+condition (Fr-En, p &lt; 0.05; En-De, p &lt; 0.01).
+The orientation of the coefficients indicates that
+interactive is slower for both language pairs. For Fr-
+En, the LMEM predicts a mean time (intercept) of
+46.0 sec/sentence in post-edit vs. 54.6 sec/sentence
+</bodyText>
+<footnote confidence="0.992718">
+8http://www.proz.com
+</footnote>
+<page confidence="0.889906">
+1230
+</page>
+<table confidence="0.98244725">
+Fr-En En-De
+TER HTER TER HTER
+post-edit 47.32 23.51 56.16 37.15
+interactive 47.05 24.14 55.89 39.55
+</table>
+<tableCaption confidence="0.999378">
+Table 1: Automatic assessment of translation qual-
+</tableCaption>
+<bodyText confidence="0.99869705">
+ity. Here we change the definitions of TER and
+HTER slightly. TER is the human translations com-
+pared to the independent references. HTER is the
+baseline MT compared to the human corrections.
+in interactive, or 18.7% slower. For En-De, the
+mean is 51.8 sec/sentence vs. 63.3 sec/sentence in
+interactive, or 22.1% slower.
+We found other predictive covariates that reveal
+more about translator behavior. When subjects did
+not edit the MT suggestion, they were significantly
+faster. When token edit distance from MT or source
+input length increased, they were slower. Subjects
+were usually faster as the experiment progressed, a
+result that may indicate increased proficiency with
+practice. Note that all subjects reported profes-
+sional familiarity with post-edit, whereas the in-
+teractive mode was entirely new to them. In the
+exit survey many translators suggested that with
+more practice, they could have been as fast in the
+interactive mode.9
+</bodyText>
+<subsubsectionHeader confidence="0.744204">
+4.3.2 Translation Quality
+</subsubsectionHeader>
+<bodyText confidence="0.999802631578947">
+We evaluated translation quality with both auto-
+matic and manual measures. Table 1 shows that
+in the interactive mode, TER is lower and HTER
+is higher: subjects created translations closer to
+the references (lower TER), but performed more
+editing (higher HTER). This result suggests better
+translations in the interactive mode.
+To confirm that intuition, we elicited judgments
+from professional human raters. The setup followed
+the manual quality evaluation of the WMT 2014
+shared task (Bojar et al., 2014). We hired six raters—
+three for each language pair—who were paid be-
+tween $15–20 per hour. The raters logged into Ap-
+praise (Federmann, 2010) and for each source seg-
+ment, ranked five randomly selected translations.
+From these 5-way rankings we extracted pairwise
+judgments 7r = {&lt;, =}, where u1 &lt; u2 indicates
+that subject u1 provided a better translation than
+subject u2 for a given source input (Table 2).
+</bodyText>
+<footnote confidence="0.934522">
+9See (Green et al., 2014c) for significance levels of the
+other covariates along with analysis of subject learning rates,
+subject behavior, and qualitative feedback.
+</footnote>
+<table confidence="0.9994546">
+Fr-En En-De
+#pairwise 14,211 15,001
+#ties (=) 5,528 2,964
+IAA 0.419 (0.357) 0.407 (0.427)
+EW (inter.) 0.512 0.491
+</table>
+<tableCaption confidence="0.987976">
+Table 2: Pairwise judgments for the manual qual-
+</tableCaption>
+<bodyText confidence="0.78448">
+ity assessment. Inter-annotator agreement (IAA)
+n scores are measured with the official WMT14
+script. For comparison, the WMT14 IAA scores
+are given in parentheses. EW (inter.) is expected
+wins of interactive according to Eq. (6).
+</bodyText>
+<subsectionHeader confidence="0.743437">
+Fr-En En-De
+</subsectionHeader>
+<bodyText confidence="0.96638">
+sign p sign p
+</bodyText>
+<equation confidence="0.9995745">
++ • − •••
+− ••• +
+− + •
+− + •
+</equation>
+<bodyText confidence="0.958508055555556">
+Table 3: LMEM manual translation quality results
+for each fixed effect with contrast conditions for
+binary predictors in (). The signs of the coefficients
+can be interpreted as in ordinary regression. edit
+distance is token-level edit distance from baseline
+MT. session order is the order in which the subject
+translated the sentence during the experiment. Sta-
+tistical significance was computed with a likelihood
+ratio test: ••• p &lt; 0.001; • p &lt; 0.05.
+In WMT the objective is to rank individual sys-
+tems; here we need only compare interface condi-
+tions. However, we should control for translator
+variability. Therefore, we build a binomial LMEM
+for quality. The model is motivated by the simple
+and intuitive expected wins (EW) measure used at
+WMT. Let 5 be the set of pairwise judgments and
+wins(u1, u2) = |{(u1, u2, 7r) E 5  |7r = &lt;}|. The
+standard EW measure is:
+</bodyText>
+<equation confidence="0.997778">
+wins(u1,u2)
+wins(u1, u2) + wins(u2, u1)
+</equation>
+<bodyText confidence="0.988637571428571">
+(5)
+Sakaguchi et al. (2014) showed that, despite its sim-
+plicity, Eq. (5) is nearly as effective as model-based
+methods given sufficient high-quality judgments.
+Since we care only about the two translation condi-
+tions, we reinterpret the ui as interface conditions,
+i.e., u1 = int and u2 = pe. We can then disregard
+</bodyText>
+<equation confidence="0.994581">
+ui (interactive)
+log edit distance
+gender (female)
+log session order
+1 �
+e(u1) = |5|
+u1=,4u2
+</equation>
+<page confidence="0.882008">
+1231
+</page>
+<bodyText confidence="0.988327">
+the normalizing term to obtain:
+</bodyText>
+<equation confidence="0.99336">
+wins(u1,u2)
+e(u1) = wins(u1, u2) + wins(u2, u1) (6)
+</equation>
+<bodyText confidence="0.99945175862069">
+which is the expected value of a Bernoulli distribu-
+tion (so e(u2) = 1 − e(u1)). The intercept-term
+of the binomial LMEM will be approximately this
+value subject to other fixed and random effects.
+To estimate the model, we convert each pairwise
+judgment u1 &lt; u2 to two examples where the re-
+sponse is 1 for u1 and 0 for u2. We add the fixed
+effects shown in Table 3, where the numeric effects
+are centered and scaled by their standard deviations.
+The maximal random effects structure contains in-
+tercepts for sentence id nested within subject along
+with random slopes for interface condition.
+Table 3 shows the p-values and coefficient orien-
+tations. The models yield probabilities that can be
+interpreted like Eq. (6) but with all fixed predictors
+set to 0. For Fr-En, the value for post-edit is 0.472
+vs. 0.527 for interactive. For En-De, post-edit is
+0.474 vs. 0.467 for interactive. The difference is
+statistically significant for Fr-En, but not for En-De.
+When MT quality was anecdotally high (Fr-En),
+high token-level edit distance from the initial sug-
+gestion decreased quality. When MT was poor (En-
+De), significant editing improved quality. Female
+En-De translators were better than males, possibly
+due to imbalance in the subject pool (12 females vs.
+4 males). En-De translators seemed to improve with
+practice (positive coefficient for session order).
+The Fr-En results are the first showing an inter-
+active UI that improves over post-edit.
+</bodyText>
+<sectionHeader confidence="0.99388" genericHeader="method">
+5 MT Re-tuning Experiment
+</sectionHeader>
+<bodyText confidence="0.997980764705882">
+The human translators corrected the output of the
+BLEU-tuned, baseline MT system. No updating of
+the MT system occurred during the experiment to
+eliminate a confound in the time and quality analy-
+ses. Now we investigate re-tuning the MT system
+to the corrections by simply re-starting the online
+learning algorithm from the baseline weight vector
+w, this time scoring with HTER instead of BLEU.
+Conventional incremental MT learning experi-
+ments typically resemble domain adaptation: small-
+scale baselines are trained and tuned on mostly out-
+of-domain data, and then re-tuned incrementally
+on in-domain data. In contrast, we start with large-
+scale systems. This is more consistent with a pro-
+fessional translation environment where translators
+receive suggestions from state-of-the-art systems
+like Google Translate.
+</bodyText>
+<subsectionHeader confidence="0.516665">
+Bilingual Monolingual
+</subsectionHeader>
+<table confidence="0.997250333333333">
+#Segments #Tokens #Tokens
+En-De 4.54M 224M 1.7B
+Fr-En 14.8M 842M 2.24B
+</table>
+<tableCaption confidence="0.995744">
+Table 4: Gross statistics of MT training corpora.
+</tableCaption>
+<table confidence="0.514557428571429">
+En-De Fr-En
+baseline-tune 9,469 8,931
+baseline-dev 9,012 9,030
+680 589
+457 368
+764 709
+492 447
+</table>
+<tableCaption confidence="0.945978">
+Table 5: Tuning, development, and test corpora
+</tableCaption>
+<bodyText confidence="0.9805088">
+(#segments). tune and dev were used for baseline
+system preparation. Re-tuning was performed on
+int-tune and pe-tune, respectively. We report held-
+out results on the two test data sets. All sets are
+supplied with independent references.
+</bodyText>
+<subsectionHeader confidence="0.985923">
+5.1 Datasets
+</subsectionHeader>
+<bodyText confidence="0.98770953125">
+Table 4 shows the monolingual and parallel train-
+ing corpora. Most of the data come from the con-
+strained track of the WMT 2013 shared task (Bojar
+et al., 2013). We also added 61k parallel segments
+of TAUS data to the En-De bitext, and 26k TAUS
+segments to the Fr-En bitext. We aligned the par-
+allel data with the Berkeley Aligner (Liang et al.,
+2006) and symmetrized the alignments with the
+grow-diag heuristic. For each target language we
+used lmplz (Heafield et al., 2013) to estimate unfil-
+tered, 5-gram Kneser-Ney LMs from the concate-
+nation of the target side of the bitext and the mono-
+lingual data. For the class-based features, we esti-
+mated 512-class source and target mappings with
+the algorithm of Green et al. (2014a).
+The upper part of Table 5 shows the baseline
+tuning and development sets, which also contained
+1/3 TAUS medical text, 1/3 TAUS software text,
+and 1/3 WMT newswire text (see section 4).
+The lower part of Table 5 shows the organization
+of the human corrections for re-tuning and testing.
+Recall that for each unique source input, eight hu-
+man translators produced a correction in each con-
+dition. First, we filtered all corrections for which a
+log u was not recorded (due to technical problems).
+Second, we de-duplicated the corrections so that
+each h was unique. Finally, we split the unique
+(f, h) tuples according to a natural division in the
+int-tune
+int-test
+pe-tune
+pe-test
+</bodyText>
+<page confidence="0.9386">
+1232
+</page>
+<table confidence="0.9976221">
+System tune BLEUT TER, HTER
+baseline bleu 23.12 60.29 44.05
+re-tune hter 22.18 60.85 43.99
+re-tune+feat hter 21.73 59.71 42.35
+(a) En-De int-test results.
+System tune BLEUT TER, HTER
+baseline bleu 39.33 45.29 28.28
+re-tune hter 39.99 45.73 26.96
+re-tune+feat hter 40.30 45.28 26.40
+(b) Fr-En int-test results.
+</table>
+<tableCaption confidence="0.964007">
+Table 6: Main re-tuning results for interactive
+</tableCaption>
+<bodyText confidence="0.999416259259259">
+data. baseline is the BLEU-tuned system used
+in the translation user study. re-tune is the base-
+line feature set re-tuned to HTER on int-tune. re-
+tune+feat adds the human feature templates de-
+scribed in section 3.3. bold indicates statistical
+significance relative to the baseline at p &lt; 0.001;
+italic at p &lt; 0.05 by the permutation test of Riezler
+and Maxwell (2005).
+data. There were five source segments per docu-
+ment, and each document was rendered as a single
+screen during the translation experiment. Segment
+order was not randomized, so we could split the
+data as follows: assign the first three segments of
+each screen to tune, and the last two to test. This is
+a clean split with no overlap.
+This tune/test split has two attractive properties.
+First, if we can quickly re-tune on the first few sen-
+tences on a screen and provide better translations
+for the last few, then presumably the user experience
+improves. Second, source inputs f are repeated—
+eight translators translated each input in each condi-
+tion. This means that a reduction in HTER means
+better average suggestions for multiple human trans-
+lators. Contrast this experimental design with tun-
+ing to the corrections of a single human translator.
+There the system might overfit to one human style,
+and may not generalize to other human translators.
+</bodyText>
+<subsectionHeader confidence="0.885658">
+5.2 Results
+</subsectionHeader>
+<bodyText confidence="0.999522">
+Table 6 contains the main results for re-tuning to in-
+teractive MT corrections. For both language pairs,
+we observe large statistically significant reductions
+in HTER. However, the results for BLEU and TER—
+which are computed with respect to the independent
+references—are mixed. The lower En-De BLEU
+score is explained by a higher brevity penalty for
+the re-tuned output (0.918 vs. 0.862). However, the
+re-tuned 4-gram and 3-gram precisions are signif-
+</bodyText>
+<table confidence="0.9987315">
+System HTER, System HTER,
+int pe
+baseline 44.05 baseline 41.05
+re-tune (int) 43.99 re-tune (pe) 40.34
+re-tune+feat 42.35 – –
+A −1.80 −0.71
+</table>
+<tableCaption confidence="0.7130538">
+Table 7: En-De test results for re-tuning to post-edit
+(pe) vs. interactive (int). Features cannot be ex-
+tracted from the post-edit data, so the re-tune+feat
+system cannot be learned. The Fr-En results are
+similar but are omitted due to space.
+</tableCaption>
+<bodyText confidence="0.999596516129032">
+icantly higher. The unchanged Fr-En TER value
+can be explained by the observation that no human
+translators produced TER scores higher than the
+baseline MT. This odd result has also been observed
+for BLEU (Culy and Riehemann, 2003), although
+here we do observe a slight BLEU improvement.
+The additional features (854 for Fr-En; 847 for
+En-De) help significantly and do not slow down
+decoding. We used the same Li regularization
+strength as the baseline, but feature growth could
+be further constrained by increasing this parame-
+ter. Tuning is very fast at about six minutes for the
+whole dataset, so tuning during a live user session
+is already practical.
+Table 7 compares re-tuning to interactive vs.
+post-edit corrections. Recall that the int-test and
+pe-test datasets are different and contain different
+references. The post-edit baseline is lower because
+humans performed less editing in the baseline con-
+dition (see Table 1). Features account for the great-
+est reduction in HTER. Of course, the features are
+based mostly on word alignments, which could be
+obtained for the post-edit data by running an online
+word alignment tool (see: Farajian et al. (2014)).
+However, the interactive logs contain much richer
+user state information that we could not exploit due
+to data sparsity. We also hypothesize that the fi-
+nal interactive corrections might be more useful
+since suggestions prime translators (Green et al.,
+2013a), and the MT system was able to refine its
+suggestions.
+</bodyText>
+<sectionHeader confidence="0.980667" genericHeader="method">
+6 Re-tuning Analysis
+</sectionHeader>
+<bodyText confidence="0.9998588">
+Tables 6 and 7 raise two natural questions: what
+accounts for the reduction in HTER, and why are
+the TER/BLEU results mixed? Comparison of the
+BLEU-tuned baseline to the HTER re-tuned sys-
+tems gives some insight. For both questions, fine-
+</bodyText>
+<page confidence="0.964643">
+1233
+</page>
+<bodyText confidence="0.9923525">
+grained corrections appear to make the difference.
+Consider this French test example (with gloss):
+The independent reference for une ligne de chimio-
+thérapie is ‘previous chemotherapy treatment’, and
+the baseline produces ‘previous chemotherapy line.’
+The source sentence appears seven times with the
+following user translations: ‘one line or more
+of chemotherapy’, ‘one prior line of chemother-
+apy&apos;, ‘one previous line of chemotherapy’ (2), ‘one
+line of chemotherapy before’ (2), ‘one protocol of
+chemotherapy’. The re-tuned, feature-based sys-
+tem produces ‘one line of chemotherapy before’,
+matching two of the humans exactly, and six of the
+humans in terms of idiomatic medical jargon (‘line
+of chemotherapy’ vs. ‘chemotherapy treatment’).
+However, the baseline output would have received
+better BLEU and TER scores.
+Sometimes re-tuning improves the translations
+with respect to both the reference and the human
+corrections. This English phrase appears in the
+En-De test set:
+(2) depending
+abhängig
+The baseline produces exactly the gloss shown in Ex.
+(2). The human translators produced: `je nach datei&apos;
+(6), `das dokument&apos;, and `abhängig von der datei&apos;.
+The re-tuned system rendered the phrase `je nach
+dokument&apos;, which is closer to both the independent
+reference `je nach datei&apos; and the human corrections.
+This change improves TER, BLEU, and HTER.
+</bodyText>
+<sectionHeader confidence="0.999935" genericHeader="method">
+7 Related Work
+</sectionHeader>
+<bodyText confidence="0.999948416666667">
+The process study most similar to ours is that of
+Koehn (2009a), who compared scratch, post-edit,
+and simple interactive modes. However, he used un-
+dergraduate, non-professional subjects, and did not
+consider re-tuning. Our experimental design with
+professional bilingual translators follows our previ-
+ous work Green et al. (2013a) comparing scratch
+translation to post-edit.
+Many research translation UIs have been pro-
+posed including TransType (Langlais et al., 2000),
+Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and
+Casacuberta, 2014), TransCenter (Denkowski et
+al., 2014b), and CasmaCat (Alabau et al., 2013).
+However, to our knowledge, none of these inter-
+faces were explicitly designed according to mixed-
+initiative principles from the HCI literature.
+Incremental MT learning has been investigated
+several times, usually starting from no data (Bar-
+rachina et al., 2009; Ortiz-Martínez et al., 2010),
+via simulated post-editing (Martínez-Gómez et al.,
+2012; Denkowski et al., 2014a), or via re-ranking
+(Wäschle et al., 2013). No previous experiments
+combined large-scale baselines, full re-tuning of
+the model weights, and HTER optimization.
+HTER tuning can be simulated by re-
+parameterizing an existing metric. Snover et
+al. (2009) tuned TERp to correlate with HTER,
+while Denkowski and Lavie (2010) did the same
+for METEOR. Zaidan and Callison-Burch (2010)
+showed how to solicit MT corrections for HTER
+from Amazon Mechanical Turk.
+Our learning approach is related to coactive learn-
+ing (Shivaswamy and Joachims, 2012). Their basic
+preference perceptron updates toward a correction,
+whereas we use the correction for metric scoring
+and feature extraction.
+</bodyText>
+<sectionHeader confidence="0.997389" genericHeader="conclusions">
+8 Conclusion
+</sectionHeader>
+<bodyText confidence="0.999983133333334">
+We presented a new CAT interface that supports
+post-edit and interactive modes. Evaluation with
+professional, bilingual translators showed post-edit
+to be faster, but prior subject familiarity with post-
+edit may have mattered. For French-English, the
+interactive mode enabled higher quality translation.
+Re-tuning the MT system to interactive corrections
+also yielded large HTER gains. Technical contri-
+butions that make re-tuning possible are a cross-
+entropy objective, prefix decoding, and dynamic
+phrase table augmentation. Larger quantities of cor-
+rections should yield further gains, but our current
+experiments already establish the feasibility of Bar-
+Hillel&apos;s virtuous “machine-post-editor partnership”
+which benefits both humans and machines.
+</bodyText>
+<sectionHeader confidence="0.994209" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.999814833333333">
+We thank TAUS for access to their data reposi-
+tory. We also thank John DeNero, Chris Dyer,
+Alon Lavie, and Matt Post for helpful conversa-
+tions. The first author is supported by a National
+Science Foundation Graduate Research Fellowship.
+This work was also supported by the Defense Ad-
+vanced Research Projects Agency (DARPA) Broad
+Operational Language Translation (BOLT) program
+through IBM. Any opinions, findings, and conclu-
+sions or recommendations expressed are those of
+the author(s) and do not necessarily reflect the view
+of either DARPA or the US government.
+</bodyText>
+<figure confidence="0.9988494375">
+(1) une
+one
+chimiothérapie
+chemotherapy
+antérieure
+previous
+de
+of
+ligne
+line
+the
+der
+file
+datei
+on
+von
+</figure>
+<page confidence="0.985442">
+1234
+</page>
+<sectionHeader confidence="0.962113" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.989281443113772">
+V. Alabau, R. Bonk, C. Buck, M. Carl, F. Casacuberta,
+M. García-Martínez, et al. 2013. Advanced com-
+puter aided translation with a web-based workbench.
+In 2nd Workshop on Post-Editing Technologies and
+Practice.
+R.H. Baayen, D.J. Davidson, and D.M. Bates. 2008.
+Mixed-effects modeling with crossed random effects
+for subjects and items. Journal of Memory and Lan-
+guage, 59(4):390–412.
+Y. Bar-Hillel. 1960. The present status of automatic
+translation of languages. Advances in Computers,
+1:91–163.
+D. J. Barr, R. Levy, C. Scheepers, and H. J. Tily. 2013.
+Random effects structure for confirmatory hypothe-
+sis testing: Keep it maximal. Journal of Memory
+and Language, 68(3):255–278.
+S. Barrachina, O. Bender, F. Casacuberta, J. Civera,
+E. Cubel, S. Khadivi, et al. 2009. Statistical ap-
+proaches to computer-assisted translation. Compu-
+tational Linguistics, 35(1):3–28.
+D. M. Bates. 2007. lme4: Linear mixed-
+effects models using S4 classes. Technical re-
+port, R package version 1.1-5, http://cran.r-
+project.org/package=lme4.
+O. Bojar, C. Buck, C. Callison-Burch, C. Federmann,
+B. Haddow, P. Koehn, et al. 2013. Findings of the
+2013 Workshop on Statistical Machine Translation.
+In WMT.
+O. Bojar, C. Buck, C. Federmann, B. Haddow, P. Koehn,
+J. Leveling, et al. 2014. Findings of the 2014 Work-
+shop on Statistical Machine Translation. In WMT.
+C. Callison-Burch, M. Osborne, and P. Koehn. 2006.
+Re-evaluating the role of BLEU in machine transla-
+tion research. In EACL.
+M. Carl. 2010. A computational framework for a cogni-
+tive model of human translation processes. In Aslib
+Translating and the Computer Conference.
+D. Cer, C. D. Manning, and D. Jurafsky. 2010. The best
+lexical metric for phrase-based statistical MT system
+optimization. In NAACL.
+C. Cherry and G. Foster. 2012. Batch tuning strategies
+for statistical machine translation. In NAACL.
+C. Culy and S. Z. Riehemann. 2003. The limits of n-
+gram translation evaluation metrics. In MT Summit
+IX.
+M. Denkowski and A. Lavie. 2010. Extending the ME-
+TEOR machine translation evaluation metric to the
+phrase level. In NAACL.
+M. Denkowski, C. Dyer, and A. Lavie. 2014a. Learn-
+ing from post-editing: Online model adaptation for
+statistical machine translation. In EACL.
+M. Denkowski, A. Lavie, I. Lacruz, and C. Dyer.
+2014b. Real time adaptive machine translation for
+post-editing with cdec and TransCenter. In Work-
+shop on Humans and Computer-assisted Translation.
+J. Duchi, E. Hazan, and Y. Singer. 2011. Adaptive sub-
+gradient methods for online learning and stochastic
+optimization. JMLR, 12:2121–2159.
+M. A. Farajian, N. Bertoldi, and M. Federico. 2014.
+Online word alignment for online adaptive machine
+translation. In Workshop on Humans and Computer-
+assisted Translation.
+C. Federmann. 2010. Appraise: An open-source
+toolkit for manual phrase-based evaluation of trans-
+lations. In LREC.
+G. Foster, P. Langlais, and G. Lapalme. 2002. User-
+friendly text prediction for translators. In EMNLP.
+M. Galley and C. D. Manning. 2008. A simple and
+effective hierarchical phrase reordering model. In
+EMNLP.
+S. Green, J. Heer, and C. D. Manning. 2013a. The effi-
+cacy of human post-editing for language translation.
+In CHI.
+S. Green, S. Wang, D. Cer, and C. D. Manning. 2013b.
+Fast and adaptive online training of feature-rich trans-
+lation models. In ACL.
+S. Green, D. Cer, and C. D. Manning. 2014a. An em-
+pirical comparison of features and tuning for phrase-
+based machine translation. In WMT.
+S. Green, D. Cer, and C. D. Manning. 2014b. Phrasal:
+A toolkit for new directions in statistical machine
+translation. In WMT.
+S. Green, J. Chuang, J. Heer, and C. D. Manning. 2014c.
+Predictive Translation Memory: A mixed-initiative
+system for human language translation. In UIST.
+K. Heafield, I. Pouzyrevsky, J. H. Clark, and P. Koehn.
+2013. Scalable modified Kneser-Ney language
+model estimation. In ACL, Short Papers.
+L. Huang and D. Chiang. 2007. Forest rescoring:
+Faster decoding with integrated language models. In
+ACL.
+R. Hwa, P. Resnik, A. Weinberg, and O. Kolak. 2002.
+Evaluating translational correspondence using anno-
+tation projection. In ACL.
+P. Koehn, H. Hoang, A. Birch, C. Callison-Burch,
+M. Federico, N. Bertoldi, et al. 2007. Moses: Open
+source toolkit for statistical machine translation. In
+ACL, Demonstration Session.
+P. Koehn. 2009a. A process study of computer-aided
+translation. Machine Translation, 23:241–263.
+P. Koehn. 2009b. A web-based interactive computer
+aided translation tool. In ACL-IJCNLP, Software
+Demonstrations.
+1235
+P. Koehn. 2010. Statistical Machine Translation. Cam-
+bridge University Press.
+D. Ortiz-Martínez, I. García-Varea, and F. Casacuberta.
+2010. Online learning for interactive statistical ma-
+chine translation. In NAACL.
+P. Langlais, G. Foster, and G. Lapalme. 2000.
+TransType: a computer-aided translation typing sys-
+tem. In Workshop on Embedded Machine Transla-
+tion Systems.
+P. Liang, B. Taskar, and D. Klein. 2006. Alignment by
+agreement. In NAACL.
+C. Manning, M. Surdeanu, J. Bauer, J. Finkel,
+S. Bethard, and D. McClosky. 2014. The Stanford
+CoreNLP natural language processing toolkit. In
+ACL, System Demonstrations.
+P. Martínez-Gómez, G. Sanchis-Trilles, and F. Casacu-
+berta. 2012. Online adaptation strategies for sta-
+tistical machine translation in post-editing scenarios.
+Pattern Recognition, 45(9):3193–3203.
+F. J. Och and H. Ney. 2004. The alignment template
+approach to statistical machine translation. Compu-
+tational Linguistics, 30(4):417–449.
+F. J. Och, R. Zens, and H. Ney. 2003. Efficient
+search for interactive statistical machine translation.
+In EACL.
+F. J. Och. 2003. Minimum error rate training for statis-
+tical machine translation. In ACL.
+D. Ortiz-Martínez and F. Casacuberta. 2014. The new
+Thot toolkit for fully automatic and interactive statis-
+tical machine translation. In EACL, System Demon-
+strations.
+D. Ortiz-Martínez, I. García-Varea, and F. Casacuberta.
+2009. Interactive machine translation based on par-
+tial statistical phrase-based alignments. In RANLP.
+K. Papineni, S. Roukos, T. Ward, and W. Zhu. 2002.
+BLEU: a method for automatic evaluation of ma-
+chine translation. In ACL.
+R. Ray. 2013. Ten essential research findings for 2013.
+In 2013 Resource Directory &amp; Index. Multilingual.
+S. Riezler and J. T. Maxwell. 2005. On some pitfalls in
+automatic evaluation and significance testing in MT.
+In ACL Workshop on Intrinsic and Extrinsic Evalua-
+tion Measures for Machine Translation and/or Sum-
+marization.
+K. Sakaguchi, M. Post, and B. Van Durme. 2014. Effi-
+cient elicitation of annotations for human evaluation
+of machine translation. In WMT.
+P. Shivaswamy and T. Joachims. 2012. Online struc-
+tured prediction via coactive learning. In ICML.
+M. Snover, B. Dorr, R. Schwartz, L. Micciulla, and
+J. Makhoul. 2006. A study of translation edit rate
+with targeted human annotation. In AMTA.
+M. Snover, N. Madnani, B. Dorr, and R. Schwartz.
+2009. Fluency, adequacy, or HTER? Exploring dif-
+ferent human judgments with a tunable MT metric.
+In WMT.
+K. Wäschle, P. Simianer, N. Bertoldi, S. Riezler, and
+M. Federico. 2013. Generative and discriminative
+methods for online adaptation in SMT. In MT Sum-
+mit XIV.
+O. F. Zaidan and C. Callison-Burch. 2010. Predicting
+human-targeted translation edit rate via untrained hu-
+man annotators. In NAACL.
+</reference>
+<page confidence="0.991077">
+1236
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.912497">
+<title confidence="0.998923">Human Effort and Machine Learnability in Computer Aided Translation</title>
+<author confidence="0.9850045">Sida Wang Green</author>
+<author confidence="0.9850045">Jason Jeffrey Sebastian D Manning</author>
+<affiliation confidence="0.999926">Computer Science Department, Stanford University</affiliation>
+<email confidence="0.995263">spenceg@stanford.edu</email>
+<email confidence="0.995263">sidaw@stanford.edu</email>
+<email confidence="0.995263">sebschu@stanford.edu</email>
+<email confidence="0.995263">manning@stanford.edu</email>
+<affiliation confidence="0.98684">Science Department, University of Washington</affiliation>
+<email confidence="0.99968">jcchuang@uw.edu</email>
+<email confidence="0.99968">jheer@uw.edu</email>
+<abstract confidence="0.998400538461539">Analyses of computer aided translation typically focus on either frontend interfaces and human effort, or backend translation and machine learnability of corrections. However, this distinction is artificial in practice since the frontend and backend must work in concert. We present the first holistic, quantitative evaluation of these issues by contrasting two assistive modes: postediting and interactive machine translation (MT). We describe a new translator interface, extensive modifications to a phrasebased MT system, and a novel objective function for re-tuning to human corrections. Evaluation with professional bilingual translators shows that post-edit is faster than interactive at the cost of translation quality for French-English and English- German. However, re-tuning the MT system to interactive output leads to larger, statistically significant reductions in HTER versus re-tuning to post-edit. Analysis shows that tuning directly to HTER results in fine-grained corrections to subsequent machine output.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>V Alabau</author>
+<author>R Bonk</author>
+<author>C Buck</author>
+<author>M Carl</author>
+<author>F Casacuberta</author>
+<author>M García-Martínez</author>
+</authors>
+<title>Advanced computer aided translation with a web-based workbench.</title>
+<date>2013</date>
+<booktitle>In 2nd Workshop on Post-Editing Technologies and Practice.</booktitle>
+<contexts>
+<context position="38995" citStr="Alabau et al., 2013" startWordPosition="6205" endWordPosition="6208">lated Work The process study most similar to ours is that of Koehn (2009a), who compared scratch, post-edit, and simple interactive modes. However, he used undergraduate, non-professional subjects, and did not consider re-tuning. Our experimental design with professional bilingual translators follows our previous work Green et al. (2013a) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimization. HTER tuning can be simulated by reparameterizing an existing metric.</context>
+</contexts>
+<marker>Alabau, Bonk, Buck, Carl, Casacuberta, García-Martínez, 2013</marker>
+<rawString>V. Alabau, R. Bonk, C. Buck, M. Carl, F. Casacuberta, M. García-Martínez, et al. 2013. Advanced computer aided translation with a web-based workbench. In 2nd Workshop on Post-Editing Technologies and Practice.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R H Baayen</author>
+<author>D J Davidson</author>
+<author>D M Bates</author>
+</authors>
+<title>Mixed-effects modeling with crossed random effects for subjects and items.</title>
+<date>2008</date>
+<journal>Journal of Memory and Language,</journal>
+<volume>59</volume>
+<issue>4</issue>
+<contexts>
+<context position="23894" citStr="Baayen et al. (2008)" startWordPosition="3784" endWordPosition="3787">tood the instructions of the experiment and proceeded without clarification; another skipped the training module entirely. The third subject had a technical problem that prevented logging. Finally, we also filtered segment-level sessions for which the log of translation time was greater than 2.5 standard deviations from the mean. 4.3.1 Translation Time We analyze time with a linear mixed effects model (LMEM) estimated with the lme4 (Bates, 2007) R package. When experimental factors are sampled from larger populations—e.g., humans, sentences, words—LMEMs are more robust to type II errors (see: Baayen et al. (2008)). The log-transformed time is the response variable and translation condition is the main independent variable. The maximal random effects structure (Barr et al., 2013) contains intercepts for subject, sentence id, and text genre, each with random slopes for translation condition. We found significant main effects for translation condition (Fr-En, p &lt; 0.05; En-De, p &lt; 0.01). The orientation of the coefficients indicates that interactive is slower for both language pairs. For FrEn, the LMEM predicts a mean time (intercept) of 46.0 sec/sentence in post-edit vs. 54.6 sec/sentence 8http://www.pro</context>
+</contexts>
+<marker>Baayen, Davidson, Bates, 2008</marker>
+<rawString>R.H. Baayen, D.J. Davidson, and D.M. Bates. 2008. Mixed-effects modeling with crossed random effects for subjects and items. Journal of Memory and Language, 59(4):390–412.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Bar-Hillel</author>
+</authors>
+<title>The present status of automatic translation of languages.</title>
+<date>1960</date>
+<booktitle>Advances in Computers,</booktitle>
+<pages>1--91</pages>
+<contexts>
+<context position="1790" citStr="Bar-Hillel (1960" startWordPosition="248" endWordPosition="249">ds to larger, statistically significant reductions in HTER versus re-tuning to post-edit. Analysis shows that tuning directly to HTER results in fine-grained corrections to subsequent machine output. 1 Introduction The goal of machine translation has always been to reduce human effort, whether by partial assistance or by outright replacement. However, preoccupation with the latter—fully automatic translation—at the exclusion of the former has been a feature of the research community since its first nascent steps in the 1950s. Pessimistic about progress during that decade and future prospects, Bar-Hillel (1960, p.3) argued that more attention should be paid to a “machine-post-editor partnership,” whose decisive problem is “the region of optimality in the continuum of possible divisions of labor.” Today, with human-quality, fully automatic machine translation (MT) elusive still, that decades-old recommendation remains current. This paper is the first to look at both sides of the partnership in a single user study. We compare two common flavors of machine-assisted translation: post-editing and interactive MT. We analyze professional, bilingual translators working in both modes, looking first at user </context>
+</contexts>
+<marker>Bar-Hillel, 1960</marker>
+<rawString>Y. Bar-Hillel. 1960. The present status of automatic translation of languages. Advances in Computers, 1:91–163.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D J Barr</author>
+<author>R Levy</author>
+<author>C Scheepers</author>
+<author>H J Tily</author>
+</authors>
+<title>Random effects structure for confirmatory hypothesis testing: Keep it maximal.</title>
+<date>2013</date>
+<journal>Journal of Memory and Language,</journal>
+<volume>68</volume>
+<issue>3</issue>
+<contexts>
+<context position="24063" citStr="Barr et al., 2013" startWordPosition="3809" endWordPosition="3812">revented logging. Finally, we also filtered segment-level sessions for which the log of translation time was greater than 2.5 standard deviations from the mean. 4.3.1 Translation Time We analyze time with a linear mixed effects model (LMEM) estimated with the lme4 (Bates, 2007) R package. When experimental factors are sampled from larger populations—e.g., humans, sentences, words—LMEMs are more robust to type II errors (see: Baayen et al. (2008)). The log-transformed time is the response variable and translation condition is the main independent variable. The maximal random effects structure (Barr et al., 2013) contains intercepts for subject, sentence id, and text genre, each with random slopes for translation condition. We found significant main effects for translation condition (Fr-En, p &lt; 0.05; En-De, p &lt; 0.01). The orientation of the coefficients indicates that interactive is slower for both language pairs. For FrEn, the LMEM predicts a mean time (intercept) of 46.0 sec/sentence in post-edit vs. 54.6 sec/sentence 8http://www.proz.com 1230 Fr-En En-De TER HTER TER HTER post-edit 47.32 23.51 56.16 37.15 interactive 47.05 24.14 55.89 39.55 Table 1: Automatic assessment of translation quality. Here</context>
+</contexts>
+<marker>Barr, Levy, Scheepers, Tily, 2013</marker>
+<rawString>D. J. Barr, R. Levy, C. Scheepers, and H. J. Tily. 2013. Random effects structure for confirmatory hypothesis testing: Keep it maximal. Journal of Memory and Language, 68(3):255–278.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Barrachina</author>
+<author>O Bender</author>
+<author>F Casacuberta</author>
+<author>J Civera</author>
+<author>E Cubel</author>
+<author>S Khadivi</author>
+</authors>
+<title>Statistical approaches to computer-assisted translation.</title>
+<date>2009</date>
+<journal>Computational Linguistics,</journal>
+<volume>35</volume>
+<issue>1</issue>
+<contexts>
+<context position="39254" citStr="Barrachina et al., 2009" startWordPosition="6243" endWordPosition="6247">th professional bilingual translators follows our previous work Green et al. (2013a) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimization. HTER tuning can be simulated by reparameterizing an existing metric. Snover et al. (2009) tuned TERp to correlate with HTER, while Denkowski and Lavie (2010) did the same for METEOR. Zaidan and Callison-Burch (2010) showed how to solicit MT corrections for HTER from Amazon Mechanical Turk. Our learning approach is related to </context>
+</contexts>
+<marker>Barrachina, Bender, Casacuberta, Civera, Cubel, Khadivi, 2009</marker>
+<rawString>S. Barrachina, O. Bender, F. Casacuberta, J. Civera, E. Cubel, S. Khadivi, et al. 2009. Statistical approaches to computer-assisted translation. Computational Linguistics, 35(1):3–28.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D M Bates</author>
+</authors>
+<title>lme4: Linear mixedeffects models using S4 classes.</title>
+<date>2007</date>
+<tech>Technical report, R package version</tech>
+<pages>1--1</pages>
+<contexts>
+<context position="23723" citStr="Bates, 2007" startWordPosition="3761" endWordPosition="3762">lation conditions in terms of two response variables: time and quality. We excluded one Fr-En subject and two En-De subjects from the models. One subject misunderstood the instructions of the experiment and proceeded without clarification; another skipped the training module entirely. The third subject had a technical problem that prevented logging. Finally, we also filtered segment-level sessions for which the log of translation time was greater than 2.5 standard deviations from the mean. 4.3.1 Translation Time We analyze time with a linear mixed effects model (LMEM) estimated with the lme4 (Bates, 2007) R package. When experimental factors are sampled from larger populations—e.g., humans, sentences, words—LMEMs are more robust to type II errors (see: Baayen et al. (2008)). The log-transformed time is the response variable and translation condition is the main independent variable. The maximal random effects structure (Barr et al., 2013) contains intercepts for subject, sentence id, and text genre, each with random slopes for translation condition. We found significant main effects for translation condition (Fr-En, p &lt; 0.05; En-De, p &lt; 0.01). The orientation of the coefficients indicates that</context>
+</contexts>
+<marker>Bates, 2007</marker>
+<rawString>D. M. Bates. 2007. lme4: Linear mixedeffects models using S4 classes. Technical report, R package version 1.1-5, http://cran.rproject.org/package=lme4.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Bojar</author>
+<author>C Buck</author>
+<author>C Callison-Burch</author>
+<author>C Federmann</author>
+<author>B Haddow</author>
+<author>P Koehn</author>
+</authors>
+<date>2013</date>
+<booktitle>Findings of the 2013 Workshop on Statistical Machine Translation. In WMT.</booktitle>
+<contexts>
+<context position="22280" citStr="Bojar et al., 2013" startWordPosition="3529" endWordPosition="3532">-English (FrEn) and English-German (En-De). Anecdotally, French-English is an easy language pair for MT, whereas English-German is very hard due to reordering and complex German morphology. We chose three text genres: software, medical, and informal news. The software text came from the graphical interfaces of Autodesk AutoCAD and Adobe Photoshop. The medical text was a drug review from the European Medicines Agency. These two data sets came from TAUS7 and included independent reference translations. The informal news text came from the WMT 2013 shared task test set 7http://www.tausdata.org/ (Bojar et al., 2013). The evaluation corpus was constructed from equal proportions of the three genres. The Fr-En dataset contained 3,003 source tokens (150 segments); the En-De dataset contained 3,002 (173 segments). As a rule of thumb, a human translator averages about 2,700 source tokens per day (Ray, 2013, p.36), so the experiment was designed to replicate a slightly demanding work day. 4.2 Selection of Subjects For each language pair, we recruited 16 professional, freelance translators on Proz, which is the largest online translation community.8 We posted ads for both language pairs at a fixed rate of $0.085</context>
+<context position="31519" citStr="Bojar et al., 2013" startWordPosition="5011" endWordPosition="5014">En 14.8M 842M 2.24B Table 4: Gross statistics of MT training corpora. En-De Fr-En baseline-tune 9,469 8,931 baseline-dev 9,012 9,030 680 589 457 368 764 709 492 447 Table 5: Tuning, development, and test corpora (#segments). tune and dev were used for baseline system preparation. Re-tuning was performed on int-tune and pe-tune, respectively. We report heldout results on the two test data sets. All sets are supplied with independent references. 5.1 Datasets Table 4 shows the monolingual and parallel training corpora. Most of the data come from the constrained track of the WMT 2013 shared task (Bojar et al., 2013). We also added 61k parallel segments of TAUS data to the En-De bitext, and 26k TAUS segments to the Fr-En bitext. We aligned the parallel data with the Berkeley Aligner (Liang et al., 2006) and symmetrized the alignments with the grow-diag heuristic. For each target language we used lmplz (Heafield et al., 2013) to estimate unfiltered, 5-gram Kneser-Ney LMs from the concatenation of the target side of the bitext and the monolingual data. For the class-based features, we estimated 512-class source and target mappings with the algorithm of Green et al. (2014a). The upper part of Table 5 shows t</context>
+</contexts>
+<marker>Bojar, Buck, Callison-Burch, Federmann, Haddow, Koehn, 2013</marker>
+<rawString>O. Bojar, C. Buck, C. Callison-Burch, C. Federmann, B. Haddow, P. Koehn, et al. 2013. Findings of the 2013 Workshop on Statistical Machine Translation. In WMT.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Bojar</author>
+<author>C Buck</author>
+<author>C Federmann</author>
+<author>B Haddow</author>
+<author>P Koehn</author>
+<author>J Leveling</author>
+</authors>
+<date>2014</date>
+<booktitle>Findings of the 2014 Workshop on Statistical Machine Translation. In WMT.</booktitle>
+<contexts>
+<context position="26126" citStr="Bojar et al., 2014" startWordPosition="4126" endWordPosition="4129">ggested that with more practice, they could have been as fast in the interactive mode.9 4.3.2 Translation Quality We evaluated translation quality with both automatic and manual measures. Table 1 shows that in the interactive mode, TER is lower and HTER is higher: subjects created translations closer to the references (lower TER), but performed more editing (higher HTER). This result suggests better translations in the interactive mode. To confirm that intuition, we elicited judgments from professional human raters. The setup followed the manual quality evaluation of the WMT 2014 shared task (Bojar et al., 2014). We hired six raters— three for each language pair—who were paid between $15–20 per hour. The raters logged into Appraise (Federmann, 2010) and for each source segment, ranked five randomly selected translations. From these 5-way rankings we extracted pairwise judgments 7r = {&lt;, =}, where u1 &lt; u2 indicates that subject u1 provided a better translation than subject u2 for a given source input (Table 2). 9See (Green et al., 2014c) for significance levels of the other covariates along with analysis of subject learning rates, subject behavior, and qualitative feedback. Fr-En En-De #pairwise 14,21</context>
+</contexts>
+<marker>Bojar, Buck, Federmann, Haddow, Koehn, Leveling, 2014</marker>
+<rawString>O. Bojar, C. Buck, C. Federmann, B. Haddow, P. Koehn, J. Leveling, et al. 2014. Findings of the 2014 Workshop on Statistical Machine Translation. In WMT.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Callison-Burch</author>
+<author>M Osborne</author>
+<author>P Koehn</author>
+</authors>
+<title>Re-evaluating the role of BLEU in machine translation research.</title>
+<date>2006</date>
+<booktitle>In EACL.</booktitle>
+<contexts>
+<context position="13944" citStr="Callison-Burch et al., 2006" startWordPosition="2177" endWordPosition="2180">. 3Ortiz-Martínez et al. (2009) describe a related technique in which all source and target words can align, with scores set by smoothing. systems tuned to other metrics. Conversely, systems tuned to edit-distance-based metrics like TER tend to produce short translations that are heavily penalized by other metrics. When human corrections become available, we switch to HTER, which correlates with human judgment and is an interpretable measure of editing effort. Whereas TER is computed as TER(e, ˆe), HTER is HTER(h, ˆe). HBLEU is an alternative, but since BLEU is invariant to some permutations (Callison-Burch et al., 2006), it is less interpretable. We find that it also does not work as well in practice. We previously proposed a fast, online tuning algorithm (Green et al., 2013b) based on AdaGrad (Duchi et al., 2011). The default loss function is expected error (EE) (Och, 2003; Cherry and Foster, 2012). Expected BLEU is an example of EE, which we found to be unstable when switching metrics. This may result from direct incorporation of the error metric into the gradient computation. To solve this problem, we propose a crossentropy loss which, to our knowledge, is new in MT. Let Eˆ = {ˆei}ni=1 be an n-best list r</context>
+</contexts>
+<marker>Callison-Burch, Osborne, Koehn, 2006</marker>
+<rawString>C. Callison-Burch, M. Osborne, and P. Koehn. 2006. Re-evaluating the role of BLEU in machine translation research. In EACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Carl</author>
+</authors>
+<title>A computational framework for a cognitive model of human translation processes.</title>
+<date>2010</date>
+<booktitle>In Aslib Translating and the Computer Conference.</booktitle>
+<contexts>
+<context position="5601" citStr="Carl, 2010" startWordPosition="828" endWordPosition="829">on with human subjects necessarily involves many moving parts. Section 2 briefly describes the interface, focusing on NLP components. Section 3 describes changes to the backend MT system. Section 4 explains the user study, and reports human translation time and quality results. Section 5 describes the MT re-tuning experiment. Analysis (section 6) and related work (section 7) round out the paper. 2 New Translator User Interface Figure 1 shows the translator interface, which is designed for expert, bilingual translators. Previous studies have shown that expert translators work and type quickly (Carl, 2010), so the interface is designed to be very responsive, and to be primarily operated by the keyboard. Most aids can be accessed via either typing or four hot keys. The current design focuses on the point of text entry and does not include conventional translator workbench features such as workflow management, spell checking, and text formatting tools. In the trivial post-edit mode, the interactive aids are disabled and a 1-best translation pre-populates the text entry box. We have described the HCI-specific motivations for and contributions of this new interface in Green et al. (2014c). This sec</context>
+<context position="9225" citStr="Carl (2010)" startWordPosition="1405" endWordPosition="1406">p, we parse each source input with Stanford CoreNLP (Manning et al., 2014). The UI combines those parses with word alignments from the full translation suggestions to project syntactic constituents to each item on the n-best list. Syntactic projection is a very old idea that underlies many MT systems (see: Hwa et al. (2002)). Here we make novel use of it for suggestion prediction filtering.1 Presently, we project noun phrases, verb phrases (minus the verbal arguments), and prepositional phrases. Crucially, these units are natural to humans, unlike statistical target phrases. Target Reordering Carl (2010) showed that expert translators tend to adopt local planning: they read a few words ahead and then translate in a roughly online fashion. However, word order differences between languages will necessarily require longer range planning and movement. To that end, the UI supports keyboard-based reordering. Suppose that the user wants to move a span in gray text to the insertion position for editing. Typing the prefix of this string will update the autocomplete dropdown with matching strings from the gray text. Consequently, sometimes the autocomplete dropdown will contain suggestions from several</context>
+</contexts>
+<marker>Carl, 2010</marker>
+<rawString>M. Carl. 2010. A computational framework for a cognitive model of human translation processes. In Aslib Translating and the Computer Conference.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Cer</author>
+<author>C D Manning</author>
+<author>D Jurafsky</author>
+</authors>
+<title>The best lexical metric for phrase-based statistical MT system optimization.</title>
+<date>2010</date>
+<booktitle>In NAACL.</booktitle>
+<contexts>
+<context position="13135" citStr="Cer et al. (2010)" startWordPosition="2050" endWordPosition="2053">s allowing any source word to align with any unseen or ungeneratable (due to the distortion limit) target word are created.3 These synthetic rules are given rule scores lower than any other rules in the set of queried rules for that source input f. Then candidates are allowed to compete on the beam. Candidates with spurious alignments will likely be pruned in favor of those that only turn to synthetic rules as a last resort. 3.2 Tuning We choose BLEU (Papineni et al., 2002) for baseline tuning to independent references, and HTER for re-tuning to human corrections. Our rationale is as follows: Cer et al. (2010) showed that BLEUtuned systems score well across automatic metrics and also correlate with human judgment better than 2Och et al. (2003) describe a similar algorithm for word graphs. 3Ortiz-Martínez et al. (2009) describe a related technique in which all source and target words can align, with scores set by smoothing. systems tuned to other metrics. Conversely, systems tuned to edit-distance-based metrics like TER tend to produce short translations that are heavily penalized by other metrics. When human corrections become available, we switch to HTER, which correlates with human judgment and i</context>
+</contexts>
+<marker>Cer, Manning, Jurafsky, 2010</marker>
+<rawString>D. Cer, C. D. Manning, and D. Jurafsky. 2010. The best lexical metric for phrase-based statistical MT system optimization. In NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Cherry</author>
+<author>G Foster</author>
+</authors>
+<title>Batch tuning strategies for statistical machine translation.</title>
+<date>2012</date>
+<booktitle>In NAACL.</booktitle>
+<contexts>
+<context position="14229" citStr="Cherry and Foster, 2012" startWordPosition="2227" endWordPosition="2230">penalized by other metrics. When human corrections become available, we switch to HTER, which correlates with human judgment and is an interpretable measure of editing effort. Whereas TER is computed as TER(e, ˆe), HTER is HTER(h, ˆe). HBLEU is an alternative, but since BLEU is invariant to some permutations (Callison-Burch et al., 2006), it is less interpretable. We find that it also does not work as well in practice. We previously proposed a fast, online tuning algorithm (Green et al., 2013b) based on AdaGrad (Duchi et al., 2011). The default loss function is expected error (EE) (Och, 2003; Cherry and Foster, 2012). Expected BLEU is an example of EE, which we found to be unstable when switching metrics. This may result from direct incorporation of the error metric into the gradient computation. To solve this problem, we propose a crossentropy loss which, to our knowledge, is new in MT. Let Eˆ = {ˆei}ni=1 be an n-best list ranked by a gold metric G(e, ˆe) &gt; 0. Assume we have a preference of a higher G (e.g., BLEU or 1−HTER). Define the model distribution over Eˆ as q(ˆe|f) a exp[wTφ(ˆe, f)] normalized so that E ˆec Eˆ q(ˆe|f) = 1; q indicates how much the model prefers each translation. Similarly, define</context>
+</contexts>
+<marker>Cherry, Foster, 2012</marker>
+<rawString>C. Cherry and G. Foster. 2012. Batch tuning strategies for statistical machine translation. In NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Culy</author>
+<author>S Z Riehemann</author>
+</authors>
+<title>The limits of ngram translation evaluation metrics.</title>
+<date>2003</date>
+<booktitle>In MT Summit IX.</booktitle>
+<contexts>
+<context position="35513" citStr="Culy and Riehemann, 2003" startWordPosition="5671" endWordPosition="5674">s are signifSystem HTER, System HTER, int pe baseline 44.05 baseline 41.05 re-tune (int) 43.99 re-tune (pe) 40.34 re-tune+feat 42.35 – – A −1.80 −0.71 Table 7: En-De test results for re-tuning to post-edit (pe) vs. interactive (int). Features cannot be extracted from the post-edit data, so the re-tune+feat system cannot be learned. The Fr-En results are similar but are omitted due to space. icantly higher. The unchanged Fr-En TER value can be explained by the observation that no human translators produced TER scores higher than the baseline MT. This odd result has also been observed for BLEU (Culy and Riehemann, 2003), although here we do observe a slight BLEU improvement. The additional features (854 for Fr-En; 847 for En-De) help significantly and do not slow down decoding. We used the same Li regularization strength as the baseline, but feature growth could be further constrained by increasing this parameter. Tuning is very fast at about six minutes for the whole dataset, so tuning during a live user session is already practical. Table 7 compares re-tuning to interactive vs. post-edit corrections. Recall that the int-test and pe-test datasets are different and contain different references. The post-edit</context>
+</contexts>
+<marker>Culy, Riehemann, 2003</marker>
+<rawString>C. Culy and S. Z. Riehemann. 2003. The limits of ngram translation evaluation metrics. In MT Summit IX.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Denkowski</author>
+<author>A Lavie</author>
+</authors>
+<title>Extending the METEOR machine translation evaluation metric to the phrase level.</title>
+<date>2010</date>
+<booktitle>In NAACL.</booktitle>
+<contexts>
+<context position="39684" citStr="Denkowski and Lavie (2010)" startWordPosition="6307" endWordPosition="6310">icitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimization. HTER tuning can be simulated by reparameterizing an existing metric. Snover et al. (2009) tuned TERp to correlate with HTER, while Denkowski and Lavie (2010) did the same for METEOR. Zaidan and Callison-Burch (2010) showed how to solicit MT corrections for HTER from Amazon Mechanical Turk. Our learning approach is related to coactive learning (Shivaswamy and Joachims, 2012). Their basic preference perceptron updates toward a correction, whereas we use the correction for metric scoring and feature extraction. 8 Conclusion We presented a new CAT interface that supports post-edit and interactive modes. Evaluation with professional, bilingual translators showed post-edit to be faster, but prior subject familiarity with postedit may have mattered. For </context>
+</contexts>
+<marker>Denkowski, Lavie, 2010</marker>
+<rawString>M. Denkowski and A. Lavie. 2010. Extending the METEOR machine translation evaluation metric to the phrase level. In NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Denkowski</author>
+<author>C Dyer</author>
+<author>A Lavie</author>
+</authors>
+<title>Learning from post-editing: Online model adaptation for statistical machine translation.</title>
+<date>2014</date>
+<booktitle>In EACL.</booktitle>
+<contexts>
+<context position="19486" citStr="Denkowski et al. (2014" startWordPosition="3108" endWordPosition="3111">ecoder OOV model generates an identity translation rule. We add features in which the source word is concatenated with the left, right, and left/right contexts in the target, e.g., {&lt;s&gt;-tarceva, tarcevawas, &lt;s&gt;-tarceva-was}. We also add versions with target words mapped to classes. 3.4 Differences from Previous Work Our backend innovations support the UI and enable feature-based learning from human corrections. In contrast, most previous work on incremental MT learning has focused on extracting new translation rules, language model updating, and modifying translation model probabilities (see: Denkowski et al. (2014a)). We regard these features as additive to our own work: certainly extracting new, unseen rules should help translation in a new domain. Moreover, to our knowledge, all previous work on updating the weight vector w has considered simulated post-editing, in which the independent references e are substituted for corrections h. Here we extract features from and re-tune to actual corrections to the baseline MT output. tarceva parvient ainsi A stopper la croissance 1229 4 Translation User Study We conducted a human translation experiment with a 2 (translation conditions) × n (source sentences) mi</context>
+<context position="38957" citStr="Denkowski et al., 2014" startWordPosition="6199" endWordPosition="6202">hange improves TER, BLEU, and HTER. 7 Related Work The process study most similar to ours is that of Koehn (2009a), who compared scratch, post-edit, and simple interactive modes. However, he used undergraduate, non-professional subjects, and did not consider re-tuning. Our experimental design with professional bilingual translators follows our previous work Green et al. (2013a) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimization. HTER tuning can be simulated b</context>
+</contexts>
+<marker>Denkowski, Dyer, Lavie, 2014</marker>
+<rawString>M. Denkowski, C. Dyer, and A. Lavie. 2014a. Learning from post-editing: Online model adaptation for statistical machine translation. In EACL.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>M Denkowski</author>
+<author>A Lavie</author>
+<author>I Lacruz</author>
+<author>C Dyer</author>
+</authors>
+<title>2014b. Real time adaptive machine translation for post-editing with cdec and TransCenter.</title>
+<booktitle>In Workshop on Humans and Computer-assisted Translation.</booktitle>
+<marker>Denkowski, Lavie, Lacruz, Dyer, </marker>
+<rawString>M. Denkowski, A. Lavie, I. Lacruz, and C. Dyer. 2014b. Real time adaptive machine translation for post-editing with cdec and TransCenter. In Workshop on Humans and Computer-assisted Translation.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Duchi</author>
+<author>E Hazan</author>
+<author>Y Singer</author>
+</authors>
+<title>Adaptive subgradient methods for online learning and stochastic optimization.</title>
+<date>2011</date>
+<journal>JMLR,</journal>
+<pages>12--2121</pages>
+<contexts>
+<context position="14142" citStr="Duchi et al., 2011" startWordPosition="2213" endWordPosition="2216">stance-based metrics like TER tend to produce short translations that are heavily penalized by other metrics. When human corrections become available, we switch to HTER, which correlates with human judgment and is an interpretable measure of editing effort. Whereas TER is computed as TER(e, ˆe), HTER is HTER(h, ˆe). HBLEU is an alternative, but since BLEU is invariant to some permutations (Callison-Burch et al., 2006), it is less interpretable. We find that it also does not work as well in practice. We previously proposed a fast, online tuning algorithm (Green et al., 2013b) based on AdaGrad (Duchi et al., 2011). The default loss function is expected error (EE) (Och, 2003; Cherry and Foster, 2012). Expected BLEU is an example of EE, which we found to be unstable when switching metrics. This may result from direct incorporation of the error metric into the gradient computation. To solve this problem, we propose a crossentropy loss which, to our knowledge, is new in MT. Let Eˆ = {ˆei}ni=1 be an n-best list ranked by a gold metric G(e, ˆe) &gt; 0. Assume we have a preference of a higher G (e.g., BLEU or 1−HTER). Define the model distribution over Eˆ as q(ˆe|f) a exp[wTφ(ˆe, f)] normalized so that E ˆec Eˆ </context>
+</contexts>
+<marker>Duchi, Hazan, Singer, 2011</marker>
+<rawString>J. Duchi, E. Hazan, and Y. Singer. 2011. Adaptive subgradient methods for online learning and stochastic optimization. JMLR, 12:2121–2159.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M A Farajian</author>
+<author>N Bertoldi</author>
+<author>M Federico</author>
+</authors>
+<title>Online word alignment for online adaptive machine translation.</title>
+<date>2014</date>
+<booktitle>In Workshop on Humans and Computerassisted Translation.</booktitle>
+<contexts>
+<context position="36441" citStr="Farajian et al. (2014)" startWordPosition="5820" endWordPosition="5823">g is very fast at about six minutes for the whole dataset, so tuning during a live user session is already practical. Table 7 compares re-tuning to interactive vs. post-edit corrections. Recall that the int-test and pe-test datasets are different and contain different references. The post-edit baseline is lower because humans performed less editing in the baseline condition (see Table 1). Features account for the greatest reduction in HTER. Of course, the features are based mostly on word alignments, which could be obtained for the post-edit data by running an online word alignment tool (see: Farajian et al. (2014)). However, the interactive logs contain much richer user state information that we could not exploit due to data sparsity. We also hypothesize that the final interactive corrections might be more useful since suggestions prime translators (Green et al., 2013a), and the MT system was able to refine its suggestions. 6 Re-tuning Analysis Tables 6 and 7 raise two natural questions: what accounts for the reduction in HTER, and why are the TER/BLEU results mixed? Comparison of the BLEU-tuned baseline to the HTER re-tuned systems gives some insight. For both questions, fine1233 grained corrections a</context>
+</contexts>
+<marker>Farajian, Bertoldi, Federico, 2014</marker>
+<rawString>M. A. Farajian, N. Bertoldi, and M. Federico. 2014. Online word alignment for online adaptive machine translation. In Workshop on Humans and Computerassisted Translation.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Federmann</author>
+</authors>
+<title>Appraise: An open-source toolkit for manual phrase-based evaluation of translations.</title>
+<date>2010</date>
+<booktitle>In LREC.</booktitle>
+<contexts>
+<context position="26266" citStr="Federmann, 2010" startWordPosition="4152" endWordPosition="4153">ity with both automatic and manual measures. Table 1 shows that in the interactive mode, TER is lower and HTER is higher: subjects created translations closer to the references (lower TER), but performed more editing (higher HTER). This result suggests better translations in the interactive mode. To confirm that intuition, we elicited judgments from professional human raters. The setup followed the manual quality evaluation of the WMT 2014 shared task (Bojar et al., 2014). We hired six raters— three for each language pair—who were paid between $15–20 per hour. The raters logged into Appraise (Federmann, 2010) and for each source segment, ranked five randomly selected translations. From these 5-way rankings we extracted pairwise judgments 7r = {&lt;, =}, where u1 &lt; u2 indicates that subject u1 provided a better translation than subject u2 for a given source input (Table 2). 9See (Green et al., 2014c) for significance levels of the other covariates along with analysis of subject learning rates, subject behavior, and qualitative feedback. Fr-En En-De #pairwise 14,211 15,001 #ties (=) 5,528 2,964 IAA 0.419 (0.357) 0.407 (0.427) EW (inter.) 0.512 0.491 Table 2: Pairwise judgments for the manual quality as</context>
+</contexts>
+<marker>Federmann, 2010</marker>
+<rawString>C. Federmann. 2010. Appraise: An open-source toolkit for manual phrase-based evaluation of translations. In LREC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Foster</author>
+<author>P Langlais</author>
+<author>G Lapalme</author>
+</authors>
+<title>Userfriendly text prediction for translators.</title>
+<date>2002</date>
+<booktitle>In EMNLP.</booktitle>
+<contexts>
+<context position="11130" citStr="Foster et al., 2002" startWordPosition="1717" endWordPosition="1720">nslation of f, h is the correction of ˆe, and u is the log of interaction events during the translation session. Our evaluation corpora also include independently generated references e for each f. 3 Interactive MT Backend Now we describe modifications to Phrasal (Green et al., 2014b), the phrase-based MT system that supports the interface. Phrasal follows the log-linear approach to phrase-based translation (Och and Ney, 2004) in which the decision rule has the familiar linear form eˆ = arg max wTO(e, f) (1) e 1The classic TransType system included a probabilistic prediction length component (Foster et al., 2002), but we find that the simpler projection technique works well in practice. 1227 where w E Rd is the model weight vector and φ(·) E Rd is a feature map. 3.1 Decoding The default Phrasal search algorithm is cube pruning (Huang and Chiang, 2007). In the post-edit condition, search is executed as usual for each source input, and the 1-best output is inserted into the target textbox. However, in interactive mode, the full search algorithm is executed each time the user modifies the partial translation. Machine suggestions eˆ must match user prefix h. Define indicator function pref(ˆe, h) to return</context>
+</contexts>
+<marker>Foster, Langlais, Lapalme, 2002</marker>
+<rawString>G. Foster, P. Langlais, and G. Lapalme. 2002. Userfriendly text prediction for translators. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Galley</author>
+<author>C D Manning</author>
+</authors>
+<title>A simple and effective hierarchical phrase reordering model.</title>
+<date>2008</date>
+<booktitle>In EMNLP.</booktitle>
+<contexts>
+<context position="17122" citStr="Galley and Manning (2008)" startWordPosition="2727" endWordPosition="2730">am size is 1,200, we were able to reduce the beam size to 800 and run the tuner longer to achieve the same level of translation quality. For example, at the default beam size for French-English, the algorithm converges after 12 iterations, whereas at the lower beam size it achieves that level after 20 iterations. In our experience, batch tuning algorithms seem to be more sensitive to the beam size. 3.3 Feature Templates The baseline system contains 19 dense feature templates: the nine Moses (Koehn et al., 2007) baseline features, the eight-feature hierarchical lexicalized re-ordering model of Galley and Manning (2008), the (log) count of each rule in the bitext, and an indicator for unique rules. We found that sparse features, while improving translation quality, came at the cost of slower decoding due to feature extraction and inner products with a higher dimensional feature map 0. During prototyping, we observed that users found the system to be sluggish unless it responded in approximately 300ms or less. This budget restricted us to dense features. When re-tuning to corrections, we extract features from the user logs u and add them to the baseline dense model. For each tuning input f, the MT system prod</context>
+</contexts>
+<marker>Galley, Manning, 2008</marker>
+<rawString>M. Galley and C. D. Manning. 2008. A simple and effective hierarchical phrase reordering model. In EMNLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Green</author>
+<author>J Heer</author>
+<author>C D Manning</author>
+</authors>
+<title>The efficacy of human post-editing for language translation.</title>
+<date>2013</date>
+<booktitle>In CHI.</booktitle>
+<contexts>
+<context position="14102" citStr="Green et al., 2013" startWordPosition="2206" endWordPosition="2209">s. Conversely, systems tuned to edit-distance-based metrics like TER tend to produce short translations that are heavily penalized by other metrics. When human corrections become available, we switch to HTER, which correlates with human judgment and is an interpretable measure of editing effort. Whereas TER is computed as TER(e, ˆe), HTER is HTER(h, ˆe). HBLEU is an alternative, but since BLEU is invariant to some permutations (Callison-Burch et al., 2006), it is less interpretable. We find that it also does not work as well in practice. We previously proposed a fast, online tuning algorithm (Green et al., 2013b) based on AdaGrad (Duchi et al., 2011). The default loss function is expected error (EE) (Och, 2003; Cherry and Foster, 2012). Expected BLEU is an example of EE, which we found to be unstable when switching metrics. This may result from direct incorporation of the error metric into the gradient computation. To solve this problem, we propose a crossentropy loss which, to our knowledge, is new in MT. Let Eˆ = {ˆei}ni=1 be an n-best list ranked by a gold metric G(e, ˆe) &gt; 0. Assume we have a preference of a higher G (e.g., BLEU or 1−HTER). Define the model distribution over Eˆ as q(ˆe|f) a exp[</context>
+<context position="36700" citStr="Green et al., 2013" startWordPosition="5860" endWordPosition="5863">erent references. The post-edit baseline is lower because humans performed less editing in the baseline condition (see Table 1). Features account for the greatest reduction in HTER. Of course, the features are based mostly on word alignments, which could be obtained for the post-edit data by running an online word alignment tool (see: Farajian et al. (2014)). However, the interactive logs contain much richer user state information that we could not exploit due to data sparsity. We also hypothesize that the final interactive corrections might be more useful since suggestions prime translators (Green et al., 2013a), and the MT system was able to refine its suggestions. 6 Re-tuning Analysis Tables 6 and 7 raise two natural questions: what accounts for the reduction in HTER, and why are the TER/BLEU results mixed? Comparison of the BLEU-tuned baseline to the HTER re-tuned systems gives some insight. For both questions, fine1233 grained corrections appear to make the difference. Consider this French test example (with gloss): The independent reference for une ligne de chimiothérapie is ‘previous chemotherapy treatment’, and the baseline produces ‘previous chemotherapy line.’ The source sentence appears s</context>
+<context position="38713" citStr="Green et al. (2013" startWordPosition="6167" endWordPosition="6170">ors produced: `je nach datei&apos; (6), `das dokument&apos;, and `abhängig von der datei&apos;. The re-tuned system rendered the phrase `je nach dokument&apos;, which is closer to both the independent reference `je nach datei&apos; and the human corrections. This change improves TER, BLEU, and HTER. 7 Related Work The process study most similar to ours is that of Koehn (2009a), who compared scratch, post-edit, and simple interactive modes. However, he used undergraduate, non-professional subjects, and did not consider re-tuning. Our experimental design with professional bilingual translators follows our previous work Green et al. (2013a) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing </context>
+</contexts>
+<marker>Green, Heer, Manning, 2013</marker>
+<rawString>S. Green, J. Heer, and C. D. Manning. 2013a. The efficacy of human post-editing for language translation. In CHI.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Green</author>
+<author>S Wang</author>
+<author>D Cer</author>
+<author>C D Manning</author>
+</authors>
+<title>Fast and adaptive online training of feature-rich translation models.</title>
+<date>2013</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="14102" citStr="Green et al., 2013" startWordPosition="2206" endWordPosition="2209">s. Conversely, systems tuned to edit-distance-based metrics like TER tend to produce short translations that are heavily penalized by other metrics. When human corrections become available, we switch to HTER, which correlates with human judgment and is an interpretable measure of editing effort. Whereas TER is computed as TER(e, ˆe), HTER is HTER(h, ˆe). HBLEU is an alternative, but since BLEU is invariant to some permutations (Callison-Burch et al., 2006), it is less interpretable. We find that it also does not work as well in practice. We previously proposed a fast, online tuning algorithm (Green et al., 2013b) based on AdaGrad (Duchi et al., 2011). The default loss function is expected error (EE) (Och, 2003; Cherry and Foster, 2012). Expected BLEU is an example of EE, which we found to be unstable when switching metrics. This may result from direct incorporation of the error metric into the gradient computation. To solve this problem, we propose a crossentropy loss which, to our knowledge, is new in MT. Let Eˆ = {ˆei}ni=1 be an n-best list ranked by a gold metric G(e, ˆe) &gt; 0. Assume we have a preference of a higher G (e.g., BLEU or 1−HTER). Define the model distribution over Eˆ as q(ˆe|f) a exp[</context>
+<context position="36700" citStr="Green et al., 2013" startWordPosition="5860" endWordPosition="5863">erent references. The post-edit baseline is lower because humans performed less editing in the baseline condition (see Table 1). Features account for the greatest reduction in HTER. Of course, the features are based mostly on word alignments, which could be obtained for the post-edit data by running an online word alignment tool (see: Farajian et al. (2014)). However, the interactive logs contain much richer user state information that we could not exploit due to data sparsity. We also hypothesize that the final interactive corrections might be more useful since suggestions prime translators (Green et al., 2013a), and the MT system was able to refine its suggestions. 6 Re-tuning Analysis Tables 6 and 7 raise two natural questions: what accounts for the reduction in HTER, and why are the TER/BLEU results mixed? Comparison of the BLEU-tuned baseline to the HTER re-tuned systems gives some insight. For both questions, fine1233 grained corrections appear to make the difference. Consider this French test example (with gloss): The independent reference for une ligne de chimiothérapie is ‘previous chemotherapy treatment’, and the baseline produces ‘previous chemotherapy line.’ The source sentence appears s</context>
+<context position="38713" citStr="Green et al. (2013" startWordPosition="6167" endWordPosition="6170">ors produced: `je nach datei&apos; (6), `das dokument&apos;, and `abhängig von der datei&apos;. The re-tuned system rendered the phrase `je nach dokument&apos;, which is closer to both the independent reference `je nach datei&apos; and the human corrections. This change improves TER, BLEU, and HTER. 7 Related Work The process study most similar to ours is that of Koehn (2009a), who compared scratch, post-edit, and simple interactive modes. However, he used undergraduate, non-professional subjects, and did not consider re-tuning. Our experimental design with professional bilingual translators follows our previous work Green et al. (2013a) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing </context>
+</contexts>
+<marker>Green, Wang, Cer, Manning, 2013</marker>
+<rawString>S. Green, S. Wang, D. Cer, and C. D. Manning. 2013b. Fast and adaptive online training of feature-rich translation models. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Green</author>
+<author>D Cer</author>
+<author>C D Manning</author>
+</authors>
+<title>An empirical comparison of features and tuning for phrasebased machine translation.</title>
+<date>2014</date>
+<booktitle>In WMT.</booktitle>
+<contexts>
+<context position="6189" citStr="Green et al. (2014" startWordPosition="922" endWordPosition="925"> and type quickly (Carl, 2010), so the interface is designed to be very responsive, and to be primarily operated by the keyboard. Most aids can be accessed via either typing or four hot keys. The current design focuses on the point of text entry and does not include conventional translator workbench features such as workflow management, spell checking, and text formatting tools. In the trivial post-edit mode, the interactive aids are disabled and a 1-best translation pre-populates the text entry box. We have described the HCI-specific motivations for and contributions of this new interface in Green et al. (2014c). This section focuses on interface elements built on NLP components. 2.1 UI Overview and Walkthrough We categorized interactions into three groups: source comprehension: word lookups, source coverage highlighting; target gisting: 1-best translation, real-time target completion; target generation: real-time autocomplete, target reordering, insert complete translation. The interaction designs are novel; those in italic have, to our knowledge, never appeared in a translation workbench. Source word lookup When the user hovers over a source word, a menu of up to four ranked translation suggestio</context>
+<context position="10793" citStr="Green et al., 2014" startWordPosition="1664" endWordPosition="1667">and the user only wants to make a few changes. 2.2 User Activity Logging A web application serves the Javascript-based interface, relays translation requests to the MT system, and logs user records to a database. Each user record is a tuple of the form (f, ˆe, h, u), where f is the source sequence, eˆ is the latest 1-best machine translation of f, h is the correction of ˆe, and u is the log of interaction events during the translation session. Our evaluation corpora also include independently generated references e for each f. 3 Interactive MT Backend Now we describe modifications to Phrasal (Green et al., 2014b), the phrase-based MT system that supports the interface. Phrasal follows the log-linear approach to phrase-based translation (Och and Ney, 2004) in which the decision rule has the familiar linear form eˆ = arg max wTO(e, f) (1) e 1The classic TransType system included a probabilistic prediction length component (Foster et al., 2002), but we find that the simpler projection technique works well in practice. 1227 where w E Rd is the model weight vector and φ(·) E Rd is a feature map. 3.1 Decoding The default Phrasal search algorithm is cube pruning (Huang and Chiang, 2007). In the post-edit c</context>
+<context position="26557" citStr="Green et al., 2014" startWordPosition="4200" endWordPosition="4203">ve mode. To confirm that intuition, we elicited judgments from professional human raters. The setup followed the manual quality evaluation of the WMT 2014 shared task (Bojar et al., 2014). We hired six raters— three for each language pair—who were paid between $15–20 per hour. The raters logged into Appraise (Federmann, 2010) and for each source segment, ranked five randomly selected translations. From these 5-way rankings we extracted pairwise judgments 7r = {&lt;, =}, where u1 &lt; u2 indicates that subject u1 provided a better translation than subject u2 for a given source input (Table 2). 9See (Green et al., 2014c) for significance levels of the other covariates along with analysis of subject learning rates, subject behavior, and qualitative feedback. Fr-En En-De #pairwise 14,211 15,001 #ties (=) 5,528 2,964 IAA 0.419 (0.357) 0.407 (0.427) EW (inter.) 0.512 0.491 Table 2: Pairwise judgments for the manual quality assessment. Inter-annotator agreement (IAA) n scores are measured with the official WMT14 script. For comparison, the WMT14 IAA scores are given in parentheses. EW (inter.) is expected wins of interactive according to Eq. (6). Fr-En En-De sign p sign p + • − ••• − ••• + − + • − + • Table 3: L</context>
+<context position="32082" citStr="Green et al. (2014" startWordPosition="5108" endWordPosition="5111"> track of the WMT 2013 shared task (Bojar et al., 2013). We also added 61k parallel segments of TAUS data to the En-De bitext, and 26k TAUS segments to the Fr-En bitext. We aligned the parallel data with the Berkeley Aligner (Liang et al., 2006) and symmetrized the alignments with the grow-diag heuristic. For each target language we used lmplz (Heafield et al., 2013) to estimate unfiltered, 5-gram Kneser-Ney LMs from the concatenation of the target side of the bitext and the monolingual data. For the class-based features, we estimated 512-class source and target mappings with the algorithm of Green et al. (2014a). The upper part of Table 5 shows the baseline tuning and development sets, which also contained 1/3 TAUS medical text, 1/3 TAUS software text, and 1/3 WMT newswire text (see section 4). The lower part of Table 5 shows the organization of the human corrections for re-tuning and testing. Recall that for each unique source input, eight human translators produced a correction in each condition. First, we filtered all corrections for which a log u was not recorded (due to technical problems). Second, we de-duplicated the corrections so that each h was unique. Finally, we split the unique (f, h) </context>
+</contexts>
+<marker>Green, Cer, Manning, 2014</marker>
+<rawString>S. Green, D. Cer, and C. D. Manning. 2014a. An empirical comparison of features and tuning for phrasebased machine translation. In WMT.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Green</author>
+<author>D Cer</author>
+<author>C D Manning</author>
+</authors>
+<title>Phrasal: A toolkit for new directions in statistical machine translation.</title>
+<date>2014</date>
+<booktitle>In WMT.</booktitle>
+<contexts>
+<context position="6189" citStr="Green et al. (2014" startWordPosition="922" endWordPosition="925"> and type quickly (Carl, 2010), so the interface is designed to be very responsive, and to be primarily operated by the keyboard. Most aids can be accessed via either typing or four hot keys. The current design focuses on the point of text entry and does not include conventional translator workbench features such as workflow management, spell checking, and text formatting tools. In the trivial post-edit mode, the interactive aids are disabled and a 1-best translation pre-populates the text entry box. We have described the HCI-specific motivations for and contributions of this new interface in Green et al. (2014c). This section focuses on interface elements built on NLP components. 2.1 UI Overview and Walkthrough We categorized interactions into three groups: source comprehension: word lookups, source coverage highlighting; target gisting: 1-best translation, real-time target completion; target generation: real-time autocomplete, target reordering, insert complete translation. The interaction designs are novel; those in italic have, to our knowledge, never appeared in a translation workbench. Source word lookup When the user hovers over a source word, a menu of up to four ranked translation suggestio</context>
+<context position="10793" citStr="Green et al., 2014" startWordPosition="1664" endWordPosition="1667">and the user only wants to make a few changes. 2.2 User Activity Logging A web application serves the Javascript-based interface, relays translation requests to the MT system, and logs user records to a database. Each user record is a tuple of the form (f, ˆe, h, u), where f is the source sequence, eˆ is the latest 1-best machine translation of f, h is the correction of ˆe, and u is the log of interaction events during the translation session. Our evaluation corpora also include independently generated references e for each f. 3 Interactive MT Backend Now we describe modifications to Phrasal (Green et al., 2014b), the phrase-based MT system that supports the interface. Phrasal follows the log-linear approach to phrase-based translation (Och and Ney, 2004) in which the decision rule has the familiar linear form eˆ = arg max wTO(e, f) (1) e 1The classic TransType system included a probabilistic prediction length component (Foster et al., 2002), but we find that the simpler projection technique works well in practice. 1227 where w E Rd is the model weight vector and φ(·) E Rd is a feature map. 3.1 Decoding The default Phrasal search algorithm is cube pruning (Huang and Chiang, 2007). In the post-edit c</context>
+<context position="26557" citStr="Green et al., 2014" startWordPosition="4200" endWordPosition="4203">ve mode. To confirm that intuition, we elicited judgments from professional human raters. The setup followed the manual quality evaluation of the WMT 2014 shared task (Bojar et al., 2014). We hired six raters— three for each language pair—who were paid between $15–20 per hour. The raters logged into Appraise (Federmann, 2010) and for each source segment, ranked five randomly selected translations. From these 5-way rankings we extracted pairwise judgments 7r = {&lt;, =}, where u1 &lt; u2 indicates that subject u1 provided a better translation than subject u2 for a given source input (Table 2). 9See (Green et al., 2014c) for significance levels of the other covariates along with analysis of subject learning rates, subject behavior, and qualitative feedback. Fr-En En-De #pairwise 14,211 15,001 #ties (=) 5,528 2,964 IAA 0.419 (0.357) 0.407 (0.427) EW (inter.) 0.512 0.491 Table 2: Pairwise judgments for the manual quality assessment. Inter-annotator agreement (IAA) n scores are measured with the official WMT14 script. For comparison, the WMT14 IAA scores are given in parentheses. EW (inter.) is expected wins of interactive according to Eq. (6). Fr-En En-De sign p sign p + • − ••• − ••• + − + • − + • Table 3: L</context>
+<context position="32082" citStr="Green et al. (2014" startWordPosition="5108" endWordPosition="5111"> track of the WMT 2013 shared task (Bojar et al., 2013). We also added 61k parallel segments of TAUS data to the En-De bitext, and 26k TAUS segments to the Fr-En bitext. We aligned the parallel data with the Berkeley Aligner (Liang et al., 2006) and symmetrized the alignments with the grow-diag heuristic. For each target language we used lmplz (Heafield et al., 2013) to estimate unfiltered, 5-gram Kneser-Ney LMs from the concatenation of the target side of the bitext and the monolingual data. For the class-based features, we estimated 512-class source and target mappings with the algorithm of Green et al. (2014a). The upper part of Table 5 shows the baseline tuning and development sets, which also contained 1/3 TAUS medical text, 1/3 TAUS software text, and 1/3 WMT newswire text (see section 4). The lower part of Table 5 shows the organization of the human corrections for re-tuning and testing. Recall that for each unique source input, eight human translators produced a correction in each condition. First, we filtered all corrections for which a log u was not recorded (due to technical problems). Second, we de-duplicated the corrections so that each h was unique. Finally, we split the unique (f, h) </context>
+</contexts>
+<marker>Green, Cer, Manning, 2014</marker>
+<rawString>S. Green, D. Cer, and C. D. Manning. 2014b. Phrasal: A toolkit for new directions in statistical machine translation. In WMT.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Green</author>
+<author>J Chuang</author>
+<author>J Heer</author>
+<author>C D Manning</author>
+</authors>
+<title>Predictive Translation Memory: A mixed-initiative system for human language translation.</title>
+<date>2014</date>
+<booktitle>In UIST.</booktitle>
+<contexts>
+<context position="6189" citStr="Green et al. (2014" startWordPosition="922" endWordPosition="925"> and type quickly (Carl, 2010), so the interface is designed to be very responsive, and to be primarily operated by the keyboard. Most aids can be accessed via either typing or four hot keys. The current design focuses on the point of text entry and does not include conventional translator workbench features such as workflow management, spell checking, and text formatting tools. In the trivial post-edit mode, the interactive aids are disabled and a 1-best translation pre-populates the text entry box. We have described the HCI-specific motivations for and contributions of this new interface in Green et al. (2014c). This section focuses on interface elements built on NLP components. 2.1 UI Overview and Walkthrough We categorized interactions into three groups: source comprehension: word lookups, source coverage highlighting; target gisting: 1-best translation, real-time target completion; target generation: real-time autocomplete, target reordering, insert complete translation. The interaction designs are novel; those in italic have, to our knowledge, never appeared in a translation workbench. Source word lookup When the user hovers over a source word, a menu of up to four ranked translation suggestio</context>
+<context position="10793" citStr="Green et al., 2014" startWordPosition="1664" endWordPosition="1667">and the user only wants to make a few changes. 2.2 User Activity Logging A web application serves the Javascript-based interface, relays translation requests to the MT system, and logs user records to a database. Each user record is a tuple of the form (f, ˆe, h, u), where f is the source sequence, eˆ is the latest 1-best machine translation of f, h is the correction of ˆe, and u is the log of interaction events during the translation session. Our evaluation corpora also include independently generated references e for each f. 3 Interactive MT Backend Now we describe modifications to Phrasal (Green et al., 2014b), the phrase-based MT system that supports the interface. Phrasal follows the log-linear approach to phrase-based translation (Och and Ney, 2004) in which the decision rule has the familiar linear form eˆ = arg max wTO(e, f) (1) e 1The classic TransType system included a probabilistic prediction length component (Foster et al., 2002), but we find that the simpler projection technique works well in practice. 1227 where w E Rd is the model weight vector and φ(·) E Rd is a feature map. 3.1 Decoding The default Phrasal search algorithm is cube pruning (Huang and Chiang, 2007). In the post-edit c</context>
+<context position="26557" citStr="Green et al., 2014" startWordPosition="4200" endWordPosition="4203">ve mode. To confirm that intuition, we elicited judgments from professional human raters. The setup followed the manual quality evaluation of the WMT 2014 shared task (Bojar et al., 2014). We hired six raters— three for each language pair—who were paid between $15–20 per hour. The raters logged into Appraise (Federmann, 2010) and for each source segment, ranked five randomly selected translations. From these 5-way rankings we extracted pairwise judgments 7r = {&lt;, =}, where u1 &lt; u2 indicates that subject u1 provided a better translation than subject u2 for a given source input (Table 2). 9See (Green et al., 2014c) for significance levels of the other covariates along with analysis of subject learning rates, subject behavior, and qualitative feedback. Fr-En En-De #pairwise 14,211 15,001 #ties (=) 5,528 2,964 IAA 0.419 (0.357) 0.407 (0.427) EW (inter.) 0.512 0.491 Table 2: Pairwise judgments for the manual quality assessment. Inter-annotator agreement (IAA) n scores are measured with the official WMT14 script. For comparison, the WMT14 IAA scores are given in parentheses. EW (inter.) is expected wins of interactive according to Eq. (6). Fr-En En-De sign p sign p + • − ••• − ••• + − + • − + • Table 3: L</context>
+<context position="32082" citStr="Green et al. (2014" startWordPosition="5108" endWordPosition="5111"> track of the WMT 2013 shared task (Bojar et al., 2013). We also added 61k parallel segments of TAUS data to the En-De bitext, and 26k TAUS segments to the Fr-En bitext. We aligned the parallel data with the Berkeley Aligner (Liang et al., 2006) and symmetrized the alignments with the grow-diag heuristic. For each target language we used lmplz (Heafield et al., 2013) to estimate unfiltered, 5-gram Kneser-Ney LMs from the concatenation of the target side of the bitext and the monolingual data. For the class-based features, we estimated 512-class source and target mappings with the algorithm of Green et al. (2014a). The upper part of Table 5 shows the baseline tuning and development sets, which also contained 1/3 TAUS medical text, 1/3 TAUS software text, and 1/3 WMT newswire text (see section 4). The lower part of Table 5 shows the organization of the human corrections for re-tuning and testing. Recall that for each unique source input, eight human translators produced a correction in each condition. First, we filtered all corrections for which a log u was not recorded (due to technical problems). Second, we de-duplicated the corrections so that each h was unique. Finally, we split the unique (f, h) </context>
+</contexts>
+<marker>Green, Chuang, Heer, Manning, 2014</marker>
+<rawString>S. Green, J. Chuang, J. Heer, and C. D. Manning. 2014c. Predictive Translation Memory: A mixed-initiative system for human language translation. In UIST.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Heafield</author>
+<author>I Pouzyrevsky</author>
+<author>J H Clark</author>
+<author>P Koehn</author>
+</authors>
+<title>Scalable modified Kneser-Ney language model estimation. In ACL, Short Papers.</title>
+<date>2013</date>
+<contexts>
+<context position="31833" citStr="Heafield et al., 2013" startWordPosition="5065" endWordPosition="5068">-tune and pe-tune, respectively. We report heldout results on the two test data sets. All sets are supplied with independent references. 5.1 Datasets Table 4 shows the monolingual and parallel training corpora. Most of the data come from the constrained track of the WMT 2013 shared task (Bojar et al., 2013). We also added 61k parallel segments of TAUS data to the En-De bitext, and 26k TAUS segments to the Fr-En bitext. We aligned the parallel data with the Berkeley Aligner (Liang et al., 2006) and symmetrized the alignments with the grow-diag heuristic. For each target language we used lmplz (Heafield et al., 2013) to estimate unfiltered, 5-gram Kneser-Ney LMs from the concatenation of the target side of the bitext and the monolingual data. For the class-based features, we estimated 512-class source and target mappings with the algorithm of Green et al. (2014a). The upper part of Table 5 shows the baseline tuning and development sets, which also contained 1/3 TAUS medical text, 1/3 TAUS software text, and 1/3 WMT newswire text (see section 4). The lower part of Table 5 shows the organization of the human corrections for re-tuning and testing. Recall that for each unique source input, eight human transla</context>
+</contexts>
+<marker>Heafield, Pouzyrevsky, Clark, Koehn, 2013</marker>
+<rawString>K. Heafield, I. Pouzyrevsky, J. H. Clark, and P. Koehn. 2013. Scalable modified Kneser-Ney language model estimation. In ACL, Short Papers.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Huang</author>
+<author>D Chiang</author>
+</authors>
+<title>Forest rescoring: Faster decoding with integrated language models.</title>
+<date>2007</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="11373" citStr="Huang and Chiang, 2007" startWordPosition="1762" endWordPosition="1765">odifications to Phrasal (Green et al., 2014b), the phrase-based MT system that supports the interface. Phrasal follows the log-linear approach to phrase-based translation (Och and Ney, 2004) in which the decision rule has the familiar linear form eˆ = arg max wTO(e, f) (1) e 1The classic TransType system included a probabilistic prediction length component (Foster et al., 2002), but we find that the simpler projection technique works well in practice. 1227 where w E Rd is the model weight vector and φ(·) E Rd is a feature map. 3.1 Decoding The default Phrasal search algorithm is cube pruning (Huang and Chiang, 2007). In the post-edit condition, search is executed as usual for each source input, and the 1-best output is inserted into the target textbox. However, in interactive mode, the full search algorithm is executed each time the user modifies the partial translation. Machine suggestions eˆ must match user prefix h. Define indicator function pref(ˆe, h) to return true if eˆ begins with h, and false otherwise. Eq. 1 becomes: eˆ = arg max wTφ(e, f) (2) e s.t. pref(e,h) Cube pruning can be straightforwardly modified to satisfy this constraint by simple string matching of candidate translations. Also, the</context>
+</contexts>
+<marker>Huang, Chiang, 2007</marker>
+<rawString>L. Huang and D. Chiang. 2007. Forest rescoring: Faster decoding with integrated language models. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Hwa</author>
+<author>P Resnik</author>
+<author>A Weinberg</author>
+<author>O Kolak</author>
+</authors>
+<title>Evaluating translational correspondence using annotation projection.</title>
+<date>2002</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="8939" citStr="Hwa et al. (2002)" startWordPosition="1363" endWordPosition="1366">ns a distinct 10-best list for the full source input. The UI builds up a trie from these 10-best lists. Up to four distinct suggestions are then shown at the point of translation. The suggestion length is based on a syntactic parse of the fixed source input. As an offline, pre-processing step, we parse each source input with Stanford CoreNLP (Manning et al., 2014). The UI combines those parses with word alignments from the full translation suggestions to project syntactic constituents to each item on the n-best list. Syntactic projection is a very old idea that underlies many MT systems (see: Hwa et al. (2002)). Here we make novel use of it for suggestion prediction filtering.1 Presently, we project noun phrases, verb phrases (minus the verbal arguments), and prepositional phrases. Crucially, these units are natural to humans, unlike statistical target phrases. Target Reordering Carl (2010) showed that expert translators tend to adopt local planning: they read a few words ahead and then translate in a roughly online fashion. However, word order differences between languages will necessarily require longer range planning and movement. To that end, the UI supports keyboard-based reordering. Suppose t</context>
+</contexts>
+<marker>Hwa, Resnik, Weinberg, Kolak, 2002</marker>
+<rawString>R. Hwa, P. Resnik, A. Weinberg, and O. Kolak. 2002. Evaluating translational correspondence using annotation projection. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Koehn</author>
+<author>H Hoang</author>
+<author>A Birch</author>
+<author>C Callison-Burch</author>
+<author>M Federico</author>
+<author>N Bertoldi</author>
+</authors>
+<title>Moses: Open source toolkit for statistical machine translation.</title>
+<date>2007</date>
+<booktitle>In ACL, Demonstration Session.</booktitle>
+<contexts>
+<context position="17013" citStr="Koehn et al., 2007" startWordPosition="2714" endWordPosition="2717">e tuning also permits a trick that speeds up decoding during deployment. Whereas the Phrasal default beam size is 1,200, we were able to reduce the beam size to 800 and run the tuner longer to achieve the same level of translation quality. For example, at the default beam size for French-English, the algorithm converges after 12 iterations, whereas at the lower beam size it achieves that level after 20 iterations. In our experience, batch tuning algorithms seem to be more sensitive to the beam size. 3.3 Feature Templates The baseline system contains 19 dense feature templates: the nine Moses (Koehn et al., 2007) baseline features, the eight-feature hierarchical lexicalized re-ordering model of Galley and Manning (2008), the (log) count of each rule in the bitext, and an indicator for unique rules. We found that sparse features, while improving translation quality, came at the cost of slower decoding due to feature extraction and inner products with a higher dimensional feature map 0. During prototyping, we observed that users found the system to be sluggish unless it responded in approximately 300ms or less. This budget restricted us to dense features. When re-tuning to corrections, we extract featur</context>
+</contexts>
+<marker>Koehn, Hoang, Birch, Callison-Burch, Federico, Bertoldi, 2007</marker>
+<rawString>P. Koehn, H. Hoang, A. Birch, C. Callison-Burch, M. Federico, N. Bertoldi, et al. 2007. Moses: Open source toolkit for statistical machine translation. In ACL, Demonstration Session.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Koehn</author>
+</authors>
+<title>A process study of computer-aided translation.</title>
+<date>2009</date>
+<booktitle>Machine Translation,</booktitle>
+<pages>23--241</pages>
+<contexts>
+<context position="3577" citStr="Koehn (2009" startWordPosition="523" endWordPosition="524">an effort, making fine distinctions between 0 (no editing) and 1 (complete rewrite). We designed a new user interface (UI) for the experiment. The interface places demands on the MT backend—not the other way around. The most significant new MT system features are prefix decoding, for translation completion based on a user prefix; and dynamic phrase table augmentation, to handle target out-of-vocabulary (OOV) words. Discriminative re-tuning is accomplished with a novel cross-entropy objective function. We report three main findings: (1) post-editing is faster than interactive MT, corroborating Koehn (2009a); (2) interactive MT yields higher quality translation when baseline MT quality is high; and (3) re-tuning to interactive feedback leads to larger held-out HTER gains relative to post-edit. Together these results show that a human-centered approach to computer aided translation (CAT) may involve tradeoffs between human effort and machine learnability. For example, if speed is the top priority, then a design geared toward post-editing 1225 Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 1225–1236, October 25-29, 2014, Doha, Qatar. c�2014 A</context>
+<context position="20947" citStr="Koehn (2009" startWordPosition="3326" endWordPosition="3327">sure to a sentence would influence another. Subjects completed the experiment remotely on their own hardware. They received personalized login credentials for the translation interface, which administered the experiment. Subjects first completed a demographic questionnaire about prior experience with CAT and language proficiency. Next, they completed a training module that included a 4-minute tutorial video and a practice “sandbox” for developing proficiency with the UI. Then subjects completed the translation experiment. Finally, they completed an exit questionnaire. Unlike the experiment of Koehn (2009a), subjects were under time pressure. An idle timer prevented subjects from pausing for more than three minutes while the translator interface was open. This constraint eliminates a source of confound in the timing analysis. We randomized the order of translation conditions and the assignment of sentences to conditions. At most five sentences appeared per screen, and those sentences appeared in the source document order. Subjects could move among sentences within a screen, but could not revise previous screens. Subjects received untimed breaks both between translation conditions and after abo</context>
+<context position="38447" citStr="Koehn (2009" startWordPosition="6133" endWordPosition="6134"> Sometimes re-tuning improves the translations with respect to both the reference and the human corrections. This English phrase appears in the En-De test set: (2) depending abhängig The baseline produces exactly the gloss shown in Ex. (2). The human translators produced: `je nach datei&apos; (6), `das dokument&apos;, and `abhängig von der datei&apos;. The re-tuned system rendered the phrase `je nach dokument&apos;, which is closer to both the independent reference `je nach datei&apos; and the human corrections. This change improves TER, BLEU, and HTER. 7 Related Work The process study most similar to ours is that of Koehn (2009a), who compared scratch, post-edit, and simple interactive modes. However, he used undergraduate, non-professional subjects, and did not consider re-tuning. Our experimental design with professional bilingual translators follows our previous work Green et al. (2013a) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interface</context>
+</contexts>
+<marker>Koehn, 2009</marker>
+<rawString>P. Koehn. 2009a. A process study of computer-aided translation. Machine Translation, 23:241–263.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Koehn</author>
+</authors>
+<title>A web-based interactive computer aided translation tool.</title>
+<date>2009</date>
+<booktitle>In ACL-IJCNLP, Software Demonstrations.</booktitle>
+<contexts>
+<context position="3577" citStr="Koehn (2009" startWordPosition="523" endWordPosition="524">an effort, making fine distinctions between 0 (no editing) and 1 (complete rewrite). We designed a new user interface (UI) for the experiment. The interface places demands on the MT backend—not the other way around. The most significant new MT system features are prefix decoding, for translation completion based on a user prefix; and dynamic phrase table augmentation, to handle target out-of-vocabulary (OOV) words. Discriminative re-tuning is accomplished with a novel cross-entropy objective function. We report three main findings: (1) post-editing is faster than interactive MT, corroborating Koehn (2009a); (2) interactive MT yields higher quality translation when baseline MT quality is high; and (3) re-tuning to interactive feedback leads to larger held-out HTER gains relative to post-edit. Together these results show that a human-centered approach to computer aided translation (CAT) may involve tradeoffs between human effort and machine learnability. For example, if speed is the top priority, then a design geared toward post-editing 1225 Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 1225–1236, October 25-29, 2014, Doha, Qatar. c�2014 A</context>
+<context position="20947" citStr="Koehn (2009" startWordPosition="3326" endWordPosition="3327">sure to a sentence would influence another. Subjects completed the experiment remotely on their own hardware. They received personalized login credentials for the translation interface, which administered the experiment. Subjects first completed a demographic questionnaire about prior experience with CAT and language proficiency. Next, they completed a training module that included a 4-minute tutorial video and a practice “sandbox” for developing proficiency with the UI. Then subjects completed the translation experiment. Finally, they completed an exit questionnaire. Unlike the experiment of Koehn (2009a), subjects were under time pressure. An idle timer prevented subjects from pausing for more than three minutes while the translator interface was open. This constraint eliminates a source of confound in the timing analysis. We randomized the order of translation conditions and the assignment of sentences to conditions. At most five sentences appeared per screen, and those sentences appeared in the source document order. Subjects could move among sentences within a screen, but could not revise previous screens. Subjects received untimed breaks both between translation conditions and after abo</context>
+<context position="38447" citStr="Koehn (2009" startWordPosition="6133" endWordPosition="6134"> Sometimes re-tuning improves the translations with respect to both the reference and the human corrections. This English phrase appears in the En-De test set: (2) depending abhängig The baseline produces exactly the gloss shown in Ex. (2). The human translators produced: `je nach datei&apos; (6), `das dokument&apos;, and `abhängig von der datei&apos;. The re-tuned system rendered the phrase `je nach dokument&apos;, which is closer to both the independent reference `je nach datei&apos; and the human corrections. This change improves TER, BLEU, and HTER. 7 Related Work The process study most similar to ours is that of Koehn (2009a), who compared scratch, post-edit, and simple interactive modes. However, he used undergraduate, non-professional subjects, and did not consider re-tuning. Our experimental design with professional bilingual translators follows our previous work Green et al. (2013a) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interface</context>
+</contexts>
+<marker>Koehn, 2009</marker>
+<rawString>P. Koehn. 2009b. A web-based interactive computer aided translation tool. In ACL-IJCNLP, Software Demonstrations.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Koehn</author>
+</authors>
+<title>Statistical Machine Translation.</title>
+<date>2010</date>
+<publisher>Cambridge University Press.</publisher>
+<contexts>
+<context position="7798" citStr="Koehn, 2010" startWordPosition="1175" endWordPosition="1176">e coverage feature (Figure 1C) helps the user quickly find untranslated words in the source. The interaction is 1226 Figure 2: Source word lookup and target autocomplete menus. The menus show different suggestions. The word lookup menu (top) is not dependent on the target context Teachers, whereas the autocomplete dropdown (bottom) is. based on the word alignments between source and target generated by the MT system. We found that the raw alignments are too noisy to show users, so the UI filters them with phrase-level heuristics. 1-best translation The most common use of MT output is gisting (Koehn, 2010, p.21). The gray text below each black source input shows the best MT system output (Figure 1B). Real-time target completion When the user extends the black prefix, the gray text will update to the most probable completion (Figure 1E). This update comes from decoding under the full translation model. All previous systems performed inference in a word lattice. Real-time autocomplete The autocomplete dropdown at the point of text entry is the main translation aid (Figures 1D and 2). Each real-time update actually contains a distinct 10-best list for the full source input. The UI builds up a tri</context>
+</contexts>
+<marker>Koehn, 2010</marker>
+<rawString>P. Koehn. 2010. Statistical Machine Translation. Cambridge University Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Ortiz-Martínez</author>
+<author>I García-Varea</author>
+<author>F Casacuberta</author>
+</authors>
+<title>Online learning for interactive statistical machine translation.</title>
+<date>2010</date>
+<booktitle>In NAACL.</booktitle>
+<contexts>
+<context position="39284" citStr="Ortiz-Martínez et al., 2010" startWordPosition="6248" endWordPosition="6251"> translators follows our previous work Green et al. (2013a) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimization. HTER tuning can be simulated by reparameterizing an existing metric. Snover et al. (2009) tuned TERp to correlate with HTER, while Denkowski and Lavie (2010) did the same for METEOR. Zaidan and Callison-Burch (2010) showed how to solicit MT corrections for HTER from Amazon Mechanical Turk. Our learning approach is related to coactive learning (Shivaswamy </context>
+</contexts>
+<marker>Ortiz-Martínez, García-Varea, Casacuberta, 2010</marker>
+<rawString>D. Ortiz-Martínez, I. García-Varea, and F. Casacuberta. 2010. Online learning for interactive statistical machine translation. In NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Langlais</author>
+<author>G Foster</author>
+<author>G Lapalme</author>
+</authors>
+<title>TransType: a computer-aided translation typing system.</title>
+<date>2000</date>
+<booktitle>In Workshop on Embedded Machine Translation Systems.</booktitle>
+<contexts>
+<context position="38852" citStr="Langlais et al., 2000" startWordPosition="6186" endWordPosition="6189">ent&apos;, which is closer to both the independent reference `je nach datei&apos; and the human corrections. This change improves TER, BLEU, and HTER. 7 Related Work The process study most similar to ours is that of Koehn (2009a), who compared scratch, post-edit, and simple interactive modes. However, he used undergraduate, non-professional subjects, and did not consider re-tuning. Our experimental design with professional bilingual translators follows our previous work Green et al. (2013a) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-sc</context>
+</contexts>
+<marker>Langlais, Foster, Lapalme, 2000</marker>
+<rawString>P. Langlais, G. Foster, and G. Lapalme. 2000. TransType: a computer-aided translation typing system. In Workshop on Embedded Machine Translation Systems.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Liang</author>
+<author>B Taskar</author>
+<author>D Klein</author>
+</authors>
+<title>Alignment by agreement.</title>
+<date>2006</date>
+<booktitle>In NAACL.</booktitle>
+<contexts>
+<context position="31709" citStr="Liang et al., 2006" startWordPosition="5046" endWordPosition="5049">ent, and test corpora (#segments). tune and dev were used for baseline system preparation. Re-tuning was performed on int-tune and pe-tune, respectively. We report heldout results on the two test data sets. All sets are supplied with independent references. 5.1 Datasets Table 4 shows the monolingual and parallel training corpora. Most of the data come from the constrained track of the WMT 2013 shared task (Bojar et al., 2013). We also added 61k parallel segments of TAUS data to the En-De bitext, and 26k TAUS segments to the Fr-En bitext. We aligned the parallel data with the Berkeley Aligner (Liang et al., 2006) and symmetrized the alignments with the grow-diag heuristic. For each target language we used lmplz (Heafield et al., 2013) to estimate unfiltered, 5-gram Kneser-Ney LMs from the concatenation of the target side of the bitext and the monolingual data. For the class-based features, we estimated 512-class source and target mappings with the algorithm of Green et al. (2014a). The upper part of Table 5 shows the baseline tuning and development sets, which also contained 1/3 TAUS medical text, 1/3 TAUS software text, and 1/3 WMT newswire text (see section 4). The lower part of Table 5 shows the or</context>
+</contexts>
+<marker>Liang, Taskar, Klein, 2006</marker>
+<rawString>P. Liang, B. Taskar, and D. Klein. 2006. Alignment by agreement. In NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Manning</author>
+<author>M Surdeanu</author>
+<author>J Bauer</author>
+<author>J Finkel</author>
+<author>S Bethard</author>
+<author>D McClosky</author>
+</authors>
+<title>The Stanford CoreNLP natural language processing toolkit.</title>
+<date>2014</date>
+<booktitle>In ACL, System Demonstrations.</booktitle>
+<contexts>
+<context position="8688" citStr="Manning et al., 2014" startWordPosition="1321" endWordPosition="1324">under the full translation model. All previous systems performed inference in a word lattice. Real-time autocomplete The autocomplete dropdown at the point of text entry is the main translation aid (Figures 1D and 2). Each real-time update actually contains a distinct 10-best list for the full source input. The UI builds up a trie from these 10-best lists. Up to four distinct suggestions are then shown at the point of translation. The suggestion length is based on a syntactic parse of the fixed source input. As an offline, pre-processing step, we parse each source input with Stanford CoreNLP (Manning et al., 2014). The UI combines those parses with word alignments from the full translation suggestions to project syntactic constituents to each item on the n-best list. Syntactic projection is a very old idea that underlies many MT systems (see: Hwa et al. (2002)). Here we make novel use of it for suggestion prediction filtering.1 Presently, we project noun phrases, verb phrases (minus the verbal arguments), and prepositional phrases. Crucially, these units are natural to humans, unlike statistical target phrases. Target Reordering Carl (2010) showed that expert translators tend to adopt local planning: t</context>
+</contexts>
+<marker>Manning, Surdeanu, Bauer, Finkel, Bethard, McClosky, 2014</marker>
+<rawString>C. Manning, M. Surdeanu, J. Bauer, J. Finkel, S. Bethard, and D. McClosky. 2014. The Stanford CoreNLP natural language processing toolkit. In ACL, System Demonstrations.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Martínez-Gómez</author>
+<author>G Sanchis-Trilles</author>
+<author>F Casacuberta</author>
+</authors>
+<title>Online adaptation strategies for statistical machine translation in post-editing scenarios.</title>
+<date>2012</date>
+<journal>Pattern Recognition,</journal>
+<volume>45</volume>
+<issue>9</issue>
+<contexts>
+<context position="39341" citStr="Martínez-Gómez et al., 2012" startWordPosition="6255" endWordPosition="6258">) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimization. HTER tuning can be simulated by reparameterizing an existing metric. Snover et al. (2009) tuned TERp to correlate with HTER, while Denkowski and Lavie (2010) did the same for METEOR. Zaidan and Callison-Burch (2010) showed how to solicit MT corrections for HTER from Amazon Mechanical Turk. Our learning approach is related to coactive learning (Shivaswamy and Joachims, 2012). Their basic preference perceptron up</context>
+</contexts>
+<marker>Martínez-Gómez, Sanchis-Trilles, Casacuberta, 2012</marker>
+<rawString>P. Martínez-Gómez, G. Sanchis-Trilles, and F. Casacuberta. 2012. Online adaptation strategies for statistical machine translation in post-editing scenarios. Pattern Recognition, 45(9):3193–3203.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F J Och</author>
+<author>H Ney</author>
+</authors>
+<title>The alignment template approach to statistical machine translation.</title>
+<date>2004</date>
+<journal>Computational Linguistics,</journal>
+<volume>30</volume>
+<issue>4</issue>
+<contexts>
+<context position="10940" citStr="Och and Ney, 2004" startWordPosition="1685" endWordPosition="1688">n requests to the MT system, and logs user records to a database. Each user record is a tuple of the form (f, ˆe, h, u), where f is the source sequence, eˆ is the latest 1-best machine translation of f, h is the correction of ˆe, and u is the log of interaction events during the translation session. Our evaluation corpora also include independently generated references e for each f. 3 Interactive MT Backend Now we describe modifications to Phrasal (Green et al., 2014b), the phrase-based MT system that supports the interface. Phrasal follows the log-linear approach to phrase-based translation (Och and Ney, 2004) in which the decision rule has the familiar linear form eˆ = arg max wTO(e, f) (1) e 1The classic TransType system included a probabilistic prediction length component (Foster et al., 2002), but we find that the simpler projection technique works well in practice. 1227 where w E Rd is the model weight vector and φ(·) E Rd is a feature map. 3.1 Decoding The default Phrasal search algorithm is cube pruning (Huang and Chiang, 2007). In the post-edit condition, search is executed as usual for each source input, and the 1-best output is inserted into the target textbox. However, in interactive mod</context>
+</contexts>
+<marker>Och, Ney, 2004</marker>
+<rawString>F. J. Och and H. Ney. 2004. The alignment template approach to statistical machine translation. Computational Linguistics, 30(4):417–449.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F J Och</author>
+<author>R Zens</author>
+<author>H Ney</author>
+</authors>
+<title>Efficient search for interactive statistical machine translation.</title>
+<date>2003</date>
+<booktitle>In EACL.</booktitle>
+<contexts>
+<context position="13271" citStr="Och et al. (2003)" startWordPosition="2072" endWordPosition="2075">etic rules are given rule scores lower than any other rules in the set of queried rules for that source input f. Then candidates are allowed to compete on the beam. Candidates with spurious alignments will likely be pruned in favor of those that only turn to synthetic rules as a last resort. 3.2 Tuning We choose BLEU (Papineni et al., 2002) for baseline tuning to independent references, and HTER for re-tuning to human corrections. Our rationale is as follows: Cer et al. (2010) showed that BLEUtuned systems score well across automatic metrics and also correlate with human judgment better than 2Och et al. (2003) describe a similar algorithm for word graphs. 3Ortiz-Martínez et al. (2009) describe a related technique in which all source and target words can align, with scores set by smoothing. systems tuned to other metrics. Conversely, systems tuned to edit-distance-based metrics like TER tend to produce short translations that are heavily penalized by other metrics. When human corrections become available, we switch to HTER, which correlates with human judgment and is an interpretable measure of editing effort. Whereas TER is computed as TER(e, ˆe), HTER is HTER(h, ˆe). HBLEU is an alternative, but s</context>
+</contexts>
+<marker>Och, Zens, Ney, 2003</marker>
+<rawString>F. J. Och, R. Zens, and H. Ney. 2003. Efficient search for interactive statistical machine translation. In EACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F J Och</author>
+</authors>
+<title>Minimum error rate training for statistical machine translation.</title>
+<date>2003</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="14203" citStr="Och, 2003" startWordPosition="2225" endWordPosition="2226">re heavily penalized by other metrics. When human corrections become available, we switch to HTER, which correlates with human judgment and is an interpretable measure of editing effort. Whereas TER is computed as TER(e, ˆe), HTER is HTER(h, ˆe). HBLEU is an alternative, but since BLEU is invariant to some permutations (Callison-Burch et al., 2006), it is less interpretable. We find that it also does not work as well in practice. We previously proposed a fast, online tuning algorithm (Green et al., 2013b) based on AdaGrad (Duchi et al., 2011). The default loss function is expected error (EE) (Och, 2003; Cherry and Foster, 2012). Expected BLEU is an example of EE, which we found to be unstable when switching metrics. This may result from direct incorporation of the error metric into the gradient computation. To solve this problem, we propose a crossentropy loss which, to our knowledge, is new in MT. Let Eˆ = {ˆei}ni=1 be an n-best list ranked by a gold metric G(e, ˆe) &gt; 0. Assume we have a preference of a higher G (e.g., BLEU or 1−HTER). Define the model distribution over Eˆ as q(ˆe|f) a exp[wTφ(ˆe, f)] normalized so that E ˆec Eˆ q(ˆe|f) = 1; q indicates how much the model prefers each tran</context>
+</contexts>
+<marker>Och, 2003</marker>
+<rawString>F. J. Och. 2003. Minimum error rate training for statistical machine translation. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Ortiz-Martínez</author>
+<author>F Casacuberta</author>
+</authors>
+<title>The new Thot toolkit for fully automatic and interactive statistical machine translation.</title>
+<date>2014</date>
+<booktitle>In EACL, System Demonstrations.</booktitle>
+<contexts>
+<context position="38920" citStr="Ortiz-Martínez and Casacuberta, 2014" startWordPosition="6194" endWordPosition="6197">ce `je nach datei&apos; and the human corrections. This change improves TER, BLEU, and HTER. 7 Related Work The process study most similar to ours is that of Koehn (2009a), who compared scratch, post-edit, and simple interactive modes. However, he used undergraduate, non-professional subjects, and did not consider re-tuning. Our experimental design with professional bilingual translators follows our previous work Green et al. (2013a) comparing scratch translation to post-edit. Many research translation UIs have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimiz</context>
+</contexts>
+<marker>Ortiz-Martínez, Casacuberta, 2014</marker>
+<rawString>D. Ortiz-Martínez and F. Casacuberta. 2014. The new Thot toolkit for fully automatic and interactive statistical machine translation. In EACL, System Demonstrations.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Ortiz-Martínez</author>
+<author>I García-Varea</author>
+<author>F Casacuberta</author>
+</authors>
+<title>Interactive machine translation based on partial statistical phrase-based alignments.</title>
+<date>2009</date>
+<booktitle>In RANLP.</booktitle>
+<contexts>
+<context position="13347" citStr="Ortiz-Martínez et al. (2009)" startWordPosition="2083" endWordPosition="2086">e set of queried rules for that source input f. Then candidates are allowed to compete on the beam. Candidates with spurious alignments will likely be pruned in favor of those that only turn to synthetic rules as a last resort. 3.2 Tuning We choose BLEU (Papineni et al., 2002) for baseline tuning to independent references, and HTER for re-tuning to human corrections. Our rationale is as follows: Cer et al. (2010) showed that BLEUtuned systems score well across automatic metrics and also correlate with human judgment better than 2Och et al. (2003) describe a similar algorithm for word graphs. 3Ortiz-Martínez et al. (2009) describe a related technique in which all source and target words can align, with scores set by smoothing. systems tuned to other metrics. Conversely, systems tuned to edit-distance-based metrics like TER tend to produce short translations that are heavily penalized by other metrics. When human corrections become available, we switch to HTER, which correlates with human judgment and is an interpretable measure of editing effort. Whereas TER is computed as TER(e, ˆe), HTER is HTER(h, ˆe). HBLEU is an alternative, but since BLEU is invariant to some permutations (Callison-Burch et al., 2006), i</context>
+</contexts>
+<marker>Ortiz-Martínez, García-Varea, Casacuberta, 2009</marker>
+<rawString>D. Ortiz-Martínez, I. García-Varea, and F. Casacuberta. 2009. Interactive machine translation based on partial statistical phrase-based alignments. In RANLP.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Papineni</author>
+<author>S Roukos</author>
+<author>T Ward</author>
+<author>W Zhu</author>
+</authors>
+<title>BLEU: a method for automatic evaluation of machine translation.</title>
+<date>2002</date>
+<booktitle>In ACL.</booktitle>
+<contexts>
+<context position="12996" citStr="Papineni et al., 2002" startWordPosition="2027" endWordPosition="2030">istortion limit. To solve these problems, we perform dynamic phrase table augmentation, adding new synthetic rules specific to each search. Rules allowing any source word to align with any unseen or ungeneratable (due to the distortion limit) target word are created.3 These synthetic rules are given rule scores lower than any other rules in the set of queried rules for that source input f. Then candidates are allowed to compete on the beam. Candidates with spurious alignments will likely be pruned in favor of those that only turn to synthetic rules as a last resort. 3.2 Tuning We choose BLEU (Papineni et al., 2002) for baseline tuning to independent references, and HTER for re-tuning to human corrections. Our rationale is as follows: Cer et al. (2010) showed that BLEUtuned systems score well across automatic metrics and also correlate with human judgment better than 2Och et al. (2003) describe a similar algorithm for word graphs. 3Ortiz-Martínez et al. (2009) describe a related technique in which all source and target words can align, with scores set by smoothing. systems tuned to other metrics. Conversely, systems tuned to edit-distance-based metrics like TER tend to produce short translations that are</context>
+</contexts>
+<marker>Papineni, Roukos, Ward, Zhu, 2002</marker>
+<rawString>K. Papineni, S. Roukos, T. Ward, and W. Zhu. 2002. BLEU: a method for automatic evaluation of machine translation. In ACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Ray</author>
+</authors>
+<title>Ten essential research findings for 2013. In</title>
+<date>2013</date>
+<journal>Resource Directory &amp; Index. Multilingual.</journal>
+<contexts>
+<context position="22570" citStr="Ray, 2013" startWordPosition="3578" endWordPosition="3579">terfaces of Autodesk AutoCAD and Adobe Photoshop. The medical text was a drug review from the European Medicines Agency. These two data sets came from TAUS7 and included independent reference translations. The informal news text came from the WMT 2013 shared task test set 7http://www.tausdata.org/ (Bojar et al., 2013). The evaluation corpus was constructed from equal proportions of the three genres. The Fr-En dataset contained 3,003 source tokens (150 segments); the En-De dataset contained 3,002 (173 segments). As a rule of thumb, a human translator averages about 2,700 source tokens per day (Ray, 2013, p.36), so the experiment was designed to replicate a slightly demanding work day. 4.2 Selection of Subjects For each language pair, we recruited 16 professional, freelance translators on Proz, which is the largest online translation community.8 We posted ads for both language pairs at a fixed rate of $0.085 per source word, an average rate in the industry. In addition, we paid $10 to each translator for completing the training module. All subjects had significant prior experience with a CAT workbench. 4.3 Results We analyze the translation conditions in terms of two response variables: time </context>
+</contexts>
+<marker>Ray, 2013</marker>
+<rawString>R. Ray. 2013. Ten essential research findings for 2013. In 2013 Resource Directory &amp; Index. Multilingual.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Riezler</author>
+<author>J T Maxwell</author>
+</authors>
+<title>On some pitfalls in automatic evaluation and significance testing in MT.</title>
+<date>2005</date>
+<booktitle>In ACL Workshop on Intrinsic and Extrinsic Evaluation Measures for Machine Translation and/or Summarization.</booktitle>
+<contexts>
+<context position="33489" citStr="Riezler and Maxwell (2005)" startWordPosition="5340" endWordPosition="5343">ne+feat hter 21.73 59.71 42.35 (a) En-De int-test results. System tune BLEUT TER, HTER baseline bleu 39.33 45.29 28.28 re-tune hter 39.99 45.73 26.96 re-tune+feat hter 40.30 45.28 26.40 (b) Fr-En int-test results. Table 6: Main re-tuning results for interactive data. baseline is the BLEU-tuned system used in the translation user study. re-tune is the baseline feature set re-tuned to HTER on int-tune. retune+feat adds the human feature templates described in section 3.3. bold indicates statistical significance relative to the baseline at p &lt; 0.001; italic at p &lt; 0.05 by the permutation test of Riezler and Maxwell (2005). data. There were five source segments per document, and each document was rendered as a single screen during the translation experiment. Segment order was not randomized, so we could split the data as follows: assign the first three segments of each screen to tune, and the last two to test. This is a clean split with no overlap. This tune/test split has two attractive properties. First, if we can quickly re-tune on the first few sentences on a screen and provide better translations for the last few, then presumably the user experience improves. Second, source inputs f are repeated— eight tra</context>
+</contexts>
+<marker>Riezler, Maxwell, 2005</marker>
+<rawString>S. Riezler and J. T. Maxwell. 2005. On some pitfalls in automatic evaluation and significance testing in MT. In ACL Workshop on Intrinsic and Extrinsic Evaluation Measures for Machine Translation and/or Summarization.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Sakaguchi</author>
+<author>M Post</author>
+<author>B Van Durme</author>
+</authors>
+<title>Efficient elicitation of annotations for human evaluation of machine translation.</title>
+<date>2014</date>
+<booktitle>In WMT.</booktitle>
+<marker>Sakaguchi, Post, Van Durme, 2014</marker>
+<rawString>K. Sakaguchi, M. Post, and B. Van Durme. 2014. Efficient elicitation of annotations for human evaluation of machine translation. In WMT.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Shivaswamy</author>
+<author>T Joachims</author>
+</authors>
+<title>Online structured prediction via coactive learning.</title>
+<date>2012</date>
+<booktitle>In ICML.</booktitle>
+<contexts>
+<context position="39903" citStr="Shivaswamy and Joachims, 2012" startWordPosition="6341" endWordPosition="6344"> al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimization. HTER tuning can be simulated by reparameterizing an existing metric. Snover et al. (2009) tuned TERp to correlate with HTER, while Denkowski and Lavie (2010) did the same for METEOR. Zaidan and Callison-Burch (2010) showed how to solicit MT corrections for HTER from Amazon Mechanical Turk. Our learning approach is related to coactive learning (Shivaswamy and Joachims, 2012). Their basic preference perceptron updates toward a correction, whereas we use the correction for metric scoring and feature extraction. 8 Conclusion We presented a new CAT interface that supports post-edit and interactive modes. Evaluation with professional, bilingual translators showed post-edit to be faster, but prior subject familiarity with postedit may have mattered. For French-English, the interactive mode enabled higher quality translation. Re-tuning the MT system to interactive corrections also yielded large HTER gains. Technical contributions that make re-tuning possible are a cross</context>
+</contexts>
+<marker>Shivaswamy, Joachims, 2012</marker>
+<rawString>P. Shivaswamy and T. Joachims. 2012. Online structured prediction via coactive learning. In ICML.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Snover</author>
+<author>B Dorr</author>
+<author>R Schwartz</author>
+<author>L Micciulla</author>
+<author>J Makhoul</author>
+</authors>
+<title>A study of translation edit rate with targeted human annotation.</title>
+<date>2006</date>
+<booktitle>In AMTA.</booktitle>
+<contexts>
+<context position="2926" citStr="Snover et al., 2006" startWordPosition="423" endWordPosition="426">ze professional, bilingual translators working in both modes, looking first at user productivity. Does the additional machine assistance available in the interactive mode affect translation time and/or quality? Then we turn to the machine side of the partnership. The user study results in corrections to the baseline MT output. Do these corrections help the MT system, and can it learn from them quickly enough to help the user? We perform a re-tuning experiment in which we directly optimize human Translation Edit Rate (HTER), which correlates highly with human judgments of fluency and adequacy (Snover et al., 2006). It is also an intuitive measure of human effort, making fine distinctions between 0 (no editing) and 1 (complete rewrite). We designed a new user interface (UI) for the experiment. The interface places demands on the MT backend—not the other way around. The most significant new MT system features are prefix decoding, for translation completion based on a user prefix; and dynamic phrase table augmentation, to handle target out-of-vocabulary (OOV) words. Discriminative re-tuning is accomplished with a novel cross-entropy objective function. We report three main findings: (1) post-editing is fa</context>
+</contexts>
+<marker>Snover, Dorr, Schwartz, Micciulla, Makhoul, 2006</marker>
+<rawString>M. Snover, B. Dorr, R. Schwartz, L. Micciulla, and J. Makhoul. 2006. A study of translation edit rate with targeted human annotation. In AMTA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Snover</author>
+<author>N Madnani</author>
+<author>B Dorr</author>
+<author>R Schwartz</author>
+</authors>
+<title>Fluency, adequacy, or HTER? Exploring different human judgments with a tunable MT metric.</title>
+<date>2009</date>
+<booktitle>In WMT.</booktitle>
+<contexts>
+<context position="39616" citStr="Snover et al. (2009)" startWordPosition="6296" endWordPosition="6299"> However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimization. HTER tuning can be simulated by reparameterizing an existing metric. Snover et al. (2009) tuned TERp to correlate with HTER, while Denkowski and Lavie (2010) did the same for METEOR. Zaidan and Callison-Burch (2010) showed how to solicit MT corrections for HTER from Amazon Mechanical Turk. Our learning approach is related to coactive learning (Shivaswamy and Joachims, 2012). Their basic preference perceptron updates toward a correction, whereas we use the correction for metric scoring and feature extraction. 8 Conclusion We presented a new CAT interface that supports post-edit and interactive modes. Evaluation with professional, bilingual translators showed post-edit to be faster,</context>
+</contexts>
+<marker>Snover, Madnani, Dorr, Schwartz, 2009</marker>
+<rawString>M. Snover, N. Madnani, B. Dorr, and R. Schwartz. 2009. Fluency, adequacy, or HTER? Exploring different human judgments with a tunable MT metric. In WMT.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Wäschle</author>
+<author>P Simianer</author>
+<author>N Bertoldi</author>
+<author>S Riezler</author>
+<author>M Federico</author>
+</authors>
+<title>Generative and discriminative methods for online adaptation in SMT.</title>
+<date>2013</date>
+<booktitle>In MT Summit XIV.</booktitle>
+<contexts>
+<context position="39409" citStr="Wäschle et al., 2013" startWordPosition="6266" endWordPosition="6269">s have been proposed including TransType (Langlais et al., 2000), Caitra (Koehn, 2009b), Thot (Ortiz-Martínez and Casacuberta, 2014), TransCenter (Denkowski et al., 2014b), and CasmaCat (Alabau et al., 2013). However, to our knowledge, none of these interfaces were explicitly designed according to mixedinitiative principles from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimization. HTER tuning can be simulated by reparameterizing an existing metric. Snover et al. (2009) tuned TERp to correlate with HTER, while Denkowski and Lavie (2010) did the same for METEOR. Zaidan and Callison-Burch (2010) showed how to solicit MT corrections for HTER from Amazon Mechanical Turk. Our learning approach is related to coactive learning (Shivaswamy and Joachims, 2012). Their basic preference perceptron updates toward a correction, whereas we use the correction for metric </context>
+</contexts>
+<marker>Wäschle, Simianer, Bertoldi, Riezler, Federico, 2013</marker>
+<rawString>K. Wäschle, P. Simianer, N. Bertoldi, S. Riezler, and M. Federico. 2013. Generative and discriminative methods for online adaptation in SMT. In MT Summit XIV.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O F Zaidan</author>
+<author>C Callison-Burch</author>
+</authors>
+<title>Predicting human-targeted translation edit rate via untrained human annotators.</title>
+<date>2010</date>
+<booktitle>In NAACL.</booktitle>
+<contexts>
+<context position="39742" citStr="Zaidan and Callison-Burch (2010)" startWordPosition="6316" endWordPosition="6319">les from the HCI literature. Incremental MT learning has been investigated several times, usually starting from no data (Barrachina et al., 2009; Ortiz-Martínez et al., 2010), via simulated post-editing (Martínez-Gómez et al., 2012; Denkowski et al., 2014a), or via re-ranking (Wäschle et al., 2013). No previous experiments combined large-scale baselines, full re-tuning of the model weights, and HTER optimization. HTER tuning can be simulated by reparameterizing an existing metric. Snover et al. (2009) tuned TERp to correlate with HTER, while Denkowski and Lavie (2010) did the same for METEOR. Zaidan and Callison-Burch (2010) showed how to solicit MT corrections for HTER from Amazon Mechanical Turk. Our learning approach is related to coactive learning (Shivaswamy and Joachims, 2012). Their basic preference perceptron updates toward a correction, whereas we use the correction for metric scoring and feature extraction. 8 Conclusion We presented a new CAT interface that supports post-edit and interactive modes. Evaluation with professional, bilingual translators showed post-edit to be faster, but prior subject familiarity with postedit may have mattered. For French-English, the interactive mode enabled higher qualit</context>
+</contexts>
+<marker>Zaidan, Callison-Burch, 2010</marker>
+<rawString>O. F. Zaidan and C. Callison-Burch. 2010. Predicting human-targeted translation edit rate via untrained human annotators. In NAACL.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

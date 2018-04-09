@@ -1,0 +1,1582 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000198">
+<title confidence="0.99875">
+Phrase Translation Probabilities with ITG Priors
+and Smoothing as Learning Objective
+</title>
+<author confidence="0.97842">
+Markos Mylonakis
+</author>
+<affiliation confidence="0.990683333333333">
+Language and Computation, ILLC
+Faculty of Science
+University of Amsterdam
+</affiliation>
+<email confidence="0.979339">
+m.mylonakis@uva.nl
+</email>
+<author confidence="0.974846">
+Khalil Sima’an
+</author>
+<affiliation confidence="0.990784666666667">
+Language and Computation, ILLC
+Faculty of Science
+University of Amsterdam
+</affiliation>
+<email confidence="0.989322">
+k.simaan@uva.nl
+</email>
+<sectionHeader confidence="0.998558" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.9985982">
+The conditional phrase translation probabil-
+ities constitute the principal components of
+phrase-based machine translation systems.
+These probabilities are estimated using a
+heuristic method that does not seem to opti-
+mize any reasonable objective function of the
+word-aligned, parallel training corpus. Ear-
+lier efforts on devising a better understood
+estimator either do not scale to reasonably
+sized training data, or lead to deteriorating
+performance. In this paper we explore a new
+approach based on three ingredients (1) A
+generative model with a prior over latent
+segmentations derived from Inversion Trans-
+duction Grammar (ITG), (2) A phrase ta-
+ble containing all phrase pairs without length
+limit, and (3) Smoothing as learning ob-
+jective using a novel Maximum-A-Posteriori
+version of Deleted Estimation working with
+Expectation-Maximization. Where others
+conclude that latent segmentations lead to
+overfitting and deteriorating performance,
+we show here that these three ingredients
+give performance equivalent to the heuristic
+method on reasonably sized training data.
+</bodyText>
+<sectionHeader confidence="0.994107" genericHeader="keywords">
+1 Motivation
+</sectionHeader>
+<bodyText confidence="0.998360375">
+A major component in phrase-based statistical Ma-
+chine translation (PBSMT) (Zens et al., 2002;
+Koehn et al., 2003) is the table of conditional prob-
+abilities of phrase translation pairs. The pervading
+method for estimating these probabilities is a sim-
+ple heuristic based on the relative frequency of the
+phrase pair in the multi-set of the phrase pairs ex-
+tracted from the word-aligned corpus (Koehn et al.,
+</bodyText>
+<page confidence="0.966082">
+630
+</page>
+<bodyText confidence="0.999768588235294">
+2003). While this heuristic estimator gives good em-
+pirical results, it does not seem to optimize any intu-
+itively reasonable objective function of the (word-
+aligned) parallel corpus (see e.g., (DeNero et al.,
+2006)) The mounting number of efforts attacking
+this problem over the last few years (DeNero et al.,
+2006; Marcu and Wong, 2002; Birch et al., 2006;
+Moore and Quirk, 2007; Zhang et al., 2008) exhibits
+its difficulty. So far, none has lead to an alternative
+method that performs as well as the heuristic on rea-
+sonably sized data (approx. 1000k sentence pair).
+Given a parallel corpus, an estimator for phrase-
+tables in PBSMT involves two interacting decisions
+(1) which phrase pairs to extract, and (2) how to as-
+sign probabilities to the extracted pairs. The heuris-
+tic estimator employs word-alignment (Giza++)
+(Och and Ney, 2003) and a few thumb rules for
+defining phrase pairs, and then extracts a multi-set
+of phrase pairs and estimates their conditional prob-
+abilities based on the counts in the multi-set. Us-
+ing this method for extracting a set of phrase pairs,
+(DeNero et al., 2006; Moore and Quirk, 2007) aim
+at defining a better estimator for the probabilities.
+Generally speaking, both efforts report deteriorating
+translation performance relative to the heuristic.
+Instead of employing word-alignment to guide
+phrase pair extraction, it is theoretically more ap-
+pealing to aim at phrase alignment as part of the esti-
+mation process (Marcu and Wong, 2002; Birch et al.,
+2006). This way, phrase pair extraction goes hand-
+in-hand with estimating the probabilities. How-
+ever, in practice, due to the huge number of possi-
+ble phrase pairs, this task is rather challenging, both
+computationally and statistically. It is hard to define
+</bodyText>
+<note confidence="0.944885">
+Proceedings of the 2008 Conference on Empirical Methods in Natural Language Processing, pages 630–639,
+Honolulu, October 2008.c�2008 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.99978346">
+both a manageable phrase pair translation model and
+a well-founded training regime that would scale up
+to reasonably sized parallel corpora (see e.g., (Birch
+et al., 2006)). It remains to be seen whether this the-
+oretically interesting approach will lead to improved
+phrase probability estimates.
+In this paper we also start out from a stan-
+dard phrase extraction procedure based on word-
+alignment and aim solely at estimating the condi-
+tional probabilities for the phrase pairs and their
+reverse translation probabilities. Unlike preceding
+work, we extract all phrase pairs from the training
+corpus and estimate their probabilities, i.e., without
+limit on length. We present a novel formulation of
+a conditional translation model that works with a
+prior over segmentations and a bag of conditional
+phrase pairs. We use binary Synchronous Context-
+Free Grammar (bSCFG), based on Inversion Trans-
+duction Grammar (ITG) (Wu, 1997; Chiang, 2005a),
+to define the set of eligible segmentations for an
+aligned sentence pair. We also show how the num-
+ber of spurious derivations per segmentation in this
+bSCFG can be used for devising a prior probabil-
+ity over the space of segmentations, capturing the
+bias in the data towards monotone translation. The
+heart of the estimation process is a new smoothing
+estimator, a penalized version of Deleted Estima-
+tion, which averages the temporary probability es-
+timates of multiple parallel EM processes at each
+joint iteration.
+For evaluation we use a state-of-the-art baseline
+system (Moses) (Hoang and Koehn, 2008) which
+works with a log-linear interpolation of feature func-
+tions optimized by MERT (Och, 2003). We sim-
+ply substitute our own estimates for the heuristic
+phrase translation estimates (both directions and the
+phrase penalty score) and compare the two within
+the Moses decoder. While our estimates differ sub-
+stantially from the heuristic, their performance is on
+par with the heuristic estimates. This is remark-
+able given the fact that comparable previous work
+(DeNero et al., 2006; Moore and Quirk, 2007) did
+not match the performance of the heuristic estima-
+tor using large training sets. We find that smooth-
+ing is crucial for achieving good estimates. This
+is in line with earlier work on consistent estimation
+for similar models (Zollmann and Sima’an, 2006),
+and agrees with the most up-to-date work that em-
+ploys Bayesian priors over the estimates (Zhang et
+al., 2008).
+</bodyText>
+<sectionHeader confidence="0.9997" genericHeader="introduction">
+2 Related work
+</sectionHeader>
+<bodyText confidence="0.999930674418605">
+Marcu and Wong (Marcu and Wong, 2002) realize
+that the problem of extracting phrase pairs should
+be intertwined with the method of probability esti-
+mation. They formulate a joint phrase-based model
+in which a source-target sentence pair is generated
+jointly. However, the huge number of possible
+phrase-alignments prohibits scaling up the estima-
+tion by Expectation-Maximization (EM) (Dempster
+et al., 1977) to large corpora. Birch et al (Birch et
+al., 2006) provide soft measures for including word-
+alignments in the estimation process and obtain im-
+proved results only on small data sets.
+Coming up-to-date, (Blunsom et al., 2008) at-
+tempt a related estimation problem to (Marcu and
+Wong, 2002), using the expanded phrase pair set
+of (Chiang, 2005a), working with an exponential
+model and concentrating on marginalizing out the
+latent segmentation variable. Also most up-to-date,
+(Zhang et al., 2008) report on a multi-stage model,
+without a latent segmentation variable, but with a
+strong prior preferring sparse estimates embedded in
+a Variational Bayes (VB) estimator and concentrat-
+ing the efforts on pruning both the space of phrase
+pairs and the space of (ITG) analyses. The latter two
+efforts report improved performance, albeit again on
+a limited training set (approx. 140k sentences up to
+a certain length).
+DeNero et al (2006) have explored estimation us-
+ing EM of phrase pair probabilities under a con-
+ditional translation model based on the original
+source-channel formulation. This model involves a
+hidden segmentation variable that is set uniformly
+(or to prefer shorter phrases over longer ones). Fur-
+thermore, the model involves a reordering compo-
+nent akin to the one used in IBM model 3. De-
+spite this, the heuristic estimator remains superior
+because ”EM learns overly determinized segmen-
+tations and translation parameters, overfitting the
+training data and failing to generalize”. More re-
+cently, (Moore and Quirk, 2007) devise a estimator
+working with a model that does not include a hid-
+den segmentation variable but works with a heuris-
+tic iterative procedure (rather than MLE or EM). The
+</bodyText>
+<page confidence="0.997792">
+631
+</page>
+<bodyText confidence="0.9993904">
+translation results remain inferior to the heuristic but
+the authors note an interesting trade-off between de-
+coding speed and the various settings of this estima-
+tor.
+Our work expands on the general approach taken
+by (DeNero et al., 2006; Moore and Quirk, 2007)
+but arrives at insights similar to those of the most
+recent work (Zhang et al., 2006), albeit in a com-
+pletely different manner. The present work differs
+from all preceding work in that it employs the set
+of all phrase pairs during training. It differs from
+(Zhang et al., 2008) in that it does postulate a la-
+tent segmentation variable and puts the prior di-
+rectly over that variable rather than over the ITG
+synchronous rule estimates. Our method neither
+excludes phrase pairs before estimation nor does it
+prune the space of possible segmentations/analyses
+during training/estimation. As well as smoothing,
+we find (in the same vein as (Zhang et al., 2008))
+that setting effective priors/smoothing is crucial for
+EM to arrive at better estimates.
+tal biases that might emerge due to length cut-off1.
+The Generative Model: Given a word-aligned
+source-target sentence pair (f, e, a), the generative
+story underlying our model goes as follows:
+</bodyText>
+<listItem confidence="0.993204583333334">
+1. Abiding by the word-alignments in a, segment
+the source-target sentence pair (f, e) into a se-
+quence of I containers a,, and a bag of I
+phrase pairs a (f,e) _�(fj, ej)J��1. Each
+container aj _ (lf , rf, le, re) consists of the
+start lf and end rf positions2 for a phrase in
+f and the start le and end re positions for an
+aligned phrase in e.
+2. For a given segmentation a,, for every con-
+tainer aj (1 G j G I) generate the phrase-pair
+(fj, ej), independently from all other phrase-
+pairs.
+</listItem>
+<bodyText confidence="0.824143">
+This leads to the following probabilistic model:
+</bodyText>
+<equation confidence="0.990327">
+P (f  |e; a) _ � �P(a� 1) P(fj  |ej) (1)
+or EE(a) (fj,ej)Eai(f,e)
+</equation>
+<sectionHeader confidence="0.997963" genericHeader="method">
+3 The Translation Model
+</sectionHeader>
+<bodyText confidence="0.999932805555556">
+Given a word-aligned parallel corpus of source-
+target sentences, it is common practice to extract a
+set of phrase pairs using extraction heuristics (cf.
+(Koehn et al., 2003; Och and Ney, 2004)). These
+heuristics define a phrase pair to consist of a source
+and target ngrams of a word-aligned source-target
+sentence pair such that if one end of an alignment
+is in the one ngram, the other end is in the other
+ngram (and there is at least one such alignment)
+(Och and Ney, 2004; Koehn et al., 2003). For ef-
+ficiency and sparseness, the practitioners of PBSMT
+constrain the length of the source phrase to a certain
+maximum number of words.
+An All Phrase Pairs Model: In this work we train
+a phrase-translation table that consists of all phrase-
+pairs that can be extracted from the word-aligned
+training data according to the standard phrase ex-
+traction heuristic. After training, we can still limit
+the set of phrase pairs to those selected by a cut-off
+on phrase length. The reason for using all phrase
+pairs during training is that it gives a clear point of
+reference for an estimator, without implicit, acciden-
+Where E(a) is the set of binarizable segmenta-
+tions (defined next) that are eligible according to the
+word-alignments a between f and e. These segmen-
+tations into bilingual containers (where segmenta-
+tions are taken inside the containers) are different
+from the monolingual segmentations used in earlier
+comparable conditional models (e.g., (DeNero et al.,
+2006)) which must generate the alignment on top of
+the segmentations. Note how the different phrase
+pairs (fj, ej) are generated from their bilingual con-
+tainers in the given segmentation a . We will dis-
+cuss our choice of prior probability over segmenta-
+tions P(af) after we discuss the definition of the bi-
+narizable segmentations E(a).
+</bodyText>
+<subsectionHeader confidence="0.99837">
+3.1 Binarizable segmentations E(a)
+</subsectionHeader>
+<bodyText confidence="0.9994845">
+Following (Zhang et al., 2006; Huang et al., 2008),
+every sequence of phrase alignments can be viewed
+</bodyText>
+<footnote confidence="0.98786225">
+1For example, if the cut-off on phrase pairs is ten words, all
+sentence pairs smaller than ten words in the training data will
+be included as phrase pairs as well. These sentences are treated
+differently from longer sentences, which are not allowed to be
+phrase pairs.
+2The NULL alignments (word-to-NULL) in the training
+data can also be marked with actual positions on both sides in
+order to allow for this definition of containers.
+</footnote>
+<page confidence="0.996054">
+632
+</page>
+<bodyText confidence="0.969363941176471">
+as a sequence of integers 1,... I together with a
+permuted version of this sequence 7r(1), ... , 7r(I),
+where the two copies of an integer in the two se-
+quences are assumed aligned/paired together. For
+example, possible permutations of {1, 2, 3, 4} are
+{2,1, 3, 4} and {2, 4,1, 3}. Because a segmenta-
+tion Qi of a sentence pair is also a sequence of
+aligned phrases, it also constitutes a permuted se-
+quence. A binarizable permutation x is either of
+length one, or can be properly split into two binariz-
+able sub-sequences y and z such that either3 z &lt; y
+or y &lt; z. For example, one way to binarize the
+permutation {2, 1, 3, 4} is to introduce a proper split
+into {2, 1; 3, 4}, then recursively another proper split
+of {2, 1} into {2; 1} and {3,4} into {3; 4}. In con-
+trast, the permutation {2, 4, 1, 3} is non-binarizable.
+2 1
+</bodyText>
+<figureCaption confidence="0.999018">
+Figure 1: Multiple ways to binarize a permutation
+</figureCaption>
+<bodyText confidence="0.99989">
+Graphically speaking, the recursive definition of
+binarizable permutations can be depicted as a bi-
+nary tree structure where the nodes correspond to
+recursive proper splits of the permutation, and the
+leaves are decorated with the naturals. Figure 1 ex-
+hibits two possible binarizations of the same permu-
+tation where &lt;&gt; and [] denote inverted and mono-
+tone proper splits respectively. Note that the number
+of possible binarizations of a binarizable permuta-
+tion is a recursive function of the number of possi-
+ble proper splits and reaches its maximum for fully
+monotone permutations (all binary trees, which is a
+factorial function of the length of the permutation).
+By definition (cf. (Zhang et al., 2006; Huang et
+al., 2008)), a binarizable segmentation/permutation
+can be recognized by a binarized Synchronous
+Context-Free Grammar (SCFG), i.e., an SCFG in
+which the right hand sides of all non-lexical rules
+constitute binarizable permutations. In particular,
+this holds for the SCFG implementing Inversion
+</bodyText>
+<footnote confidence="0.7611135">
+3For two sequences of numbers, the notation y &lt; z stands
+for Vy E y, Vz E z : y &lt; z.
+</footnote>
+<bodyText confidence="0.9991795">
+Transduction Grammar (Wu, 1997). This SCFG
+(Chiang, 2005b) has two binary synchronous rules
+that correspond resp. to the contiguous monotone
+and inverted alignments:
+</bodyText>
+<equation confidence="0.9992255">
+XP → XP 1 XP 2 , XP 1 XP 2 (2)
+XP → XP 1 XP 2 , XP 2 XP 1
+</equation>
+<bodyText confidence="0.9997345625">
+The boxed integers in the superscripts on the non-
+terminal XP denote synchronized rewritings. In
+this work, we employ a binary SCFG (bSCFG)
+working with these two synchronous rules to-
+gether with a set of lexical rules {XP →
+f, e  |hf, ei is a phrase pair}.
+In this bSCFG, every derivation corresponds to a
+binarization of a segmentation of the input. Note
+that the bSCFG defined in equation 2 generates all
+possible binarizations for every segmentation of the
+input. It is possible to constrain this bSCFG such
+that it generates a single, canonical derivation per
+segmentation. However, in section 3.2 we show that
+the number of such derivations is a good measure of
+phrase pair productivity.
+It is well known that there are alignments and
+segmentations that this bSCFG does not cover (see
+(Huang et al., 2008)). Recently, strong evidence
+emerged (e.g., (Huang et al., 2008)) showing that
+most word-alignments of actual parallel corpora can
+be covered by a binarized SCFG of the ITG type.
+Furthermore, because our model employs the set of
+all phrase-pairs that can be extracted from a given
+training set, it will always find segmentations that
+cover every sentence pair in the training data4. This
+implies that while our model might discard non-
+binarizable segmentations for certain complex word
+alignments, we do manage to train the model on the
+binarizable segementations of all sentence pairs.
+Up to the prior over segmentations (see next), we
+implement the above model using a weighted ver-
+sion of the binary SCFG as follows:
+</bodyText>
+<listItem confidence="0.5442065">
+• The weight for lexical rules is given by
+P(XP → f, e) := P(f  |e), where hf, ei is
+a phrase-pair. These are the trainable parame-
+ters of our model.
+</listItem>
+<footnote confidence="0.798409">
+4In the worst case the whole sentence pair is a phrase pair
+with a trivial segmentation.
+</footnote>
+<figure confidence="0.9979759">
+&lt;&gt;
+[]
+[]
+4
+3
+&lt;&gt;
+&lt;&gt;
+2 1
+[]
+3 4
+</figure>
+<page confidence="0.838852">
+633
+</page>
+<figureCaption confidence="0.950141">
+Figure 2: Two segmentations of an align-
+ment/permutation. Both segmentations have the
+same number of binarizations despite differences in
+container sizes.
+</figureCaption>
+<bodyText confidence="0.9898772">
+• The weights for the two non-lexical rules in
+equation 2 are fixed at 1.0. These weights are
+not trained at all.
+Where we use the notation P(.) for the weight of a
+synchronous rule.
+</bodyText>
+<subsectionHeader confidence="0.998717">
+3.2 Prior over segmentations
+</subsectionHeader>
+<bodyText confidence="0.999992811320755">
+As it has been found out by (DeNero et al., 2006),
+it is not easy to come up with a simple, effec-
+tive prior distribution over segmentations that al-
+lows for improved phrase pair estimates. Within a
+Maximum-Likelihood estimator, preference for seg-
+mentations al consisting of longer containers could
+lead to overfitting as we will explain in section 4.
+Alternatively, it is tempting to have preference for
+segmentations at that consist of shorter contain-
+ers, because (generally speaking) shorter contain-
+ers have higher expected coverage of new sentence
+pairs. However, mere bias for shorter containers
+will not give better estimates as observed by (DeN-
+ero et al., 2006). One case where this bias clearly
+fails is the case of a contiguous sequence of con-
+tainers with a complex alignment structure (cross-
+ing alignments). For example (see figure 2), for
+the alignment {1, 3, 4, 2, 5} there is a segmentation
+into five containers {1; 3; 4; 2; 5}, and another into
+three {1; 3, 4, 2; 5}. The first segmentation involves
+shorter containers that have crossing brackets among
+them, while the second one consists of three con-
+tainers including a longer container {3, 4, 2}. In
+the first segmentation, due to their crossing align-
+ments, each of the containers {3}, {4} and {2} will
+not combine with the surrounding context ({1} and
+{5}) on its own, i.e., without the other two contain-
+ers. Furthermore, there is only a single binariza-
+tion of {3, 4, 2}. Hence, while the first segmen-
+tation involves shorter containers than the second
+one, these shorter containers are as productive as
+the large container {3, 4, 2}, i.e., they combine with
+surrounding containers in the same number of ways
+as the large container. In such and similar cases,
+there are no grounds for the bias towards shorter
+phrases/containers.
+The notion of container productivity (the num-
+ber of ways in which it combines with surrounding
+containers during training) seems to correlate with
+the expected number of ways a container can be
+used during decoding, which should be correlated
+with expected coverage. During training, contain-
+ers that are often surrounded by other, monotoni-
+cally aligned containers are expected to be more pro-
+ductive than alternative containers that are often sur-
+rounded by crossing alignments. Hence, the num-
+ber of binarizations that a segmentation has under
+the bSCFG is a direct function of the ways in which
+the containers combine among themselves (mono-
+tone vs. inverted/crossing) within segmentations,
+and provides a more accurate measure of container
+productivity than container length. Hence, the final
+model we employ is the following:
+</bodyText>
+<equation confidence="0.9821386">
+P(f  |e; a) _
+N(ai)
+11
+Z(E(a)) I P(fj  |ej) (3)
+fj ,ej)∈o1 (f,e)
+</equation>
+<bodyText confidence="0.998689666666667">
+Where N(ai) is the number of binary deriva-
+tions/trees that a has in the binary SCFG (bSCFG),
+and Z(E(a)) _ Eoi ∈Σ(a) N(a 1), i.e., this prior is
+the ratio of number of derivations of al to the to-
+tal number of derivations that (f, e, a) has under the
+bSCFG.
+</bodyText>
+<subsectionHeader confidence="0.999827">
+3.3 Contrast with similar models:
+</subsectionHeader>
+<bodyText confidence="0.999681444444444">
+In contrast with the model of (DeNero et al., 2006),
+who define the segmentations over the source sen-
+tence f alone, our model employs bilingual con-
+tainers thereby segmenting both source and target
+sides simultaneously. Therefore, unlike (DeNero
+et al., 2006), our model does not need to gener-
+ate the word-alignments explicitly, as these are em-
+bedded in the segmentations. Similarly, our model
+does not include explicit penalty terms for reorder-
+</bodyText>
+<figure confidence="0.998496357142857">
+1
+1
+3 4 2
+2 3 4
+5
+5
+2 3 4
+3 4 2
+1
+1
+5
+5
+�
+oI
+</figure>
+<page confidence="0.988868">
+634
+</page>
+<bodyText confidence="0.998390266666667">
+ing/inversion but includes a related bias in the prior
+probabilities over segmentations P(σI1).
+In a way, the segmentations and bilingual contain-
+ers we use can be viewed as similar to the concepts
+used in the Joint Model of Marcu and Wong (Marcu
+and Wong, 2002). Unlike (Marcu and Wong, 2002),
+however, our model works with conditional proba-
+bilities and starts out from the word-alignments.
+The novel aspects of our model are three (1) It de-
+fines the set of segmentations using a bSCFG, (2) It
+includes a novel, refined prior probability over seg-
+mentations, and (3) It employs all phrase pairs that
+can be extracted from a word-aligned training par-
+allel corpus. For these novel elements to produce
+reasonable estimates, we devise our own estimator.
+</bodyText>
+<sectionHeader confidence="0.986764" genericHeader="method">
+4 Estimation by Smoothing
+</sectionHeader>
+<bodyText confidence="0.999970541666667">
+In principle, we are dealing here with a translation
+model that employs all phrase pairs (of unbounded
+size), extracted from a word-aligned parallel cor-
+pus. Under this model, where a phrase pair and
+its sub-phrase pairs are included in the model, the
+MLE can be expected to overfit the data5 unless a
+suitable prior probability over segmentations is em-
+ployed. Indeed, the prior over segmentations defined
+in the preceding section prevents the MLE from
+completely overfitting the training data. However,
+we find empirical evidence that this prior is insuffi-
+cient for avoiding overfitting.
+Our model behaves like a memory-based model
+because it memorizes all extractable phrase pairs
+found in the training data including the training sen-
+tence pairs themselves. Such memory-based mod-
+els are related to nonparametric models such as
+K-NN and kernel methods (Hastie et al., 2001).
+For memory-based models, consistent estimation for
+novel instances proceeds by local density estimation
+from the surroundings of the instance, which is akin
+to smoothing for parametric models. Hence, next we
+describe our own version of a smoothed Maximum-
+Likelihood estimator for phrase translation probabil-
+</bodyText>
+<footnote confidence="0.442319285714286">
+5One trivial MLE solution would give the longest container,
+consisting of the longest phrase pairs, a probability of one, at
+the cost of all shorter alternatives. A similar problem arises in
+Data-Oriented Parsing, see (Sima’an and Buratto, 2003; Zoll-
+mann and Sima’an, 2006). Note that models that employ an
+upperbound on phrase pair length will still risk overfitting train-
+ing sentences of lengths that fall within this upperbound.
+</footnote>
+<figure confidence="0.665909318181818">
+-
+INPUT: Word-aligned parallel training data T
+OUTPUT: Estimates π for all P(f  |e)
+{
+Split training data T into equal parts H1, ... , H10.
+For 1 &lt; i &lt; 10 do
+Extract from Ei = Uj=,,�iHj all phrase pairs πi
+Initialize ito uniform conditional probs
+Letj=0
+Repeat
+Let j = j + 1 // EM iteration counter
+For 1 &lt; i &lt; 10 do
+E-step: calculate expected counts for pairs
+in πji on Hi using counts from �πj−1
+i .
+M-step: calculate probabilities for pairs in
+πi from the expected counts
+j
+For 1 &lt; i &lt; 10 do i:= 1EZ 01πz
+Until π := {irj1, . . . , �πj10} has converged
+}
+-
+</figure>
+<figureCaption confidence="0.999642">
+Figure 3: Penalized Deleted Estimation
+</figureCaption>
+<bodyText confidence="0.987928583333333">
+ities.
+For a latent variable model, it is usually common
+to employ Expectation-Maximization (EM) (Demp-
+ster et al., 1977) as a search method for a (local)
+maximum-likelihood estimate (MLE) of the train-
+ing data. Instead of mere EM we opt for a smoothed
+version: we present a new method, that combines
+Deleted Estimation (Jelinek and Mercer, 1980) with
+the Jackknife (Duda et al., 2001) as the core estima-
+tor.
+Figure 3 shows the pseudo-code for our estima-
+tor. Like in Deleted Estimation, we split the training
+data into ten equal portions. This way we create ten
+different splits of extraction/heldout sets of respec-
+tively 90%/10% of the training set. For every split
+1 &lt; i &lt; 10, we extract a set of phrase pairs πi from
+the extraction set Ei and train it (under our model)
+on the heldout set Hi. Naturally, the phrase pair sets
+πi (1 &lt; i &lt; 10) are subsets of (or equal to) the set
+of phrase pairs π = Uiπi extracted from the total
+training data (i.e., π is the set of model parameters).
+The training of the different πi’s, each on its corre-
+sponding heldout set Hi, is done by ten separate EM
+processes, which are synchronized in their initializa-
+</bodyText>
+<page confidence="0.998231">
+635
+</page>
+<bodyText confidence="0.9995782625">
+tion, their iterations as well as stop condition. The
+EM processes start out from uniform conditional es-
+timates of the phrase pairs in all Tri. After every EM
+iteration j, when the M-step has finished, the esti-
+mates in all Trz (1 G i G 10) are set to the average
+(over 1 G i G 10) of the estimates in Trz leading to
+�rz (following the Jackknife method). The resulting
+averaged probabilities in Vi are then used as the cur-
+rent phrase pair estimates, which feed into the next
+iteration j + 1 of the different EM processes (each
+working on a different heldout set Hi with a differ-
+ent set of phrase pairs Tri).
+There are two special boundary cases which de-
+mand special attention during estimation:
+Sparse distributions: For a phrase e that does oc-
+cur both in Hi and Ei, there could be a phrase
+pair (f, e) that does occur in Hi but does not
+occur in Tri. To prevent EM from giving the
+extra probability mass to all other pairs (f, e′)
+unjustifiably, we apply smoothing. We add the
+missing pair (f, e) to Tri and set its probability
+to a fixed number 10−5∗len, where len is the
+length of the phrase pair. In effect, we backoff
+our model (equation 1) to a word-level model
+with fixed word translation probability (10−5).
+Zero distributions: When a phrase e does not oc-
+cur in Hi, all its pairs (f, e) in Tri will have
+zero counts. During each EM iteration, when
+the M-step is applied, the distribution P(·  |e)
+is undefined by MLE, since it is irrelevant for
+the likelihood of Hi. In this case any choice
+of proper distribution P(·  |e) will constitute an
+MLE solution. We choose to set this case to a
+uniform distribution every time again.
+Since our model and estimator are implemented
+within the bSCFG framework, we use a bilingual
+CYK parser (Younger, 1967) under the grammar
+in equation 2. This parser builds for every input
+(f, a, e) all binarizations/derivations for every seg-
+mentation in E(a). For implementing EM, we em-
+ploy the Inside-Outside algorithm (Lari and Young,
+1990; Goodman, 1998). During estimation, because
+the input, output and word-alignment are known
+in advance, the time and space requirements re-
+main manageable despite the worst-case complexity
+O(n6) in target sentence length n.
+Penalized Deleted Estimation: In contrast with
+our method, Deleted Estimation sums the expected
+counts (rather than probabilities) obtained from
+the different splits before applying the M-step
+(normalization). While the rationale behind Deleted
+Estimation comes from MLE over the original
+training data, our method has a smoothing objective
+(inspired by the Jackknife ): generally speaking, the
+averages over different heldout sets (under different
+subsets of the model) give less sharp estimates than
+MLE. By averaging the different heldout estimates,
+this estimator employs a penalty term that depends
+on the marginal count of e in the heldout set6.
+Interestingly, when the phrase e is very frequent7,
+it will approximately occur almost as often in the
+different heldout sets. In this case, our method
+reduces to Deleted Estimation, where it effectively
+sums the counts8. Yet, when the target phrase e
+does occur only very few times, it is likely that its
+count in some splits will be zero. In our method, at
+every EM iteration, during the Maximization step,
+we set such cases back to uniform. By averaging the
+probabilities from the different splits over many EM
+iterations, setting these cases to uniform constitutes
+a kind of prior that prevents the final estimates
+from falling too far from uniform. In contrast, in
+Deleted Interpolation the zero counts are simply
+summed with the other corresponding counts of the
+same phrase pair, which leads to sharper probability
+distributions. In all experiments that we conducted,
+our method (which we call Penalized Deleted
+Estimation) gave more successful estimates than
+mere Deleted Estimation.
+On the theoretical side, the choice for a fixed
+</bodyText>
+<footnote confidence="0.972500866666667">
+6Define county(x) to be the count of event x
+in data y. The Deleted Estimation (DE) estimate is
+EH countH(f,e)/countT(e), which can be written as
+EH[countH(f,e)/countH(e)][countH(e)/countT(e)] =
+EH irH(f|e)[countH(e)/countT(e)] where irH(f|e) is the
+estimate from heldout set H. Hence, DE linearly interpolated
+irH with factors countH(e)/countT(e). Our estimator em-
+ploys uniform interpolation factors instead, thereby penalizing
+the DI counts (hence Penalized DI).
+7Theoretically speaking, when the training data is unbound-
+edly large, our estimator will converge to the same estimates
+as the Deleted Estimation. When the data is still sparse, our
+estimator is biased, unlike the MLE which will overfit.
+8When calculating the conditional probabilities, the denom-
+inators used are approximately equal to one another.
+</footnote>
+<page confidence="0.997783">
+636
+</page>
+<bodyText confidence="0.999894454545455">
+prior over segmentations (ITG prior) implies that our
+model cannot be estimated to converge (in proba-
+bility) to the relative frequency estimates (RFE) of
+source-target sentence pairs in the limit of the train-
+ing data (a sufficiently large parallel corpus). A prior
+probability over segmentations that would allow our
+estimator to converge in the limit to the RFE must
+gradually prefer segmentations consisting of larger
+containers as the data grows large. We set the de-
+sign and estimation of such a prior aside for future
+work.
+</bodyText>
+<sectionHeader confidence="0.983737" genericHeader="method">
+5 Empirical experiments
+</sectionHeader>
+<bodyText confidence="0.999649806451613">
+Decoding and Baseline Model: In this work
+we employ an existing decoder, Moses (Hoang
+and Koehn, 2008), which defines a log-linear
+model interpolating feature functions, with interpo-
+lation scores Af e∗ = arg maxe E f∈D AfHf(f, e).
+The Af are optimized by Minimum-Error Training
+(MERT) (Och, 2003). The set 4b consists of the
+following feature functions (see (Hoang and Koehn,
+2008)): a 5-gram target language model, the stan-
+dard reordering scores, the word and phrase penalty
+scores, the conditional lexical estimates obtained
+from the word-alignment in both directions, and the
+conditional phrase translation estimates in both di-
+rections P(f  |e) and P(e  |f). Keeping the other
+five feature functions fixed, we compare our esti-
+mates of P(f  |e) and P(e  |f) (and the phrase
+penalty) to the commonly used heuristic estimates.
+Because our model employs a latent segmenta-
+tion variable, this variable should be marginalized
+out during decoding to allow selecting the highest
+probability translation given the input. This turns
+out crucial for improved results (cf. (Blunsom et al.,
+2008)). However, such a marginalization can be NP-
+Complete, in analogy to a similar problem in Data-
+Oriented Parsing (Sima’an, 2002)9. We do not have
+a decoder yet that can approximate this marginaliza-
+tion efficiently and we employ the standard Moses
+decoder for this work.
+Experimental Setup: The training, development
+and test data all come from the French-English
+translation shared task of the ACL 2007 Second
+</bodyText>
+<footnote confidence="0.5902225">
+9A reduction of simple instances of the first problem to in-
+stances of the latter problem should be possible.
+</footnote>
+<table confidence="0.93220775">
+Phrases System BLEU
+&lt; 7 Baseline PBSMT 33.03
+&lt; 10 Baseline PBSMT 33.03
+All Baseline PBSMT 33.00
+</table>
+<equation confidence="0.904578666666667">
+&lt; 7 EM + ITG Prior 32.50
+&lt; 7 EM + Del. Est. 32.67
+&lt; 7 EM + Del. Est. + ITG Prior 32.73
+&lt; 7 EM + Pen. Del. Est. + ITG Prior 33.02
+&lt; 10 EM + Pen. Del. Est. + ITG Prior 33.14
+All EM + Pen. Del. Est. + ITG Prior 32.98
+</equation>
+<tableCaption confidence="0.997652">
+Table 1: Results: data from ACL07 2 d Wkshp on SMT
+</tableCaption>
+<bodyText confidence="0.99559925">
+Workshop on Statistical Machine Translation 10. Af-
+ter pruning sentence pairs with word length more
+than 40 on either side, we are left with 949K sen-
+tence pairs for training. The development and test
+data are composed of 2K sentence pairs each. All
+data sets are lower-cased.
+For both the baseline system and our method,
+we produce word-level alignments for the parallel
+training corpus using GIZA++. We use 5 iterations
+of each IBM Model 1 and HMM alignment mod-
+els, followed by 3 iterations of each Model 3 and
+Model 4. From this aligned training corpus, we ex-
+tract the phrase pairs according to the heuristics in
+(Koehn et al., 2003). The baseline system extracts
+all phrase-pairs upto a certain maximum length on
+both sides and employs the heuristic estimator. The
+language model used in all systems is a 5-gram lan-
+guage model trained on the English side of the paral-
+lel corpus. Minimum-Error Rate Training (MERT)
+is applied on the development set to obtain opti-
+mal log-linear interpolation weights for all systems.
+Performance is measured by computing the BLEU
+scores (Papineni et al., 2002) of the system’s trans-
+lations, when compared against a single reference
+translation per sentence.
+Results: We compare different versions of our
+system against the baseline system using the heuris-
+tic estimator. We observe the effects of the ITG prior
+in the translation model as well as the method of es-
+timation (Deleted Estimation vs. Penalized Deleted
+Estimation).
+Table 1 exhibits the BLEU scores for the sys-
+</bodyText>
+<footnote confidence="0.491088">
+10http://www.statmt.org/wmt07
+</footnote>
+<page confidence="0.996205">
+637
+</page>
+<bodyText confidence="0.999923674418605">
+tems. Our own system (with ITG prior and Pe-
+nalized Deleted Estimation and maximum phrase-
+length ten words) scores (33.14), slightly outper-
+forming the best baseline system (33.03). When us-
+ing straight Deleted Estimation over EM, this leads
+to deterioration (32.73). When also the ITG prior is
+excluded (by having a single derivation per segmen-
+tation) this leads to further deterioration (32.67). By
+using mere EM with an ITG prior, performance goes
+down to 32.50, exhibiting the crucial role of the es-
+timation by smoothing. Clearly, Penalized Deleted
+Estimation and the ITG prior are important for the
+improved phrase translation estimates.
+As table 1 shows we also varied the phrase length
+cutoff (seven, ten or none=all phrase pairs). The
+length cutoff pertains to both sides of a phrase-pair.
+For our estimator, we always train all phrase pairs,
+applying the length cutoff only after training (no re-
+normalization is applied at that point).
+Interestingly, we find out that the heuristic estima-
+tor cannot benefit performance by including longer
+phrase pairs. Our estimator does benefit perfor-
+mance by including phrase pairs of length upto ten
+words, but then it degrades again when including
+all phrase pairs. We take the latter finding to sig-
+nal remaining overfitting that proved resistant to the
+smoothing applied by our estimator. The heuristic
+estimator exhibits a similar degradation.
+We also tried to vary the treatment of Sparse Dis-
+tributions (section 4, page 7) during heldout estima-
+tion from fixed word-translation probabilities to the
+lexical model probabilities. This lead to slight dete-
+rioration of results (32.94). It is unclear whether this
+deterioration is meaningful or not. We did not ex-
+plore mere EM without any smoothing or ITG prior,
+as we expect it will directly overfit the training data
+as reported by (DeNero et al., 2006).
+We note that for French-English translation it is
+hard to outperform the heuristic within the PBSMT
+framework, since it already performs very well.
+Preliminary, most recent experiments on German-
+English (also WMT07 data) exhibit that our estima-
+tor outperforms the heuristic.
+</bodyText>
+<sectionHeader confidence="0.996704" genericHeader="conclusions">
+6 Discussion and Future Research
+</sectionHeader>
+<bodyText confidence="0.982202734693877">
+The most similar efforts to ours, mainly (DeNero
+et al., 2006), conclude that segmentation variables
+in the generative translation model lead to overfit-
+ting while attaining higher likelihood of the train-
+ing data than the heuristic estimator. Based on this
+advise (Moore and Quirk, 2007) exclude the latent
+segmentation variables and opt for a heuristic train-
+ing procedure. In this work we also start out from a
+generative model with latent segmentation variables.
+However, we find out that concentrating the learning
+effort on smoothing is crucial for good performance.
+For this, we devise ITG-based priors over segmenta-
+tions and employ a penalized version of Deleted Es-
+timation working with EM at its core. The fact that
+our results (at least) match the heuristic estimates on
+a reasonably sized data set (947k parallel sentence
+pairs) is rather encouraging.
+The work in (Zhang et al., 2008) has a simi-
+lar flavor to our work, yet the two differ substan-
+tially. Both depart from Maximum-Likelihood to-
+wards non-overfitting estimators. Where Zhang et al
+choose for sparse priors (leading to sharp phrase dis-
+tributions) and put the smoothing burden on the ITG
+rule parameters and a pruning strategy, we choose
+for a prior over segmentations determined by the
+ITG derivation space and smooth the MLE directly
+with a penalized version of Deleted Estimation. It
+remains to be seen how the two biases compare to
+one another on the same task.
+There are various strands of future research.
+Firstly, we plan to explore our estimator on other
+language pairs in order to obtain more evidence on
+its behavior. Secondly, as (Blunsom et al., 2008)
+show, marginalizing out the different segmentations
+during decoding leads to improved performance. We
+plan to build our own decoder (based on ITG) where
+different ideas can be tested including tractable ways
+for achieving a marginalization effect. Apart from a
+new decoder, it will be worthwhile adapting the prior
+probability in our model to allow for consistent es-
+timation. Finally, it would be interesting to study
+properties of the penalized Deleted Estimation used
+in this paper.
+Acknowledgments: Both authors are supported
+by a VIDI grant (nr. 639.022.604) from The Nether-
+lands Organization for Scientific Research (NWO).
+David Chiang and Andy Way are acknowledged for
+stimulating discussions on machine translation and
+parsing.
+</bodyText>
+<page confidence="0.998357">
+638
+</page>
+<sectionHeader confidence="0.998339" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999860028846154">
+A. Birch, Ch. Callison-Burch, M. Osborne, and Ph.
+Koehn. 2006. Constraining the phrase-based, joint
+probability statistical translation model. In Proceed-
+ings on the Workshop on Statistical Machine Trans-
+lation, pages 154–157. Association for Computational
+Linguistics.
+P. Blunsom, T. Cohn, and M. Osborne. 2008. A discrim-
+inative latent variable model for statistical machine
+translation. In Proceedings of ACL-08: HLT, pages
+200–208. Association for Computational Linguistics.
+D. Chiang. 2005a. A hierarchical phrase-based model
+for statistical machine translation. In In Proceedings
+ofACL 2005, pages 263–270.
+D. Chiang. 2005b. An introduction to synchronous
+grammars. Technical report, Univeristy of Maryland.
+A.P. Dempster, N.M. Laird, and D.B. Rubin. 1977. Max-
+imum likelihood from incomplete data via the em al-
+gorithm. Journal of the Royal Statistical Society, Se-
+ries B, 39(1):1–38.
+J. DeNero, D. Gillick, J. Zhang, and D. Klein. 2006.
+Why generative phrase models underperform surface
+heuristics. In Proceedings on the Workshop on Sta-
+tistical Machine Translation, pages 31–38, New York
+City. Association for Computational Linguistics.
+R.O. Duda, P.E. Hart, and D.G. Stork. 2001. Pattern
+Classification. John Wiley &amp; Sons, NY, USA.
+J.T. Goodman. 1998. Parsing Inside-Out. PhD thesis,
+Departement of Computer Science, Harvard Univer-
+sity, Cambridge, Massachusetts.
+T. Hastie, R. Tibshirani, and J. H. Friedman. 2001. The
+Elements of Statistical Learning. Springer.
+H. Hoang and Ph. Koehn. 2008. Design of the moses de-
+coder for statistical machine translation. In ACL Work-
+shop on Software engineering, testing, and quality as-
+surance for NLP 2008.
+L. Huang, H. Zhang, D. Gildea, and K. Knight.
+2008. Binarization of synchronous context-free
+grammars. Submitted to Computational Linguistics.
+http://www.cis.upenn.edu/ lhuang3/opt.pdf.
+F. Jelinek and R. L. Mercer. 1980. Interpolated estima-
+tion of markov source parameters from sparse data. In
+In Proceedings of the Workshop on Pattern Recogni-
+tion in Practice.
+P. Koehn, F. J. Och, and D. Marcu. 2003. Statistical
+phrase-based translation. In HLT-NAACL.
+K. Lari and S.J. Young. 1990. The estimation of stochas-
+tic context-free grammars using the inside-outside al-
+gorithm. Computer, Speech and Language, 4:35–56.
+D. Marcu and W. Wong. 2002. A phrase-based, joint
+probability model for statistical machine translation.
+In Proceedings of Empirical methods in natural lan-
+guage processing, pages 133–139. Association for
+Computational Linguistics.
+R. Moore and Ch. Quirk. 2007. An iteratively-trained
+segmentation-free phrase translation model for statisti-
+cal machine translation. In Proceedings of the Second
+Workshop on Statistical Machine Translation, pages
+112–119, Prague, Czech Republic. Association for
+Computational Linguistics.
+F. J. Och and H. Ney. 2003. A systematic comparison of
+various statistical alignment models. Computational
+Linguistics, 29(1):19–51.
+F. J. Och and H. Ney. 2004. The alignment template
+approach to statistical machine translation. Computa-
+tional Linguistics, 30(4):417–449.
+F. J. Och. 2003. Minimum error rate training in statistical
+machine translation. In ACL, pages 160–167.
+K. Papineni, S. Roukos, T. Ward, and W.-J. Zhu. 2002.
+Bleu: a method for automatic evaluation of machine
+translation. In ACL, pages 311–318.
+K. Sima’an and L. Buratto. 2003. Backoff Parame-
+ter Estimation for the DOP Model. In H. Blockeel
+N. LavraˆC, D. Gamberger and L. Todorovski, editors,
+Proceedings of the 14th European Conference on Ma-
+chine Learning (ECML’03), Lecture Notes in Artifi-
+cial Intelligence (LNAI2837), pages 373–384, Cavtat-
+Dubrovnik, Croatia. Springer.
+K. Sima’an. 2002. Computational complexity of proba-
+bilistic disambiguation. Grammars, 5(2):125–151.
+D. Wu. 1997. Stochastic inversion transduction gram-
+mars and bilingual parsing of parallel corpora. Com-
+putationalLinguistics, 23(3):377–403.
+D.H. Younger. 1967. Recognition and parsing of
+context-free languages in time n3. Information and
+Control, 10(2):189–208.
+R. Zens, F. J. Och, and H. Ney. 2002. Phrase-based sta-
+tistical machine translation. In Matthias Jarke, Jana
+Koehler, and Gerhard Lakemeyer, editors, KI 2002:
+Advances in Artificial Intelligence, 25th Annual Ger-
+man Conference on AI (KI 2002), volume 2479 of
+Lecture Notes in Computer Science, pages 18–32.
+Springer.
+H. Zhang, L. Huang, D. Gildea, and K. Knight. 2006.
+Synchronous binarization for machine translation. In
+HLT-NAACL.
+H. Zhang, Ch. Quirk, R. C. Moore, and D. Gildea.
+2008. Bayesian learning of non-compositional phrases
+with synchronous parsing. In Proceedings ofACL-08:
+HLT, pages 97–105, Columbus, Ohio, June. Associa-
+tion for Computational Linguistics.
+A. Zollmann and K. Sima’an. 2006. An efficient and
+consistent estimator for data-oriented parsing. Journal
+of Automata, Languages and Combinatorics (JALC),
+10 (2005) Number 2/3:367–388.
+</reference>
+<page confidence="0.998848">
+639
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.009763">
+<title confidence="0.9827795">Phrase Translation Probabilities with ITG and Smoothing as Learning Objective</title>
+<author confidence="0.940616">Markos</author>
+<affiliation confidence="0.95771">Language and Computation, Faculty of University of</affiliation>
+<email confidence="0.931806">m.mylonakis@uva.nl</email>
+<author confidence="0.774266">Khalil</author>
+<affiliation confidence="0.973702">Language and Computation, Faculty of University of</affiliation>
+<email confidence="0.96174">k.simaan@uva.nl</email>
+<abstract confidence="0.997728917159765">The conditional phrase translation probabilities constitute the principal components of phrase-based machine translation systems. These probabilities are estimated using a heuristic method that does not seem to optimize any reasonable objective function of the word-aligned, parallel training corpus. Earlier efforts on devising a better understood estimator either do not scale to reasonably sized training data, or lead to deteriorating performance. In this paper we explore a new approach based on three ingredients (1) A generative model with a prior over latent segmentations derived from Inversion Transduction Grammar (ITG), (2) A phrase table containing all phrase pairs without length limit, and (3) Smoothing as learning objective using a novel Maximum-A-Posteriori version of Deleted Estimation working with Expectation-Maximization. Where others conclude that latent segmentations lead to overfitting and deteriorating performance, we show here that these three ingredients give performance equivalent to the heuristic reasonably sized training 1 Motivation A major component in phrase-based statistical Machine translation (PBSMT) (Zens et al., 2002; Koehn et al., 2003) is the table of conditional probabilities of phrase translation pairs. The pervading method for estimating these probabilities is a simple heuristic based on the relative frequency of the pair the multi-set of the phrase pairs exfrom the word-aligned corpus et al., 630 2003). While this heuristic estimator gives good empirical results, it does not seem to optimize any intuitively reasonable objective function of the (wordaligned) parallel corpus (see e.g., (DeNero et al., 2006)) The mounting number of efforts attacking this problem over the last few years (DeNero et al., 2006; Marcu and Wong, 2002; Birch et al., 2006; Moore and Quirk, 2007; Zhang et al., 2008) exhibits its difficulty. So far, none has lead to an alternative that performs as well as the heuristic on reasized data (approx. 1000k sentence Given a parallel corpus, an estimator for phrasetables in PBSMT involves two interacting decisions (1) which phrase pairs to extract, and (2) how to assign probabilities to the extracted pairs. The heuristic estimator employs word-alignment (Giza++) (Och and Ney, 2003) and a few thumb rules for defining phrase pairs, and then extracts a multi-set of phrase pairs and estimates their conditional probabilities based on the counts in the multi-set. Using this method for extracting a set of phrase pairs, (DeNero et al., 2006; Moore and Quirk, 2007) aim at defining a better estimator for the probabilities. Generally speaking, both efforts report deteriorating translation performance relative to the heuristic. Instead of employing word-alignment to guide phrase pair extraction, it is theoretically more appealing to aim at phrase alignment as part of the estimation process (Marcu and Wong, 2002; Birch et al., 2006). This way, phrase pair extraction goes handin-hand with estimating the probabilities. However, in practice, due to the huge number of possible phrase pairs, this task is rather challenging, both computationally and statistically. It is hard to define of the 2008 Conference on Empirical Methods in Natural Language pages 630–639, October Association for Computational Linguistics both a manageable phrase pair translation model and a well-founded training regime that would scale up to reasonably sized parallel corpora (see e.g., (Birch et al., 2006)). It remains to be seen whether this theoretically interesting approach will lead to improved phrase probability estimates. In this paper we also start out from a standard phrase extraction procedure based on wordalignment and aim solely at estimating the conditional probabilities for the phrase pairs and their reverse translation probabilities. Unlike preceding we extract phrase pairs the training corpus and estimate their probabilities, i.e., without limit on length. We present a novel formulation of a conditional translation model that works with a over segmentations a bag of conditional phrase pairs. We use binary Synchronous Context- Free Grammar (bSCFG), based on Inversion Transduction Grammar (ITG) (Wu, 1997; Chiang, 2005a), to define the set of eligible segmentations for an aligned sentence pair. We also show how the number of spurious derivations per segmentation in this bSCFG can be used for devising a prior probability over the space of segmentations, capturing the the data monotone translation. The of the estimation process is a new a penalized version of Deleted Estimawhich averages the temporary esmultiple parallel EM processes at each joint iteration. For evaluation we use a state-of-the-art baseline system (Moses) (Hoang and Koehn, 2008) which works with a log-linear interpolation of feature functions optimized by MERT (Och, 2003). We simply substitute our own estimates for the heuristic phrase translation estimates (both directions and the phrase penalty score) and compare the two within the Moses decoder. While our estimates differ substantially from the heuristic, their performance is on par with the heuristic estimates. This is remarkable given the fact that comparable previous work (DeNero et al., 2006; Moore and Quirk, 2007) did not match the performance of the heuristic estimator using large training sets. We find that smoothing is crucial for achieving good estimates. This is in line with earlier work on consistent estimation for similar models (Zollmann and Sima’an, 2006), and agrees with the most up-to-date work that employs Bayesian priors over the estimates (Zhang et al., 2008). 2 Related work Marcu and Wong (Marcu and Wong, 2002) realize that the problem of extracting phrase pairs should be intertwined with the method of probability estimation. They formulate a joint phrase-based model in which a source-target sentence pair is generated jointly. However, the huge number of possible scaling up the estimation by Expectation-Maximization (EM) (Dempster et al., 1977) to large corpora. Birch et al (Birch et al., 2006) provide soft measures for including wordalignments in the estimation process and obtain improved results only on small data sets. Coming up-to-date, (Blunsom et al., 2008) attempt a related estimation problem to (Marcu and Wong, 2002), using the expanded phrase pair set of (Chiang, 2005a), working with an exponential model and concentrating on marginalizing out the latent segmentation variable. Also most up-to-date, (Zhang et al., 2008) report on a multi-stage model, latent segmentation variable, but with a strong prior preferring sparse estimates embedded in a Variational Bayes (VB) estimator and concentrating the efforts on pruning both the space of phrase pairs and the space of (ITG) analyses. The latter two efforts report improved performance, albeit again on a limited training set (approx. 140k sentences up to a certain length). DeNero et al (2006) have explored estimation using EM of phrase pair probabilities under a conditional translation model based on the original source-channel formulation. This model involves a hidden segmentation variable that is set uniformly (or to prefer shorter phrases over longer ones). Furthermore, the model involves a reordering component akin to the one used in IBM model 3. Despite this, the heuristic estimator remains superior because ”EM learns overly determinized segmentations and translation parameters, overfitting the training data and failing to generalize”. More recently, (Moore and Quirk, 2007) devise a estimator working with a model that does not include a hidden segmentation variable but works with a heuristic iterative procedure (rather than MLE or EM). The 631 translation results remain inferior to the heuristic but the authors note an interesting trade-off between decoding speed and the various settings of this estimator. Our work expands on the general approach taken by (DeNero et al., 2006; Moore and Quirk, 2007) but arrives at insights similar to those of the most recent work (Zhang et al., 2006), albeit in a completely different manner. The present work differs from all preceding work in that it employs the set phrase pairs training. It differs from (Zhang et al., 2008) in that it does postulate a latent segmentation variable and puts the prior directly over that variable rather than over the ITG synchronous rule estimates. Our method neither excludes phrase pairs before estimation nor does it prune the space of possible segmentations/analyses during training/estimation. As well as smoothing, we find (in the same vein as (Zhang et al., 2008)) that setting effective priors/smoothing is crucial for EM to arrive at better estimates. biases that might emerge due to length Generative Model: a word-aligned sentence pair the generative story underlying our model goes as follows: Abiding by the word-alignments in segment source-target sentence pair a seof and a bag of pairs Each of the end for a phrase in the start and end positions for an phrase in For a given segmentation for every congenerate the phrase-pair independently from all other phrasepairs. This leads to the following probabilistic model: _ 3 The Translation Model Given a word-aligned parallel corpus of sourcetarget sentences, it is common practice to extract a set of phrase pairs using extraction heuristics (cf. (Koehn et al., 2003; Och and Ney, 2004)). These heuristics define a phrase pair to consist of a source and target ngrams of a word-aligned source-target sentence pair such that if one end of an alignment is in the one ngram, the other end is in the other ngram (and there is at least one such alignment) (Och and Ney, 2004; Koehn et al., 2003). For efficiency and sparseness, the practitioners of PBSMT constrain the length of the source phrase to a certain maximum number of words. All Phrase Pairs Model: this work we train phrase-translation table that consists of phrasecan be extracted from the word-aligned training data according to the standard phrase extraction heuristic. After training, we can still limit the set of phrase pairs to those selected by a cut-off on phrase length. The reason for using all phrase pairs during training is that it gives a clear point of for an estimator, without implicit, accidenthe set of segmentations (defined next) that are eligible according to the These segmentations into bilingual containers (where segmentations are taken inside the containers) are different from the monolingual segmentations used in earlier comparable conditional models (e.g., (DeNero et al., 2006)) which must generate the alignment on top of the segmentations. Note how the different phrase generated from their bilingual conin the given segmentation We will discuss our choice of prior probability over segmentawe discuss the definition of the bisegmentations Binarizable segmentations Following (Zhang et al., 2006; Huang et al., 2008), sequence of alignments be viewed example, if the cut-off on phrase pairs is ten words, all sentence pairs smaller than ten words in the training data will be included as phrase pairs as well. These sentences are treated differently from longer sentences, which are not allowed to be phrase pairs. NULL alignments (word-to-NULL) in the training data can also be marked with actual positions on both sides in order to allow for this definition of containers. 632 a sequence of integers I with a version of this sequence ... , where the two copies of an integer in the two sequences are assumed aligned/paired together. For possible permutations of Because a segmentaa sentence pair is also a sequence of aligned phrases, it also constitutes a permuted se- A binarizable permutation either of one, or can be split two binarizsub-sequences that y For example, one way to binarize the to introduce a proper split then recursively another proper split In conthe permutation non-binarizable. 2 1 Figure 1: Multiple ways to binarize a permutation Graphically speaking, the recursive definition of binarizable permutations can be depicted as a binary tree structure where the nodes correspond to recursive proper splits of the permutation, and the leaves are decorated with the naturals. Figure 1 exhibits two possible binarizations of the same permuwhere inverted and monotone proper splits respectively. Note that the number of possible binarizations of a binarizable permutation is a recursive function of the number of possible proper splits and reaches its maximum for fully monotone permutations (all binary trees, which is a factorial function of the length of the permutation). By definition (cf. (Zhang et al., 2006; Huang et al., 2008)), a binarizable segmentation/permutation can be recognized by a binarized Synchronous Context-Free Grammar (SCFG), i.e., an SCFG in which the right hand sides of all non-lexical rules constitute binarizable permutations. In particular, this holds for the SCFG implementing Inversion two sequences of numbers, the notation z z : &lt; Transduction Grammar (Wu, 1997). This SCFG (Chiang, 2005b) has two binary synchronous rules that correspond resp. to the contiguous monotone and inverted alignments: XP (2) XP The boxed integers in the superscripts on the nonsynchronized rewritings. In this work, we employ a binary SCFG (bSCFG) working with these two synchronous rules towith a set of lexical rules e a phrase In this bSCFG, every derivation corresponds to a binarization of a segmentation of the input. Note that the bSCFG defined in equation 2 generates all possible binarizations for every segmentation of the input. It is possible to constrain this bSCFG such that it generates a single, canonical derivation per segmentation. However, in section 3.2 we show that the number of such derivations is a good measure of phrase pair productivity. It is well known that there are alignments and segmentations that this bSCFG does not cover (see (Huang et al., 2008)). Recently, strong evidence emerged (e.g., (Huang et al., 2008)) showing that most word-alignments of actual parallel corpora can be covered by a binarized SCFG of the ITG type. Furthermore, because our model employs the set of phrase-pairs can be extracted from a given training set, it will always find segmentations that every sentence pair in the training This implies that while our model might discard nonbinarizable segmentations for certain complex word alignments, we do manage to train the model on the binarizable segementations of all sentence pairs. Up to the prior over segmentations (see next), we implement the above model using a weighted version of the binary SCFG as follows: • The weight for lexical rules is given by := where a phrase-pair. These are the trainable parameters of our model. the worst case the whole sentence pair is a phrase pair with a trivial segmentation. &lt;&gt; [] [] 4 3 &lt;&gt; &lt;&gt; 2 1 [] 3 4 633 2: Two segmentations of an alignment/permutation. Both segmentations have the same number of binarizations despite differences in container sizes. • The weights for the two non-lexical rules in equation 2 are fixed at 1.0. These weights are not trained at all. we use the notation the weight of a synchronous rule. 3.2 Prior over segmentations As it has been found out by (DeNero et al., 2006), it is not easy to come up with a simple, effective prior distribution over segmentations that allows for improved phrase pair estimates. Within a Maximum-Likelihood estimator, preference for segof longer containers could lead to overfitting as we will explain in section 4. Alternatively, it is tempting to have preference for consist of shorter containers, because (generally speaking) shorter containers have higher expected coverage of new sentence pairs. However, mere bias for shorter containers will not give better estimates as observed by (DeNero et al., 2006). One case where this bias clearly fails is the case of a contiguous sequence of containers with a complex alignment structure (crossing alignments). For example (see figure 2), for alignment 3, 4, 2, is a segmentation five containers 3; 4; 2; and another into 3, 4, 2; The first segmentation involves shorter containers that have crossing brackets among them, while the second one consists of three conincluding a longer container 4, In the first segmentation, due to their crossing aligneach of the containers combine with the surrounding context on its own, i.e., without the other two contain- Furthermore, there is only a single binarizaof 4, Hence, while the first segmentation involves shorter containers than the second these shorter containers are as large container 4, i.e., they combine with surrounding containers in the same number of ways as the large container. In such and similar cases, there are no grounds for the bias towards shorter phrases/containers. notion of productivity number of ways in which it combines with surrounding containers during training) seems to correlate with the expected number of ways a container can be used during decoding, which should be correlated with expected coverage. During training, containers that are often surrounded by other, monotonically aligned containers are expected to be more productive than alternative containers that are often surrounded by crossing alignments. Hence, the number of binarizations that a segmentation has under the bSCFG is a direct function of the ways in which the containers combine among themselves (monotone vs. inverted/crossing) within segmentations, and provides a more accurate measure of container productivity than container length. Hence, the final model we employ is the following: _ 11 the number of binary derivathat in the binary SCFG (bSCFG), _ i.e., this prior is ratio of number of derivations of the tonumber of derivations that under the bSCFG. 3.3 Contrast with similar models: In contrast with the model of (DeNero et al., 2006), who define the segmentations over the source senour model employs bilingual containers thereby segmenting both source and target sides simultaneously. Therefore, unlike (DeNero et al., 2006), our model does not need to generate the word-alignments explicitly, as these are embedded in the segmentations. Similarly, our model not include terms for reorder- 1 1 3 4 2 2 3 4 5 5 2 3 4 3 4 2 1 1 5 5 � 634 ing/inversion but includes a related bias in the prior over segmentations In a way, the segmentations and bilingual containers we use can be viewed as similar to the concepts used in the Joint Model of Marcu and Wong (Marcu and Wong, 2002). Unlike (Marcu and Wong, 2002), however, our model works with conditional probabilities and starts out from the word-alignments. The novel aspects of our model are three (1) It defines the set of segmentations using a bSCFG, (2) It includes a novel, refined prior probability over segmentations, and (3) It employs all phrase pairs that can be extracted from a word-aligned training parallel corpus. For these novel elements to produce reasonable estimates, we devise our own estimator. 4 Estimation by Smoothing In principle, we are dealing here with a translation model that employs all phrase pairs (of unbounded size), extracted from a word-aligned parallel corpus. Under this model, where a phrase pair and its sub-phrase pairs are included in the model, the can be expected to overfit the unless a suitable prior probability over segmentations is employed. Indeed, the prior over segmentations defined in the preceding section prevents the MLE from completely overfitting the training data. However, we find empirical evidence that this prior is insufficient for avoiding overfitting. model behaves like a model because it memorizes all extractable phrase pairs found in the training data including the training sentence pairs themselves. Such memory-based models are related to nonparametric models such as K-NN and kernel methods (Hastie et al., 2001). For memory-based models, consistent estimation for novel instances proceeds by local density estimation from the surroundings of the instance, which is akin to smoothing for parametric models. Hence, next we our own version of a Maximumestimator for phrase translation probabiltrivial MLE solution would give the longest container, consisting of the longest phrase pairs, a probability of one, at the cost of all shorter alternatives. A similar problem arises in Data-Oriented Parsing, see (Sima’an and Buratto, 2003; Zollmann and Sima’an, 2006). Note that models that employ an upperbound on phrase pair length will still risk overfitting training sentences of lengths that fall within this upperbound. parallel training data all { data equal parts ... , phrase pairs uniform conditional probs Repeat 1 iteration calculate expected counts for pairs on counts from calculate probabilities for pairs in from the expected counts j . . . , converged } - Figure 3: Penalized Deleted Estimation ities. For a latent variable model, it is usually common to employ Expectation-Maximization (EM) (Dempster et al., 1977) as a search method for a (local) maximum-likelihood estimate (MLE) of the traindata. Instead of mere EM we opt for a version: we present a new method, that combines Deleted Estimation (Jelinek and Mercer, 1980) with the Jackknife (Duda et al., 2001) as the core estimator. Figure 3 shows the pseudo-code for our estimator. Like in Deleted Estimation, we split the training data into ten equal portions. This way we create ten splits of sets respectively 90%/10% of the training set. For every split we extract a set of phrase pairs train it (under our model) the set Naturally, the phrase pair sets are subsets of (or equal to) the set phrase pairs from the total data (i.e., the set of model parameters). training of the different each on its correheldout set is done by ten separate EM which are synchronized in their initializa- 635 tion, their iterations as well as stop condition. The EM processes start out from uniform conditional esof the phrase pairs in all After every EM when the M-step has finished, the estiin all are set to the average of the estimates in to the Jackknife method). The resulting probabilities in then used as the current phrase pair estimates, which feed into the next + 1 the different EM processes (each on a different heldout set a differset of phrase pairs There are two special boundary cases which demand special attention during estimation: distributions: a phrase does ocboth in there could be a phrase does occur in does in To prevent EM from giving the probability mass to all other pairs unjustifiably, we apply smoothing. We add the pair set its probability a fixed number where the length of the phrase pair. In effect, we backoff our model (equation 1) to a word-level model fixed word translation probability distributions: a phrase not ocin all its pairs have zero counts. During each EM iteration, when M-step is applied, the distribution | is undefined by MLE, since it is irrelevant for likelihood of In this case any choice proper distribution  |constitute an MLE solution. We choose to set this case to a uniform distribution every time again. Since our model and estimator are implemented within the bSCFG framework, we use a bilingual CYK parser (Younger, 1967) under the grammar in equation 2. This parser builds for every input binarizations/derivations for every segin For implementing EM, we employ the Inside-Outside algorithm (Lari and Young, 1990; Goodman, 1998). During estimation, because the input, output and word-alignment are known in advance, the time and space requirements remain manageable despite the worst-case complexity target sentence length Deleted Estimation: contrast with method, Deleted Estimation sums the than probabilities) obtained from the different splits before applying the M-step (normalization). While the rationale behind Deleted Estimation comes from MLE over the original training data, our method has a smoothing objective (inspired by the Jackknife ): generally speaking, the averages over different heldout sets (under different subsets of the model) give less sharp estimates than MLE. By averaging the different heldout estimates, this estimator employs a penalty term that depends the marginal count of the heldout when the phrase very it will approximately occur almost as often in the different heldout sets. In this case, our method reduces to Deleted Estimation, where it effectively the Yet, when the target phrase does occur only very few times, it is likely that its count in some splits will be zero. In our method, at every EM iteration, during the Maximization step, we set such cases back to uniform. By averaging the probabilities from the different splits over many EM iterations, setting these cases to uniform constitutes a kind of prior that prevents the final estimates from falling too far from uniform. In contrast, in Deleted Interpolation the zero counts are simply summed with the other corresponding counts of the same phrase pair, which leads to sharper probability distributions. In all experiments that we conducted, method (which we call Deleted gave more successful estimates than mere Deleted Estimation. On the theoretical side, the choice for a fixed be the count of event data The Deleted Estimation (DE) estimate which can be written as = the from heldout set Hence, DE linearly interpolated factors Our estimator employs uniform interpolation factors instead, thereby penalizing the DI counts (hence Penalized DI). speaking, when the training data is unboundedly large, our estimator will converge to the same estimates as the Deleted Estimation. When the data is still sparse, our estimator is biased, unlike the MLE which will overfit. calculating the conditional probabilities, the denominators used are approximately equal to one another. 636 prior over segmentations (ITG prior) implies that our model cannot be estimated to converge (in probability) to the relative frequency estimates (RFE) of source-target sentence pairs in the limit of the training data (a sufficiently large parallel corpus). A prior probability over segmentations that would allow our estimator to converge in the limit to the RFE must gradually prefer segmentations consisting of larger containers as the data grows large. We set the design and estimation of such a prior aside for future work. 5 Empirical experiments and Baseline Model: this work we employ an existing decoder, Moses (Hoang and Koehn, 2008), which defines a log-linear model interpolating feature functions, with interposcores arg optimized by Minimum-Error Training (Och, 2003). The set of the following feature functions (see (Hoang and Koehn, 2008)): a 5-gram target language model, the standard reordering scores, the word and phrase penalty scores, the conditional lexical estimates obtained from the word-alignment in both directions, and the conditional phrase translation estimates in both di- Keeping the other five feature functions fixed, we compare our estiof the phrase penalty) to the commonly used heuristic estimates. Because our model employs a latent segmentation variable, this variable should be marginalized out during decoding to allow selecting the highest probability translation given the input. This turns out crucial for improved results (cf. (Blunsom et al., 2008)). However, such a marginalization can be NP- Complete, in analogy to a similar problem in Data- Parsing (Sima’an, We do not have a decoder yet that can approximate this marginalization efficiently and we employ the standard Moses decoder for this work. Setup: training, development and test data all come from the French-English translation shared task of the ACL 2007 Second reduction of simple instances of the first problem to instances of the latter problem should be possible.</abstract>
+<affiliation confidence="0.452879">Phrases System BLEU</affiliation>
+<address confidence="0.725086555555556">Baseline PBSMT Baseline PBSMT Baseline PBSMT 33.03 All 33.03 33.00 + ITG Prior 32.50 + Del. Est. 32.67 + Del. Est. + ITG Prior 32.73 + Pen. Del. Est. + ITG Prior 33.02 + Pen. Del. Est. + ITG Prior All EM + Pen. Del. Est. + ITG Prior 32.98</address>
+<abstract confidence="0.995343606299212">1: Results: data from ACL07 on SMT on Statistical Machine Translation After pruning sentence pairs with word length more than 40 on either side, we are left with 949K sentence pairs for training. The development and test data are composed of 2K sentence pairs each. All data sets are lower-cased. For both the baseline system and our method, we produce word-level alignments for the parallel training corpus using GIZA++. We use 5 iterations of each IBM Model 1 and HMM alignment models, followed by 3 iterations of each Model 3 and Model 4. From this aligned training corpus, we extract the phrase pairs according to the heuristics in (Koehn et al., 2003). The baseline system extracts all phrase-pairs upto a certain maximum length on both sides and employs the heuristic estimator. The language model used in all systems is a 5-gram language model trained on the English side of the parallel corpus. Minimum-Error Rate Training (MERT) is applied on the development set to obtain optimal log-linear interpolation weights for all systems. Performance is measured by computing the BLEU scores (Papineni et al., 2002) of the system’s translations, when compared against a single reference translation per sentence. compare different versions of our system against the baseline system using the heuristic estimator. We observe the effects of the ITG prior in the translation model as well as the method of estimation (Deleted Estimation vs. Penalized Deleted Estimation). 1 exhibits the BLEU scores for the sys- 637 tems. Our own system (with ITG prior and Penalized Deleted Estimation and maximum phraselength ten words) scores (33.14), slightly outperforming the best baseline system (33.03). When using straight Deleted Estimation over EM, this leads to deterioration (32.73). When also the ITG prior is excluded (by having a single derivation per segmentation) this leads to further deterioration (32.67). By using mere EM with an ITG prior, performance goes down to 32.50, exhibiting the crucial role of the estimation by smoothing. Clearly, Penalized Deleted Estimation and the ITG prior are important for the improved phrase translation estimates. As table 1 shows we also varied the phrase length cutoff (seven, ten or none=all phrase pairs). The length cutoff pertains to both sides of a phrase-pair. For our estimator, we always train all phrase pairs, applying the length cutoff only after training (no renormalization is applied at that point). Interestingly, we find out that the heuristic estimator cannot benefit performance by including longer phrase pairs. Our estimator does benefit performance by including phrase pairs of length upto ten words, but then it degrades again when including all phrase pairs. We take the latter finding to signal remaining overfitting that proved resistant to the smoothing applied by our estimator. The heuristic estimator exhibits a similar degradation. We also tried to vary the treatment of Sparse Distributions (section 4, page 7) during heldout estimation from fixed word-translation probabilities to the lexical model probabilities. This lead to slight deterioration of results (32.94). It is unclear whether this deterioration is meaningful or not. We did not explore mere EM without any smoothing or ITG prior, as we expect it will directly overfit the training data as reported by (DeNero et al., 2006). We note that for French-English translation it is hard to outperform the heuristic within the PBSMT framework, since it already performs very well. Preliminary, most recent experiments on German- English (also WMT07 data) exhibit that our estimator outperforms the heuristic. 6 Discussion and Future Research The most similar efforts to ours, mainly (DeNero et al., 2006), conclude that segmentation variables in the generative translation model lead to overfitting while attaining higher likelihood of the training data than the heuristic estimator. Based on this advise (Moore and Quirk, 2007) exclude the latent segmentation variables and opt for a heuristic training procedure. In this work we also start out from a generative model with latent segmentation variables. However, we find out that concentrating the learning effort on smoothing is crucial for good performance. For this, we devise ITG-based priors over segmentations and employ a penalized version of Deleted Estimation working with EM at its core. The fact that our results (at least) match the heuristic estimates on a reasonably sized data set (947k parallel sentence pairs) is rather encouraging. The work in (Zhang et al., 2008) has a similar flavor to our work, yet the two differ substantially. Both depart from Maximum-Likelihood towards non-overfitting estimators. Where Zhang et al choose for sparse priors (leading to sharp phrase distributions) and put the smoothing burden on the ITG rule parameters and a pruning strategy, we choose for a prior over segmentations determined by the ITG derivation space and smooth the MLE directly with a penalized version of Deleted Estimation. It remains to be seen how the two biases compare to one another on the same task. There are various strands of future research. Firstly, we plan to explore our estimator on other language pairs in order to obtain more evidence on its behavior. Secondly, as (Blunsom et al., 2008) show, marginalizing out the different segmentations during decoding leads to improved performance. We plan to build our own decoder (based on ITG) where different ideas can be tested including tractable ways for achieving a marginalization effect. Apart from a new decoder, it will be worthwhile adapting the prior probability in our model to allow for consistent estimation. Finally, it would be interesting to study properties of the penalized Deleted Estimation used in this paper. authors are supported by a VIDI grant (nr. 639.022.604) from The Netherlands Organization for Scientific Research (NWO). David Chiang and Andy Way are acknowledged for stimulating discussions on machine translation and parsing.</abstract>
+<note confidence="0.710402866666667">638 References A. Birch, Ch. Callison-Burch, M. Osborne, and Ph. Koehn. 2006. Constraining the phrase-based, joint statistical translation model. In Proceedings on the Workshop on Statistical Machine Transpages 154–157. Association for Computational Linguistics. P. Blunsom, T. Cohn, and M. Osborne. 2008. A discriminative latent variable model for statistical machine In of ACL-08: pages 200–208. Association for Computational Linguistics. D. Chiang. 2005a. A hierarchical phrase-based model statistical machine translation. In Proceedings pages 263–270.</note>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>M Osborne Callison-Burch</author>
+<author>Ph Koehn</author>
+</authors>
+<title>Constraining the phrase-based, joint probability statistical translation model.</title>
+<date>2006</date>
+<booktitle>In Proceedings on the Workshop on Statistical Machine Translation,</booktitle>
+<pages>154--157</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<marker>Callison-Burch, Koehn, 2006</marker>
+<rawString>A. Birch, Ch. Callison-Burch, M. Osborne, and Ph. Koehn. 2006. Constraining the phrase-based, joint probability statistical translation model. In Proceedings on the Workshop on Statistical Machine Translation, pages 154–157. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Blunsom</author>
+<author>T Cohn</author>
+<author>M Osborne</author>
+</authors>
+<title>A discriminative latent variable model for statistical machine translation.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL-08: HLT,</booktitle>
+<pages>200--208</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="6771" citStr="Blunsom et al., 2008" startWordPosition="1043" endWordPosition="1046">nd Wong (Marcu and Wong, 2002) realize that the problem of extracting phrase pairs should be intertwined with the method of probability estimation. They formulate a joint phrase-based model in which a source-target sentence pair is generated jointly. However, the huge number of possible phrase-alignments prohibits scaling up the estimation by Expectation-Maximization (EM) (Dempster et al., 1977) to large corpora. Birch et al (Birch et al., 2006) provide soft measures for including wordalignments in the estimation process and obtain improved results only on small data sets. Coming up-to-date, (Blunsom et al., 2008) attempt a related estimation problem to (Marcu and Wong, 2002), using the expanded phrase pair set of (Chiang, 2005a), working with an exponential model and concentrating on marginalizing out the latent segmentation variable. Also most up-to-date, (Zhang et al., 2008) report on a multi-stage model, without a latent segmentation variable, but with a strong prior preferring sparse estimates embedded in a Variational Bayes (VB) estimator and concentrating the efforts on pruning both the space of phrase pairs and the space of (ITG) analyses. The latter two efforts report improved performance, alb</context>
+<context position="30731" citStr="Blunsom et al., 2008" startWordPosition="5090" endWordPosition="5093"> phrase penalty scores, the conditional lexical estimates obtained from the word-alignment in both directions, and the conditional phrase translation estimates in both directions P(f |e) and P(e |f). Keeping the other five feature functions fixed, we compare our estimates of P(f |e) and P(e |f) (and the phrase penalty) to the commonly used heuristic estimates. Because our model employs a latent segmentation variable, this variable should be marginalized out during decoding to allow selecting the highest probability translation given the input. This turns out crucial for improved results (cf. (Blunsom et al., 2008)). However, such a marginalization can be NPComplete, in analogy to a similar problem in DataOriented Parsing (Sima’an, 2002)9. We do not have a decoder yet that can approximate this marginalization efficiently and we employ the standard Moses decoder for this work. Experimental Setup: The training, development and test data all come from the French-English translation shared task of the ACL 2007 Second 9A reduction of simple instances of the first problem to instances of the latter problem should be possible. Phrases System BLEU &lt; 7 Baseline PBSMT 33.03 &lt; 10 Baseline PBSMT 33.03 All Baseline </context>
+<context position="36931" citStr="Blunsom et al., 2008" startWordPosition="6124" endWordPosition="6127">verfitting estimators. Where Zhang et al choose for sparse priors (leading to sharp phrase distributions) and put the smoothing burden on the ITG rule parameters and a pruning strategy, we choose for a prior over segmentations determined by the ITG derivation space and smooth the MLE directly with a penalized version of Deleted Estimation. It remains to be seen how the two biases compare to one another on the same task. There are various strands of future research. Firstly, we plan to explore our estimator on other language pairs in order to obtain more evidence on its behavior. Secondly, as (Blunsom et al., 2008) show, marginalizing out the different segmentations during decoding leads to improved performance. We plan to build our own decoder (based on ITG) where different ideas can be tested including tractable ways for achieving a marginalization effect. Apart from a new decoder, it will be worthwhile adapting the prior probability in our model to allow for consistent estimation. Finally, it would be interesting to study properties of the penalized Deleted Estimation used in this paper. Acknowledgments: Both authors are supported by a VIDI grant (nr. 639.022.604) from The Netherlands Organization fo</context>
+</contexts>
+<marker>Blunsom, Cohn, Osborne, 2008</marker>
+<rawString>P. Blunsom, T. Cohn, and M. Osborne. 2008. A discriminative latent variable model for statistical machine translation. In Proceedings of ACL-08: HLT, pages 200–208. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Chiang</author>
+</authors>
+<title>A hierarchical phrase-based model for statistical machine translation. In</title>
+<date>2005</date>
+<booktitle>In Proceedings ofACL</booktitle>
+<pages>263--270</pages>
+<contexts>
+<context position="4650" citStr="Chiang, 2005" startWordPosition="707" endWordPosition="708">rt out from a standard phrase extraction procedure based on wordalignment and aim solely at estimating the conditional probabilities for the phrase pairs and their reverse translation probabilities. Unlike preceding work, we extract all phrase pairs from the training corpus and estimate their probabilities, i.e., without limit on length. We present a novel formulation of a conditional translation model that works with a prior over segmentations and a bag of conditional phrase pairs. We use binary Synchronous ContextFree Grammar (bSCFG), based on Inversion Transduction Grammar (ITG) (Wu, 1997; Chiang, 2005a), to define the set of eligible segmentations for an aligned sentence pair. We also show how the number of spurious derivations per segmentation in this bSCFG can be used for devising a prior probability over the space of segmentations, capturing the bias in the data towards monotone translation. The heart of the estimation process is a new smoothing estimator, a penalized version of Deleted Estimation, which averages the temporary probability estimates of multiple parallel EM processes at each joint iteration. For evaluation we use a state-of-the-art baseline system (Moses) (Hoang and Koehn</context>
+<context position="6887" citStr="Chiang, 2005" startWordPosition="1065" endWordPosition="1066">robability estimation. They formulate a joint phrase-based model in which a source-target sentence pair is generated jointly. However, the huge number of possible phrase-alignments prohibits scaling up the estimation by Expectation-Maximization (EM) (Dempster et al., 1977) to large corpora. Birch et al (Birch et al., 2006) provide soft measures for including wordalignments in the estimation process and obtain improved results only on small data sets. Coming up-to-date, (Blunsom et al., 2008) attempt a related estimation problem to (Marcu and Wong, 2002), using the expanded phrase pair set of (Chiang, 2005a), working with an exponential model and concentrating on marginalizing out the latent segmentation variable. Also most up-to-date, (Zhang et al., 2008) report on a multi-stage model, without a latent segmentation variable, but with a strong prior preferring sparse estimates embedded in a Variational Bayes (VB) estimator and concentrating the efforts on pruning both the space of phrase pairs and the space of (ITG) analyses. The latter two efforts report improved performance, albeit again on a limited training set (approx. 140k sentences up to a certain length). DeNero et al (2006) have explor</context>
+<context position="14462" citStr="Chiang, 2005" startWordPosition="2346" endWordPosition="2347">its maximum for fully monotone permutations (all binary trees, which is a factorial function of the length of the permutation). By definition (cf. (Zhang et al., 2006; Huang et al., 2008)), a binarizable segmentation/permutation can be recognized by a binarized Synchronous Context-Free Grammar (SCFG), i.e., an SCFG in which the right hand sides of all non-lexical rules constitute binarizable permutations. In particular, this holds for the SCFG implementing Inversion 3For two sequences of numbers, the notation y &lt; z stands for Vy E y, Vz E z : y &lt; z. Transduction Grammar (Wu, 1997). This SCFG (Chiang, 2005b) has two binary synchronous rules that correspond resp. to the contiguous monotone and inverted alignments: XP → XP 1 XP 2 , XP 1 XP 2 (2) XP → XP 1 XP 2 , XP 2 XP 1 The boxed integers in the superscripts on the nonterminal XP denote synchronized rewritings. In this work, we employ a binary SCFG (bSCFG) working with these two synchronous rules together with a set of lexical rules {XP → f, e |hf, ei is a phrase pair}. In this bSCFG, every derivation corresponds to a binarization of a segmentation of the input. Note that the bSCFG defined in equation 2 generates all possible binarizations for </context>
+</contexts>
+<marker>Chiang, 2005</marker>
+<rawString>D. Chiang. 2005a. A hierarchical phrase-based model for statistical machine translation. In In Proceedings ofACL 2005, pages 263–270.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Chiang</author>
+</authors>
+<title>An introduction to synchronous grammars.</title>
+<date>2005</date>
+<tech>Technical report,</tech>
+<institution>Univeristy of Maryland.</institution>
+<contexts>
+<context position="4650" citStr="Chiang, 2005" startWordPosition="707" endWordPosition="708">rt out from a standard phrase extraction procedure based on wordalignment and aim solely at estimating the conditional probabilities for the phrase pairs and their reverse translation probabilities. Unlike preceding work, we extract all phrase pairs from the training corpus and estimate their probabilities, i.e., without limit on length. We present a novel formulation of a conditional translation model that works with a prior over segmentations and a bag of conditional phrase pairs. We use binary Synchronous ContextFree Grammar (bSCFG), based on Inversion Transduction Grammar (ITG) (Wu, 1997; Chiang, 2005a), to define the set of eligible segmentations for an aligned sentence pair. We also show how the number of spurious derivations per segmentation in this bSCFG can be used for devising a prior probability over the space of segmentations, capturing the bias in the data towards monotone translation. The heart of the estimation process is a new smoothing estimator, a penalized version of Deleted Estimation, which averages the temporary probability estimates of multiple parallel EM processes at each joint iteration. For evaluation we use a state-of-the-art baseline system (Moses) (Hoang and Koehn</context>
+<context position="6887" citStr="Chiang, 2005" startWordPosition="1065" endWordPosition="1066">robability estimation. They formulate a joint phrase-based model in which a source-target sentence pair is generated jointly. However, the huge number of possible phrase-alignments prohibits scaling up the estimation by Expectation-Maximization (EM) (Dempster et al., 1977) to large corpora. Birch et al (Birch et al., 2006) provide soft measures for including wordalignments in the estimation process and obtain improved results only on small data sets. Coming up-to-date, (Blunsom et al., 2008) attempt a related estimation problem to (Marcu and Wong, 2002), using the expanded phrase pair set of (Chiang, 2005a), working with an exponential model and concentrating on marginalizing out the latent segmentation variable. Also most up-to-date, (Zhang et al., 2008) report on a multi-stage model, without a latent segmentation variable, but with a strong prior preferring sparse estimates embedded in a Variational Bayes (VB) estimator and concentrating the efforts on pruning both the space of phrase pairs and the space of (ITG) analyses. The latter two efforts report improved performance, albeit again on a limited training set (approx. 140k sentences up to a certain length). DeNero et al (2006) have explor</context>
+<context position="14462" citStr="Chiang, 2005" startWordPosition="2346" endWordPosition="2347">its maximum for fully monotone permutations (all binary trees, which is a factorial function of the length of the permutation). By definition (cf. (Zhang et al., 2006; Huang et al., 2008)), a binarizable segmentation/permutation can be recognized by a binarized Synchronous Context-Free Grammar (SCFG), i.e., an SCFG in which the right hand sides of all non-lexical rules constitute binarizable permutations. In particular, this holds for the SCFG implementing Inversion 3For two sequences of numbers, the notation y &lt; z stands for Vy E y, Vz E z : y &lt; z. Transduction Grammar (Wu, 1997). This SCFG (Chiang, 2005b) has two binary synchronous rules that correspond resp. to the contiguous monotone and inverted alignments: XP → XP 1 XP 2 , XP 1 XP 2 (2) XP → XP 1 XP 2 , XP 2 XP 1 The boxed integers in the superscripts on the nonterminal XP denote synchronized rewritings. In this work, we employ a binary SCFG (bSCFG) working with these two synchronous rules together with a set of lexical rules {XP → f, e |hf, ei is a phrase pair}. In this bSCFG, every derivation corresponds to a binarization of a segmentation of the input. Note that the bSCFG defined in equation 2 generates all possible binarizations for </context>
+</contexts>
+<marker>Chiang, 2005</marker>
+<rawString>D. Chiang. 2005b. An introduction to synchronous grammars. Technical report, Univeristy of Maryland.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A P Dempster</author>
+<author>N M Laird</author>
+<author>D B Rubin</author>
+</authors>
+<title>Maximum likelihood from incomplete data via the em algorithm.</title>
+<date>1977</date>
+<journal>Journal of the Royal Statistical Society, Series B,</journal>
+<volume>39</volume>
+<issue>1</issue>
+<contexts>
+<context position="6548" citStr="Dempster et al., 1977" startWordPosition="1006" endWordPosition="1009">ith earlier work on consistent estimation for similar models (Zollmann and Sima’an, 2006), and agrees with the most up-to-date work that employs Bayesian priors over the estimates (Zhang et al., 2008). 2 Related work Marcu and Wong (Marcu and Wong, 2002) realize that the problem of extracting phrase pairs should be intertwined with the method of probability estimation. They formulate a joint phrase-based model in which a source-target sentence pair is generated jointly. However, the huge number of possible phrase-alignments prohibits scaling up the estimation by Expectation-Maximization (EM) (Dempster et al., 1977) to large corpora. Birch et al (Birch et al., 2006) provide soft measures for including wordalignments in the estimation process and obtain improved results only on small data sets. Coming up-to-date, (Blunsom et al., 2008) attempt a related estimation problem to (Marcu and Wong, 2002), using the expanded phrase pair set of (Chiang, 2005a), working with an exponential model and concentrating on marginalizing out the latent segmentation variable. Also most up-to-date, (Zhang et al., 2008) report on a multi-stage model, without a latent segmentation variable, but with a strong prior preferring s</context>
+<context position="23365" citStr="Dempster et al., 1977" startWordPosition="3869" endWordPosition="3873">ning data T into equal parts H1, ... , H10. For 1 &lt; i &lt; 10 do Extract from Ei = Uj=,,�iHj all phrase pairs πi Initialize ito uniform conditional probs Letj=0 Repeat Let j = j + 1 // EM iteration counter For 1 &lt; i &lt; 10 do E-step: calculate expected counts for pairs in πji on Hi using counts from �πj−1 i . M-step: calculate probabilities for pairs in πi from the expected counts j For 1 &lt; i &lt; 10 do i:= 1EZ 01πz Until π := {irj1, . . . , �πj10} has converged } - Figure 3: Penalized Deleted Estimation ities. For a latent variable model, it is usually common to employ Expectation-Maximization (EM) (Dempster et al., 1977) as a search method for a (local) maximum-likelihood estimate (MLE) of the training data. Instead of mere EM we opt for a smoothed version: we present a new method, that combines Deleted Estimation (Jelinek and Mercer, 1980) with the Jackknife (Duda et al., 2001) as the core estimator. Figure 3 shows the pseudo-code for our estimator. Like in Deleted Estimation, we split the training data into ten equal portions. This way we create ten different splits of extraction/heldout sets of respectively 90%/10% of the training set. For every split 1 &lt; i &lt; 10, we extract a set of phrase pairs πi from th</context>
+</contexts>
+<marker>Dempster, Laird, Rubin, 1977</marker>
+<rawString>A.P. Dempster, N.M. Laird, and D.B. Rubin. 1977. Maximum likelihood from incomplete data via the em algorithm. Journal of the Royal Statistical Society, Series B, 39(1):1–38.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J DeNero</author>
+<author>D Gillick</author>
+<author>J Zhang</author>
+<author>D Klein</author>
+</authors>
+<title>Why generative phrase models underperform surface heuristics.</title>
+<date>2006</date>
+<booktitle>In Proceedings on the Workshop on Statistical Machine Translation,</booktitle>
+<pages>31--38</pages>
+<institution>City. Association for Computational Linguistics.</institution>
+<location>New York</location>
+<contexts>
+<context position="2016" citStr="DeNero et al., 2006" startWordPosition="290" endWordPosition="293"> major component in phrase-based statistical Machine translation (PBSMT) (Zens et al., 2002; Koehn et al., 2003) is the table of conditional probabilities of phrase translation pairs. The pervading method for estimating these probabilities is a simple heuristic based on the relative frequency of the phrase pair in the multi-set of the phrase pairs extracted from the word-aligned corpus (Koehn et al., 630 2003). While this heuristic estimator gives good empirical results, it does not seem to optimize any intuitively reasonable objective function of the (wordaligned) parallel corpus (see e.g., (DeNero et al., 2006)) The mounting number of efforts attacking this problem over the last few years (DeNero et al., 2006; Marcu and Wong, 2002; Birch et al., 2006; Moore and Quirk, 2007; Zhang et al., 2008) exhibits its difficulty. So far, none has lead to an alternative method that performs as well as the heuristic on reasonably sized data (approx. 1000k sentence pair). Given a parallel corpus, an estimator for phrasetables in PBSMT involves two interacting decisions (1) which phrase pairs to extract, and (2) how to assign probabilities to the extracted pairs. The heuristic estimator employs word-alignment (Giza</context>
+<context position="5736" citStr="DeNero et al., 2006" startWordPosition="878" endWordPosition="881">iple parallel EM processes at each joint iteration. For evaluation we use a state-of-the-art baseline system (Moses) (Hoang and Koehn, 2008) which works with a log-linear interpolation of feature functions optimized by MERT (Och, 2003). We simply substitute our own estimates for the heuristic phrase translation estimates (both directions and the phrase penalty score) and compare the two within the Moses decoder. While our estimates differ substantially from the heuristic, their performance is on par with the heuristic estimates. This is remarkable given the fact that comparable previous work (DeNero et al., 2006; Moore and Quirk, 2007) did not match the performance of the heuristic estimator using large training sets. We find that smoothing is crucial for achieving good estimates. This is in line with earlier work on consistent estimation for similar models (Zollmann and Sima’an, 2006), and agrees with the most up-to-date work that employs Bayesian priors over the estimates (Zhang et al., 2008). 2 Related work Marcu and Wong (Marcu and Wong, 2002) realize that the problem of extracting phrase pairs should be intertwined with the method of probability estimation. They formulate a joint phrase-based mo</context>
+<context position="7475" citStr="DeNero et al (2006)" startWordPosition="1154" endWordPosition="1157">hrase pair set of (Chiang, 2005a), working with an exponential model and concentrating on marginalizing out the latent segmentation variable. Also most up-to-date, (Zhang et al., 2008) report on a multi-stage model, without a latent segmentation variable, but with a strong prior preferring sparse estimates embedded in a Variational Bayes (VB) estimator and concentrating the efforts on pruning both the space of phrase pairs and the space of (ITG) analyses. The latter two efforts report improved performance, albeit again on a limited training set (approx. 140k sentences up to a certain length). DeNero et al (2006) have explored estimation using EM of phrase pair probabilities under a conditional translation model based on the original source-channel formulation. This model involves a hidden segmentation variable that is set uniformly (or to prefer shorter phrases over longer ones). Furthermore, the model involves a reordering component akin to the one used in IBM model 3. Despite this, the heuristic estimator remains superior because ”EM learns overly determinized segmentations and translation parameters, overfitting the training data and failing to generalize”. More recently, (Moore and Quirk, 2007) d</context>
+<context position="11539" citStr="DeNero et al., 2006" startWordPosition="1842" endWordPosition="1845"> heuristic. After training, we can still limit the set of phrase pairs to those selected by a cut-off on phrase length. The reason for using all phrase pairs during training is that it gives a clear point of reference for an estimator, without implicit, accidenWhere E(a) is the set of binarizable segmentations (defined next) that are eligible according to the word-alignments a between f and e. These segmentations into bilingual containers (where segmentations are taken inside the containers) are different from the monolingual segmentations used in earlier comparable conditional models (e.g., (DeNero et al., 2006)) which must generate the alignment on top of the segmentations. Note how the different phrase pairs (fj, ej) are generated from their bilingual containers in the given segmentation a . We will discuss our choice of prior probability over segmentations P(af) after we discuss the definition of the binarizable segmentations E(a). 3.1 Binarizable segmentations E(a) Following (Zhang et al., 2006; Huang et al., 2008), every sequence of phrase alignments can be viewed 1For example, if the cut-off on phrase pairs is ten words, all sentence pairs smaller than ten words in the training data will be inc</context>
+<context position="16842" citStr="DeNero et al., 2006" startWordPosition="2767" endWordPosition="2770">, where hf, ei is a phrase-pair. These are the trainable parameters of our model. 4In the worst case the whole sentence pair is a phrase pair with a trivial segmentation. &lt;&gt; [] [] 4 3 &lt;&gt; &lt;&gt; 2 1 [] 3 4 633 Figure 2: Two segmentations of an alignment/permutation. Both segmentations have the same number of binarizations despite differences in container sizes. • The weights for the two non-lexical rules in equation 2 are fixed at 1.0. These weights are not trained at all. Where we use the notation P(.) for the weight of a synchronous rule. 3.2 Prior over segmentations As it has been found out by (DeNero et al., 2006), it is not easy to come up with a simple, effective prior distribution over segmentations that allows for improved phrase pair estimates. Within a Maximum-Likelihood estimator, preference for segmentations al consisting of longer containers could lead to overfitting as we will explain in section 4. Alternatively, it is tempting to have preference for segmentations at that consist of shorter containers, because (generally speaking) shorter containers have higher expected coverage of new sentence pairs. However, mere bias for shorter containers will not give better estimates as observed by (DeN</context>
+<context position="19818" citStr="DeNero et al., 2006" startWordPosition="3266" endWordPosition="3269">mbine among themselves (monotone vs. inverted/crossing) within segmentations, and provides a more accurate measure of container productivity than container length. Hence, the final model we employ is the following: P(f |e; a) _ N(ai) 11 Z(E(a)) I P(fj |ej) (3) fj ,ej)∈o1 (f,e) Where N(ai) is the number of binary derivations/trees that a has in the binary SCFG (bSCFG), and Z(E(a)) _ Eoi ∈Σ(a) N(a 1), i.e., this prior is the ratio of number of derivations of al to the total number of derivations that (f, e, a) has under the bSCFG. 3.3 Contrast with similar models: In contrast with the model of (DeNero et al., 2006), who define the segmentations over the source sentence f alone, our model employs bilingual containers thereby segmenting both source and target sides simultaneously. Therefore, unlike (DeNero et al., 2006), our model does not need to generate the word-alignments explicitly, as these are embedded in the segmentations. Similarly, our model does not include explicit penalty terms for reorder1 1 3 4 2 2 3 4 5 5 2 3 4 3 4 2 1 1 5 5 � oI 634 ing/inversion but includes a related bias in the prior probabilities over segmentations P(σI1). In a way, the segmentations and bilingual containers we use ca</context>
+<context position="34991" citStr="DeNero et al., 2006" startWordPosition="5809" endWordPosition="5812">er finding to signal remaining overfitting that proved resistant to the smoothing applied by our estimator. The heuristic estimator exhibits a similar degradation. We also tried to vary the treatment of Sparse Distributions (section 4, page 7) during heldout estimation from fixed word-translation probabilities to the lexical model probabilities. This lead to slight deterioration of results (32.94). It is unclear whether this deterioration is meaningful or not. We did not explore mere EM without any smoothing or ITG prior, as we expect it will directly overfit the training data as reported by (DeNero et al., 2006). We note that for French-English translation it is hard to outperform the heuristic within the PBSMT framework, since it already performs very well. Preliminary, most recent experiments on GermanEnglish (also WMT07 data) exhibit that our estimator outperforms the heuristic. 6 Discussion and Future Research The most similar efforts to ours, mainly (DeNero et al., 2006), conclude that segmentation variables in the generative translation model lead to overfitting while attaining higher likelihood of the training data than the heuristic estimator. Based on this advise (Moore and Quirk, 2007) excl</context>
+</contexts>
+<marker>DeNero, Gillick, Zhang, Klein, 2006</marker>
+<rawString>J. DeNero, D. Gillick, J. Zhang, and D. Klein. 2006. Why generative phrase models underperform surface heuristics. In Proceedings on the Workshop on Statistical Machine Translation, pages 31–38, New York City. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R O Duda</author>
+<author>P E Hart</author>
+<author>D G Stork</author>
+</authors>
+<title>Pattern Classification.</title>
+<date>2001</date>
+<publisher>John Wiley &amp; Sons,</publisher>
+<location>NY, USA.</location>
+<contexts>
+<context position="23628" citStr="Duda et al., 2001" startWordPosition="3915" endWordPosition="3918"> πji on Hi using counts from �πj−1 i . M-step: calculate probabilities for pairs in πi from the expected counts j For 1 &lt; i &lt; 10 do i:= 1EZ 01πz Until π := {irj1, . . . , �πj10} has converged } - Figure 3: Penalized Deleted Estimation ities. For a latent variable model, it is usually common to employ Expectation-Maximization (EM) (Dempster et al., 1977) as a search method for a (local) maximum-likelihood estimate (MLE) of the training data. Instead of mere EM we opt for a smoothed version: we present a new method, that combines Deleted Estimation (Jelinek and Mercer, 1980) with the Jackknife (Duda et al., 2001) as the core estimator. Figure 3 shows the pseudo-code for our estimator. Like in Deleted Estimation, we split the training data into ten equal portions. This way we create ten different splits of extraction/heldout sets of respectively 90%/10% of the training set. For every split 1 &lt; i &lt; 10, we extract a set of phrase pairs πi from the extraction set Ei and train it (under our model) on the heldout set Hi. Naturally, the phrase pair sets πi (1 &lt; i &lt; 10) are subsets of (or equal to) the set of phrase pairs π = Uiπi extracted from the total training data (i.e., π is the set of model parameters)</context>
+</contexts>
+<marker>Duda, Hart, Stork, 2001</marker>
+<rawString>R.O. Duda, P.E. Hart, and D.G. Stork. 2001. Pattern Classification. John Wiley &amp; Sons, NY, USA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J T Goodman</author>
+</authors>
+<title>Parsing Inside-Out.</title>
+<date>1998</date>
+<tech>PhD thesis,</tech>
+<institution>Departement of Computer Science, Harvard University,</institution>
+<location>Cambridge, Massachusetts.</location>
+<contexts>
+<context position="26381" citStr="Goodman, 1998" startWordPosition="4422" endWordPosition="4423">d, the distribution P(· |e) is undefined by MLE, since it is irrelevant for the likelihood of Hi. In this case any choice of proper distribution P(· |e) will constitute an MLE solution. We choose to set this case to a uniform distribution every time again. Since our model and estimator are implemented within the bSCFG framework, we use a bilingual CYK parser (Younger, 1967) under the grammar in equation 2. This parser builds for every input (f, a, e) all binarizations/derivations for every segmentation in E(a). For implementing EM, we employ the Inside-Outside algorithm (Lari and Young, 1990; Goodman, 1998). During estimation, because the input, output and word-alignment are known in advance, the time and space requirements remain manageable despite the worst-case complexity O(n6) in target sentence length n. Penalized Deleted Estimation: In contrast with our method, Deleted Estimation sums the expected counts (rather than probabilities) obtained from the different splits before applying the M-step (normalization). While the rationale behind Deleted Estimation comes from MLE over the original training data, our method has a smoothing objective (inspired by the Jackknife ): generally speaking, th</context>
+</contexts>
+<marker>Goodman, 1998</marker>
+<rawString>J.T. Goodman. 1998. Parsing Inside-Out. PhD thesis, Departement of Computer Science, Harvard University, Cambridge, Massachusetts.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Hastie</author>
+<author>R Tibshirani</author>
+<author>J H Friedman</author>
+</authors>
+<title>The Elements of Statistical Learning.</title>
+<date>2001</date>
+<publisher>Springer.</publisher>
+<contexts>
+<context position="21908" citStr="Hastie et al., 2001" startWordPosition="3617" endWordPosition="3620">E can be expected to overfit the data5 unless a suitable prior probability over segmentations is employed. Indeed, the prior over segmentations defined in the preceding section prevents the MLE from completely overfitting the training data. However, we find empirical evidence that this prior is insufficient for avoiding overfitting. Our model behaves like a memory-based model because it memorizes all extractable phrase pairs found in the training data including the training sentence pairs themselves. Such memory-based models are related to nonparametric models such as K-NN and kernel methods (Hastie et al., 2001). For memory-based models, consistent estimation for novel instances proceeds by local density estimation from the surroundings of the instance, which is akin to smoothing for parametric models. Hence, next we describe our own version of a smoothed MaximumLikelihood estimator for phrase translation probabil5One trivial MLE solution would give the longest container, consisting of the longest phrase pairs, a probability of one, at the cost of all shorter alternatives. A similar problem arises in Data-Oriented Parsing, see (Sima’an and Buratto, 2003; Zollmann and Sima’an, 2006). Note that models </context>
+</contexts>
+<marker>Hastie, Tibshirani, Friedman, 2001</marker>
+<rawString>T. Hastie, R. Tibshirani, and J. H. Friedman. 2001. The Elements of Statistical Learning. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Koehn</author>
+</authors>
+<title>Design of the moses decoder for statistical machine translation.</title>
+<date>2008</date>
+<booktitle>In ACL Workshop on Software engineering, testing, and quality assurance for NLP</booktitle>
+<contexts>
+<context position="5257" citStr="Koehn, 2008" startWordPosition="804" endWordPosition="805"> 2005a), to define the set of eligible segmentations for an aligned sentence pair. We also show how the number of spurious derivations per segmentation in this bSCFG can be used for devising a prior probability over the space of segmentations, capturing the bias in the data towards monotone translation. The heart of the estimation process is a new smoothing estimator, a penalized version of Deleted Estimation, which averages the temporary probability estimates of multiple parallel EM processes at each joint iteration. For evaluation we use a state-of-the-art baseline system (Moses) (Hoang and Koehn, 2008) which works with a log-linear interpolation of feature functions optimized by MERT (Och, 2003). We simply substitute our own estimates for the heuristic phrase translation estimates (both directions and the phrase penalty score) and compare the two within the Moses decoder. While our estimates differ substantially from the heuristic, their performance is on par with the heuristic estimates. This is remarkable given the fact that comparable previous work (DeNero et al., 2006; Moore and Quirk, 2007) did not match the performance of the heuristic estimator using large training sets. We find that</context>
+<context position="29752" citStr="Koehn, 2008" startWordPosition="4938" endWordPosition="4939">es that our model cannot be estimated to converge (in probability) to the relative frequency estimates (RFE) of source-target sentence pairs in the limit of the training data (a sufficiently large parallel corpus). A prior probability over segmentations that would allow our estimator to converge in the limit to the RFE must gradually prefer segmentations consisting of larger containers as the data grows large. We set the design and estimation of such a prior aside for future work. 5 Empirical experiments Decoding and Baseline Model: In this work we employ an existing decoder, Moses (Hoang and Koehn, 2008), which defines a log-linear model interpolating feature functions, with interpolation scores Af e∗ = arg maxe E f∈D AfHf(f, e). The Af are optimized by Minimum-Error Training (MERT) (Och, 2003). The set 4b consists of the following feature functions (see (Hoang and Koehn, 2008)): a 5-gram target language model, the standard reordering scores, the word and phrase penalty scores, the conditional lexical estimates obtained from the word-alignment in both directions, and the conditional phrase translation estimates in both directions P(f |e) and P(e |f). Keeping the other five feature functions f</context>
+</contexts>
+<marker>Koehn, 2008</marker>
+<rawString>H. Hoang and Ph. Koehn. 2008. Design of the moses decoder for statistical machine translation. In ACL Workshop on Software engineering, testing, and quality assurance for NLP 2008.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Huang</author>
+<author>H Zhang</author>
+<author>D Gildea</author>
+<author>K Knight</author>
+</authors>
+<title>Binarization of synchronous context-free grammars.</title>
+<date>2008</date>
+<note>Submitted to Computational Linguistics. http://www.cis.upenn.edu/ lhuang3/opt.pdf.</note>
+<contexts>
+<context position="11954" citStr="Huang et al., 2008" startWordPosition="1910" endWordPosition="1913"> into bilingual containers (where segmentations are taken inside the containers) are different from the monolingual segmentations used in earlier comparable conditional models (e.g., (DeNero et al., 2006)) which must generate the alignment on top of the segmentations. Note how the different phrase pairs (fj, ej) are generated from their bilingual containers in the given segmentation a . We will discuss our choice of prior probability over segmentations P(af) after we discuss the definition of the binarizable segmentations E(a). 3.1 Binarizable segmentations E(a) Following (Zhang et al., 2006; Huang et al., 2008), every sequence of phrase alignments can be viewed 1For example, if the cut-off on phrase pairs is ten words, all sentence pairs smaller than ten words in the training data will be included as phrase pairs as well. These sentences are treated differently from longer sentences, which are not allowed to be phrase pairs. 2The NULL alignments (word-to-NULL) in the training data can also be marked with actual positions on both sides in order to allow for this definition of containers. 632 as a sequence of integers 1,... I together with a permuted version of this sequence 7r(1), ... , 7r(I), where </context>
+<context position="14037" citStr="Huang et al., 2008" startWordPosition="2276" endWordPosition="2279"> tree structure where the nodes correspond to recursive proper splits of the permutation, and the leaves are decorated with the naturals. Figure 1 exhibits two possible binarizations of the same permutation where &lt;&gt; and [] denote inverted and monotone proper splits respectively. Note that the number of possible binarizations of a binarizable permutation is a recursive function of the number of possible proper splits and reaches its maximum for fully monotone permutations (all binary trees, which is a factorial function of the length of the permutation). By definition (cf. (Zhang et al., 2006; Huang et al., 2008)), a binarizable segmentation/permutation can be recognized by a binarized Synchronous Context-Free Grammar (SCFG), i.e., an SCFG in which the right hand sides of all non-lexical rules constitute binarizable permutations. In particular, this holds for the SCFG implementing Inversion 3For two sequences of numbers, the notation y &lt; z stands for Vy E y, Vz E z : y &lt; z. Transduction Grammar (Wu, 1997). This SCFG (Chiang, 2005b) has two binary synchronous rules that correspond resp. to the contiguous monotone and inverted alignments: XP → XP 1 XP 2 , XP 1 XP 2 (2) XP → XP 1 XP 2 , XP 2 XP 1 The box</context>
+<context position="15438" citStr="Huang et al., 2008" startWordPosition="2520" endWordPosition="2523">with a set of lexical rules {XP → f, e |hf, ei is a phrase pair}. In this bSCFG, every derivation corresponds to a binarization of a segmentation of the input. Note that the bSCFG defined in equation 2 generates all possible binarizations for every segmentation of the input. It is possible to constrain this bSCFG such that it generates a single, canonical derivation per segmentation. However, in section 3.2 we show that the number of such derivations is a good measure of phrase pair productivity. It is well known that there are alignments and segmentations that this bSCFG does not cover (see (Huang et al., 2008)). Recently, strong evidence emerged (e.g., (Huang et al., 2008)) showing that most word-alignments of actual parallel corpora can be covered by a binarized SCFG of the ITG type. Furthermore, because our model employs the set of all phrase-pairs that can be extracted from a given training set, it will always find segmentations that cover every sentence pair in the training data4. This implies that while our model might discard nonbinarizable segmentations for certain complex word alignments, we do manage to train the model on the binarizable segementations of all sentence pairs. Up to the prio</context>
+</contexts>
+<marker>Huang, Zhang, Gildea, Knight, 2008</marker>
+<rawString>L. Huang, H. Zhang, D. Gildea, and K. Knight. 2008. Binarization of synchronous context-free grammars. Submitted to Computational Linguistics. http://www.cis.upenn.edu/ lhuang3/opt.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F Jelinek</author>
+<author>R L Mercer</author>
+</authors>
+<title>Interpolated estimation of markov source parameters from sparse data. In</title>
+<date>1980</date>
+<booktitle>In Proceedings of the Workshop on Pattern Recognition in Practice.</booktitle>
+<contexts>
+<context position="23589" citStr="Jelinek and Mercer, 1980" startWordPosition="3908" endWordPosition="3911">E-step: calculate expected counts for pairs in πji on Hi using counts from �πj−1 i . M-step: calculate probabilities for pairs in πi from the expected counts j For 1 &lt; i &lt; 10 do i:= 1EZ 01πz Until π := {irj1, . . . , �πj10} has converged } - Figure 3: Penalized Deleted Estimation ities. For a latent variable model, it is usually common to employ Expectation-Maximization (EM) (Dempster et al., 1977) as a search method for a (local) maximum-likelihood estimate (MLE) of the training data. Instead of mere EM we opt for a smoothed version: we present a new method, that combines Deleted Estimation (Jelinek and Mercer, 1980) with the Jackknife (Duda et al., 2001) as the core estimator. Figure 3 shows the pseudo-code for our estimator. Like in Deleted Estimation, we split the training data into ten equal portions. This way we create ten different splits of extraction/heldout sets of respectively 90%/10% of the training set. For every split 1 &lt; i &lt; 10, we extract a set of phrase pairs πi from the extraction set Ei and train it (under our model) on the heldout set Hi. Naturally, the phrase pair sets πi (1 &lt; i &lt; 10) are subsets of (or equal to) the set of phrase pairs π = Uiπi extracted from the total training data (</context>
+</contexts>
+<marker>Jelinek, Mercer, 1980</marker>
+<rawString>F. Jelinek and R. L. Mercer. 1980. Interpolated estimation of markov source parameters from sparse data. In In Proceedings of the Workshop on Pattern Recognition in Practice.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Koehn</author>
+<author>F J Och</author>
+<author>D Marcu</author>
+</authors>
+<title>Statistical phrase-based translation.</title>
+<date>2003</date>
+<booktitle>In HLT-NAACL.</booktitle>
+<contexts>
+<context position="1508" citStr="Koehn et al., 2003" startWordPosition="207" endWordPosition="210"> derived from Inversion Transduction Grammar (ITG), (2) A phrase table containing all phrase pairs without length limit, and (3) Smoothing as learning objective using a novel Maximum-A-Posteriori version of Deleted Estimation working with Expectation-Maximization. Where others conclude that latent segmentations lead to overfitting and deteriorating performance, we show here that these three ingredients give performance equivalent to the heuristic method on reasonably sized training data. 1 Motivation A major component in phrase-based statistical Machine translation (PBSMT) (Zens et al., 2002; Koehn et al., 2003) is the table of conditional probabilities of phrase translation pairs. The pervading method for estimating these probabilities is a simple heuristic based on the relative frequency of the phrase pair in the multi-set of the phrase pairs extracted from the word-aligned corpus (Koehn et al., 630 2003). While this heuristic estimator gives good empirical results, it does not seem to optimize any intuitively reasonable objective function of the (wordaligned) parallel corpus (see e.g., (DeNero et al., 2006)) The mounting number of efforts attacking this problem over the last few years (DeNero et a</context>
+<context position="10245" citStr="Koehn et al., 2003" startWordPosition="1624" endWordPosition="1627">h container aj _ (lf , rf, le, re) consists of the start lf and end rf positions2 for a phrase in f and the start le and end re positions for an aligned phrase in e. 2. For a given segmentation a,, for every container aj (1 G j G I) generate the phrase-pair (fj, ej), independently from all other phrasepairs. This leads to the following probabilistic model: P (f |e; a) _ � �P(a� 1) P(fj |ej) (1) or EE(a) (fj,ej)Eai(f,e) 3 The Translation Model Given a word-aligned parallel corpus of sourcetarget sentences, it is common practice to extract a set of phrase pairs using extraction heuristics (cf. (Koehn et al., 2003; Och and Ney, 2004)). These heuristics define a phrase pair to consist of a source and target ngrams of a word-aligned source-target sentence pair such that if one end of an alignment is in the one ngram, the other end is in the other ngram (and there is at least one such alignment) (Och and Ney, 2004; Koehn et al., 2003). For efficiency and sparseness, the practitioners of PBSMT constrain the length of the source phrase to a certain maximum number of words. An All Phrase Pairs Model: In this work we train a phrase-translation table that consists of all phrasepairs that can be extracted from </context>
+<context position="32242" citStr="Koehn et al., 2003" startWordPosition="5369" endWordPosition="5372">tistical Machine Translation 10. After pruning sentence pairs with word length more than 40 on either side, we are left with 949K sentence pairs for training. The development and test data are composed of 2K sentence pairs each. All data sets are lower-cased. For both the baseline system and our method, we produce word-level alignments for the parallel training corpus using GIZA++. We use 5 iterations of each IBM Model 1 and HMM alignment models, followed by 3 iterations of each Model 3 and Model 4. From this aligned training corpus, we extract the phrase pairs according to the heuristics in (Koehn et al., 2003). The baseline system extracts all phrase-pairs upto a certain maximum length on both sides and employs the heuristic estimator. The language model used in all systems is a 5-gram language model trained on the English side of the parallel corpus. Minimum-Error Rate Training (MERT) is applied on the development set to obtain optimal log-linear interpolation weights for all systems. Performance is measured by computing the BLEU scores (Papineni et al., 2002) of the system’s translations, when compared against a single reference translation per sentence. Results: We compare different versions of </context>
+</contexts>
+<marker>Koehn, Och, Marcu, 2003</marker>
+<rawString>P. Koehn, F. J. Och, and D. Marcu. 2003. Statistical phrase-based translation. In HLT-NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Lari</author>
+<author>S J Young</author>
+</authors>
+<title>The estimation of stochastic context-free grammars using the inside-outside algorithm.</title>
+<date>1990</date>
+<journal>Computer, Speech and Language,</journal>
+<pages>4--35</pages>
+<contexts>
+<context position="26365" citStr="Lari and Young, 1990" startWordPosition="4418" endWordPosition="4421">n the M-step is applied, the distribution P(· |e) is undefined by MLE, since it is irrelevant for the likelihood of Hi. In this case any choice of proper distribution P(· |e) will constitute an MLE solution. We choose to set this case to a uniform distribution every time again. Since our model and estimator are implemented within the bSCFG framework, we use a bilingual CYK parser (Younger, 1967) under the grammar in equation 2. This parser builds for every input (f, a, e) all binarizations/derivations for every segmentation in E(a). For implementing EM, we employ the Inside-Outside algorithm (Lari and Young, 1990; Goodman, 1998). During estimation, because the input, output and word-alignment are known in advance, the time and space requirements remain manageable despite the worst-case complexity O(n6) in target sentence length n. Penalized Deleted Estimation: In contrast with our method, Deleted Estimation sums the expected counts (rather than probabilities) obtained from the different splits before applying the M-step (normalization). While the rationale behind Deleted Estimation comes from MLE over the original training data, our method has a smoothing objective (inspired by the Jackknife ): genera</context>
+</contexts>
+<marker>Lari, Young, 1990</marker>
+<rawString>K. Lari and S.J. Young. 1990. The estimation of stochastic context-free grammars using the inside-outside algorithm. Computer, Speech and Language, 4:35–56.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Marcu</author>
+<author>W Wong</author>
+</authors>
+<title>A phrase-based, joint probability model for statistical machine translation.</title>
+<date>2002</date>
+<booktitle>In Proceedings of Empirical methods in natural language processing,</booktitle>
+<pages>133--139</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<contexts>
+<context position="2138" citStr="Marcu and Wong, 2002" startWordPosition="311" endWordPosition="314">ble of conditional probabilities of phrase translation pairs. The pervading method for estimating these probabilities is a simple heuristic based on the relative frequency of the phrase pair in the multi-set of the phrase pairs extracted from the word-aligned corpus (Koehn et al., 630 2003). While this heuristic estimator gives good empirical results, it does not seem to optimize any intuitively reasonable objective function of the (wordaligned) parallel corpus (see e.g., (DeNero et al., 2006)) The mounting number of efforts attacking this problem over the last few years (DeNero et al., 2006; Marcu and Wong, 2002; Birch et al., 2006; Moore and Quirk, 2007; Zhang et al., 2008) exhibits its difficulty. So far, none has lead to an alternative method that performs as well as the heuristic on reasonably sized data (approx. 1000k sentence pair). Given a parallel corpus, an estimator for phrasetables in PBSMT involves two interacting decisions (1) which phrase pairs to extract, and (2) how to assign probabilities to the extracted pairs. The heuristic estimator employs word-alignment (Giza++) (Och and Ney, 2003) and a few thumb rules for defining phrase pairs, and then extracts a multi-set of phrase pairs and</context>
+<context position="6180" citStr="Marcu and Wong, 2002" startWordPosition="953" endWordPosition="956"> substantially from the heuristic, their performance is on par with the heuristic estimates. This is remarkable given the fact that comparable previous work (DeNero et al., 2006; Moore and Quirk, 2007) did not match the performance of the heuristic estimator using large training sets. We find that smoothing is crucial for achieving good estimates. This is in line with earlier work on consistent estimation for similar models (Zollmann and Sima’an, 2006), and agrees with the most up-to-date work that employs Bayesian priors over the estimates (Zhang et al., 2008). 2 Related work Marcu and Wong (Marcu and Wong, 2002) realize that the problem of extracting phrase pairs should be intertwined with the method of probability estimation. They formulate a joint phrase-based model in which a source-target sentence pair is generated jointly. However, the huge number of possible phrase-alignments prohibits scaling up the estimation by Expectation-Maximization (EM) (Dempster et al., 1977) to large corpora. Birch et al (Birch et al., 2006) provide soft measures for including wordalignments in the estimation process and obtain improved results only on small data sets. Coming up-to-date, (Blunsom et al., 2008) attempt </context>
+<context position="20521" citStr="Marcu and Wong, 2002" startWordPosition="3395" endWordPosition="3398"> bilingual containers thereby segmenting both source and target sides simultaneously. Therefore, unlike (DeNero et al., 2006), our model does not need to generate the word-alignments explicitly, as these are embedded in the segmentations. Similarly, our model does not include explicit penalty terms for reorder1 1 3 4 2 2 3 4 5 5 2 3 4 3 4 2 1 1 5 5 � oI 634 ing/inversion but includes a related bias in the prior probabilities over segmentations P(σI1). In a way, the segmentations and bilingual containers we use can be viewed as similar to the concepts used in the Joint Model of Marcu and Wong (Marcu and Wong, 2002). Unlike (Marcu and Wong, 2002), however, our model works with conditional probabilities and starts out from the word-alignments. The novel aspects of our model are three (1) It defines the set of segmentations using a bSCFG, (2) It includes a novel, refined prior probability over segmentations, and (3) It employs all phrase pairs that can be extracted from a word-aligned training parallel corpus. For these novel elements to produce reasonable estimates, we devise our own estimator. 4 Estimation by Smoothing In principle, we are dealing here with a translation model that employs all phrase pai</context>
+</contexts>
+<marker>Marcu, Wong, 2002</marker>
+<rawString>D. Marcu and W. Wong. 2002. A phrase-based, joint probability model for statistical machine translation. In Proceedings of Empirical methods in natural language processing, pages 133–139. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Quirk</author>
+</authors>
+<title>An iteratively-trained segmentation-free phrase translation model for statistical machine translation.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the Second Workshop on Statistical Machine Translation,</booktitle>
+<pages>112--119</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Prague, Czech Republic.</location>
+<contexts>
+<context position="2181" citStr="Quirk, 2007" startWordPosition="321" endWordPosition="322">on pairs. The pervading method for estimating these probabilities is a simple heuristic based on the relative frequency of the phrase pair in the multi-set of the phrase pairs extracted from the word-aligned corpus (Koehn et al., 630 2003). While this heuristic estimator gives good empirical results, it does not seem to optimize any intuitively reasonable objective function of the (wordaligned) parallel corpus (see e.g., (DeNero et al., 2006)) The mounting number of efforts attacking this problem over the last few years (DeNero et al., 2006; Marcu and Wong, 2002; Birch et al., 2006; Moore and Quirk, 2007; Zhang et al., 2008) exhibits its difficulty. So far, none has lead to an alternative method that performs as well as the heuristic on reasonably sized data (approx. 1000k sentence pair). Given a parallel corpus, an estimator for phrasetables in PBSMT involves two interacting decisions (1) which phrase pairs to extract, and (2) how to assign probabilities to the extracted pairs. The heuristic estimator employs word-alignment (Giza++) (Och and Ney, 2003) and a few thumb rules for defining phrase pairs, and then extracts a multi-set of phrase pairs and estimates their conditional probabilities </context>
+<context position="5760" citStr="Quirk, 2007" startWordPosition="884" endWordPosition="885">ach joint iteration. For evaluation we use a state-of-the-art baseline system (Moses) (Hoang and Koehn, 2008) which works with a log-linear interpolation of feature functions optimized by MERT (Och, 2003). We simply substitute our own estimates for the heuristic phrase translation estimates (both directions and the phrase penalty score) and compare the two within the Moses decoder. While our estimates differ substantially from the heuristic, their performance is on par with the heuristic estimates. This is remarkable given the fact that comparable previous work (DeNero et al., 2006; Moore and Quirk, 2007) did not match the performance of the heuristic estimator using large training sets. We find that smoothing is crucial for achieving good estimates. This is in line with earlier work on consistent estimation for similar models (Zollmann and Sima’an, 2006), and agrees with the most up-to-date work that employs Bayesian priors over the estimates (Zhang et al., 2008). 2 Related work Marcu and Wong (Marcu and Wong, 2002) realize that the problem of extracting phrase pairs should be intertwined with the method of probability estimation. They formulate a joint phrase-based model in which a source-ta</context>
+<context position="8073" citStr="Quirk, 2007" startWordPosition="1248" endWordPosition="1249">o et al (2006) have explored estimation using EM of phrase pair probabilities under a conditional translation model based on the original source-channel formulation. This model involves a hidden segmentation variable that is set uniformly (or to prefer shorter phrases over longer ones). Furthermore, the model involves a reordering component akin to the one used in IBM model 3. Despite this, the heuristic estimator remains superior because ”EM learns overly determinized segmentations and translation parameters, overfitting the training data and failing to generalize”. More recently, (Moore and Quirk, 2007) devise a estimator working with a model that does not include a hidden segmentation variable but works with a heuristic iterative procedure (rather than MLE or EM). The 631 translation results remain inferior to the heuristic but the authors note an interesting trade-off between decoding speed and the various settings of this estimator. Our work expands on the general approach taken by (DeNero et al., 2006; Moore and Quirk, 2007) but arrives at insights similar to those of the most recent work (Zhang et al., 2006), albeit in a completely different manner. The present work differs from all pre</context>
+<context position="35586" citStr="Quirk, 2007" startWordPosition="5902" endWordPosition="5903">ero et al., 2006). We note that for French-English translation it is hard to outperform the heuristic within the PBSMT framework, since it already performs very well. Preliminary, most recent experiments on GermanEnglish (also WMT07 data) exhibit that our estimator outperforms the heuristic. 6 Discussion and Future Research The most similar efforts to ours, mainly (DeNero et al., 2006), conclude that segmentation variables in the generative translation model lead to overfitting while attaining higher likelihood of the training data than the heuristic estimator. Based on this advise (Moore and Quirk, 2007) exclude the latent segmentation variables and opt for a heuristic training procedure. In this work we also start out from a generative model with latent segmentation variables. However, we find out that concentrating the learning effort on smoothing is crucial for good performance. For this, we devise ITG-based priors over segmentations and employ a penalized version of Deleted Estimation working with EM at its core. The fact that our results (at least) match the heuristic estimates on a reasonably sized data set (947k parallel sentence pairs) is rather encouraging. The work in (Zhang et al.,</context>
+</contexts>
+<marker>Quirk, 2007</marker>
+<rawString>R. Moore and Ch. Quirk. 2007. An iteratively-trained segmentation-free phrase translation model for statistical machine translation. In Proceedings of the Second Workshop on Statistical Machine Translation, pages 112–119, Prague, Czech Republic. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F J Och</author>
+<author>H Ney</author>
+</authors>
+<title>A systematic comparison of various statistical alignment models.</title>
+<date>2003</date>
+<journal>Computational Linguistics,</journal>
+<volume>29</volume>
+<issue>1</issue>
+<contexts>
+<context position="2639" citStr="Och and Ney, 2003" startWordPosition="394" endWordPosition="397"> mounting number of efforts attacking this problem over the last few years (DeNero et al., 2006; Marcu and Wong, 2002; Birch et al., 2006; Moore and Quirk, 2007; Zhang et al., 2008) exhibits its difficulty. So far, none has lead to an alternative method that performs as well as the heuristic on reasonably sized data (approx. 1000k sentence pair). Given a parallel corpus, an estimator for phrasetables in PBSMT involves two interacting decisions (1) which phrase pairs to extract, and (2) how to assign probabilities to the extracted pairs. The heuristic estimator employs word-alignment (Giza++) (Och and Ney, 2003) and a few thumb rules for defining phrase pairs, and then extracts a multi-set of phrase pairs and estimates their conditional probabilities based on the counts in the multi-set. Using this method for extracting a set of phrase pairs, (DeNero et al., 2006; Moore and Quirk, 2007) aim at defining a better estimator for the probabilities. Generally speaking, both efforts report deteriorating translation performance relative to the heuristic. Instead of employing word-alignment to guide phrase pair extraction, it is theoretically more appealing to aim at phrase alignment as part of the estimation</context>
+</contexts>
+<marker>Och, Ney, 2003</marker>
+<rawString>F. J. Och and H. Ney. 2003. A systematic comparison of various statistical alignment models. Computational Linguistics, 29(1):19–51.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F J Och</author>
+<author>H Ney</author>
+</authors>
+<title>The alignment template approach to statistical machine translation.</title>
+<date>2004</date>
+<journal>Computational Linguistics,</journal>
+<volume>30</volume>
+<issue>4</issue>
+<contexts>
+<context position="10265" citStr="Och and Ney, 2004" startWordPosition="1628" endWordPosition="1631"> , rf, le, re) consists of the start lf and end rf positions2 for a phrase in f and the start le and end re positions for an aligned phrase in e. 2. For a given segmentation a,, for every container aj (1 G j G I) generate the phrase-pair (fj, ej), independently from all other phrasepairs. This leads to the following probabilistic model: P (f |e; a) _ � �P(a� 1) P(fj |ej) (1) or EE(a) (fj,ej)Eai(f,e) 3 The Translation Model Given a word-aligned parallel corpus of sourcetarget sentences, it is common practice to extract a set of phrase pairs using extraction heuristics (cf. (Koehn et al., 2003; Och and Ney, 2004)). These heuristics define a phrase pair to consist of a source and target ngrams of a word-aligned source-target sentence pair such that if one end of an alignment is in the one ngram, the other end is in the other ngram (and there is at least one such alignment) (Och and Ney, 2004; Koehn et al., 2003). For efficiency and sparseness, the practitioners of PBSMT constrain the length of the source phrase to a certain maximum number of words. An All Phrase Pairs Model: In this work we train a phrase-translation table that consists of all phrasepairs that can be extracted from the word-aligned tra</context>
+</contexts>
+<marker>Och, Ney, 2004</marker>
+<rawString>F. J. Och and H. Ney. 2004. The alignment template approach to statistical machine translation. Computational Linguistics, 30(4):417–449.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F J Och</author>
+</authors>
+<title>Minimum error rate training in statistical machine translation.</title>
+<date>2003</date>
+<booktitle>In ACL,</booktitle>
+<pages>160--167</pages>
+<contexts>
+<context position="5352" citStr="Och, 2003" startWordPosition="819" endWordPosition="820">ow the number of spurious derivations per segmentation in this bSCFG can be used for devising a prior probability over the space of segmentations, capturing the bias in the data towards monotone translation. The heart of the estimation process is a new smoothing estimator, a penalized version of Deleted Estimation, which averages the temporary probability estimates of multiple parallel EM processes at each joint iteration. For evaluation we use a state-of-the-art baseline system (Moses) (Hoang and Koehn, 2008) which works with a log-linear interpolation of feature functions optimized by MERT (Och, 2003). We simply substitute our own estimates for the heuristic phrase translation estimates (both directions and the phrase penalty score) and compare the two within the Moses decoder. While our estimates differ substantially from the heuristic, their performance is on par with the heuristic estimates. This is remarkable given the fact that comparable previous work (DeNero et al., 2006; Moore and Quirk, 2007) did not match the performance of the heuristic estimator using large training sets. We find that smoothing is crucial for achieving good estimates. This is in line with earlier work on consis</context>
+<context position="29946" citStr="Och, 2003" startWordPosition="4969" endWordPosition="4970"> parallel corpus). A prior probability over segmentations that would allow our estimator to converge in the limit to the RFE must gradually prefer segmentations consisting of larger containers as the data grows large. We set the design and estimation of such a prior aside for future work. 5 Empirical experiments Decoding and Baseline Model: In this work we employ an existing decoder, Moses (Hoang and Koehn, 2008), which defines a log-linear model interpolating feature functions, with interpolation scores Af e∗ = arg maxe E f∈D AfHf(f, e). The Af are optimized by Minimum-Error Training (MERT) (Och, 2003). The set 4b consists of the following feature functions (see (Hoang and Koehn, 2008)): a 5-gram target language model, the standard reordering scores, the word and phrase penalty scores, the conditional lexical estimates obtained from the word-alignment in both directions, and the conditional phrase translation estimates in both directions P(f |e) and P(e |f). Keeping the other five feature functions fixed, we compare our estimates of P(f |e) and P(e |f) (and the phrase penalty) to the commonly used heuristic estimates. Because our model employs a latent segmentation variable, this variable s</context>
+</contexts>
+<marker>Och, 2003</marker>
+<rawString>F. J. Och. 2003. Minimum error rate training in statistical machine translation. In ACL, pages 160–167.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Papineni</author>
+<author>S Roukos</author>
+<author>T Ward</author>
+<author>W-J Zhu</author>
+</authors>
+<title>Bleu: a method for automatic evaluation of machine translation.</title>
+<date>2002</date>
+<booktitle>In ACL,</booktitle>
+<pages>311--318</pages>
+<contexts>
+<context position="32702" citStr="Papineni et al., 2002" startWordPosition="5443" endWordPosition="5446">ed by 3 iterations of each Model 3 and Model 4. From this aligned training corpus, we extract the phrase pairs according to the heuristics in (Koehn et al., 2003). The baseline system extracts all phrase-pairs upto a certain maximum length on both sides and employs the heuristic estimator. The language model used in all systems is a 5-gram language model trained on the English side of the parallel corpus. Minimum-Error Rate Training (MERT) is applied on the development set to obtain optimal log-linear interpolation weights for all systems. Performance is measured by computing the BLEU scores (Papineni et al., 2002) of the system’s translations, when compared against a single reference translation per sentence. Results: We compare different versions of our system against the baseline system using the heuristic estimator. We observe the effects of the ITG prior in the translation model as well as the method of estimation (Deleted Estimation vs. Penalized Deleted Estimation). Table 1 exhibits the BLEU scores for the sys10http://www.statmt.org/wmt07 637 tems. Our own system (with ITG prior and Penalized Deleted Estimation and maximum phraselength ten words) scores (33.14), slightly outperforming the best ba</context>
+</contexts>
+<marker>Papineni, Roukos, Ward, Zhu, 2002</marker>
+<rawString>K. Papineni, S. Roukos, T. Ward, and W.-J. Zhu. 2002. Bleu: a method for automatic evaluation of machine translation. In ACL, pages 311–318.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Sima’an</author>
+<author>L Buratto</author>
+</authors>
+<title>Backoff Parameter Estimation for the DOP Model.</title>
+<date>2003</date>
+<booktitle>Proceedings of the 14th European Conference on Machine Learning (ECML’03), Lecture Notes in Artificial Intelligence (LNAI2837),</booktitle>
+<pages>373--384</pages>
+<editor>In H. Blockeel N. LavraˆC, D. Gamberger and L. Todorovski, editors,</editor>
+<publisher>CavtatDubrovnik, Croatia. Springer.</publisher>
+<marker>Sima’an, Buratto, 2003</marker>
+<rawString>K. Sima’an and L. Buratto. 2003. Backoff Parameter Estimation for the DOP Model. In H. Blockeel N. LavraˆC, D. Gamberger and L. Todorovski, editors, Proceedings of the 14th European Conference on Machine Learning (ECML’03), Lecture Notes in Artificial Intelligence (LNAI2837), pages 373–384, CavtatDubrovnik, Croatia. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Sima’an</author>
+</authors>
+<title>Computational complexity of probabilistic disambiguation.</title>
+<date>2002</date>
+<journal>Grammars,</journal>
+<volume>5</volume>
+<issue>2</issue>
+<marker>Sima’an, 2002</marker>
+<rawString>K. Sima’an. 2002. Computational complexity of probabilistic disambiguation. Grammars, 5(2):125–151.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Wu</author>
+</authors>
+<title>Stochastic inversion transduction grammars and bilingual parsing of parallel corpora.</title>
+<date>1997</date>
+<journal>ComputationalLinguistics,</journal>
+<volume>23</volume>
+<issue>3</issue>
+<contexts>
+<context position="4636" citStr="Wu, 1997" startWordPosition="705" endWordPosition="706">e also start out from a standard phrase extraction procedure based on wordalignment and aim solely at estimating the conditional probabilities for the phrase pairs and their reverse translation probabilities. Unlike preceding work, we extract all phrase pairs from the training corpus and estimate their probabilities, i.e., without limit on length. We present a novel formulation of a conditional translation model that works with a prior over segmentations and a bag of conditional phrase pairs. We use binary Synchronous ContextFree Grammar (bSCFG), based on Inversion Transduction Grammar (ITG) (Wu, 1997; Chiang, 2005a), to define the set of eligible segmentations for an aligned sentence pair. We also show how the number of spurious derivations per segmentation in this bSCFG can be used for devising a prior probability over the space of segmentations, capturing the bias in the data towards monotone translation. The heart of the estimation process is a new smoothing estimator, a penalized version of Deleted Estimation, which averages the temporary probability estimates of multiple parallel EM processes at each joint iteration. For evaluation we use a state-of-the-art baseline system (Moses) (H</context>
+<context position="14437" citStr="Wu, 1997" startWordPosition="2342" endWordPosition="2343">er splits and reaches its maximum for fully monotone permutations (all binary trees, which is a factorial function of the length of the permutation). By definition (cf. (Zhang et al., 2006; Huang et al., 2008)), a binarizable segmentation/permutation can be recognized by a binarized Synchronous Context-Free Grammar (SCFG), i.e., an SCFG in which the right hand sides of all non-lexical rules constitute binarizable permutations. In particular, this holds for the SCFG implementing Inversion 3For two sequences of numbers, the notation y &lt; z stands for Vy E y, Vz E z : y &lt; z. Transduction Grammar (Wu, 1997). This SCFG (Chiang, 2005b) has two binary synchronous rules that correspond resp. to the contiguous monotone and inverted alignments: XP → XP 1 XP 2 , XP 1 XP 2 (2) XP → XP 1 XP 2 , XP 2 XP 1 The boxed integers in the superscripts on the nonterminal XP denote synchronized rewritings. In this work, we employ a binary SCFG (bSCFG) working with these two synchronous rules together with a set of lexical rules {XP → f, e |hf, ei is a phrase pair}. In this bSCFG, every derivation corresponds to a binarization of a segmentation of the input. Note that the bSCFG defined in equation 2 generates all po</context>
+</contexts>
+<marker>Wu, 1997</marker>
+<rawString>D. Wu. 1997. Stochastic inversion transduction grammars and bilingual parsing of parallel corpora. ComputationalLinguistics, 23(3):377–403.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D H Younger</author>
+</authors>
+<title>Recognition and parsing of context-free languages in time n3.</title>
+<date>1967</date>
+<journal>Information and Control,</journal>
+<volume>10</volume>
+<issue>2</issue>
+<contexts>
+<context position="26143" citStr="Younger, 1967" startWordPosition="4384" endWordPosition="4385">tion 1) to a word-level model with fixed word translation probability (10−5). Zero distributions: When a phrase e does not occur in Hi, all its pairs (f, e) in Tri will have zero counts. During each EM iteration, when the M-step is applied, the distribution P(· |e) is undefined by MLE, since it is irrelevant for the likelihood of Hi. In this case any choice of proper distribution P(· |e) will constitute an MLE solution. We choose to set this case to a uniform distribution every time again. Since our model and estimator are implemented within the bSCFG framework, we use a bilingual CYK parser (Younger, 1967) under the grammar in equation 2. This parser builds for every input (f, a, e) all binarizations/derivations for every segmentation in E(a). For implementing EM, we employ the Inside-Outside algorithm (Lari and Young, 1990; Goodman, 1998). During estimation, because the input, output and word-alignment are known in advance, the time and space requirements remain manageable despite the worst-case complexity O(n6) in target sentence length n. Penalized Deleted Estimation: In contrast with our method, Deleted Estimation sums the expected counts (rather than probabilities) obtained from the differ</context>
+</contexts>
+<marker>Younger, 1967</marker>
+<rawString>D.H. Younger. 1967. Recognition and parsing of context-free languages in time n3. Information and Control, 10(2):189–208.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Zens</author>
+<author>F J Och</author>
+<author>H Ney</author>
+</authors>
+<title>Phrase-based statistical machine translation.</title>
+<date>2002</date>
+<booktitle>KI 2002: Advances in Artificial Intelligence, 25th Annual German Conference on AI (KI 2002),</booktitle>
+<volume>2479</volume>
+<pages>18--32</pages>
+<editor>In Matthias Jarke, Jana Koehler, and Gerhard Lakemeyer, editors,</editor>
+<publisher>Springer.</publisher>
+<contexts>
+<context position="1487" citStr="Zens et al., 2002" startWordPosition="203" endWordPosition="206">atent segmentations derived from Inversion Transduction Grammar (ITG), (2) A phrase table containing all phrase pairs without length limit, and (3) Smoothing as learning objective using a novel Maximum-A-Posteriori version of Deleted Estimation working with Expectation-Maximization. Where others conclude that latent segmentations lead to overfitting and deteriorating performance, we show here that these three ingredients give performance equivalent to the heuristic method on reasonably sized training data. 1 Motivation A major component in phrase-based statistical Machine translation (PBSMT) (Zens et al., 2002; Koehn et al., 2003) is the table of conditional probabilities of phrase translation pairs. The pervading method for estimating these probabilities is a simple heuristic based on the relative frequency of the phrase pair in the multi-set of the phrase pairs extracted from the word-aligned corpus (Koehn et al., 630 2003). While this heuristic estimator gives good empirical results, it does not seem to optimize any intuitively reasonable objective function of the (wordaligned) parallel corpus (see e.g., (DeNero et al., 2006)) The mounting number of efforts attacking this problem over the last f</context>
+</contexts>
+<marker>Zens, Och, Ney, 2002</marker>
+<rawString>R. Zens, F. J. Och, and H. Ney. 2002. Phrase-based statistical machine translation. In Matthias Jarke, Jana Koehler, and Gerhard Lakemeyer, editors, KI 2002: Advances in Artificial Intelligence, 25th Annual German Conference on AI (KI 2002), volume 2479 of Lecture Notes in Computer Science, pages 18–32. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>H Zhang</author>
+<author>L Huang</author>
+<author>D Gildea</author>
+<author>K Knight</author>
+</authors>
+<title>Synchronous binarization for machine translation.</title>
+<date>2006</date>
+<booktitle>In HLT-NAACL.</booktitle>
+<contexts>
+<context position="8593" citStr="Zhang et al., 2006" startWordPosition="1336" endWordPosition="1339">s, overfitting the training data and failing to generalize”. More recently, (Moore and Quirk, 2007) devise a estimator working with a model that does not include a hidden segmentation variable but works with a heuristic iterative procedure (rather than MLE or EM). The 631 translation results remain inferior to the heuristic but the authors note an interesting trade-off between decoding speed and the various settings of this estimator. Our work expands on the general approach taken by (DeNero et al., 2006; Moore and Quirk, 2007) but arrives at insights similar to those of the most recent work (Zhang et al., 2006), albeit in a completely different manner. The present work differs from all preceding work in that it employs the set of all phrase pairs during training. It differs from (Zhang et al., 2008) in that it does postulate a latent segmentation variable and puts the prior directly over that variable rather than over the ITG synchronous rule estimates. Our method neither excludes phrase pairs before estimation nor does it prune the space of possible segmentations/analyses during training/estimation. As well as smoothing, we find (in the same vein as (Zhang et al., 2008)) that setting effective prio</context>
+<context position="11933" citStr="Zhang et al., 2006" startWordPosition="1906" endWordPosition="1909"> These segmentations into bilingual containers (where segmentations are taken inside the containers) are different from the monolingual segmentations used in earlier comparable conditional models (e.g., (DeNero et al., 2006)) which must generate the alignment on top of the segmentations. Note how the different phrase pairs (fj, ej) are generated from their bilingual containers in the given segmentation a . We will discuss our choice of prior probability over segmentations P(af) after we discuss the definition of the binarizable segmentations E(a). 3.1 Binarizable segmentations E(a) Following (Zhang et al., 2006; Huang et al., 2008), every sequence of phrase alignments can be viewed 1For example, if the cut-off on phrase pairs is ten words, all sentence pairs smaller than ten words in the training data will be included as phrase pairs as well. These sentences are treated differently from longer sentences, which are not allowed to be phrase pairs. 2The NULL alignments (word-to-NULL) in the training data can also be marked with actual positions on both sides in order to allow for this definition of containers. 632 as a sequence of integers 1,... I together with a permuted version of this sequence 7r(1)</context>
+<context position="14016" citStr="Zhang et al., 2006" startWordPosition="2272" endWordPosition="2275">depicted as a binary tree structure where the nodes correspond to recursive proper splits of the permutation, and the leaves are decorated with the naturals. Figure 1 exhibits two possible binarizations of the same permutation where &lt;&gt; and [] denote inverted and monotone proper splits respectively. Note that the number of possible binarizations of a binarizable permutation is a recursive function of the number of possible proper splits and reaches its maximum for fully monotone permutations (all binary trees, which is a factorial function of the length of the permutation). By definition (cf. (Zhang et al., 2006; Huang et al., 2008)), a binarizable segmentation/permutation can be recognized by a binarized Synchronous Context-Free Grammar (SCFG), i.e., an SCFG in which the right hand sides of all non-lexical rules constitute binarizable permutations. In particular, this holds for the SCFG implementing Inversion 3For two sequences of numbers, the notation y &lt; z stands for Vy E y, Vz E z : y &lt; z. Transduction Grammar (Wu, 1997). This SCFG (Chiang, 2005b) has two binary synchronous rules that correspond resp. to the contiguous monotone and inverted alignments: XP → XP 1 XP 2 , XP 1 XP 2 (2) XP → XP 1 XP </context>
+</contexts>
+<marker>Zhang, Huang, Gildea, Knight, 2006</marker>
+<rawString>H. Zhang, L. Huang, D. Gildea, and K. Knight. 2006. Synchronous binarization for machine translation. In HLT-NAACL.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R C Moore Quirk</author>
+<author>D Gildea</author>
+</authors>
+<title>Bayesian learning of non-compositional phrases with synchronous parsing.</title>
+<date>2008</date>
+<booktitle>In Proceedings ofACL-08: HLT,</booktitle>
+<pages>97--105</pages>
+<publisher>Association</publisher>
+<institution>for Computational Linguistics.</institution>
+<location>Columbus, Ohio,</location>
+<marker>Quirk, Gildea, 2008</marker>
+<rawString>H. Zhang, Ch. Quirk, R. C. Moore, and D. Gildea. 2008. Bayesian learning of non-compositional phrases with synchronous parsing. In Proceedings ofACL-08: HLT, pages 97–105, Columbus, Ohio, June. Association for Computational Linguistics.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Zollmann</author>
+<author>K Sima’an</author>
+</authors>
+<title>An efficient and consistent estimator for data-oriented parsing.</title>
+<date>2006</date>
+<journal>Journal of Automata, Languages and Combinatorics (JALC),</journal>
+<volume>10</volume>
+<pages>2--3</pages>
+<marker>Zollmann, Sima’an, 2006</marker>
+<rawString>A. Zollmann and K. Sima’an. 2006. An efficient and consistent estimator for data-oriented parsing. Journal of Automata, Languages and Combinatorics (JALC), 10 (2005) Number 2/3:367–388.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

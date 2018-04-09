@@ -1,0 +1,1056 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000003">
+<title confidence="0.997546">
+A Computational Framework for Non-Lexicalist Semantics
+</title>
+<author confidence="0.850948">
+Jimmy Lin
+</author>
+<affiliation confidence="0.443012">
+MIT Computer Science and Artificial Intelligence Laboratory
+</affiliation>
+<address confidence="0.709285">
+Cambridge, MA 02139
+</address>
+<email confidence="0.998755">
+jimmylin@csail.mit.edu
+</email>
+<sectionHeader confidence="0.995637" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.999392555555556">
+Under a lexicalist approach to semantics, a verb
+completely encodes its syntactic and semantic
+structures, along with the relevant syntax-to-
+semantics mapping; polysemy is typically at-
+tributed to the existence of different lexical en-
+tries. A lexicon organized in this fashion con-
+tains much redundant information and is un-
+able to capture cross-categorial morphological
+derivations. The solution is to spread the “se-
+mantic load” of lexical entries to other mor-
+phemes not typically taken to bear semantic
+content. This approach follows current trends
+in linguistic theory, and more perspicuously ac-
+counts for alternations in argument structure.
+I demonstrate how such a framework can be
+computationally realized with a feature-based,
+agenda-driven chart parser for the Minimalist
+Program.
+</bodyText>
+<sectionHeader confidence="0.999135" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999920227272727">
+The understanding of natural language text includes not
+only analysis of syntactic structure, but also of semantic
+content. Due to advances in statistical syntactic parsing
+techniques (Collins, 1997; Charniak, 2001), attention has
+recently shifted towards the harder question of analyzing
+the meaning of natural language sentences.
+A common lexical semantic representation in the com-
+putational linguistics literature is a frame-based model
+where syntactic arguments are associated with various se-
+mantic roles (essentially frame slots). Verbs are viewed
+as simple predicates over their arguments. This approach
+has its roots in Fillmore’s Case Grammar (1968), and
+serves as the foundation for two current large-scale se-
+mantic annotation projects: FrameNet (Baker et al., 1998)
+and PropBank (Kingsbury et al., 2002).
+Underlying the semantic roles approach is a lexical-
+ist assumption, that is, each verb’s lexical entry com-
+pletely encodes (more formally, projects) its syntactic and
+semantic structures. Alternations in argument structure
+are usually attributed to multiple lexical entries (i.e., verb
+senses). Under the lexicalist approach, the semantics of
+the verb break might look something like this:
+</bodyText>
+<listItem confidence="0.668609625">
+(1) break(agent, theme)
+agent: subject theme: object
+break(agent, theme, instrument)
+agent: subject theme: object
+instrument: oblique(with)
+break(theme)
+theme: subject
+. . .
+</listItem>
+<bodyText confidence="0.99997753125">
+The lexicon explicitly specifies the different subcate-
+gorization frames of a verb, e.g., the causative frame, the
+causative instrumental frame, the inchoative frame, etc.
+The major drawback of this approach, however, is the
+tremendous amount of redundancy in the lexicon—for
+example, the class of prototypical transitive verbs where
+the agent appears as the subject and the theme as the di-
+rect object must all duplicate this pattern.
+The typical solution to the redundancy problem is
+to group verbs according to their argument realization
+patterns (Levin, 1993), possibly arranged in an inheri-
+tance hierarchy. The argument structure and syntax-to-
+semantics mapping would then only need to be specified
+once for each verb class. In addition, lexical rules could
+be formulated to derive certain alternations from more ba-
+sic forms.
+Nevertheless, the lexicalist approach does not capture
+productive morphological processes that pervade natu-
+ral language, for example, flat.V → flatten.ADJ or ham-
+mer.N → hammer.V; most frameworks for computational
+semantics fail to capture the deeper derivational relation-
+ship between morphologically-related terms. For lan-
+guages with rich derivational morphology, this problem
+is often critical: the standard architectural view of mor-
+phological analysis as a preprocessor presents difficulties
+in handling semantically meaningful affixes.
+In this paper, I present a computational implementation
+of Distributed Morphology (Halle and Marantz, 1993), a
+non-lexicalist linguistic theory that erases the distinction
+between syntactic derivation and morphological deriva-
+tion. This framework leads to finer-grained semantics ca-
+pable of better capturing linguistic generalizations.
+</bodyText>
+<sectionHeader confidence="0.848828" genericHeader="method">
+2 Event Structure
+</sectionHeader>
+<bodyText confidence="0.996820333333333">
+It has previously been argued that representations based
+on a fixed collection of semantic roles cannot adequately
+capture natural language semantics. The actual inventory
+of semantic roles, along with precise definitions and di-
+agnostics, remains an unsolved problem; see (Levin and
+Rappaport Hovav, 1996). Fixed roles are too coarse-
+grained to account for certain semantic distinctions—the
+only recourse, to expand the inventory of roles, comes
+with the price of increased complexity, e.g., in the syntax-
+to-semantics mapping.
+There is a general consensus among theoretical lin-
+guists that the proper representation of verbal argument
+structure is event structure—representations grounded in
+a theory of events that decompose semantic roles in
+terms of primitive predicates representing concepts such
+as causality and inchoativity (Dowty, 1979; Jackendoff,
+1983; Pustejovsky, 1991b; Rappaport Hovav and Levin,
+1998). Consider the following example:
+</bodyText>
+<listItem confidence="0.663842714285714">
+(2) He sweeps the floor clean.
+[ [ DO(he, sweeps(the floor)) ] CAUSE
+[ BECOME [ clean(the floor) ] ] ]
+Dowty breaks the event described by (2) into two
+subevents, the activity of sweeping the floor and its result,
+the state of the floor being clean. A more recent approach,
+advocated by Rappaport Hovav and Levin (1998), de-
+scribes a basic set of event templates corresponding to
+Vendler’s event classes (Vendler, 1957):
+(3) a. [ x ACT&lt;MANNER&gt; ] (activity)
+b. [ x &lt;STATE&gt; ] (state)
+c. [ BECOME [ x &lt;STATE&gt; ] ] (achievement)
+d. [ x CAUSE [ BECOME [ x &lt;STATE&gt; ] ] ]
+(accomplishment)
+</listItem>
+<equation confidence="0.978083">
+e. [ [ x ACT&lt;MANNER&gt; ] CAUSE [ BECOME
+[ x &lt;STATE&gt; ] ] ] (accomplishment)
+</equation>
+<bodyText confidence="0.9799865">
+A process called Template Augmentation allows basic
+event templates to be freely “augmented” to any other
+event template. This process, for example, explains the
+resultative form of surface contact verbs like sweep:
+</bodyText>
+<listItem confidence="0.926128">
+(4) a. Phil swept the floor.
+[ Phil ACT&lt;SWEEP&gt; floor ]
+b. Phil swept the floor clean.
+</listItem>
+<equation confidence="0.859872">
+[ [ Phil ACT&lt;SWEEP&gt; floor ] CAUSE
+[ BECOME [ floor &lt;CLEAN&gt; ] ] ]
+</equation>
+<bodyText confidence="0.999789857142857">
+Following this long tradition of research, I propose a
+syntactically-based event representation specifically de-
+signed to handle alternations in argument structure. Fur-
+thermore, I will show how this theoretical analysis can
+be implemented in a feature-driven computational frame-
+work. The product is an agenda-driven, chart-based
+parser for the Minimalist Program.
+</bodyText>
+<sectionHeader confidence="0.993253" genericHeader="method">
+3 A Decompositional Framework
+</sectionHeader>
+<bodyText confidence="0.9999125">
+A primary advantage of decompositional (non-lexicalist)
+theories of lexical semantics is the ability to transpar-
+ently relate morphologically related words—explaining,
+for example, categorial divergences in terms of differ-
+ences in event structure. Consider the adjective flat and
+the deadjectival verb flatten:
+</bodyText>
+<listItem confidence="0.9384355">
+(5) a. The tire is flat.
+b. The tire flattened.
+</listItem>
+<bodyText confidence="0.98981225">
+Clearly, (5a) is a stative sentence denoting a static situ-
+ation, while (5b) denotes an inchoative event, i.e., a tran-
+sition from “tire is not flat” to “tire is flat”. One might
+assign the above two sentence the following logical form:
+</bodyText>
+<listItem confidence="0.920686">
+(6) a. BE(tire, [state flat])
+b. ARGδ(tire, e) ∧ BECOME(BE([state flat]), e)
+</listItem>
+<bodyText confidence="0.997225166666667">
+In Davidsonian terms, dynamic events introduce event
+arguments, whereas static situations do not. In (6b), the
+semantic argument that undergoes the change of state
+(ARGδ) is introduced externally via the event argument.
+Considering that the only difference between flat.ADJ
+and flatten.V is the suffix -en, it must be the source of
+inchoativity and contribute the change of state reading
+that distinguishes the verb from the adjective. Here, we
+have evidence that derivational affixes affect the seman-
+tic representation of lexical items, that is, fragments of
+event structure are directly associated with derivational
+morphemes. We have the following situation:
+</bodyText>
+<listItem confidence="0.725091">
+(7) JflatK = [state flat]
+</listItem>
+<equation confidence="0.854127">
+Jis flatK = AxBE(x, [state flat])
+J-enK = AsAxARGδ(x, e) ∧ BECOME(BE(s), e)
+Jflat-enK = Ax.ARGδ(x, e)∧
+BECOME(BE([state flat]), e)
+</equation>
+<bodyText confidence="0.999956795454546">
+In this case, the complete event structure of a word
+can be compositionally derived from its component mor-
+phemes. This framework, where the “semantic load” is
+spread more evenly throughout the lexicon to lexical cat-
+egories not typically thought to bear semantic content, is
+essentially the model advocated by Pustejovsky (1991a),
+among many others. Note that such an approach is no
+longer lexicalist: each lexical item does not fully encode
+its associated syntactic and semantic structures. Rather,
+meanings are composed from component morphemes.
+In addition to -en, other productive derivational suf-
+fixes in English such as -er, -ize, -ion, just to name a
+few, can be analyzed in a similar way. In fact, we may
+view morphological rules for composing morphemes into
+larger phonological units the same way we view syntac-
+tic rules for combining constituents into higher-level pro-
+jections, i.e., why distinguish VP → V + NP from V
+→ Adj + -en? With this arbitrary distinction erased, we
+are left with a unified morpho-syntactic framework for
+integrating levels of grammar previously thought to be
+separate—this is indeed one of the major goals of Dis-
+tributed Morphology. This theoretical framework trans-
+lates into a computational model better suited for analyz-
+ing the semantics of natural language, particularly those
+rich in morphology.
+A conclusion that follows naturally from this analysis
+is that fragments of event structure are directly encoded
+in the syntactic structure. We could, in fact, further pos-
+tulate that all event structure is encoded syntactically, i.e.,
+that lexical semantic representation is isomorphic to syn-
+tactic structure. Sometimes, these functional elements are
+overtly realized, e.g., -en. Often, however, these func-
+tional elements responsible for licensing event interpre-
+tations are not phonologically realized.
+These observations and this line of reasoning has not
+escaped the attention of theoretical linguists: Hale and
+Keyser (1993) propose that argument structure is, in fact,
+encoded syntactically. They describe a cascading verb
+phrase analysis with multiple phonetically empty verbal
+projections corresponding to concepts such as inchoativ-
+ity and agentivity. This present framework builds on the
+work of Hale and Keyser, but in addition to advancing a
+more refined theory of verbal argument structure, I also
+describe a computational implementation.
+</bodyText>
+<sectionHeader confidence="0.990352" genericHeader="method">
+4 Event Types
+</sectionHeader>
+<bodyText confidence="0.999754">
+Although the study of event types can be traced back
+to Aristotle, it wasn’t until the twentieth century when
+philosophers and linguists developed classifications of
+events that capture logical entailments and the co-
+occurrence restrictions between verbs and other syntactic
+elements such as tenses and adverbials. Vendler’s (1957)
+four-way classification of events into states, activities, ac-
+complishments, and achievements serves as a good start-
+ing point for a computational ontology of event types.
+Examples of the four event types are given below:
+</bodyText>
+<table confidence="0.9843255">
+(8) States Activities
+know run
+believe walk
+Accomplishments Achievements
+paint a picture recognize
+make a chair find
+</table>
+<bodyText confidence="0.988031034482758">
+Under Vendler’s classification, activities and states
+both depict situations that are inherently temporally un-
+bounded (atelic); states denote static situations, whereas
+activities denote on-going dynamic situations. Accom-
+plishments and achievements both express a change of
+state, and hence are temporally bounded (telic); achieve-
+ments are punctual, whereas accomplishments extend
+over a period of time. Tenny (1987) observes that ac-
+complishments differ from achievements only in terms of
+event duration, which is often a question of granularity.
+From typological studies, it appears that states, change
+of states, and activities form the most basic ontology of
+event types. They correspond to the primitives BE, BE-
+COME, and DO proposed by a variety of linguists; let us
+adopt these conceptual primitives as the basic vocabulary
+of our lexical semantic representation.
+Following the non-lexicalist tradition, these primitives
+are argued to occupy functional projections in the syntac-
+tic structure, as so-called light verbs. Here, I adopt the
+model proposed by Marantz (1997) and decompose lexi-
+cal verbs into verbalizing heads and verbal roots. Verbal-
+izing heads introduce relevant eventive interpretations in
+the syntax, and correspond to (assumed) universal primi-
+tives of the human cognitive system. On the other hand,
+verbal roots represent abstract (categoryless) concepts
+and basically correspond to open-class items drawn from
+encyclopedic knowledge. I assume an inventory of three
+verbalizing heads, each corresponding to an aforemen-
+tioned primitive:
+</bodyText>
+<listItem confidence="0.865733">
+(9) vDO [+dynamic, −inchoative] = DO
+vb [+dynamic, +inchoative] = BECOME
+vBE [−dynamic] = BE
+</listItem>
+<bodyText confidence="0.99447325">
+The light verb vDO licenses an atelic non-inchoative
+event, and is compatible with verbal roots expressing ac-
+tivity. It projects a functional head, voice (Kratzer, 1994),
+whose specifier is the external argument.
+</bodyText>
+<listItem confidence="0.855731">
+(10) John ran.
+</listItem>
+<equation confidence="0.891017125">
+voiceP
+run
+ARGext(John, e) ∧ DO([activity run], e)
+DP
+voice vDOP
+√
+vDO
+John
+</equation>
+<bodyText confidence="0.997174727272727">
+The entire voiceP is further embedded under a tense
+projection (not shown here), and the verbal complex un-
+dergoes head movement and left adjoins to any overt
+tense markings. Similarly, the external argument raises to
+[Spec, TP]. This is in accordance with modern linguistic
+theory, more specifically, the subject-internal hypothesis.
+The verbal root can itself idiosyncratically license a
+DP to give rise to a transitive sentence (subjected, nat-
+urally, to selectional restrictions). These constructions
+correspond to what Levin calls “non-core transitive sen-
+tences” (1999):
+</bodyText>
+<listItem confidence="0.621288">
+(11) John ran the marathon.
+</listItem>
+<bodyText confidence="0.99697225">
+of a vDO, accounting for the causative/inchoative alterna-
+tion. Cyclic head movement (incorporation) of the verbal
+roots into the verbalizing heads up to the highest verbal
+projection accounts for the surface form of the sentence.
+</bodyText>
+<figure confidence="0.930845666666667">
+(14) John broke the window.
+voiceP
+DP
+John voice vDOP
+vDO vbP
+voiceP
+run DP
+the marathon
+ARGext(John, e) ∧ DO([activity run(marathon)], e)
+</figure>
+<bodyText confidence="0.837835">
+Similarly, vBE licenses static situations, and is compat-
+ible with verbal roots expressing state:
+</bodyText>
+<equation confidence="0.566299">
+(12) Mary is tall.
+vBEP
+</equation>
+<bodyText confidence="0.8693042">
+BE(Mary, [state tall])
+The light verb vb licenses telic inchoative events (i.e.,
+change of states), which correspond to the BECOME
+primitive:
+(13) The window broke:
+</bodyText>
+<equation confidence="0.9555896">
+vbP
+J
+vBE
+break
+ARGb(window, e) ∧ BECOME(BE([state break]), e)
+</equation>
+<bodyText confidence="0.999366">
+The structure denotes an event where an entity under-
+goes a change of state to the end state specified by the
+root. vbP can be optionally embedded as the complement
+</bodyText>
+<equation confidence="0.993406857142857">
+vb
+J
+vBE
+break
+CAUSE(e1, e2) ∧ ARGext(John, e1) ∧
+DO([activity undef], e1) ∧ ARGb(window, e2) ∧
+BECOME(BE([state break]), e2)
+</equation>
+<bodyText confidence="0.958201714285714">
+Note that in the causative form, vDO is unmodified by
+a verbal root—the manner of activity is left unspecified,
+i.e., “John did something that caused the window to un-
+dergo the change of state break.”
+Given this framework, deadjectival verbs such as flat-
+ten can be directly derived in the syntax:
+(15) The tire flattened.
+</bodyText>
+<equation confidence="0.877097">
+vbP
+flat
+ARGb(tire, e) ∧ BECOME(BE([state flat]), e)
+</equation>
+<bodyText confidence="0.99972925">
+In (Lin, 2004), I present evidence from Mandarin Chi-
+nese that this analysis is on the right track. The rest of
+this paper, however, will be concerned with the computa-
+tional implementation of my theoretical framework.
+</bodyText>
+<sectionHeader confidence="0.994431" genericHeader="method">
+5 Minimalist Derivations
+</sectionHeader>
+<bodyText confidence="0.997413428571429">
+My theory of verbal argument structure can be imple-
+mented in a unified morpho-syntactic parsing model
+that interleaves syntactic and semantic parsing. The
+system is in the form of an agenda-driven chart-based
+parser whose foundation is similar to previous formaliza-
+tions of Chomsky’s Minimalist Program (Stabler, 1997;
+Harkema, 2000; Niyogi, 2001).
+</bodyText>
+<figure confidence="0.992163136363636">
+DP
+John voice vDOP
+JP
+vDO
+Mary
+DP
+vBE
+J
+tall
+is
+DP
+window
+vb
+DP
+tire
+-en
+vb
+vBEP
+J
+vBE
+DP
+window
+</figure>
+<bodyText confidence="0.999433352941177">
+Lexical entries in the system are minimally specified,
+each consisting of a phonetic form, a list of relevant fea-
+tures, and semantics in the form of a A expression.
+The basic structure building operation, MERGE, takes
+two items and creates a larger item. In the process,
+compatible features are canceled and one of the items
+projects. Simultaneously, the A expression associated
+with the licensor is applied to the A expression associated
+with the licensee (in theoretical linguistic terms, Spell-
+Out).
+The most basic feature is the =x licensor feature,
+which cancels out a corresponding x licensee feature and
+projects. A simple example is a determiner selecting a
+noun to form a determiner phrase (akin to the context free
+rule DP → det noun). This is shown below (underline in-
+dicates canceled features, and the node label &lt; indicates
+that the left item projects):
+</bodyText>
+<equation confidence="0.746314">
+(16) &lt;
+</equation>
+<bodyText confidence="0.951064714285714">
+the shelf
+=n d -k n
+The features &gt;x and &lt;x trigger head movement (in-
+corporation), i.e., the phonetic content of the licensee is
+affixed to the left or right of the licensor’s phonetic con-
+tent, respectively. These licensor features also cancel cor-
+responding x licensee features:
+</bodyText>
+<figure confidence="0.99731296969697">
+&lt;
+//
+&gt;s vbe
+✿✿
+Ax.BE(x)
+/flat/
+✿s
+[state flat]
+&lt;
+/flat -en/
+&gt;be =d
+✿✿✿✿
+Ax.Ay.ARGδ(y, e)∧
+BECOME(x, e)
+&gt;s ✿✿✿
+vbe
+✿✿
+BE([state flat])
+s
+&lt;
+&gt;
+/the tire/ &lt;
+d ✿✿
+tire
+/flat -en/
+&gt;be =d ✿✿
+Ay.ARGδ(y, e)∧
+BECOME(BE([state tall]), e)
+ARGδ(he, e) ∧ BECOME(BE([state tall(3cm)]), e)
+&lt;
+&gt;s vbe s
+(17) &lt; &lt; Figure 1: Simplified derivation for the sentence “The tire
+flattened.”
+</figure>
+<bodyText confidence="0.896434375">
+book -s book de- bone bone
+&gt;n d -k n &lt;n V n
+Finally, feature checking is implemented by +x/-x fea-
+tures. The +x denotes a need to discharge features, and
+the -x denotes a need for features. A simple example of
+this is the case assignment involved in building a preposi-
+tional phrase, i.e., prepositions must assign case, and DPs
+much receive case.
+</bodyText>
+<equation confidence="0.511523">
+(18) &lt;
+</equation>
+<bodyText confidence="0.999899136363636">
+Niyogi (2001) has developed an agenda-driven chart
+parser for the feature-driven formalism described above;
+please refer to his paper for a description of the parsing
+algorithm. I have adapted it for my needs and developed
+grammar fragments that reflect my non-lexicalist seman-
+tic framework. As an example, a simplified derivation of
+the sentence “The tire flattened.” is shown in Figure 1.
+The currently implemented system is still at the “toy
+parser” stage. Although the effectiveness and coverage
+of my parser remains to be seen, similar approaches have
+been successful at capturing complex linguistic phenom-
+ena. With a minimal set of features and a small num-
+ber of lexical entries, Niyogi (2001) has successfully
+modeled many of the argument alternations described by
+Levin (1993) using a Hale and Keyser (1993) style anal-
+ysis. I believe that with a suitable lexicon (either hand
+crafted or automatically induced), my framework can be
+elaborated into a system whose performance is compara-
+ble to that of current statistical parsers, but with the added
+advantage of simultaneously providing a richer lexical se-
+mantic representation of the input sentence than flat pred-
+icate argument structures based on semantic roles.
+</bodyText>
+<sectionHeader confidence="0.999486" genericHeader="conclusions">
+6 Conclusion
+</sectionHeader>
+<bodyText confidence="0.999965">
+A combination of factors in the natural development of
+computational linguistics as a field has conspired to nar-
+row the diversity of techniques being explored by re-
+searchers. While empirical and quantitative research is
+the mark of a mature field, such an approach is not with-
+out its adverse side-effects. Both syntactic and semantic
+parsing technology faces a classic chicken-and-egg prob-
+</bodyText>
+<figure confidence="0.7665058">
+on
+✿✿✿
+=d ✿✿✿
++kploc
+the
+=n -k
+✿✿✿ ✿d ✿✿
+shelf
+n
+&lt;
+</figure>
+<bodyText confidence="0.999068384615384">
+lem. In order for any new framework to become widely
+adopted, it must prove to be competitive with state-of-
+the-art systems in terms of performance. However, ro-
+bust parsing cannot be achieved without either labori-
+ously crafting grammars or a massive dedicated annota-
+tion effort (and experience has shown the latter method
+to be superior). Therein, however, lies the catch: neither
+effort is likely to be undertaken unless a new framework
+proves to be quantitatively superior than previously es-
+tablished methodologies. Lacking quantitative measures
+currently, the merits of my proposed framework can only
+be gauged on theoretical grounds and its future potential
+to better capture a variety of linguistic phenomena.
+</bodyText>
+<sectionHeader confidence="0.99894" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.998800523809524">
+Collin F. Baker, Charles J. Fillmore, and John B. Lowe.
+1998. The Berkeley FrameNet project. In Proceedings
+of the 36th Annual Meeting ofthe Association for Com-
+putational Linguistics and 17th International Con-
+ference on Computational Linguistics (COLING/ACL
+1998).
+Eugene Charniak. 2001. Immediate head parsing for
+language models. In Proceedings of the 39th Annual
+Meeting of the Association for Computational Linguis-
+tics (ACL-2001).
+Michael Collins. 1997. Three generative lexicalized
+models for statistical parsing. In Proceedings of the
+35th Annual Meeting of the Association for Computa-
+tional Linguistics (ACL-1997).
+David Dowty. 1979. Word Meaning and Montague
+Grammar. D. Reidel Publishing Company, Dordrecht,
+The Netherlands.
+Charles J. Fillmore. 1968. The case for case. In E. Bach
+and R. Harms, editors, Universals in Linguistic The-
+ory, pages 1–88. Holt, Rinehart, and Winston, New
+York.
+Kenneth Hale and Samuel Jay Keyser. 1993. On argu-
+ment structure and the lexical expression of syntactic
+relations. In Kenneth Hale and Samuel Jay Keyser,
+editors, The View from Building 20: Essays in Linguis-
+tics in Honor ofSylvain Bromberger. MIT Press, Cam-
+bridge, Massachusetts.
+Morris Halle and Alec Marantz. 1993. Distributed mor-
+phology and the pieces of inflection. In Kenneth Hale
+and S. Jay Keyser, editors, In The View from Build-
+ing 20, pages 111–176. MIT Press, Cambridge, Mas-
+sachusetts.
+Henk Harkema. 2000. A recognizer for minimalist
+grammars. In Proceedings of the Sixth International
+Workshop on Parsing Technologies (IWPT 2000).
+Ray Jackendoff. 1983. Semantics and Cognition. MIT
+Press, Cambridge, Massachusetts.
+Paul Kingsbury, Martha Palmer, and Mitch Marcus.
+2002. Adding semantic annotation to the Penn Tree-
+Bank. In Proceeding of 2002 Human Language Tech-
+nology Conference (HLT 2002).
+Angelika Kratzer. 1994. The event argument and the se-
+mantics of voice. Unpublished manuscript, University
+of Massachusetts, Amherst.
+Beth Levin and Malka Rappaport Hovav. 1996. From
+lexical semantics to argument realization. Unpub-
+lished manuscript, Northwestern University and Bar
+Ilan University.
+Beth Levin. 1993. English Verb Classes and Alter-
+nations: A Preliminary Investigation. University of
+Chicago Press, Chicago, Illinois.
+Beth Levin. 1999. Objecthood: An event structure per-
+spective. In Proceedings of the 35th Annual Meeting
+of the Chicago Linguistics Society.
+Jimmy Lin. 2004. Event Structure and the Encoding of
+Arguments: The Syntax of the English and Mandarin
+Verb Phrase. Ph.D. thesis, Department of Electrical
+Engineering and Computer Science, Massachusetts In-
+stitute of Technology.
+Alec Marantz. 1997. No escape from syntax: Don’t try
+morphological analysis in the privacy of your own lex-
+icon. In Proceedings of the 21st Annual Penn Linguis-
+tics Colloquium.
+Sourabh Niyogi. 2001. A minimalist implementation
+of verb subcategorization. In Proceedings of the Sev-
+enth International Workshop on Parsing Technologies
+(IWPT-2001).
+James Pustejovsky. 1991a. The generative lexicon.
+Computational Linguistics, 17(4):409–441.
+James Pustejovsky. 1991b. The syntax of event structure.
+Cognition, 41:47–81.
+Malka Rappaport Hovav and Beth Levin. 1998. Building
+verb meanings. In Miriam Butt and Wilhelm Geuder,
+editors, The Projection of Arguments: Lexical and
+Compositional Factors. CSLI Publications, Stanford,
+California.
+Edward Stabler. 1997. Derivational minimalism. In
+Christian Retor´e, editor, Logical Aspects of Computa-
+tional Linguistics. Springer.
+Carol Tenny. 1987. Grammaticalizing Aspect and Affect-
+edness. Ph.D. thesis, Massachusetts Institute of Tech-
+nology.
+Zeno Vendler. 1957. Verbs and times. Philosophical
+Review, 56:143–160.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.523018">
+<title confidence="0.999093">A Computational Framework for Non-Lexicalist Semantics</title>
+<author confidence="0.992996">Jimmy</author>
+<affiliation confidence="0.99916">MIT Computer Science and Artificial Intelligence</affiliation>
+<address confidence="0.994384">Cambridge, MA</address>
+<email confidence="0.999661">jimmylin@csail.mit.edu</email>
+<abstract confidence="0.996475555555556">Under a lexicalist approach to semantics, a verb completely encodes its syntactic and semantic structures, along with the relevant syntax-tosemantics mapping; polysemy is typically attributed to the existence of different lexical entries. A lexicon organized in this fashion contains much redundant information and is unable to capture cross-categorial morphological derivations. The solution is to spread the “semantic load” of lexical entries to other morphemes not typically taken to bear semantic content. This approach follows current trends in linguistic theory, and more perspicuously accounts for alternations in argument structure. I demonstrate how such a framework can be computationally realized with a feature-based, agenda-driven chart parser for the Minimalist</abstract>
+<intro confidence="0.554844">Program.</intro>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Collin F Baker</author>
+<author>Charles J Fillmore</author>
+<author>John B Lowe</author>
+</authors>
+<title>The Berkeley FrameNet project.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the 36th Annual Meeting ofthe Association for Computational Linguistics and 17th International Conference on Computational Linguistics (COLING/ACL</booktitle>
+<contexts>
+<context position="1752" citStr="Baker et al., 1998" startWordPosition="245" endWordPosition="248">yntactic parsing techniques (Collins, 1997; Charniak, 2001), attention has recently shifted towards the harder question of analyzing the meaning of natural language sentences. A common lexical semantic representation in the computational linguistics literature is a frame-based model where syntactic arguments are associated with various semantic roles (essentially frame slots). Verbs are viewed as simple predicates over their arguments. This approach has its roots in Fillmore’s Case Grammar (1968), and serves as the foundation for two current large-scale semantic annotation projects: FrameNet (Baker et al., 1998) and PropBank (Kingsbury et al., 2002). Underlying the semantic roles approach is a lexicalist assumption, that is, each verb’s lexical entry completely encodes (more formally, projects) its syntactic and semantic structures. Alternations in argument structure are usually attributed to multiple lexical entries (i.e., verb senses). Under the lexicalist approach, the semantics of the verb break might look something like this: (1) break(agent, theme) agent: subject theme: object break(agent, theme, instrument) agent: subject theme: object instrument: oblique(with) break(theme) theme: subject . . </context>
+</contexts>
+<marker>Baker, Fillmore, Lowe, 1998</marker>
+<rawString>Collin F. Baker, Charles J. Fillmore, and John B. Lowe. 1998. The Berkeley FrameNet project. In Proceedings of the 36th Annual Meeting ofthe Association for Computational Linguistics and 17th International Conference on Computational Linguistics (COLING/ACL 1998).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eugene Charniak</author>
+</authors>
+<title>Immediate head parsing for language models.</title>
+<date>2001</date>
+<booktitle>In Proceedings of the 39th Annual Meeting of the Association for Computational Linguistics (ACL-2001).</booktitle>
+<contexts>
+<context position="1192" citStr="Charniak, 2001" startWordPosition="166" endWordPosition="167">pread the “semantic load” of lexical entries to other morphemes not typically taken to bear semantic content. This approach follows current trends in linguistic theory, and more perspicuously accounts for alternations in argument structure. I demonstrate how such a framework can be computationally realized with a feature-based, agenda-driven chart parser for the Minimalist Program. 1 Introduction The understanding of natural language text includes not only analysis of syntactic structure, but also of semantic content. Due to advances in statistical syntactic parsing techniques (Collins, 1997; Charniak, 2001), attention has recently shifted towards the harder question of analyzing the meaning of natural language sentences. A common lexical semantic representation in the computational linguistics literature is a frame-based model where syntactic arguments are associated with various semantic roles (essentially frame slots). Verbs are viewed as simple predicates over their arguments. This approach has its roots in Fillmore’s Case Grammar (1968), and serves as the foundation for two current large-scale semantic annotation projects: FrameNet (Baker et al., 1998) and PropBank (Kingsbury et al., 2002). </context>
+</contexts>
+<marker>Charniak, 2001</marker>
+<rawString>Eugene Charniak. 2001. Immediate head parsing for language models. In Proceedings of the 39th Annual Meeting of the Association for Computational Linguistics (ACL-2001).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Collins</author>
+</authors>
+<title>Three generative lexicalized models for statistical parsing.</title>
+<date>1997</date>
+<booktitle>In Proceedings of the 35th Annual Meeting of the Association for Computational Linguistics (ACL-1997).</booktitle>
+<contexts>
+<context position="1175" citStr="Collins, 1997" startWordPosition="164" endWordPosition="165">olution is to spread the “semantic load” of lexical entries to other morphemes not typically taken to bear semantic content. This approach follows current trends in linguistic theory, and more perspicuously accounts for alternations in argument structure. I demonstrate how such a framework can be computationally realized with a feature-based, agenda-driven chart parser for the Minimalist Program. 1 Introduction The understanding of natural language text includes not only analysis of syntactic structure, but also of semantic content. Due to advances in statistical syntactic parsing techniques (Collins, 1997; Charniak, 2001), attention has recently shifted towards the harder question of analyzing the meaning of natural language sentences. A common lexical semantic representation in the computational linguistics literature is a frame-based model where syntactic arguments are associated with various semantic roles (essentially frame slots). Verbs are viewed as simple predicates over their arguments. This approach has its roots in Fillmore’s Case Grammar (1968), and serves as the foundation for two current large-scale semantic annotation projects: FrameNet (Baker et al., 1998) and PropBank (Kingsbur</context>
+</contexts>
+<marker>Collins, 1997</marker>
+<rawString>Michael Collins. 1997. Three generative lexicalized models for statistical parsing. In Proceedings of the 35th Annual Meeting of the Association for Computational Linguistics (ACL-1997).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Dowty</author>
+</authors>
+<title>Word Meaning and</title>
+<date>1979</date>
+<publisher>Reidel Publishing Company,</publisher>
+<location>Dordrecht, The Netherlands.</location>
+<contexts>
+<context position="4915" citStr="Dowty, 1979" startWordPosition="697" endWordPosition="698">nostics, remains an unsolved problem; see (Levin and Rappaport Hovav, 1996). Fixed roles are too coarsegrained to account for certain semantic distinctions—the only recourse, to expand the inventory of roles, comes with the price of increased complexity, e.g., in the syntaxto-semantics mapping. There is a general consensus among theoretical linguists that the proper representation of verbal argument structure is event structure—representations grounded in a theory of events that decompose semantic roles in terms of primitive predicates representing concepts such as causality and inchoativity (Dowty, 1979; Jackendoff, 1983; Pustejovsky, 1991b; Rappaport Hovav and Levin, 1998). Consider the following example: (2) He sweeps the floor clean. [ [ DO(he, sweeps(the floor)) ] CAUSE [ BECOME [ clean(the floor) ] ] ] Dowty breaks the event described by (2) into two subevents, the activity of sweeping the floor and its result, the state of the floor being clean. A more recent approach, advocated by Rappaport Hovav and Levin (1998), describes a basic set of event templates corresponding to Vendler’s event classes (Vendler, 1957): (3) a. [ x ACT&lt;MANNER&gt; ] (activity) b. [ x &lt;STATE&gt; ] (state) c. [ BECOME [</context>
+</contexts>
+<marker>Dowty, 1979</marker>
+<rawString>David Dowty. 1979. Word Meaning and Montague Grammar. D. Reidel Publishing Company, Dordrecht, The Netherlands.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Charles J Fillmore</author>
+</authors>
+<title>The case for case.</title>
+<date>1968</date>
+<booktitle>Universals in Linguistic Theory,</booktitle>
+<pages>1--88</pages>
+<editor>In E. Bach and R. Harms, editors,</editor>
+<location>Holt, Rinehart, and Winston, New York.</location>
+<marker>Fillmore, 1968</marker>
+<rawString>Charles J. Fillmore. 1968. The case for case. In E. Bach and R. Harms, editors, Universals in Linguistic Theory, pages 1–88. Holt, Rinehart, and Winston, New York.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kenneth Hale</author>
+<author>Samuel Jay Keyser</author>
+</authors>
+<title>On argument structure and the lexical expression of syntactic relations.</title>
+<date>1993</date>
+<booktitle>The View from Building 20: Essays in Linguistics in Honor ofSylvain Bromberger.</booktitle>
+<editor>In Kenneth Hale and Samuel Jay Keyser, editors,</editor>
+<publisher>MIT Press,</publisher>
+<location>Cambridge, Massachusetts.</location>
+<contexts>
+<context position="9885" citStr="Hale and Keyser (1993)" startWordPosition="1479" endWordPosition="1482">clusion that follows naturally from this analysis is that fragments of event structure are directly encoded in the syntactic structure. We could, in fact, further postulate that all event structure is encoded syntactically, i.e., that lexical semantic representation is isomorphic to syntactic structure. Sometimes, these functional elements are overtly realized, e.g., -en. Often, however, these functional elements responsible for licensing event interpretations are not phonologically realized. These observations and this line of reasoning has not escaped the attention of theoretical linguists: Hale and Keyser (1993) propose that argument structure is, in fact, encoded syntactically. They describe a cascading verb phrase analysis with multiple phonetically empty verbal projections corresponding to concepts such as inchoativity and agentivity. This present framework builds on the work of Hale and Keyser, but in addition to advancing a more refined theory of verbal argument structure, I also describe a computational implementation. 4 Event Types Although the study of event types can be traced back to Aristotle, it wasn’t until the twentieth century when philosophers and linguists developed classifications o</context>
+<context position="18299" citStr="Hale and Keyser (1993)" startWordPosition="2814" endWordPosition="2817">it for my needs and developed grammar fragments that reflect my non-lexicalist semantic framework. As an example, a simplified derivation of the sentence “The tire flattened.” is shown in Figure 1. The currently implemented system is still at the “toy parser” stage. Although the effectiveness and coverage of my parser remains to be seen, similar approaches have been successful at capturing complex linguistic phenomena. With a minimal set of features and a small number of lexical entries, Niyogi (2001) has successfully modeled many of the argument alternations described by Levin (1993) using a Hale and Keyser (1993) style analysis. I believe that with a suitable lexicon (either hand crafted or automatically induced), my framework can be elaborated into a system whose performance is comparable to that of current statistical parsers, but with the added advantage of simultaneously providing a richer lexical semantic representation of the input sentence than flat predicate argument structures based on semantic roles. 6 Conclusion A combination of factors in the natural development of computational linguistics as a field has conspired to narrow the diversity of techniques being explored by researchers. While </context>
+</contexts>
+<marker>Hale, Keyser, 1993</marker>
+<rawString>Kenneth Hale and Samuel Jay Keyser. 1993. On argument structure and the lexical expression of syntactic relations. In Kenneth Hale and Samuel Jay Keyser, editors, The View from Building 20: Essays in Linguistics in Honor ofSylvain Bromberger. MIT Press, Cambridge, Massachusetts.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Morris Halle</author>
+<author>Alec Marantz</author>
+</authors>
+<title>Distributed morphology and the pieces of inflection.</title>
+<date>1993</date>
+<booktitle>In The View from Building 20,</booktitle>
+<pages>111--176</pages>
+<editor>In Kenneth Hale and S. Jay Keyser, editors,</editor>
+<publisher>MIT Press,</publisher>
+<location>Cambridge, Massachusetts.</location>
+<contexts>
+<context position="3828" citStr="Halle and Marantz, 1993" startWordPosition="543" endWordPosition="546">calist approach does not capture productive morphological processes that pervade natural language, for example, flat.V → flatten.ADJ or hammer.N → hammer.V; most frameworks for computational semantics fail to capture the deeper derivational relationship between morphologically-related terms. For languages with rich derivational morphology, this problem is often critical: the standard architectural view of morphological analysis as a preprocessor presents difficulties in handling semantically meaningful affixes. In this paper, I present a computational implementation of Distributed Morphology (Halle and Marantz, 1993), a non-lexicalist linguistic theory that erases the distinction between syntactic derivation and morphological derivation. This framework leads to finer-grained semantics capable of better capturing linguistic generalizations. 2 Event Structure It has previously been argued that representations based on a fixed collection of semantic roles cannot adequately capture natural language semantics. The actual inventory of semantic roles, along with precise definitions and diagnostics, remains an unsolved problem; see (Levin and Rappaport Hovav, 1996). Fixed roles are too coarsegrained to account fo</context>
+</contexts>
+<marker>Halle, Marantz, 1993</marker>
+<rawString>Morris Halle and Alec Marantz. 1993. Distributed morphology and the pieces of inflection. In Kenneth Hale and S. Jay Keyser, editors, In The View from Building 20, pages 111–176. MIT Press, Cambridge, Massachusetts.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Henk Harkema</author>
+</authors>
+<title>A recognizer for minimalist grammars.</title>
+<date>2000</date>
+<booktitle>In Proceedings of the Sixth International Workshop on Parsing Technologies (IWPT</booktitle>
+<contexts>
+<context position="15501" citStr="Harkema, 2000" startWordPosition="2335" endWordPosition="2336">tire, e) ∧ BECOME(BE([state flat]), e) In (Lin, 2004), I present evidence from Mandarin Chinese that this analysis is on the right track. The rest of this paper, however, will be concerned with the computational implementation of my theoretical framework. 5 Minimalist Derivations My theory of verbal argument structure can be implemented in a unified morpho-syntactic parsing model that interleaves syntactic and semantic parsing. The system is in the form of an agenda-driven chart-based parser whose foundation is similar to previous formalizations of Chomsky’s Minimalist Program (Stabler, 1997; Harkema, 2000; Niyogi, 2001). DP John voice vDOP JP vDO Mary DP vBE J tall is DP window vb DP tire -en vb vBEP J vBE DP window Lexical entries in the system are minimally specified, each consisting of a phonetic form, a list of relevant features, and semantics in the form of a A expression. The basic structure building operation, MERGE, takes two items and creates a larger item. In the process, compatible features are canceled and one of the items projects. Simultaneously, the A expression associated with the licensor is applied to the A expression associated with the licensee (in theoretical linguistic te</context>
+</contexts>
+<marker>Harkema, 2000</marker>
+<rawString>Henk Harkema. 2000. A recognizer for minimalist grammars. In Proceedings of the Sixth International Workshop on Parsing Technologies (IWPT 2000).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ray Jackendoff</author>
+</authors>
+<title>Semantics and Cognition.</title>
+<date>1983</date>
+<publisher>MIT Press,</publisher>
+<location>Cambridge, Massachusetts.</location>
+<contexts>
+<context position="4933" citStr="Jackendoff, 1983" startWordPosition="699" endWordPosition="700">ins an unsolved problem; see (Levin and Rappaport Hovav, 1996). Fixed roles are too coarsegrained to account for certain semantic distinctions—the only recourse, to expand the inventory of roles, comes with the price of increased complexity, e.g., in the syntaxto-semantics mapping. There is a general consensus among theoretical linguists that the proper representation of verbal argument structure is event structure—representations grounded in a theory of events that decompose semantic roles in terms of primitive predicates representing concepts such as causality and inchoativity (Dowty, 1979; Jackendoff, 1983; Pustejovsky, 1991b; Rappaport Hovav and Levin, 1998). Consider the following example: (2) He sweeps the floor clean. [ [ DO(he, sweeps(the floor)) ] CAUSE [ BECOME [ clean(the floor) ] ] ] Dowty breaks the event described by (2) into two subevents, the activity of sweeping the floor and its result, the state of the floor being clean. A more recent approach, advocated by Rappaport Hovav and Levin (1998), describes a basic set of event templates corresponding to Vendler’s event classes (Vendler, 1957): (3) a. [ x ACT&lt;MANNER&gt; ] (activity) b. [ x &lt;STATE&gt; ] (state) c. [ BECOME [ x &lt;STATE&gt; ] ] (ac</context>
+</contexts>
+<marker>Jackendoff, 1983</marker>
+<rawString>Ray Jackendoff. 1983. Semantics and Cognition. MIT Press, Cambridge, Massachusetts.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Paul Kingsbury</author>
+<author>Martha Palmer</author>
+<author>Mitch Marcus</author>
+</authors>
+<title>Adding semantic annotation to the Penn TreeBank.</title>
+<date>2002</date>
+<booktitle>In Proceeding of 2002 Human Language Technology Conference (HLT</booktitle>
+<contexts>
+<context position="1790" citStr="Kingsbury et al., 2002" startWordPosition="251" endWordPosition="254">ns, 1997; Charniak, 2001), attention has recently shifted towards the harder question of analyzing the meaning of natural language sentences. A common lexical semantic representation in the computational linguistics literature is a frame-based model where syntactic arguments are associated with various semantic roles (essentially frame slots). Verbs are viewed as simple predicates over their arguments. This approach has its roots in Fillmore’s Case Grammar (1968), and serves as the foundation for two current large-scale semantic annotation projects: FrameNet (Baker et al., 1998) and PropBank (Kingsbury et al., 2002). Underlying the semantic roles approach is a lexicalist assumption, that is, each verb’s lexical entry completely encodes (more formally, projects) its syntactic and semantic structures. Alternations in argument structure are usually attributed to multiple lexical entries (i.e., verb senses). Under the lexicalist approach, the semantics of the verb break might look something like this: (1) break(agent, theme) agent: subject theme: object break(agent, theme, instrument) agent: subject theme: object instrument: oblique(with) break(theme) theme: subject . . . The lexicon explicitly specifies the</context>
+</contexts>
+<marker>Kingsbury, Palmer, Marcus, 2002</marker>
+<rawString>Paul Kingsbury, Martha Palmer, and Mitch Marcus. 2002. Adding semantic annotation to the Penn TreeBank. In Proceeding of 2002 Human Language Technology Conference (HLT 2002).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Angelika Kratzer</author>
+</authors>
+<title>The event argument and the semantics of voice.</title>
+<date>1994</date>
+<institution>University of Massachusetts,</institution>
+<location>Amherst.</location>
+<note>Unpublished manuscript,</note>
+<contexts>
+<context position="12808" citStr="Kratzer, 1994" startWordPosition="1910" endWordPosition="1911"> in the syntax, and correspond to (assumed) universal primitives of the human cognitive system. On the other hand, verbal roots represent abstract (categoryless) concepts and basically correspond to open-class items drawn from encyclopedic knowledge. I assume an inventory of three verbalizing heads, each corresponding to an aforementioned primitive: (9) vDO [+dynamic, −inchoative] = DO vb [+dynamic, +inchoative] = BECOME vBE [−dynamic] = BE The light verb vDO licenses an atelic non-inchoative event, and is compatible with verbal roots expressing activity. It projects a functional head, voice (Kratzer, 1994), whose specifier is the external argument. (10) John ran. voiceP run ARGext(John, e) ∧ DO([activity run], e) DP voice vDOP √ vDO John The entire voiceP is further embedded under a tense projection (not shown here), and the verbal complex undergoes head movement and left adjoins to any overt tense markings. Similarly, the external argument raises to [Spec, TP]. This is in accordance with modern linguistic theory, more specifically, the subject-internal hypothesis. The verbal root can itself idiosyncratically license a DP to give rise to a transitive sentence (subjected, naturally, to selection</context>
+</contexts>
+<marker>Kratzer, 1994</marker>
+<rawString>Angelika Kratzer. 1994. The event argument and the semantics of voice. Unpublished manuscript, University of Massachusetts, Amherst.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Beth Levin</author>
+<author>Malka Rappaport Hovav</author>
+</authors>
+<title>From lexical semantics to argument realization.</title>
+<date>1996</date>
+<institution>Northwestern University and Bar Ilan University.</institution>
+<note>Unpublished manuscript,</note>
+<marker>Levin, Hovav, 1996</marker>
+<rawString>Beth Levin and Malka Rappaport Hovav. 1996. From lexical semantics to argument realization. Unpublished manuscript, Northwestern University and Bar Ilan University.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Beth Levin</author>
+</authors>
+<title>English Verb Classes and Alternations: A Preliminary Investigation.</title>
+<date>1993</date>
+<publisher>University of Chicago Press,</publisher>
+<location>Chicago, Illinois.</location>
+<contexts>
+<context position="2915" citStr="Levin, 1993" startWordPosition="417" endWordPosition="418">t: oblique(with) break(theme) theme: subject . . . The lexicon explicitly specifies the different subcategorization frames of a verb, e.g., the causative frame, the causative instrumental frame, the inchoative frame, etc. The major drawback of this approach, however, is the tremendous amount of redundancy in the lexicon—for example, the class of prototypical transitive verbs where the agent appears as the subject and the theme as the direct object must all duplicate this pattern. The typical solution to the redundancy problem is to group verbs according to their argument realization patterns (Levin, 1993), possibly arranged in an inheritance hierarchy. The argument structure and syntax-tosemantics mapping would then only need to be specified once for each verb class. In addition, lexical rules could be formulated to derive certain alternations from more basic forms. Nevertheless, the lexicalist approach does not capture productive morphological processes that pervade natural language, for example, flat.V → flatten.ADJ or hammer.N → hammer.V; most frameworks for computational semantics fail to capture the deeper derivational relationship between morphologically-related terms. For languages with</context>
+<context position="18268" citStr="Levin (1993)" startWordPosition="2810" endWordPosition="2811">ithm. I have adapted it for my needs and developed grammar fragments that reflect my non-lexicalist semantic framework. As an example, a simplified derivation of the sentence “The tire flattened.” is shown in Figure 1. The currently implemented system is still at the “toy parser” stage. Although the effectiveness and coverage of my parser remains to be seen, similar approaches have been successful at capturing complex linguistic phenomena. With a minimal set of features and a small number of lexical entries, Niyogi (2001) has successfully modeled many of the argument alternations described by Levin (1993) using a Hale and Keyser (1993) style analysis. I believe that with a suitable lexicon (either hand crafted or automatically induced), my framework can be elaborated into a system whose performance is comparable to that of current statistical parsers, but with the added advantage of simultaneously providing a richer lexical semantic representation of the input sentence than flat predicate argument structures based on semantic roles. 6 Conclusion A combination of factors in the natural development of computational linguistics as a field has conspired to narrow the diversity of techniques being </context>
+</contexts>
+<marker>Levin, 1993</marker>
+<rawString>Beth Levin. 1993. English Verb Classes and Alternations: A Preliminary Investigation. University of Chicago Press, Chicago, Illinois.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Beth Levin</author>
+</authors>
+<title>Objecthood: An event structure perspective.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the 35th Annual Meeting of the Chicago Linguistics Society.</booktitle>
+<marker>Levin, 1999</marker>
+<rawString>Beth Levin. 1999. Objecthood: An event structure perspective. In Proceedings of the 35th Annual Meeting of the Chicago Linguistics Society.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jimmy Lin</author>
+</authors>
+<title>Event Structure and the Encoding of Arguments: The Syntax of the English and Mandarin Verb Phrase.</title>
+<date>2004</date>
+<tech>Ph.D. thesis,</tech>
+<institution>Department of Electrical Engineering and Computer Science, Massachusetts Institute of Technology.</institution>
+<contexts>
+<context position="14941" citStr="Lin, 2004" startWordPosition="2250" endWordPosition="2251"> state to the end state specified by the root. vbP can be optionally embedded as the complement vb J vBE break CAUSE(e1, e2) ∧ ARGext(John, e1) ∧ DO([activity undef], e1) ∧ ARGb(window, e2) ∧ BECOME(BE([state break]), e2) Note that in the causative form, vDO is unmodified by a verbal root—the manner of activity is left unspecified, i.e., “John did something that caused the window to undergo the change of state break.” Given this framework, deadjectival verbs such as flatten can be directly derived in the syntax: (15) The tire flattened. vbP flat ARGb(tire, e) ∧ BECOME(BE([state flat]), e) In (Lin, 2004), I present evidence from Mandarin Chinese that this analysis is on the right track. The rest of this paper, however, will be concerned with the computational implementation of my theoretical framework. 5 Minimalist Derivations My theory of verbal argument structure can be implemented in a unified morpho-syntactic parsing model that interleaves syntactic and semantic parsing. The system is in the form of an agenda-driven chart-based parser whose foundation is similar to previous formalizations of Chomsky’s Minimalist Program (Stabler, 1997; Harkema, 2000; Niyogi, 2001). DP John voice vDOP JP v</context>
+</contexts>
+<marker>Lin, 2004</marker>
+<rawString>Jimmy Lin. 2004. Event Structure and the Encoding of Arguments: The Syntax of the English and Mandarin Verb Phrase. Ph.D. thesis, Department of Electrical Engineering and Computer Science, Massachusetts Institute of Technology.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alec Marantz</author>
+</authors>
+<title>No escape from syntax: Don’t try morphological analysis in the privacy of your own lexicon.</title>
+<date>1997</date>
+<booktitle>In Proceedings of the 21st Annual Penn Linguistics Colloquium.</booktitle>
+<contexts>
+<context position="12063" citStr="Marantz (1997)" startWordPosition="1801" endWordPosition="1802">chievements only in terms of event duration, which is often a question of granularity. From typological studies, it appears that states, change of states, and activities form the most basic ontology of event types. They correspond to the primitives BE, BECOME, and DO proposed by a variety of linguists; let us adopt these conceptual primitives as the basic vocabulary of our lexical semantic representation. Following the non-lexicalist tradition, these primitives are argued to occupy functional projections in the syntactic structure, as so-called light verbs. Here, I adopt the model proposed by Marantz (1997) and decompose lexical verbs into verbalizing heads and verbal roots. Verbalizing heads introduce relevant eventive interpretations in the syntax, and correspond to (assumed) universal primitives of the human cognitive system. On the other hand, verbal roots represent abstract (categoryless) concepts and basically correspond to open-class items drawn from encyclopedic knowledge. I assume an inventory of three verbalizing heads, each corresponding to an aforementioned primitive: (9) vDO [+dynamic, −inchoative] = DO vb [+dynamic, +inchoative] = BECOME vBE [−dynamic] = BE The light verb vDO licen</context>
+</contexts>
+<marker>Marantz, 1997</marker>
+<rawString>Alec Marantz. 1997. No escape from syntax: Don’t try morphological analysis in the privacy of your own lexicon. In Proceedings of the 21st Annual Penn Linguistics Colloquium.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Sourabh Niyogi</author>
+</authors>
+<title>A minimalist implementation of verb subcategorization.</title>
+<date>2001</date>
+<booktitle>In Proceedings of the Seventh International Workshop on Parsing Technologies (IWPT-2001).</booktitle>
+<contexts>
+<context position="15516" citStr="Niyogi, 2001" startWordPosition="2337" endWordPosition="2338">ME(BE([state flat]), e) In (Lin, 2004), I present evidence from Mandarin Chinese that this analysis is on the right track. The rest of this paper, however, will be concerned with the computational implementation of my theoretical framework. 5 Minimalist Derivations My theory of verbal argument structure can be implemented in a unified morpho-syntactic parsing model that interleaves syntactic and semantic parsing. The system is in the form of an agenda-driven chart-based parser whose foundation is similar to previous formalizations of Chomsky’s Minimalist Program (Stabler, 1997; Harkema, 2000; Niyogi, 2001). DP John voice vDOP JP vDO Mary DP vBE J tall is DP window vb DP tire -en vb vBEP J vBE DP window Lexical entries in the system are minimally specified, each consisting of a phonetic form, a list of relevant features, and semantics in the form of a A expression. The basic structure building operation, MERGE, takes two items and creates a larger item. In the process, compatible features are canceled and one of the items projects. Simultaneously, the A expression associated with the licensor is applied to the A expression associated with the licensee (in theoretical linguistic terms, SpellOut).</context>
+<context position="17497" citStr="Niyogi (2001)" startWordPosition="2689" endWordPosition="2690">E([state flat]) s &lt; &gt; /the tire/ &lt; d ✿✿ tire /flat -en/ &gt;be =d ✿✿ Ay.ARGδ(y, e)∧ BECOME(BE([state tall]), e) ARGδ(he, e) ∧ BECOME(BE([state tall(3cm)]), e) &lt; &gt;s vbe s (17) &lt; &lt; Figure 1: Simplified derivation for the sentence “The tire flattened.” book -s book de- bone bone &gt;n d -k n &lt;n V n Finally, feature checking is implemented by +x/-x features. The +x denotes a need to discharge features, and the -x denotes a need for features. A simple example of this is the case assignment involved in building a prepositional phrase, i.e., prepositions must assign case, and DPs much receive case. (18) &lt; Niyogi (2001) has developed an agenda-driven chart parser for the feature-driven formalism described above; please refer to his paper for a description of the parsing algorithm. I have adapted it for my needs and developed grammar fragments that reflect my non-lexicalist semantic framework. As an example, a simplified derivation of the sentence “The tire flattened.” is shown in Figure 1. The currently implemented system is still at the “toy parser” stage. Although the effectiveness and coverage of my parser remains to be seen, similar approaches have been successful at capturing complex linguistic phenomen</context>
+</contexts>
+<marker>Niyogi, 2001</marker>
+<rawString>Sourabh Niyogi. 2001. A minimalist implementation of verb subcategorization. In Proceedings of the Seventh International Workshop on Parsing Technologies (IWPT-2001).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James Pustejovsky</author>
+</authors>
+<title>The generative lexicon.</title>
+<date>1991</date>
+<journal>Computational Linguistics,</journal>
+<volume>17</volume>
+<issue>4</issue>
+<contexts>
+<context position="4952" citStr="Pustejovsky, 1991" startWordPosition="701" endWordPosition="702">oblem; see (Levin and Rappaport Hovav, 1996). Fixed roles are too coarsegrained to account for certain semantic distinctions—the only recourse, to expand the inventory of roles, comes with the price of increased complexity, e.g., in the syntaxto-semantics mapping. There is a general consensus among theoretical linguists that the proper representation of verbal argument structure is event structure—representations grounded in a theory of events that decompose semantic roles in terms of primitive predicates representing concepts such as causality and inchoativity (Dowty, 1979; Jackendoff, 1983; Pustejovsky, 1991b; Rappaport Hovav and Levin, 1998). Consider the following example: (2) He sweeps the floor clean. [ [ DO(he, sweeps(the floor)) ] CAUSE [ BECOME [ clean(the floor) ] ] ] Dowty breaks the event described by (2) into two subevents, the activity of sweeping the floor and its result, the state of the floor being clean. A more recent approach, advocated by Rappaport Hovav and Levin (1998), describes a basic set of event templates corresponding to Vendler’s event classes (Vendler, 1957): (3) a. [ x ACT&lt;MANNER&gt; ] (activity) b. [ x &lt;STATE&gt; ] (state) c. [ BECOME [ x &lt;STATE&gt; ] ] (achievement) d. [ x C</context>
+<context position="8249" citStr="Pustejovsky (1991" startWordPosition="1230" endWordPosition="1231">al items, that is, fragments of event structure are directly associated with derivational morphemes. We have the following situation: (7) JflatK = [state flat] Jis flatK = AxBE(x, [state flat]) J-enK = AsAxARGδ(x, e) ∧ BECOME(BE(s), e) Jflat-enK = Ax.ARGδ(x, e)∧ BECOME(BE([state flat]), e) In this case, the complete event structure of a word can be compositionally derived from its component morphemes. This framework, where the “semantic load” is spread more evenly throughout the lexicon to lexical categories not typically thought to bear semantic content, is essentially the model advocated by Pustejovsky (1991a), among many others. Note that such an approach is no longer lexicalist: each lexical item does not fully encode its associated syntactic and semantic structures. Rather, meanings are composed from component morphemes. In addition to -en, other productive derivational suffixes in English such as -er, -ize, -ion, just to name a few, can be analyzed in a similar way. In fact, we may view morphological rules for composing morphemes into larger phonological units the same way we view syntactic rules for combining constituents into higher-level projections, i.e., why distinguish VP → V + NP from </context>
+</contexts>
+<marker>Pustejovsky, 1991</marker>
+<rawString>James Pustejovsky. 1991a. The generative lexicon. Computational Linguistics, 17(4):409–441.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James Pustejovsky</author>
+</authors>
+<title>The syntax of event structure.</title>
+<date>1991</date>
+<journal>Cognition,</journal>
+<pages>41--47</pages>
+<contexts>
+<context position="4952" citStr="Pustejovsky, 1991" startWordPosition="701" endWordPosition="702">oblem; see (Levin and Rappaport Hovav, 1996). Fixed roles are too coarsegrained to account for certain semantic distinctions—the only recourse, to expand the inventory of roles, comes with the price of increased complexity, e.g., in the syntaxto-semantics mapping. There is a general consensus among theoretical linguists that the proper representation of verbal argument structure is event structure—representations grounded in a theory of events that decompose semantic roles in terms of primitive predicates representing concepts such as causality and inchoativity (Dowty, 1979; Jackendoff, 1983; Pustejovsky, 1991b; Rappaport Hovav and Levin, 1998). Consider the following example: (2) He sweeps the floor clean. [ [ DO(he, sweeps(the floor)) ] CAUSE [ BECOME [ clean(the floor) ] ] ] Dowty breaks the event described by (2) into two subevents, the activity of sweeping the floor and its result, the state of the floor being clean. A more recent approach, advocated by Rappaport Hovav and Levin (1998), describes a basic set of event templates corresponding to Vendler’s event classes (Vendler, 1957): (3) a. [ x ACT&lt;MANNER&gt; ] (activity) b. [ x &lt;STATE&gt; ] (state) c. [ BECOME [ x &lt;STATE&gt; ] ] (achievement) d. [ x C</context>
+<context position="8249" citStr="Pustejovsky (1991" startWordPosition="1230" endWordPosition="1231">al items, that is, fragments of event structure are directly associated with derivational morphemes. We have the following situation: (7) JflatK = [state flat] Jis flatK = AxBE(x, [state flat]) J-enK = AsAxARGδ(x, e) ∧ BECOME(BE(s), e) Jflat-enK = Ax.ARGδ(x, e)∧ BECOME(BE([state flat]), e) In this case, the complete event structure of a word can be compositionally derived from its component morphemes. This framework, where the “semantic load” is spread more evenly throughout the lexicon to lexical categories not typically thought to bear semantic content, is essentially the model advocated by Pustejovsky (1991a), among many others. Note that such an approach is no longer lexicalist: each lexical item does not fully encode its associated syntactic and semantic structures. Rather, meanings are composed from component morphemes. In addition to -en, other productive derivational suffixes in English such as -er, -ize, -ion, just to name a few, can be analyzed in a similar way. In fact, we may view morphological rules for composing morphemes into larger phonological units the same way we view syntactic rules for combining constituents into higher-level projections, i.e., why distinguish VP → V + NP from </context>
+</contexts>
+<marker>Pustejovsky, 1991</marker>
+<rawString>James Pustejovsky. 1991b. The syntax of event structure. Cognition, 41:47–81.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Malka Rappaport Hovav</author>
+<author>Beth Levin</author>
+</authors>
+<title>Building verb meanings.</title>
+<date>1998</date>
+<booktitle>The Projection of Arguments: Lexical and Compositional Factors.</booktitle>
+<editor>In Miriam Butt and Wilhelm Geuder, editors,</editor>
+<publisher>CSLI Publications,</publisher>
+<location>Stanford, California.</location>
+<contexts>
+<context position="4987" citStr="Hovav and Levin, 1998" startWordPosition="704" endWordPosition="707">t Hovav, 1996). Fixed roles are too coarsegrained to account for certain semantic distinctions—the only recourse, to expand the inventory of roles, comes with the price of increased complexity, e.g., in the syntaxto-semantics mapping. There is a general consensus among theoretical linguists that the proper representation of verbal argument structure is event structure—representations grounded in a theory of events that decompose semantic roles in terms of primitive predicates representing concepts such as causality and inchoativity (Dowty, 1979; Jackendoff, 1983; Pustejovsky, 1991b; Rappaport Hovav and Levin, 1998). Consider the following example: (2) He sweeps the floor clean. [ [ DO(he, sweeps(the floor)) ] CAUSE [ BECOME [ clean(the floor) ] ] ] Dowty breaks the event described by (2) into two subevents, the activity of sweeping the floor and its result, the state of the floor being clean. A more recent approach, advocated by Rappaport Hovav and Levin (1998), describes a basic set of event templates corresponding to Vendler’s event classes (Vendler, 1957): (3) a. [ x ACT&lt;MANNER&gt; ] (activity) b. [ x &lt;STATE&gt; ] (state) c. [ BECOME [ x &lt;STATE&gt; ] ] (achievement) d. [ x CAUSE [ BECOME [ x &lt;STATE&gt; ] ] ] (ac</context>
+</contexts>
+<marker>Hovav, Levin, 1998</marker>
+<rawString>Malka Rappaport Hovav and Beth Levin. 1998. Building verb meanings. In Miriam Butt and Wilhelm Geuder, editors, The Projection of Arguments: Lexical and Compositional Factors. CSLI Publications, Stanford, California.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Edward Stabler</author>
+</authors>
+<title>Derivational minimalism.</title>
+<date>1997</date>
+<booktitle>Logical Aspects of Computational Linguistics.</booktitle>
+<editor>In Christian Retor´e, editor,</editor>
+<publisher>Springer.</publisher>
+<contexts>
+<context position="15486" citStr="Stabler, 1997" startWordPosition="2333" endWordPosition="2334"> vbP flat ARGb(tire, e) ∧ BECOME(BE([state flat]), e) In (Lin, 2004), I present evidence from Mandarin Chinese that this analysis is on the right track. The rest of this paper, however, will be concerned with the computational implementation of my theoretical framework. 5 Minimalist Derivations My theory of verbal argument structure can be implemented in a unified morpho-syntactic parsing model that interleaves syntactic and semantic parsing. The system is in the form of an agenda-driven chart-based parser whose foundation is similar to previous formalizations of Chomsky’s Minimalist Program (Stabler, 1997; Harkema, 2000; Niyogi, 2001). DP John voice vDOP JP vDO Mary DP vBE J tall is DP window vb DP tire -en vb vBEP J vBE DP window Lexical entries in the system are minimally specified, each consisting of a phonetic form, a list of relevant features, and semantics in the form of a A expression. The basic structure building operation, MERGE, takes two items and creates a larger item. In the process, compatible features are canceled and one of the items projects. Simultaneously, the A expression associated with the licensor is applied to the A expression associated with the licensee (in theoretica</context>
+</contexts>
+<marker>Stabler, 1997</marker>
+<rawString>Edward Stabler. 1997. Derivational minimalism. In Christian Retor´e, editor, Logical Aspects of Computational Linguistics. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Carol Tenny</author>
+</authors>
+<title>Grammaticalizing Aspect and Affectedness.</title>
+<date>1987</date>
+<tech>Ph.D. thesis,</tech>
+<institution>Massachusetts Institute of Technology.</institution>
+<contexts>
+<context position="11405" citStr="Tenny (1987)" startWordPosition="1700" endWordPosition="1701">nal ontology of event types. Examples of the four event types are given below: (8) States Activities know run believe walk Accomplishments Achievements paint a picture recognize make a chair find Under Vendler’s classification, activities and states both depict situations that are inherently temporally unbounded (atelic); states denote static situations, whereas activities denote on-going dynamic situations. Accomplishments and achievements both express a change of state, and hence are temporally bounded (telic); achievements are punctual, whereas accomplishments extend over a period of time. Tenny (1987) observes that accomplishments differ from achievements only in terms of event duration, which is often a question of granularity. From typological studies, it appears that states, change of states, and activities form the most basic ontology of event types. They correspond to the primitives BE, BECOME, and DO proposed by a variety of linguists; let us adopt these conceptual primitives as the basic vocabulary of our lexical semantic representation. Following the non-lexicalist tradition, these primitives are argued to occupy functional projections in the syntactic structure, as so-called light</context>
+</contexts>
+<marker>Tenny, 1987</marker>
+<rawString>Carol Tenny. 1987. Grammaticalizing Aspect and Affectedness. Ph.D. thesis, Massachusetts Institute of Technology.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Zeno Vendler</author>
+</authors>
+<title>Verbs and times.</title>
+<date>1957</date>
+<journal>Philosophical Review,</journal>
+<pages>56--143</pages>
+<contexts>
+<context position="5439" citStr="Vendler, 1957" startWordPosition="783" endWordPosition="784">primitive predicates representing concepts such as causality and inchoativity (Dowty, 1979; Jackendoff, 1983; Pustejovsky, 1991b; Rappaport Hovav and Levin, 1998). Consider the following example: (2) He sweeps the floor clean. [ [ DO(he, sweeps(the floor)) ] CAUSE [ BECOME [ clean(the floor) ] ] ] Dowty breaks the event described by (2) into two subevents, the activity of sweeping the floor and its result, the state of the floor being clean. A more recent approach, advocated by Rappaport Hovav and Levin (1998), describes a basic set of event templates corresponding to Vendler’s event classes (Vendler, 1957): (3) a. [ x ACT&lt;MANNER&gt; ] (activity) b. [ x &lt;STATE&gt; ] (state) c. [ BECOME [ x &lt;STATE&gt; ] ] (achievement) d. [ x CAUSE [ BECOME [ x &lt;STATE&gt; ] ] ] (accomplishment) e. [ [ x ACT&lt;MANNER&gt; ] CAUSE [ BECOME [ x &lt;STATE&gt; ] ] ] (accomplishment) A process called Template Augmentation allows basic event templates to be freely “augmented” to any other event template. This process, for example, explains the resultative form of surface contact verbs like sweep: (4) a. Phil swept the floor. [ Phil ACT&lt;SWEEP&gt; floor ] b. Phil swept the floor clean. [ [ Phil ACT&lt;SWEEP&gt; floor ] CAUSE [ BECOME [ floor &lt;CLEAN&gt; ] ] </context>
+</contexts>
+<marker>Vendler, 1957</marker>
+<rawString>Zeno Vendler. 1957. Verbs and times. Philosophical Review, 56:143–160.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

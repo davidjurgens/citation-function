@@ -1,0 +1,1872 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000043">
+<title confidence="0.994815">
+Using Discourse Information for Paraphrase Extraction
+</title>
+<author confidence="0.991702">
+Michaela Regneri
+</author>
+<affiliation confidence="0.87987">
+Dept. of Computational Linguistics
+Saarland University
+Saarbrücken, Germany
+</affiliation>
+<email confidence="0.991254">
+regneri@coli.uni-saarland.de
+</email>
+<author confidence="0.901538">
+Rui Wang
+</author>
+<affiliation confidence="0.710728">
+Language Technology Lab
+DFKI GmbH
+Saarbrücken, Germany
+</affiliation>
+<email confidence="0.994162">
+ruiwang@dfki.de
+</email>
+<sectionHeader confidence="0.993778" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.9997284">
+Previous work on paraphrase extraction us-
+ing parallel or comparable corpora has gener-
+ally not considered the documents’ discourse
+structure as a useful information source. We
+propose a novel method for collecting para-
+phrases relying on the sequential event or-
+der in the discourse, using multiple sequence
+alignment with a semantic similarity measure.
+We show that adding discourse information
+boosts the performance of sentence-level para-
+phrase acquisition, which consequently gives
+a tremendous advantage for extracting phrase-
+level paraphrase fragments from matched sen-
+tences. Our system beats an informed baseline
+by a margin of 50%.
+</bodyText>
+<sectionHeader confidence="0.998991" genericHeader="keywords">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999924648148148">
+It is widely agreed that identifying paraphrases is a
+core task for natural language processing, including
+applications like document summarization (Barzilay
+et al., 1999), Recognizing Textual Entailment (Da-
+gan et al., 2005), natural language generation (Zhao
+et al., 2010; Ganitkevitch et al., 2011), and machine
+translation (Marton et al., 2009). As a consequence,
+many methods have been proposed for generating
+large paraphrase resources (Lin and Pantel, 2001;
+Szpektor et al., 2004; Dolan et al., 2004). One of
+the intuitively appropriate data sources for such col-
+lections are parallel or comparable corpora: if two
+texts are translations of the same foreign document,
+or if they describe the same underlying scenario,
+they should contain a reasonable number of sentence
+pairs that convey the same meaning.
+Most approaches that extract paraphrases from
+parallel texts employ some type of pattern match-
+ing: sentences with the same meaning are assumed
+to share many n-grams (Barzilay and Lee, 2003;
+Callison-Burch, 2008, among others), many words
+in their context (Barzilay and McKeown, 2001) or
+certain slots in a dependency path (Lin and Pantel,
+2001; Szpektor et al., 2004). Discourse structure
+has only marginally been considered for this task:
+For example, Dolan et al. (2004) extract the first
+sentences from comparable articles and take them
+as paraphrases. Another approach (Deléger and
+Zweigenbaum, 2009) matches similar paragraphs in
+comparable texts, creating smaller comparable doc-
+uments for paraphrase extraction.
+We believe that discourse structure delivers im-
+portant information for the extraction of para-
+phrases. Sentences that play the same role in a cer-
+tain discourse and have a similar discourse context
+can be paraphrases, even if a semantic similarity
+model does not consider them very similar. This ex-
+tends the widely applied distributional hypothesis to
+the discourse level: According to the distributional
+hypothesis, entities are similar if they share similar
+contexts. In our case, entities are whole sentences,
+and contexts are discourse units.
+Based on this assumption, we propose a novel
+method for collecting paraphrases from parallel texts
+using discourse information. We create a new type
+of parallel corpus by collecting multiple summaries
+for several TV show episodes. The discourse struc-
+tures of those summaries are easy to compare: they
+all contain the events in the same order as they
+have appeared on the screen. This allows us to
+take sentence order as event-based discourse struc-
+ture, which is highly parallel for recaps of the same
+episode.
+In its first step, our system uses a sequence align-
+</bodyText>
+<page confidence="0.971825">
+916
+</page>
+<note confidence="0.7885825">
+Proceedings of the 2012 Joint Conference on Empirical Methods in Natural Language Processing and Computational Natural
+Language Learning, pages 916–927, Jeju Island, Korea, 12–14 July 2012. c�2012 Association for Computational Linguistics
+</note>
+<bodyText confidence="0.99990736">
+ment algorithm combined with a state-of-the-art
+similarity measure. The approach outperforms in-
+formed baselines on the task of sentential paraphrase
+identification. The usage of discourse information
+even contributes more to the final performance than
+the sentence similarity measure.
+As second step, we extract phrase-level para-
+phrase fragments from the matched sentences. This
+step relies on the alignment algorithm’s output, and
+we show that discourse information makes a big dif-
+ference for the precision of the extraction. We then
+add more discourse-based information by prepro-
+cessing the text with a coreference resolution sys-
+tem, which results in additional performance im-
+provement.
+The paper is structured as follows: first we sum-
+marize related work (Sec. 2), and then we give an
+overview over our perspective on the task and sketch
+our system pipeline (Sec. 3). The following two sec-
+tions describe the details of the sentence matching
+step (Sec. 4) and the subsequent paraphrase frag-
+ment extraction (Sec. 5). We present both automatic
+and manual evaluation of the two system compo-
+nents (Sec. 6). Finally, we conclude the paper and
+give some hints for future work (Sec. 7).
+</bodyText>
+<sectionHeader confidence="0.999745" genericHeader="introduction">
+2 Related Work
+</sectionHeader>
+<bodyText confidence="0.999661573529412">
+Previous paraphrase extraction approaches can be
+roughly characterized under two aspects: 1) data
+source and 2) granularity of the output.
+Both parallel corpora and comparable corpora
+have been quite well studied. Barzilay and McK-
+eown (2001) use different English translations of
+the same novels (i.e., monolingual parallel corpora),
+while others (Quirk et al., 2004) experiment on mul-
+tiple sources of the same news/events, i.e., mono-
+lingual comparable corpora. Commonly used (can-
+didate) comparable corpora are news articles writ-
+ten by different news agencies within a limited time
+window (Wang and Callison-Burch, 2011). Other
+studies focus on extracting paraphrases from large
+bilingual parallel corpora, which the machine trans-
+lation (MT) community provides in many varieties.
+Bannard and Callison-Burch (2005) as well as Zhao
+et al. (2008) take one language as the pivot and
+match two possible translations in the other lan-
+guages as paraphrases if they share a common pivot
+phrase. As parallel corpora have many alternative
+ways of expressing the same foreign language con-
+cept, large quantities of paraphrase pairs can be ex-
+tracted.
+The paraphrasing task is also strongly related to
+cross-document event coreference resolution, which
+is tackled by similar techniques used by the available
+paraphrasing systems (Bagga and Baldwin, 1999;
+Tomadaki and Salway, 2005).
+Most work in paraphrase acquisition has dealt
+with sentence-level paraphrases, e.g., (Barzilay and
+McKeown, 2001; Barzilay and Lee, 2003; Dolan et
+al., 2004; Quirk et al., 2004). Our approach for sen-
+tential paraphrase extraction is related to the one in-
+troduced by Barzilay and Lee (2003), who also em-
+ploy multiple sequence alignment (MSA). However,
+they use MSA at the sentence level rather than at the
+discourse level.
+We take some core ideas from our previous work
+on mining script information (Regneri et al., 2010).
+In this earlier work, we focused on event structures
+and their possible realizations in natural language.
+The corpus used in those experiments were short
+crowd-sourced descriptions of everyday tasks writ-
+ten in bullet point style. We aligned them with a
+hand-crafted similarity measure that was specifically
+designed for this text type. In this current work,
+we target the general task of extracting paraphrases
+for events rather than the much more specific script-
+related task. The current approach uses a domain-
+independent similarity measure instead of a specific
+hand-crafted similarity score and is thus applicable
+to standard texts.
+From an applicational point of view, senten-
+tial paraphrases are difficult to use in other NLP
+tasks. At the phrasal level, interchangeable patterns
+(Shinyama et al., 2002; Shinyama and Sekine, 2003)
+or inference rules (Lin and Pantel, 2001) are ex-
+tracted. In both cases, each pattern or rule contains
+one or several slots, which are restricted to certain
+type of words, e.g., named entities (NE) or content
+words. They are quite successful in NE-centered
+tasks, like information extraction, but their level of
+generalization or coverage is insufficient for appli-
+cations like Recognizing Textual Entailment (Dinu
+and Wang, 2009).
+The research on general paraphrase fragment ex-
+traction at the sub-sentential level is mainly based
+</bodyText>
+<page confidence="0.99535">
+917
+</page>
+<bodyText confidence="0.999286642857143">
+on phrase pair extraction techniques from the MT
+literature. Munteanu and Marcu (2006) extract sub-
+sentential translation pairs from comparable corpora
+using the log-likelihood-ratio of word translation
+probability. Quirk et al. (2007) extract fragments
+using a generative model of noisy translations. Our
+own work (Wang and Callison-Burch, 2011) extends
+the first idea to paraphrase fragment extraction on
+monolingual parallel and comparable corpora. Our
+current approach also uses word-word alignment,
+however, we use syntactic dependency trees to com-
+pute grammatical fragments. Our use of dependency
+trees is inspired by the constituent-tree-based exper-
+iments of Callison-Burch (2008).
+</bodyText>
+<sectionHeader confidence="0.993798" genericHeader="method">
+3 Paraphrases and Discourse
+</sectionHeader>
+<bodyText confidence="0.999235666666667">
+Previous approaches have shown that comparable
+texts provide a good basis for paraphrase extrac-
+tion. We want to show that discourse structure is
+highly useful for precise and high-yield paraphrase
+collection from such corpora. Consider the follow-
+ing (made-up) example:
+</bodyText>
+<listItem confidence="0.938068772727273">
+(1) [House keeps focusing on his aching leg.1.1.]
+[The psychiatrist suggests him to get a hobby
+1.2.] [House joins a cooking class.1.3]
+(2) [He tells him that the Ibuprofen is not helping
+with the pain.2.1.] [Nolan tells House to take up
+a hobby.2.2] [Together with Wilson he goes to a
+cookery course.2.3]
+Read as a whole, it is clear that the two texts de-
+scribe the same three events, in the same order, and
+thus, e.g., 1.2 and 2.2 are paraphrases. However,
+they share very few n-grams, nor named entities. We
+determine three factors that can help to identify such
+paraphrases:
+1. Consider the sequence of events. A system
+which recognizes that the three sentence pairs
+occur in the same sequential event order would
+have a chance of actually matching the sen-
+tences.
+2. Do coreference resolution. To determine
+which sentence parts actually carry the same
+meaning, pronoun resolution is essential (e.g.,
+to match “suggest him” and “tells House”).
+</listItem>
+<figureCaption confidence="0.956787">
+Figure 1: System pipeline
+</figureCaption>
+<listItem confidence="0.9834215">
+3. Try a generic sentence similarity model. Pat-
+tern matching or n-gram overlap might not be
+sufficient to solve this problem.
+Our system pipeline is sketched in Fig. 1:
+1. Create a corpus: First, we create a compara-
+ble corpus of texts with highly comparable dis-
+course structures. Complete discourse struc-
+tures like in the RST Discourse Treebank (Carl-
+son et al., 2002) may be very useful for para-
+phrase computation, however, they are hard to
+obtain. Discourse annotation is difficult and
+work-intensive, and full-blown automatic dis-
+course parsers are neither robust nor very pre-
+cise. To circumvent this problem, we assemble
+documents that have parallel discourse struc-
+tures by default: We compile multiple plot
+summaries of TV show episodes. The textual
+order of those summaries typically mirrors the
+underlying event order of the episodes, in the
+same sequence they happened on screen. We
+take sentence sequences of recaps as parallel
+discourse structures.
+2. Extract sentence-level paraphrases: Our sys-
+tem finds sentence pairs that are either para-
+phrases themselves, or at least contain para-
+phrase fragments. This procedure crucially re-
+lies on discourse knowledge: A Multiple Se-
+quence Alignment (MSA) algorithm matches
+sentences if both their inherent semantic sim-
+ilarities and the overall similarity score of their
+discourse contexts are high enough.
+3. Extract paraphrase fragments: Sentence-
+level paraphrases may be too specific for fur-
+ther domain-independent applications, as they
+</listItem>
+<bodyText confidence="0.9172335625">
+parallel corpus
+with parallel
+discourse
+structures
+recaps
+of House
+M.D.
+2 sentence-level paraphrases
+The psychiatrist suggests
+him to get a hobby
++ discourse information
++ semantic similarity
+Nolan tells House to take
+up a hobby.
++ word alignments
++ coref. resolution
+</bodyText>
+<figure confidence="0.884871166666667">
++ dependency trees
+3
+take up a hobby
+get a hobby
+paraphrase
+fragments
+</figure>
+<page confidence="0.978765">
+918
+</page>
+<bodyText confidence="0.99729505882353">
+row recap 1 recap 2 recap 3 recap 4 recap 5
+34 She gives Fore- Cuddy tells Fore- 0 Cuddy agrees Foreman insists he de-
+man one shot. man he has one to give him one serves a chance and
+chance to prove to chance to prove Cuddy gives in, warn-
+her he can run the himself. ing him he gets one
+team. shot.
+35 0 0 0 Foreman, Hadley, Foreman gives the
+and Taub get the news to Thirteen
+conference room and Taub and they
+ready and Foreman unpack the conference
+explains that he’ll room and go with a
+be in charge. diagnosis of CRPS.
+They decide that Foreman says to 0 0
+it might be CRPS treat him for com-
+36 and Foreman or- 0 plex regional pain
+ders a spinal stim- syndrome with a
+ulation. spinal stimulation.
+</bodyText>
+<figureCaption confidence="0.983757">
+Figure 2: Excerpt from an alignment table for 5 exemplary recaps of Episode 2 (Season 6).
+</figureCaption>
+<bodyText confidence="0.9999785">
+contain specific NEs (e.g. “House”) or time ref-
+erences. Thus we take a necessary second step
+and extract finer-grained paraphrase fragments
+from the sentence pairs matched in step 2. The
+resulting matched phrases should be grammat-
+ical and interchangeable regardless of context.
+We propose and compare different fragment ex-
+traction algorithms.
+The remainder of the paper shows how both of
+the paraphrasing steps benefit from using a corpus
+with highly parallel discourse structures: The sys-
+tem components employ discourse information ei-
+ther directly by using MSA (step 1) or coreference
+resolution (step 2), or indirectly, because using MSA
+in step 1 results in a high precision gain for the sub-
+sequent second step.
+</bodyText>
+<sectionHeader confidence="0.974103" genericHeader="method">
+4 Sentence Matching with MSA
+</sectionHeader>
+<bodyText confidence="0.997486">
+This section explains how we apply MSA to ex-
+tract sentence-level paraphrases from a comparable
+corpus. As our input data, we manually collect re-
+caps for House M.D. episodes from different sources
+on the web1. House episodes have an intermediate
+length (-45 min), which results in recaps of a con-
+1e.g. http://house.wikia.com – for a detailed list of
+URLs, please check the supplementary material or contact the
+authors.
+venient size (40 to 150 sentences). The result is one
+comparable document collection per episode. We
+applied a sentence splitter (Gillick, 2009) to the doc-
+uments and treat them as sequences of sentences for
+further processing.
+Sequence alignment takes as its input two se-
+quences consisting of elements of some alphabet,
+and an alphabet-specific score function cm over
+pairs of sequence elements. For insertions and dele-
+tions, the algorithm additionally takes gap costs
+(cgap). Multiple Sequence Alignment generalizes
+pairwise alignment to arbitrarily many sequences.
+MSA has its main application area in bioinformat-
+ics, where it is used to identify equivalent parts of
+DNA (Durbin et al., 1998). Our alphabet consists of
+sentences, and a sequence is an ordered sentence list
+constituting a recap.
+A Multiple Sequence Alignment results in a table
+like Fig. 2. Each column contains the sentences of
+one recap, possibly intermitted with gaps (“0”), and
+each row contains at least one non-gap. If two sen-
+tences end up in the same row, they are aligned; we
+take aligned sentence to be paraphrases. Aligning a
+sentence with a gap can be thought of as an insertion
+or deletion. Each alignment has a score which is the
+sum of all scores for substitutions and all costs for
+insertions and deletions. Informally, the alignment
+</bodyText>
+<page confidence="0.993471">
+919
+</page>
+<bodyText confidence="0.999911740740741">
+score is the sum of all scores for each pair of cells
+(c1, c2), if c1 and c2 are in the same row. If either c1
+or c2 is a gap, the pair’s score is cgap. If both cells
+contain sentences, the score is cm(c1, c2).
+Fern and Stevenson (2009) showed that sophis-
+ticated similarity measures improve paraphrasing,
+so we apply a state-of-the-art vector space model
+(Thater et al., 2011) as our score function. The vec-
+tor space model provides contextualized similarities
+of words, i.e. the vector of each word is disam-
+biguated by the context the current instance occurs
+in. cm(c1, c2) returns the model’s similarity score
+for c1 and c2.
+We re-implement a standard MSA algorithm
+(Needleman and Wunsch, 1970) which approxi-
+mates the best MSA given the input sequences, cm
+and cgap. This algorithm recursively aligns two se-
+quences at a time, treating the resulting alignment
+as a new sequence. This does not necessarily result
+in the globally optimal alignment, because the order
+in which sequences are aligned can change the final
+output. Given this constraint, the algorithm finds the
+best alignment, which - in our case - is the alignment
+with the maximal score. Intuitively, we are looking
+for the alignment where the most similar sentences
+with the most similar preceding and trailing contexts
+end up as paraphrases.
+</bodyText>
+<sectionHeader confidence="0.984204" genericHeader="method">
+5 Paraphrase Fragment Extraction
+</sectionHeader>
+<bodyText confidence="0.9999772">
+Taking the output of the sentence alignment as in-
+put, we next extract shorter phrase-level paraphrases
+(paraphrase fragments) from the matched sentence
+pairs. We try different algorithms for this step, all
+relying on word-word alignments.
+</bodyText>
+<subsectionHeader confidence="0.986054">
+5.1 Preprocessing
+</subsectionHeader>
+<bodyText confidence="0.999703555555556">
+Before extracting paraphrase fragments, we first pre-
+process all documents as follows:
+Stanford CoreNLP 2 provides a set of natural lan-
+guage analysis tools. We use the part-of-
+speech (POS) tagger, the named-entity recog-
+nizer, the parser (Klein and Manning, 2003),
+and the coreference resolution system (Lee et
+al., 2011). In particular, the dependency struc-
+tures of the parser’s output are used for VP-
+</bodyText>
+<footnote confidence="0.864196">
+2http://nlp.stanford.edu/software/
+corenlp.shtml
+</footnote>
+<bodyText confidence="0.999716052631579">
+fragment extraction (Sec. 5.3). The output from
+the coreference resolution system is used to
+cluster all mentions referring to the same en-
+tity and to select one as the representative men-
+tion. If the representative mention is not a pro-
+noun, we modify the original texts by replac-
+ing all pronoun mentions in the cluster with the
+syntactic head of the representative mention.
+Note that the coreference resolution system is
+applied to each recap as a whole.
+GIZA++ (Och and Ney, 2003) is a widely used
+word aligner for MT systems. We amend the
+input data by copying identical word pairs 10
+times and adding them as additional ‘sentence’
+pairs (Byrne et al., 2003), in order to emphasize
+the higher alignment probability between iden-
+tical words. We run GIZA++ for bi-directional
+word alignment and obtain a lexical translation
+table.
+</bodyText>
+<subsectionHeader confidence="0.998933">
+5.2 Fragment Extraction
+</subsectionHeader>
+<bodyText confidence="0.999710444444444">
+As mentioned in Sec. 2, we choose to use alignment-
+based approaches to this task, which allows us to use
+many existing MT techniques and tools. We mainly
+follow our previous approach (Wang and Callison-
+Burch, 2011), which is a modified version of an ap-
+proach by Munteanu and Marcu (2006) on trans-
+lation fragment extraction. We briefly review the
+three-step procedure here and refer the reader to the
+original paper for more details:
+</bodyText>
+<listItem confidence="0.9902786">
+1. Establish word-word alignment between each
+sentence pair using GIZA++;
+2. Smooth the alignment based on lexical occur-
+rence likelihood;
+3. Extract fragment pairs using different heuris-
+</listItem>
+<bodyText confidence="0.9213953">
+tics, e.g., non-overlapping n-grams, chunk
+boundaries, or dependency trees.
+After obtaining a lexical translation table by run-
+ning GIZA++, for each word pair, w1 and w2, we
+use both positive and negative lexical associations
+for the alignment, which are defined as the condi-
+tional probabilities p(w1jw2) and p(w1j:w2), re-
+spectively. The resulting alignment can be further
+constrained by a modified longest common sub-
+string (LCS) algorithm, which takes sequences of
+</bodyText>
+<page confidence="0.978503">
+920
+</page>
+<bodyText confidence="0.999905357142857">
+words instead of letters as input. Smoothing (step 2)
+is done for each word by taking the average score of
+it and its four neighbor words. All the word align-
+ments (excluding stop-words) with positive scores
+are selected as candidate fragment elements.
+Provided with the candidate fragment elements,
+we previously (Wang and Callison-Burch, 2011)
+used a chunker3 to finalize the output fragments, in
+order to follow the linguistic definition of a (para-)
+phrase. We extend this step in the current system
+by applying a dependency parser to constrain the
+boundary of the fragments (Sec. 5.3). Finally, we
+filter out trivial fragment pairs, such as identical or
+the original sentence pairs.
+</bodyText>
+<subsectionHeader confidence="0.983741">
+5.3 VP-fragment Extraction
+</subsectionHeader>
+<bodyText confidence="0.999731">
+To obtain more grammatical output fragments, we
+add another layer of linguistic information to our
+input sentences. Based on the dependency parses
+produced during preprocessing, we extract phrases
+containing verbs and their complements. More pre-
+cisely, we match two phrases if their respective sub-
+trees t1 and t2 satisfy the following conditions:
+</bodyText>
+<listItem confidence="0.9690578125">
+• The subtrees mirror a complete subset of
+the GIZA++ word alignment, i.e., all words
+aligned to a given word in t1 are contained in
+t2, and vice versa. For empty alignments, we
+require an overlap of at least one lemma (ig-
+noring stop words).
+• The root nodes of t1 and t2 have the same
+roles within their trees, e.g., we match clauses
+with an xcomp-label only with other xcomp-
+labelled clauses.
+• Both t1 and t2 contain at least one verb with
+at least one complement. To enhance recall,
+we additionally extract complete prepositional
+phrases.
+• We exclude trivial fragment pairs that are pre-
+fixes or suffixes of each other (or identical).
+</listItem>
+<bodyText confidence="0.9997452">
+The main advantage of this approach lies in the out-
+put’s grammaticality, because the subtrees always
+match complete phrases. This method also functions
+as a filtering mechanism for mistakenly aligned sen-
+tences: If only the two sentence nodes are returned
+</bodyText>
+<footnote confidence="0.561444">
+3We use the same OpenNLP chunker (http:
+//opennlp.sourceforge.net/) for consistency.
+</footnote>
+<bodyText confidence="0.997808">
+as possible matching partners, the pair is discarded
+from the results.
+</bodyText>
+<sectionHeader confidence="0.998231" genericHeader="method">
+6 Evaluation
+</sectionHeader>
+<bodyText confidence="0.999976">
+We evaluate both sentential paraphrase matching
+and paraphrase fragment extraction using manually
+labelled gold standards (provided in the supplemen-
+tary material). We collect recaps for all 20 episodes
+of season 6 of House M.D., taking 8 summaries per
+episode (the supplementary material contains a list
+of all URLs). This results in 160 documents con-
+taining 14735 sentences. For evaluation, we use all
+episodes except no. 2, which is held out for parame-
+ter optimizations and other development purposes.
+</bodyText>
+<subsectionHeader confidence="0.990025">
+6.1 Sentential Paraphrase Evaluation
+</subsectionHeader>
+<bodyText confidence="0.999991666666667">
+To evaluate sentence matching, we adapt the base-
+lines from our earlier work (Regneri et al., 2010) and
+create a new gold standard. We compute precision,
+recall and accuracy of our main system and suggest
+baselines that separately show the influence of both
+the MSA and the semantic scoring function.
+</bodyText>
+<subsectionHeader confidence="0.860936">
+Gold-Standard
+</subsectionHeader>
+<bodyText confidence="0.999903157894737">
+We aim to create an evaluation set that contains
+a sufficient amount of genuine paraphrases. Find-
+ing such sentence pairs with random sampling and
+manual annotation is infeasible: There are more than
+200, 000, 000 possible sentence pairs, and we ex-
+pect less than 1% of them to be paraphrases. We
+thus sample pairs that either the system or the base-
+lines recognized as paraphrases and try to create an
+evaluation set that is not biased towards the actual
+system or any of the baselines. The evaluation set
+consists of 2000 sentence pairs: 400 that the system
+recognized as paraphrases, 400 positively labelled
+pairs for each of the three baselines (described in the
+following section) and 400 randomly selected pairs.
+For the final evaluation, we compute precision, re-
+call, f-score and accuracy for our main system and
+each baseline on this set.
+Two annotators labelled each sentence pair
+(S1, S2) with one of the following labels:
+</bodyText>
+<listItem confidence="0.99273725">
+1. paraphrases: S1 and S2 refer to exactly the
+same event(s).
+2. containment: S1 contains all the event infor-
+mation mentioned in S2, but refers to at least
+</listItem>
+<page confidence="0.969979">
+921
+</page>
+<bodyText confidence="0.69554">
+one additional event, or vice versa.
+</bodyText>
+<listItem confidence="0.9910715">
+3. related: 51 and 52 overlap in at least one event
+reference, but both refer to at least one addi-
+tional event.
+4. unrelated: 51 and 52 do not overlap at all.
+</listItem>
+<bodyText confidence="0.999959777777778">
+This scheme has a double purpose: The main objec-
+tive is judging whether two sentences contain para-
+phrases (1-3) or if they are unrelated (4). We use
+this coarser distinction for system evaluation by col-
+lapsing the categories 1-3 in one paraphrase,oll cat-
+egory. Secondly, the annotation shows how well the
+sentences fit each other’s content (1 vs. 2&amp;3), and
+how much work needs to be done to extract the sen-
+tence parts with the same meaning (2 vs. 3).
+The inter-annotator agreement according to Co-
+hen’s Kappa (Cohen, 1960) is n = 0.55 (“mod-
+erate agreement”). The distinction between unre-
+lated cases and elements of paraphrase,oll reaches
+n = 0.71 (“substantial agreement”). For the final
+gold standard, a third annotator resolved all conflict
+cases.
+Among all gold standard sentence pairs, we find
+158 paraphrases, 238 containment cases, 194 re-
+lated ones and 1402 unrelated. We had to discard 8
+sentence pairs because one of the items was invalid
+or empty. The high proportion of ’unrelated’ cases
+results from the 400 random pairs and the low pre-
+cision of the baselines. Looking at the paraphrases,
+27% of the 590 instances in the paraphrase,oll cate-
+gory are proper paraphrases, and 73% of them con-
+tain additional information that does not belong to
+the paraphrased part.
+</bodyText>
+<subsectionHeader confidence="0.977319">
+Experimental Setup
+</subsectionHeader>
+<bodyText confidence="0.999961666666667">
+We compute precision, recall and f-score with re-
+spect to the gold standard (paraphrases are members
+of paraphrase,oll), taking f-score as follows:
+</bodyText>
+<equation confidence="0.974795333333333">
+2 � precision � recall
+f-score =
+precision + recall
+</equation>
+<bodyText confidence="0.999958764705882">
+We also compute accuracy as the overall fraction of
+correct labels (negative and positive ones).
+Our main system uses MSA (denoted by MSA af-
+terwards) with vector-based similarities (VEC) as a
+scoring function. The gap costs are optimized for
+f-score, resulting in cgap = 0.4
+To show the contribution of MSA’s structural
+component and compare it to the vector model’s
+contribution, we create a second MSA-based sys-
+tem that uses MSA with BLEU scores (Papineni et
+al., 2002) as scoring function (MSA+BLEU). BLEU
+establishes the average 1-to-4-gram overlap of two
+sentences. The gap costs for this baseline were opti-
+mized separately, ending up with cgap = 1.
+In order to quantify the contribution of the align-
+ment, we create a discourse-unaware baseline by
+dropping the MSA and using a state-of-the-art clus-
+tering algorithm (Noack, 2007) fed with the vec-
+tor space model scores (CLUSTER+VEC). The algo-
+rithm partitions the set of sentences into paraphrase
+clusters such that the most similar sentences end up
+in one cluster. This does not require any parameter
+tuning.
+We also show a baseline that uses the cluster-
+ing algorithm with BLEU scores (CLUSTER+BLEU).
+The comparison of this baseline with the other
+clustering-baseline that uses vector similarities helps
+to underline the sentence similarities’ advantage
+compared to pure word overlap. Note that the CLUS-
+TER+BLEU system resembles popular n-gram over-
+lap measures for paraphrase classification.
+We also show the results completely random label
+assignment, which constitutes a lower bound for the
+baselines and the system.
+</bodyText>
+<sectionHeader confidence="0.929178" genericHeader="evaluation">
+Results
+</sectionHeader>
+<bodyText confidence="0.929066875">
+Overall, our system extracts 20379 paraphrase
+pairs. Tab. 1 shows the evaluation results on our
+gold-standard.
+The MSA based system variants outperform the
+two clustering baselines significantly (all levels refer
+to p = 0.01 and were tested with a resampling test
+(Edgington, 1986)).
+The clustering baselines perform significantly
+better than a random baseline, especially consider-
+ing recall. The more elaborated vector-space mea-
+sure even gives 10% more in precision and accu-
+racy, and overall 14% more in f-score. This is al-
+4Gap costs directly influence precision and recall: “cheap”
+gaps lead to a more restrictive system with higher precision, and
+more expensive gaps give more recall. We chose f-score as our
+objective.
+</bodyText>
+<page confidence="0.990827">
+922
+</page>
+<table confidence="0.999787333333333">
+System Prec. Recall F-score Acc.
+RANDOM 0.30 0.49 0.37 0.51
+CLUSTER+BLEU 0.35 0.63 0.45 0.54
+CLUSTER+VEC 0.40 0.68 0.51 0.61
+MSA+BLEU 0.73 0.74 0.73 0.84
+MSA+VEC 0.79 0.66 0.72 0.85
+</table>
+<tableCaption confidence="0.999638">
+Table 1: Results for sentence matching.
+</tableCaption>
+<bodyText confidence="0.999220581818182">
+ready a remarkable improvement compared to the
+random baseline, and still a significant one com-
+pared to CLUSTER+BLEU.
+Adding structural knowledge with MSA im-
+proves the clustering’s accuracy performance by
+24% (CLUSTER+VEC vs. MSA+VEC), precision
+even goes up by 39%.
+Intuitively we expected the MSA-based systems
+to end up with a higher recall than the clustering
+baselines, because sentences can be matched even
+if their similarity is moderate or low, but their dis-
+course context is highly similar. However, this is
+only the case for the system using BLEU scores, but
+not for the system based on the vector space model.
+One possible explanation lies in picking f-score as
+objective for the optimization of the gap costs for
+MSA: For the naturally more restrictive word over-
+lap measure, this leads to a more recall-oriented
+system with a low threshold for aligning sentences,
+whereas the gap costs for the vector-based system
+favors a more restrictive alignment with more pre-
+cise results.
+The comparison of the two MSA-based sys-
+tems highlights the great benefit of using structural
+knowledge: Both MSA+BLEU and MSA+VEC have
+comparable f-scores and accuracy. The advantage
+from using the vector-space model that is still obvi-
+ous for the clustering baselines is nearly evened out
+when adding discourse knowledge as a backbone.
+However, the vector model still results in nominally
+higher precision and accuracy.
+It is hard to do a direct comparison with state-
+of-the-art paraphrase recognition systems, because
+most are evaluated on different corpora, e.g., the
+Microsoft paraphrase corpus (Dolan and Brockett,
+2005, MSR). We cannot apply our system to the
+MSR corpus, because we take complete texts as in-
+put, while the MSR corpus solely delivers sentence
+pairs. While the MSR corpus is larger than our
+collection, the wording variations in its paraphrase
+pairs are usually lower than for our examples. Thus
+the final numbers of previous approaches might be
+vaguely comparable with our results: Das and Smith
+(2009) present two systems reaching f-scores of 0.82
+and 0.83, with a precision of 0.75 and 0.80. Both
+precision and f-scores of our msa-based systems lie
+within the same range. Heilman and Smith (2010)
+introduce a recall-oriented system, which reaches an
+f-score of 0.81 by a precision of 0.76. Compared to
+this system, our approach results in better precision
+values.
+All further computations bases on the system us-
+ing MSA and the vector space model (MSA+VEC),
+because it achieves the highest precision and accu-
+racy values.
+</bodyText>
+<subsectionHeader confidence="0.999344">
+6.2 Paraphrase Fragment Evaluation
+</subsectionHeader>
+<bodyText confidence="0.9997455">
+We also manually evaluate precision on paraphrase
+fragments, and additionally describe the productiv-
+ity of the different setups, providing some intuition
+about the methods’ recall.
+</bodyText>
+<subsectionHeader confidence="0.5247">
+Gold-Standard
+</subsectionHeader>
+<bodyText confidence="0.9999755">
+We randomly collect 150 fragment pairs for each
+of the five system configurations (explained in the
+following section). Each fragment pair (f1, f2) is
+annotated with one of the following categories:
+</bodyText>
+<listItem confidence="0.998988">
+1. paraphrases: f1 and f2 convey the same
+meaning, i.e., they are well-formed and good
+matches on the content level.
+2. related: f1 and f2 overlap in their meaning, but
+one or both phrases have additional unmatched
+information.
+3. irrelevant: f1 and f2 are unrelated.
+</listItem>
+<bodyText confidence="0.999774555555555">
+This labeling scheme again assesses precision as
+well as paraphrase granularity. For precision rating,
+we collapse categories 1&amp;2 into one paraphrase,,ii
+category. Each pair is labelled by two annotators,
+who were shown both the fragments and the whole
+sentences they originate from. Overall, the raters
+had an agreement of r. = 0.67 (“substantial agree-
+ment”), which suggests that the task was easier than
+sentence level annotation. The agreement for the
+</bodyText>
+<page confidence="0.997071">
+923
+</page>
+<bodyText confidence="0.9999222">
+distinction between the paraphrase,,ii categories
+and irrelevant instances reaches a level of n = 0.88
+(also “substantial agreement”). All conflicts were
+again adjudicated by a third annotator. Overall, the
+gold standard contains 190 paraphrases, 258 related
+pairs and 302 irrelevant instances. Unlike previ-
+ous approaches to fragment extraction, we do not
+evaluate grammaticality, given that the VP-fragment
+method implicitly constrains the output fragments to
+be complete phrases.
+</bodyText>
+<subsectionHeader confidence="0.959313">
+Configurations &amp; Results
+</subsectionHeader>
+<bodyText confidence="0.999901368421053">
+We take the output of the sentence matching sys-
+tem MSA+VEC as input for paraphrase fragment ex-
+traction. As detailed in Sec. 5, our core fragment
+module uses the word-word alignments provided by
+GIZA++ and uses a chunker for fragment extrac-
+tion. We successively enrich this core module with
+more information, either by longest common sub-
+string (LCS) matching or by operating on depen-
+dency trees (VP). In addition, we evaluate the in-
+fluence of coreference resolution by preprocessing
+the input to the best performing configuration with
+pronoun resolution (COREF).
+We mainly compute precision for this task, as the
+recall of paraphrase fragments is difficult to define.
+However, we do include a measure we call produc-
+tivity to indicate the algorithm’s completeness. It is
+defined as the ratio between the number of result-
+ing fragment pairs and the number of sentence pairs
+used as input.
+</bodyText>
+<table confidence="0.9996754">
+Extraction Method Precision Productivity
+MSA 0.57 0.76
+MSA+LCS 0.45 0.30
+MSA+VP 0.81 0.42
+MSA+VP+COREF 0.84 0.45
+</table>
+<tableCaption confidence="0.999743">
+Table 2: Results of paraphrase fragment extraction.
+</tableCaption>
+<bodyText confidence="0.998988642857143">
+Tab. 2 shows the evaluation results. We reach
+our best precision by using the VP-fragment heuris-
+tics, which is still more productive than the LCS
+method. The grammatical filter gives us a higher
+precision compared to the purely alignment-based
+approaches. Enhancing the system with corefer-
+ence resolution raises the score even further. We
+cannot directly compare this performance to other
+systems, as all other approaches have different data
+sources. However, precision is usually manually
+evaluated, so the figures are at least indicative for
+a comparison with previous work: One state-of-the-
+art system introduced by Zhao et al. (2008) extracts
+paraphrase fragments from bilingual parallel cor-
+pora and reaches a precision of 0.67. We found the
+same number using our previous approach (Wang
+and Callison-Burch, 2011), which is roughly equiv-
+alent to our core module. Our approach outperforms
+both by 17% with similar estimated productivity.
+As a final comparison, we show how the perfor-
+mance of the sentence matching methods directly af-
+fects the fragment extraction. We use the VP-based
+fragment extraction system (VP), and compare the
+performances by using either the outputs from our
+main system (MSA+VP) or alternatively the base-
+line that replaces MSA with a clustering algorithm
+(CLUSTER+VP). Both variants use the vector-based
+semantic similarity measure.
+</bodyText>
+<subsubsectionHeader confidence="0.43378">
+Sentence matching Precision Productivity
+</subsubsectionHeader>
+<table confidence="0.6458405">
+CLUSTER+VP 0.31 0.04
+MSA+VP 0.81 0.42
+</table>
+<tableCaption confidence="0.997665">
+Table 3: Impact of MSA on fragment extraction
+</tableCaption>
+<bodyText confidence="0.999964454545454">
+As shown in Tab. 3, the precision gain from using
+MSA becomes tremendous during further process-
+ing: We beat the baseline by 50% here, and produc-
+tivity increases by a factor of 10. This means that the
+baseline produces on average 0.01 good fragment
+pairs per matched sentence pair, and the final sys-
+tem extracts 0.3 of them. Those numbers show that
+for any application that acquires paraphrases of arbi-
+trary granularity, sequential event information pro-
+vides an invaluable source to achieve a lean para-
+phrasing method with high precision.
+</bodyText>
+<subsectionHeader confidence="0.994076">
+6.3 Example output
+</subsectionHeader>
+<bodyText confidence="0.999594333333333">
+Fig. 3 shows exemplary results from our system
+pipeline, using the VP–FRAGMENTS method with
+full coreference resolution on the sentence pairs ex-
+tracted by MSA. The results reflect the importance
+of discourse information for this task: Sentences are
+correctly matched in spite of not having common de-
+</bodyText>
+<page confidence="0.99388">
+924
+</page>
+<table confidence="0.9382374">
+Sentence 1 [with fragment 1] Sentence 2 [with fragment 2]
+1 Taub meets House for dinner and claims [that Taub shows up for his dinner with House without
+Rachel had a pottery class]. Rachel, explaining [that she’s at a ceramics class].
+2 House doesn’t want her to go and she doesn’t want Lydia admits that she doesn’t want to leave House but
+to go either, but [she can’t leave her family.] [she has to stay with her family].
+</table>
+<tableCaption confidence="0.514025">
+3 Thirteen is in a cab to the airport when she finds
+out that [her trip had been canceled].
+</tableCaption>
+<figure confidence="0.816386230769231">
+Hadley discovers that [her reservation has been can-
+celled].
+4 Nash asks House [for the extra morphine]. The patient is ready [for more morphine].
+5 House comes in to tell Wilson that Tucker has can- House comes in and [informs Wilson that the tests have
+cer and [shows him the test results]. proven positive]: Tucker has cancer.
+6 Foreman tells him [to confide in Cameron]. When Chase points out they can’t move Donny with-
+out alerting Cameron, Foreman tells Chase [to be honest
+with his wife].
+7 Thirteen breaks [into the old residence] and tells
+Taub that she realizes that he’s been with Maya.
+Taub and Thirteen break [into Ted’s former residence].
+8 He finds [a darkened patch on his right foot near House finally finds [a tumorous mole on his toe].
+the big toe].
+</figure>
+<figureCaption confidence="0.999885">
+Figure 3: Example results; fragments extracted from aligned sentences are bracketed and emphasized.
+</figureCaption>
+<bodyText confidence="0.9997177">
+pendency patterns (e.g., Example 4) or sharing many
+n-grams (6-8). Additionally, the coreference resolu-
+tion allows us to match Rachel (1) and Wilson (5) to
+the correct corresponding pronouns. All examples
+show that this technique of matching sentence could
+even help to make coreference resolution better, be-
+cause we can easily identify Cameron with his wife,
+Lydia with the respective pronouns, Nash with The
+Patient or the nickname Thirteen with Hadley, the
+character’s actual name.
+</bodyText>
+<sectionHeader confidence="0.987887" genericHeader="conclusions">
+7 Conclusion and Future Work
+</sectionHeader>
+<bodyText confidence="0.999980695652174">
+We presented our work on paraphrase extraction us-
+ing discourse information, on a corpus consisting
+of recaps of TV show episodes. Our approach first
+uses MSA to extract sentential paraphrases, which
+are then further processed to compute finer-grained
+paraphrase fragments using dependency trees and
+pronoun resolution. The experimental results show
+great advantages from using discourse information,
+beating informed baselines and performing compet-
+itively with state-of-the-art systems.
+For future work, we plan to use MSA to align
+single clauses rather than whole sentences. This
+can also help to define the fragment boundaries
+more clearly. Additionally, we plan to generalize
+the method for other parallel texts by preprocessing
+them with a temporal classifier. In a more advanced
+step, we will also use the aligned paraphrases to help
+resolving discourse structure, e.g. for coreference
+resolution, which could lead to a high-performance
+bootstrapping system. In a long-term view, it would
+be interesting to see how aligned discourse trees
+could help to extract paraphrases from arbitrary par-
+allel text.
+</bodyText>
+<sectionHeader confidence="0.99495" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.999928769230769">
+The first author was funded by the Cluster
+of Excellence “Multimodal Computing and In-
+teraction” in the German Excellence Initiative.
+The second Author was funded by the Eu-
+ropean Community’s Seventh Framework Pro-
+gramme (FP7/2007-2013) under grant agreement
+No. 287923 (EXCITEMENT, http://www.
+excitement-project.eu/). – We want to
+thank Stefan Thater for supplying the semantic sim-
+ilarity scores of his algorithm for our data. We are
+grateful to Manfred Pinkal, Alexis Palmer and three
+anonymous reviewers for their helpful comments on
+previous versions of this paper.
+</bodyText>
+<page confidence="0.997195">
+925
+</page>
+<sectionHeader confidence="0.990186" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999782087378641">
+Amit Bagga and Breck Baldwin. 1999. Cross-document
+event coreference: annotations, experiments, and ob-
+servations. In Proceedings of the Workshop on Coref-
+erence and its Applications.
+Colin Bannard and Chris Callison-Burch. 2005. Para-
+phrasing with bilingual parallel corpora. In Proceed-
+ings ofACL 2005.
+Regina Barzilay and Lillian Lee. 2003. Learning to
+paraphrase: An unsupervised approach using multiple-
+sequence alignment. In Proc. of HLT-NAACL 2003.
+Regina Barzilay and Kathleen R. McKeown. 2001. Ex-
+tracting paraphrases from a parallel corpus. In Proc.
+of ACL 2001.
+Regina Barzilay, Kathleen McKeown, and Michael El-
+hadad. 1999. Information fusion in the context of
+multi-document summarization. In Proceedings of
+ACL 1999.
+W. Byrne, S. Khudanpur, W. Kim, S. Kumar, P. Pecina,
+P. Virga, P. Xu, and D. Yarowsky. 2003. The Johns
+Hopkins University 2003 Chinese-English machine
+translation system. In Proceedings of the MT Summit
+IX.
+Chris Callison-Burch. 2008. Syntactic constraints on
+paraphrases extracted from parallel corpora. In Pro-
+ceedings of EMNLP 2008.
+Lynn Carlson, Daniel Marcu, and Mary Ellen Okurowski.
+2002. RST Discourse Treebank. LDC.
+J. Cohen. 1960. A Coefficient of Agreement for Nominal
+Scales. Educational and Psychological Measurement,
+20(1):37.
+Ido Dagan, Oren Glickman, and Bernardo Magnini.
+2005. The pascal recognising textual entailment chal-
+lenge. In MLCW, pages 177–190.
+D. Das and N. A. Smith. 2009. Paraphrase identifica-
+tion as probabilistic quasi-synchronous recognition. In
+Proceedings of ACL-IJCNLP 2009.
+Louise Deléger and Pierre Zweigenbaum. 2009. Extract-
+ing lay paraphrases of specialized expressions from
+monolingual comparable medical corpora. In Pro-
+ceedings of the ACL-IJCNLP BUCC-2009 Workshop.
+Georgiana Dinu and Rui Wang. 2009. Inference rules
+and their application to recognizing textual entailment.
+In Proceedings of EACL 2009.
+W. B. Dolan and C. Brockett. 2005. Automatically con-
+structing a corpus of sentential paraphrases. In Pro-
+ceedings of the third International Workshop on Para-
+phrasing.
+Bill Dolan, Chris Quirk, and Chris Brockett. 2004. Un-
+supervised construction of large paraphrase corpora:
+Exploiting massively parallel news sources. In Pro-
+ceedings of COLING 2004.
+Richard Durbin, Sean Eddy, Anders Krogh, and Graeme
+Mitchison. 1998. Biological Sequence Analysis.
+Cambridge University Press.
+Eugene S Edgington. 1986. Randomization tests. Mar-
+cel Dekker, Inc., New York, NY, USA.
+Samuel Fern and Mark Stevenson. 2009. A semantic
+similarity approach to paraphrase detection. In Pro-
+ceedings of the Computational Linguistics UK (CLUK
+2008) 11th Annual Research Colloquium.
+Juri Ganitkevitch, Chris Callison-Burch, Courtney
+Napoles, and Benjamin Van Durme. 2011. Learning
+sentential paraphrases from bilingual parallel corpora
+for text-to-text generation. In Proceedings of EMNLP
+2011.
+Dan Gillick. 2009. Sentence boundary detection and the
+problem with the u.s. In Proceedings of HLT-NAACL
+2009: Companion Volume: Short Papers.
+Michael Heilman and Noah A. Smith. 2010. Tree
+edit models for recognizing textual entailments, para-
+phrases, and answers to questions. In Proceedings of
+NAACL-HLT 2010.
+Dan Klein and Christopher D. Manning. 2003. Accurate
+unlexicalized parsing. In Proceedings ofACL 2003.
+Heeyoung Lee, Yves Peirsman, Angel Chang, Nathanael
+Chambers, Mihai Surdeanu, and Dan Jurafsky. 2011.
+Stanford’s multi-pass sieve coreference resolution sys-
+tem at the conll-2011 shared task. In Proceedings of
+the CoNLL-2011 Shared Task.
+Dekang Lin and Patrick Pantel. 2001. DIRT - Discovery
+of Inference Rules from Text. In Proceedings of the
+ACM SIGKDD.
+Yuval Marton, Chris Callison-Burch, and Philip Resnik.
+2009. Improved Statistical Machine Translation Using
+Monolingually-Derived Paraphrases. In Proceedings
+of EMNLP 2009.
+Dragos Stefan Munteanu and Daniel Marcu. 2006. Ex-
+tracting Parallel Sub-Sentential Fragments from Non-
+Parallel Corpora. In Proceedings of ACL 2006.
+Saul B. Needleman and Christian D. Wunsch. 1970. A
+general method applicable to the search for similarities
+in the amino acid sequence of two proteins. Journal of
+molecular biology, 48(3), March.
+Andreas Noack. 2007. Energy models for graph cluster-
+ing. Journal of Graph Algorithms and Applications,
+11(2):453–480.
+Franz Josef Och and Hermann Ney. 2003. A system-
+atic comparison of various statistical alignment mod-
+els. Computational Linguistics, 29(1).
+Kishore Papineni, Salim Roukos, Todd Ward, and Wei-
+Jing Zhu. 2002. BLEU: a method for automatic eval-
+uation of machine translation. In Proceedings of ACL
+2002.
+</reference>
+<page confidence="0.98312">
+926
+</page>
+<reference confidence="0.999860871794872">
+Chris Quirk, Chris Brockett, and William B. Dolan.
+2004. Monolingual machine translation for paraphrase
+generation. In Proceedings of EMNLP 2004.
+Chris Quirk, Raghavendra Udupa, and Arul Menezes.
+2007. Generative models of noisy translations with
+applications to parallel fragment extraction. In Pro-
+ceedings of MT Summit XI, Copenhagen, Denmark.
+Michaela Regneri, Alexander Koller, and Manfred
+Pinkal. 2010. Learning Script Knowledge with Web
+Experiments. In Proceedings of ACL 2010.
+Yusuke Shinyama and Satoshi Sekine. 2003. Paraphrase
+acquisition for information extraction. In Proceedings
+of the ACL PARAPHRASE ’03 Workshop.
+Yusuke Shinyama, Satoshi Sekine, and Kiyoshi Sudo.
+2002. Automatic paraphrase acquisition from news ar-
+ticles. In Proceedings of HLT 2002.
+Idan Szpektor, Hristo Tanev, Ido Dagan, and Bonaven-
+tura Coppola. 2004. Scaling Web-based Acquisition
+of Entailment Relations. In Proceedings of EMNLP
+2004.
+Stefan Thater, Hagen Fürstenau, and Manfred Pinkal.
+2011. Word Meaning in Context: A Simple and Effec-
+tive Vector Model. In Proceedings of IJCNLP 2011.
+Eleftheria Tomadaki and Andrew Salway. 2005. Match-
+ing verb attributes for cross-document event corefer-
+ence. In Proc. of the Interdisciplinary Workshop on
+the Identification and Representation of Verb Features
+and Verb Classes.
+Rui Wang and Chris Callison-Burch. 2011. Para-
+phrase fragment extraction from monolingual compa-
+rable corpora. In Proc. of the ACL BUCC-2011 Work-
+shop.
+Shiqi Zhao, Haifeng Wang, Ting Liu, and Sheng Li.
+2008. Pivot Approach for Extracting Paraphrase Pat-
+terns from Bilingual Corpora. In Proceedings of ACL
+2008.
+Shiqi Zhao, Haifeng Wang, Xiang Lan, and Ting Liu.
+2010. Leveraging Multiple MT Engines for Para-
+phrase Generation. In Proceedings of COLING 2010.
+</reference>
+<page confidence="0.997148">
+927
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.418033">
+<title confidence="0.999977">Using Discourse Information for Paraphrase Extraction</title>
+<author confidence="0.991204">Michaela</author>
+<affiliation confidence="0.870652">Dept. of Computational Saarland</affiliation>
+<address confidence="0.940498">Saarbrücken,</address>
+<email confidence="0.997977">regneri@coli.uni-saarland.de</email>
+<author confidence="0.92836">Rui</author>
+<affiliation confidence="0.9352965">Language Technology DFKI</affiliation>
+<address confidence="0.790871">Saarbrücken,</address>
+<email confidence="0.998855">ruiwang@dfki.de</email>
+<abstract confidence="0.998773">Previous work on paraphrase extraction using parallel or comparable corpora has generally not considered the documents’ discourse structure as a useful information source. We propose a novel method for collecting paraphrases relying on the sequential event order in the discourse, using multiple sequence alignment with a semantic similarity measure. We show that adding discourse information boosts the performance of sentence-level paraphrase acquisition, which consequently gives a tremendous advantage for extracting phraselevel paraphrase fragments from matched sentences. Our system beats an informed baseline by a margin of 50%.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Amit Bagga</author>
+<author>Breck Baldwin</author>
+</authors>
+<title>Cross-document event coreference: annotations, experiments, and observations.</title>
+<date>1999</date>
+<booktitle>In Proceedings of the Workshop on Coreference and its Applications.</booktitle>
+<contexts>
+<context position="6328" citStr="Bagga and Baldwin, 1999" startWordPosition="950" endWordPosition="953">e machine translation (MT) community provides in many varieties. Bannard and Callison-Burch (2005) as well as Zhao et al. (2008) take one language as the pivot and match two possible translations in the other languages as paraphrases if they share a common pivot phrase. As parallel corpora have many alternative ways of expressing the same foreign language concept, large quantities of paraphrase pairs can be extracted. The paraphrasing task is also strongly related to cross-document event coreference resolution, which is tackled by similar techniques used by the available paraphrasing systems (Bagga and Baldwin, 1999; Tomadaki and Salway, 2005). Most work in paraphrase acquisition has dealt with sentence-level paraphrases, e.g., (Barzilay and McKeown, 2001; Barzilay and Lee, 2003; Dolan et al., 2004; Quirk et al., 2004). Our approach for sentential paraphrase extraction is related to the one introduced by Barzilay and Lee (2003), who also employ multiple sequence alignment (MSA). However, they use MSA at the sentence level rather than at the discourse level. We take some core ideas from our previous work on mining script information (Regneri et al., 2010). In this earlier work, we focused on event structu</context>
+</contexts>
+<marker>Bagga, Baldwin, 1999</marker>
+<rawString>Amit Bagga and Breck Baldwin. 1999. Cross-document event coreference: annotations, experiments, and observations. In Proceedings of the Workshop on Coreference and its Applications.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Colin Bannard</author>
+<author>Chris Callison-Burch</author>
+</authors>
+<title>Paraphrasing with bilingual parallel corpora.</title>
+<date>2005</date>
+<booktitle>In Proceedings ofACL</booktitle>
+<contexts>
+<context position="5803" citStr="Bannard and Callison-Burch (2005)" startWordPosition="866" endWordPosition="869">ora have been quite well studied. Barzilay and McKeown (2001) use different English translations of the same novels (i.e., monolingual parallel corpora), while others (Quirk et al., 2004) experiment on multiple sources of the same news/events, i.e., monolingual comparable corpora. Commonly used (candidate) comparable corpora are news articles written by different news agencies within a limited time window (Wang and Callison-Burch, 2011). Other studies focus on extracting paraphrases from large bilingual parallel corpora, which the machine translation (MT) community provides in many varieties. Bannard and Callison-Burch (2005) as well as Zhao et al. (2008) take one language as the pivot and match two possible translations in the other languages as paraphrases if they share a common pivot phrase. As parallel corpora have many alternative ways of expressing the same foreign language concept, large quantities of paraphrase pairs can be extracted. The paraphrasing task is also strongly related to cross-document event coreference resolution, which is tackled by similar techniques used by the available paraphrasing systems (Bagga and Baldwin, 1999; Tomadaki and Salway, 2005). Most work in paraphrase acquisition has dealt</context>
+</contexts>
+<marker>Bannard, Callison-Burch, 2005</marker>
+<rawString>Colin Bannard and Chris Callison-Burch. 2005. Paraphrasing with bilingual parallel corpora. In Proceedings ofACL 2005.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Regina Barzilay</author>
+<author>Lillian Lee</author>
+</authors>
+<title>Learning to paraphrase: An unsupervised approach using multiplesequence alignment.</title>
+<date>2003</date>
+<booktitle>In Proc. of HLT-NAACL</booktitle>
+<contexts>
+<context position="1915" citStr="Barzilay and Lee, 2003" startWordPosition="273" endWordPosition="276">ds have been proposed for generating large paraphrase resources (Lin and Pantel, 2001; Szpektor et al., 2004; Dolan et al., 2004). One of the intuitively appropriate data sources for such collections are parallel or comparable corpora: if two texts are translations of the same foreign document, or if they describe the same underlying scenario, they should contain a reasonable number of sentence pairs that convey the same meaning. Most approaches that extract paraphrases from parallel texts employ some type of pattern matching: sentences with the same meaning are assumed to share many n-grams (Barzilay and Lee, 2003; Callison-Burch, 2008, among others), many words in their context (Barzilay and McKeown, 2001) or certain slots in a dependency path (Lin and Pantel, 2001; Szpektor et al., 2004). Discourse structure has only marginally been considered for this task: For example, Dolan et al. (2004) extract the first sentences from comparable articles and take them as paraphrases. Another approach (Deléger and Zweigenbaum, 2009) matches similar paragraphs in comparable texts, creating smaller comparable documents for paraphrase extraction. We believe that discourse structure delivers important information for</context>
+<context position="6494" citStr="Barzilay and Lee, 2003" startWordPosition="973" endWordPosition="976">ch two possible translations in the other languages as paraphrases if they share a common pivot phrase. As parallel corpora have many alternative ways of expressing the same foreign language concept, large quantities of paraphrase pairs can be extracted. The paraphrasing task is also strongly related to cross-document event coreference resolution, which is tackled by similar techniques used by the available paraphrasing systems (Bagga and Baldwin, 1999; Tomadaki and Salway, 2005). Most work in paraphrase acquisition has dealt with sentence-level paraphrases, e.g., (Barzilay and McKeown, 2001; Barzilay and Lee, 2003; Dolan et al., 2004; Quirk et al., 2004). Our approach for sentential paraphrase extraction is related to the one introduced by Barzilay and Lee (2003), who also employ multiple sequence alignment (MSA). However, they use MSA at the sentence level rather than at the discourse level. We take some core ideas from our previous work on mining script information (Regneri et al., 2010). In this earlier work, we focused on event structures and their possible realizations in natural language. The corpus used in those experiments were short crowd-sourced descriptions of everyday tasks written in bulle</context>
+</contexts>
+<marker>Barzilay, Lee, 2003</marker>
+<rawString>Regina Barzilay and Lillian Lee. 2003. Learning to paraphrase: An unsupervised approach using multiplesequence alignment. In Proc. of HLT-NAACL 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Regina Barzilay</author>
+<author>Kathleen R McKeown</author>
+</authors>
+<title>Extracting paraphrases from a parallel corpus.</title>
+<date>2001</date>
+<booktitle>In Proc. of ACL</booktitle>
+<contexts>
+<context position="2010" citStr="Barzilay and McKeown, 2001" startWordPosition="286" endWordPosition="289">ektor et al., 2004; Dolan et al., 2004). One of the intuitively appropriate data sources for such collections are parallel or comparable corpora: if two texts are translations of the same foreign document, or if they describe the same underlying scenario, they should contain a reasonable number of sentence pairs that convey the same meaning. Most approaches that extract paraphrases from parallel texts employ some type of pattern matching: sentences with the same meaning are assumed to share many n-grams (Barzilay and Lee, 2003; Callison-Burch, 2008, among others), many words in their context (Barzilay and McKeown, 2001) or certain slots in a dependency path (Lin and Pantel, 2001; Szpektor et al., 2004). Discourse structure has only marginally been considered for this task: For example, Dolan et al. (2004) extract the first sentences from comparable articles and take them as paraphrases. Another approach (Deléger and Zweigenbaum, 2009) matches similar paragraphs in comparable texts, creating smaller comparable documents for paraphrase extraction. We believe that discourse structure delivers important information for the extraction of paraphrases. Sentences that play the same role in a certain discourse and ha</context>
+<context position="5231" citStr="Barzilay and McKeown (2001)" startWordPosition="783" endWordPosition="787">ective on the task and sketch our system pipeline (Sec. 3). The following two sections describe the details of the sentence matching step (Sec. 4) and the subsequent paraphrase fragment extraction (Sec. 5). We present both automatic and manual evaluation of the two system components (Sec. 6). Finally, we conclude the paper and give some hints for future work (Sec. 7). 2 Related Work Previous paraphrase extraction approaches can be roughly characterized under two aspects: 1) data source and 2) granularity of the output. Both parallel corpora and comparable corpora have been quite well studied. Barzilay and McKeown (2001) use different English translations of the same novels (i.e., monolingual parallel corpora), while others (Quirk et al., 2004) experiment on multiple sources of the same news/events, i.e., monolingual comparable corpora. Commonly used (candidate) comparable corpora are news articles written by different news agencies within a limited time window (Wang and Callison-Burch, 2011). Other studies focus on extracting paraphrases from large bilingual parallel corpora, which the machine translation (MT) community provides in many varieties. Bannard and Callison-Burch (2005) as well as Zhao et al. (200</context>
+<context position="6470" citStr="Barzilay and McKeown, 2001" startWordPosition="969" endWordPosition="972">anguage as the pivot and match two possible translations in the other languages as paraphrases if they share a common pivot phrase. As parallel corpora have many alternative ways of expressing the same foreign language concept, large quantities of paraphrase pairs can be extracted. The paraphrasing task is also strongly related to cross-document event coreference resolution, which is tackled by similar techniques used by the available paraphrasing systems (Bagga and Baldwin, 1999; Tomadaki and Salway, 2005). Most work in paraphrase acquisition has dealt with sentence-level paraphrases, e.g., (Barzilay and McKeown, 2001; Barzilay and Lee, 2003; Dolan et al., 2004; Quirk et al., 2004). Our approach for sentential paraphrase extraction is related to the one introduced by Barzilay and Lee (2003), who also employ multiple sequence alignment (MSA). However, they use MSA at the sentence level rather than at the discourse level. We take some core ideas from our previous work on mining script information (Regneri et al., 2010). In this earlier work, we focused on event structures and their possible realizations in natural language. The corpus used in those experiments were short crowd-sourced descriptions of everyda</context>
+</contexts>
+<marker>Barzilay, McKeown, 2001</marker>
+<rawString>Regina Barzilay and Kathleen R. McKeown. 2001. Extracting paraphrases from a parallel corpus. In Proc. of ACL 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Regina Barzilay</author>
+<author>Kathleen McKeown</author>
+<author>Michael Elhadad</author>
+</authors>
+<title>Information fusion in the context of multi-document summarization.</title>
+<date>1999</date>
+<booktitle>In Proceedings of ACL</booktitle>
+<contexts>
+<context position="1087" citStr="Barzilay et al., 1999" startWordPosition="144" endWordPosition="147">r collecting paraphrases relying on the sequential event order in the discourse, using multiple sequence alignment with a semantic similarity measure. We show that adding discourse information boosts the performance of sentence-level paraphrase acquisition, which consequently gives a tremendous advantage for extracting phraselevel paraphrase fragments from matched sentences. Our system beats an informed baseline by a margin of 50%. 1 Introduction It is widely agreed that identifying paraphrases is a core task for natural language processing, including applications like document summarization (Barzilay et al., 1999), Recognizing Textual Entailment (Dagan et al., 2005), natural language generation (Zhao et al., 2010; Ganitkevitch et al., 2011), and machine translation (Marton et al., 2009). As a consequence, many methods have been proposed for generating large paraphrase resources (Lin and Pantel, 2001; Szpektor et al., 2004; Dolan et al., 2004). One of the intuitively appropriate data sources for such collections are parallel or comparable corpora: if two texts are translations of the same foreign document, or if they describe the same underlying scenario, they should contain a reasonable number of sente</context>
+</contexts>
+<marker>Barzilay, McKeown, Elhadad, 1999</marker>
+<rawString>Regina Barzilay, Kathleen McKeown, and Michael Elhadad. 1999. Information fusion in the context of multi-document summarization. In Proceedings of ACL 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W Byrne</author>
+<author>S Khudanpur</author>
+<author>W Kim</author>
+<author>S Kumar</author>
+<author>P Pecina</author>
+<author>P Virga</author>
+<author>P Xu</author>
+<author>D Yarowsky</author>
+</authors>
+<title>Chinese-English machine translation system.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the MT Summit IX.</booktitle>
+<institution>The Johns Hopkins University</institution>
+<contexts>
+<context position="18007" citStr="Byrne et al., 2003" startWordPosition="2837" endWordPosition="2840">ut from the coreference resolution system is used to cluster all mentions referring to the same entity and to select one as the representative mention. If the representative mention is not a pronoun, we modify the original texts by replacing all pronoun mentions in the cluster with the syntactic head of the representative mention. Note that the coreference resolution system is applied to each recap as a whole. GIZA++ (Och and Ney, 2003) is a widely used word aligner for MT systems. We amend the input data by copying identical word pairs 10 times and adding them as additional ‘sentence’ pairs (Byrne et al., 2003), in order to emphasize the higher alignment probability between identical words. We run GIZA++ for bi-directional word alignment and obtain a lexical translation table. 5.2 Fragment Extraction As mentioned in Sec. 2, we choose to use alignmentbased approaches to this task, which allows us to use many existing MT techniques and tools. We mainly follow our previous approach (Wang and CallisonBurch, 2011), which is a modified version of an approach by Munteanu and Marcu (2006) on translation fragment extraction. We briefly review the three-step procedure here and refer the reader to the original</context>
+</contexts>
+<marker>Byrne, Khudanpur, Kim, Kumar, Pecina, Virga, Xu, Yarowsky, 2003</marker>
+<rawString>W. Byrne, S. Khudanpur, W. Kim, S. Kumar, P. Pecina, P. Virga, P. Xu, and D. Yarowsky. 2003. The Johns Hopkins University 2003 Chinese-English machine translation system. In Proceedings of the MT Summit IX.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chris Callison-Burch</author>
+</authors>
+<title>Syntactic constraints on paraphrases extracted from parallel corpora.</title>
+<date>2008</date>
+<booktitle>In Proceedings of EMNLP</booktitle>
+<contexts>
+<context position="1937" citStr="Callison-Burch, 2008" startWordPosition="277" endWordPosition="278">r generating large paraphrase resources (Lin and Pantel, 2001; Szpektor et al., 2004; Dolan et al., 2004). One of the intuitively appropriate data sources for such collections are parallel or comparable corpora: if two texts are translations of the same foreign document, or if they describe the same underlying scenario, they should contain a reasonable number of sentence pairs that convey the same meaning. Most approaches that extract paraphrases from parallel texts employ some type of pattern matching: sentences with the same meaning are assumed to share many n-grams (Barzilay and Lee, 2003; Callison-Burch, 2008, among others), many words in their context (Barzilay and McKeown, 2001) or certain slots in a dependency path (Lin and Pantel, 2001; Szpektor et al., 2004). Discourse structure has only marginally been considered for this task: For example, Dolan et al. (2004) extract the first sentences from comparable articles and take them as paraphrases. Another approach (Deléger and Zweigenbaum, 2009) matches similar paragraphs in comparable texts, creating smaller comparable documents for paraphrase extraction. We believe that discourse structure delivers important information for the extraction of par</context>
+<context position="8933" citStr="Callison-Burch (2008)" startWordPosition="1347" endWordPosition="1348">eanu and Marcu (2006) extract subsentential translation pairs from comparable corpora using the log-likelihood-ratio of word translation probability. Quirk et al. (2007) extract fragments using a generative model of noisy translations. Our own work (Wang and Callison-Burch, 2011) extends the first idea to paraphrase fragment extraction on monolingual parallel and comparable corpora. Our current approach also uses word-word alignment, however, we use syntactic dependency trees to compute grammatical fragments. Our use of dependency trees is inspired by the constituent-tree-based experiments of Callison-Burch (2008). 3 Paraphrases and Discourse Previous approaches have shown that comparable texts provide a good basis for paraphrase extraction. We want to show that discourse structure is highly useful for precise and high-yield paraphrase collection from such corpora. Consider the following (made-up) example: (1) [House keeps focusing on his aching leg.1.1.] [The psychiatrist suggests him to get a hobby 1.2.] [House joins a cooking class.1.3] (2) [He tells him that the Ibuprofen is not helping with the pain.2.1.] [Nolan tells House to take up a hobby.2.2] [Together with Wilson he goes to a cookery course.</context>
+</contexts>
+<marker>Callison-Burch, 2008</marker>
+<rawString>Chris Callison-Burch. 2008. Syntactic constraints on paraphrases extracted from parallel corpora. In Proceedings of EMNLP 2008.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Lynn Carlson</author>
+<author>Daniel Marcu</author>
+<author>Mary Ellen Okurowski</author>
+</authors>
+<date>2002</date>
+<booktitle>RST Discourse Treebank. LDC.</booktitle>
+<contexts>
+<context position="10572" citStr="Carlson et al., 2002" startWordPosition="1614" endWordPosition="1618">ave a chance of actually matching the sentences. 2. Do coreference resolution. To determine which sentence parts actually carry the same meaning, pronoun resolution is essential (e.g., to match “suggest him” and “tells House”). Figure 1: System pipeline 3. Try a generic sentence similarity model. Pattern matching or n-gram overlap might not be sufficient to solve this problem. Our system pipeline is sketched in Fig. 1: 1. Create a corpus: First, we create a comparable corpus of texts with highly comparable discourse structures. Complete discourse structures like in the RST Discourse Treebank (Carlson et al., 2002) may be very useful for paraphrase computation, however, they are hard to obtain. Discourse annotation is difficult and work-intensive, and full-blown automatic discourse parsers are neither robust nor very precise. To circumvent this problem, we assemble documents that have parallel discourse structures by default: We compile multiple plot summaries of TV show episodes. The textual order of those summaries typically mirrors the underlying event order of the episodes, in the same sequence they happened on screen. We take sentence sequences of recaps as parallel discourse structures. 2. Extract</context>
+</contexts>
+<marker>Carlson, Marcu, Okurowski, 2002</marker>
+<rawString>Lynn Carlson, Daniel Marcu, and Mary Ellen Okurowski. 2002. RST Discourse Treebank. LDC.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Cohen</author>
+</authors>
+<title>A Coefficient of Agreement for Nominal Scales. Educational and Psychological Measurement,</title>
+<date>1960</date>
+<contexts>
+<context position="24072" citStr="Cohen, 1960" startWordPosition="3827" endWordPosition="3828">oth refer to at least one additional event. 4. unrelated: 51 and 52 do not overlap at all. This scheme has a double purpose: The main objective is judging whether two sentences contain paraphrases (1-3) or if they are unrelated (4). We use this coarser distinction for system evaluation by collapsing the categories 1-3 in one paraphrase,oll category. Secondly, the annotation shows how well the sentences fit each other’s content (1 vs. 2&amp;3), and how much work needs to be done to extract the sentence parts with the same meaning (2 vs. 3). The inter-annotator agreement according to Cohen’s Kappa (Cohen, 1960) is n = 0.55 (“moderate agreement”). The distinction between unrelated cases and elements of paraphrase,oll reaches n = 0.71 (“substantial agreement”). For the final gold standard, a third annotator resolved all conflict cases. Among all gold standard sentence pairs, we find 158 paraphrases, 238 containment cases, 194 related ones and 1402 unrelated. We had to discard 8 sentence pairs because one of the items was invalid or empty. The high proportion of ’unrelated’ cases results from the 400 random pairs and the low precision of the baselines. Looking at the paraphrases, 27% of the 590 instanc</context>
+</contexts>
+<marker>Cohen, 1960</marker>
+<rawString>J. Cohen. 1960. A Coefficient of Agreement for Nominal Scales. Educational and Psychological Measurement, 20(1):37.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ido Dagan</author>
+<author>Oren Glickman</author>
+<author>Bernardo Magnini</author>
+</authors>
+<title>The pascal recognising textual entailment challenge.</title>
+<date>2005</date>
+<booktitle>In MLCW,</booktitle>
+<pages>177--190</pages>
+<contexts>
+<context position="1140" citStr="Dagan et al., 2005" startWordPosition="151" endWordPosition="155"> order in the discourse, using multiple sequence alignment with a semantic similarity measure. We show that adding discourse information boosts the performance of sentence-level paraphrase acquisition, which consequently gives a tremendous advantage for extracting phraselevel paraphrase fragments from matched sentences. Our system beats an informed baseline by a margin of 50%. 1 Introduction It is widely agreed that identifying paraphrases is a core task for natural language processing, including applications like document summarization (Barzilay et al., 1999), Recognizing Textual Entailment (Dagan et al., 2005), natural language generation (Zhao et al., 2010; Ganitkevitch et al., 2011), and machine translation (Marton et al., 2009). As a consequence, many methods have been proposed for generating large paraphrase resources (Lin and Pantel, 2001; Szpektor et al., 2004; Dolan et al., 2004). One of the intuitively appropriate data sources for such collections are parallel or comparable corpora: if two texts are translations of the same foreign document, or if they describe the same underlying scenario, they should contain a reasonable number of sentence pairs that convey the same meaning. Most approach</context>
+</contexts>
+<marker>Dagan, Glickman, Magnini, 2005</marker>
+<rawString>Ido Dagan, Oren Glickman, and Bernardo Magnini. 2005. The pascal recognising textual entailment challenge. In MLCW, pages 177–190.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Das</author>
+<author>N A Smith</author>
+</authors>
+<title>Paraphrase identification as probabilistic quasi-synchronous recognition.</title>
+<date>2009</date>
+<booktitle>In Proceedings of ACL-IJCNLP</booktitle>
+<contexts>
+<context position="29582" citStr="Das and Smith (2009)" startWordPosition="4702" endWordPosition="4705">ion and accuracy. It is hard to do a direct comparison with stateof-the-art paraphrase recognition systems, because most are evaluated on different corpora, e.g., the Microsoft paraphrase corpus (Dolan and Brockett, 2005, MSR). We cannot apply our system to the MSR corpus, because we take complete texts as input, while the MSR corpus solely delivers sentence pairs. While the MSR corpus is larger than our collection, the wording variations in its paraphrase pairs are usually lower than for our examples. Thus the final numbers of previous approaches might be vaguely comparable with our results: Das and Smith (2009) present two systems reaching f-scores of 0.82 and 0.83, with a precision of 0.75 and 0.80. Both precision and f-scores of our msa-based systems lie within the same range. Heilman and Smith (2010) introduce a recall-oriented system, which reaches an f-score of 0.81 by a precision of 0.76. Compared to this system, our approach results in better precision values. All further computations bases on the system using MSA and the vector space model (MSA+VEC), because it achieves the highest precision and accuracy values. 6.2 Paraphrase Fragment Evaluation We also manually evaluate precision on paraph</context>
+</contexts>
+<marker>Das, Smith, 2009</marker>
+<rawString>D. Das and N. A. Smith. 2009. Paraphrase identification as probabilistic quasi-synchronous recognition. In Proceedings of ACL-IJCNLP 2009.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Louise Deléger</author>
+<author>Pierre Zweigenbaum</author>
+</authors>
+<title>Extracting lay paraphrases of specialized expressions from monolingual comparable medical corpora.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the ACL-IJCNLP BUCC-2009 Workshop.</booktitle>
+<contexts>
+<context position="2331" citStr="Deléger and Zweigenbaum, 2009" startWordPosition="335" endWordPosition="338"> convey the same meaning. Most approaches that extract paraphrases from parallel texts employ some type of pattern matching: sentences with the same meaning are assumed to share many n-grams (Barzilay and Lee, 2003; Callison-Burch, 2008, among others), many words in their context (Barzilay and McKeown, 2001) or certain slots in a dependency path (Lin and Pantel, 2001; Szpektor et al., 2004). Discourse structure has only marginally been considered for this task: For example, Dolan et al. (2004) extract the first sentences from comparable articles and take them as paraphrases. Another approach (Deléger and Zweigenbaum, 2009) matches similar paragraphs in comparable texts, creating smaller comparable documents for paraphrase extraction. We believe that discourse structure delivers important information for the extraction of paraphrases. Sentences that play the same role in a certain discourse and have a similar discourse context can be paraphrases, even if a semantic similarity model does not consider them very similar. This extends the widely applied distributional hypothesis to the discourse level: According to the distributional hypothesis, entities are similar if they share similar contexts. In our case, entit</context>
+</contexts>
+<marker>Deléger, Zweigenbaum, 2009</marker>
+<rawString>Louise Deléger and Pierre Zweigenbaum. 2009. Extracting lay paraphrases of specialized expressions from monolingual comparable medical corpora. In Proceedings of the ACL-IJCNLP BUCC-2009 Workshop.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Georgiana Dinu</author>
+<author>Rui Wang</author>
+</authors>
+<title>Inference rules and their application to recognizing textual entailment.</title>
+<date>2009</date>
+<booktitle>In Proceedings of EACL</booktitle>
+<contexts>
+<context position="8142" citStr="Dinu and Wang, 2009" startWordPosition="1234" endWordPosition="1237"> applicational point of view, sentential paraphrases are difficult to use in other NLP tasks. At the phrasal level, interchangeable patterns (Shinyama et al., 2002; Shinyama and Sekine, 2003) or inference rules (Lin and Pantel, 2001) are extracted. In both cases, each pattern or rule contains one or several slots, which are restricted to certain type of words, e.g., named entities (NE) or content words. They are quite successful in NE-centered tasks, like information extraction, but their level of generalization or coverage is insufficient for applications like Recognizing Textual Entailment (Dinu and Wang, 2009). The research on general paraphrase fragment extraction at the sub-sentential level is mainly based 917 on phrase pair extraction techniques from the MT literature. Munteanu and Marcu (2006) extract subsentential translation pairs from comparable corpora using the log-likelihood-ratio of word translation probability. Quirk et al. (2007) extract fragments using a generative model of noisy translations. Our own work (Wang and Callison-Burch, 2011) extends the first idea to paraphrase fragment extraction on monolingual parallel and comparable corpora. Our current approach also uses word-word ali</context>
+</contexts>
+<marker>Dinu, Wang, 2009</marker>
+<rawString>Georgiana Dinu and Rui Wang. 2009. Inference rules and their application to recognizing textual entailment. In Proceedings of EACL 2009.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W B Dolan</author>
+<author>C Brockett</author>
+</authors>
+<title>Automatically constructing a corpus of sentential paraphrases.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the third International Workshop on Paraphrasing.</booktitle>
+<contexts>
+<context position="29182" citStr="Dolan and Brockett, 2005" startWordPosition="4635" endWordPosition="4638">. The comparison of the two MSA-based systems highlights the great benefit of using structural knowledge: Both MSA+BLEU and MSA+VEC have comparable f-scores and accuracy. The advantage from using the vector-space model that is still obvious for the clustering baselines is nearly evened out when adding discourse knowledge as a backbone. However, the vector model still results in nominally higher precision and accuracy. It is hard to do a direct comparison with stateof-the-art paraphrase recognition systems, because most are evaluated on different corpora, e.g., the Microsoft paraphrase corpus (Dolan and Brockett, 2005, MSR). We cannot apply our system to the MSR corpus, because we take complete texts as input, while the MSR corpus solely delivers sentence pairs. While the MSR corpus is larger than our collection, the wording variations in its paraphrase pairs are usually lower than for our examples. Thus the final numbers of previous approaches might be vaguely comparable with our results: Das and Smith (2009) present two systems reaching f-scores of 0.82 and 0.83, with a precision of 0.75 and 0.80. Both precision and f-scores of our msa-based systems lie within the same range. Heilman and Smith (2010) int</context>
+</contexts>
+<marker>Dolan, Brockett, 2005</marker>
+<rawString>W. B. Dolan and C. Brockett. 2005. Automatically constructing a corpus of sentential paraphrases. In Proceedings of the third International Workshop on Paraphrasing.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Bill Dolan</author>
+<author>Chris Quirk</author>
+<author>Chris Brockett</author>
+</authors>
+<title>Unsupervised construction of large paraphrase corpora: Exploiting massively parallel news sources.</title>
+<date>2004</date>
+<booktitle>In Proceedings of COLING</booktitle>
+<contexts>
+<context position="1422" citStr="Dolan et al., 2004" startWordPosition="195" endWordPosition="198">hrase fragments from matched sentences. Our system beats an informed baseline by a margin of 50%. 1 Introduction It is widely agreed that identifying paraphrases is a core task for natural language processing, including applications like document summarization (Barzilay et al., 1999), Recognizing Textual Entailment (Dagan et al., 2005), natural language generation (Zhao et al., 2010; Ganitkevitch et al., 2011), and machine translation (Marton et al., 2009). As a consequence, many methods have been proposed for generating large paraphrase resources (Lin and Pantel, 2001; Szpektor et al., 2004; Dolan et al., 2004). One of the intuitively appropriate data sources for such collections are parallel or comparable corpora: if two texts are translations of the same foreign document, or if they describe the same underlying scenario, they should contain a reasonable number of sentence pairs that convey the same meaning. Most approaches that extract paraphrases from parallel texts employ some type of pattern matching: sentences with the same meaning are assumed to share many n-grams (Barzilay and Lee, 2003; Callison-Burch, 2008, among others), many words in their context (Barzilay and McKeown, 2001) or certain </context>
+<context position="6514" citStr="Dolan et al., 2004" startWordPosition="977" endWordPosition="980">ions in the other languages as paraphrases if they share a common pivot phrase. As parallel corpora have many alternative ways of expressing the same foreign language concept, large quantities of paraphrase pairs can be extracted. The paraphrasing task is also strongly related to cross-document event coreference resolution, which is tackled by similar techniques used by the available paraphrasing systems (Bagga and Baldwin, 1999; Tomadaki and Salway, 2005). Most work in paraphrase acquisition has dealt with sentence-level paraphrases, e.g., (Barzilay and McKeown, 2001; Barzilay and Lee, 2003; Dolan et al., 2004; Quirk et al., 2004). Our approach for sentential paraphrase extraction is related to the one introduced by Barzilay and Lee (2003), who also employ multiple sequence alignment (MSA). However, they use MSA at the sentence level rather than at the discourse level. We take some core ideas from our previous work on mining script information (Regneri et al., 2010). In this earlier work, we focused on event structures and their possible realizations in natural language. The corpus used in those experiments were short crowd-sourced descriptions of everyday tasks written in bullet point style. We al</context>
+</contexts>
+<marker>Dolan, Quirk, Brockett, 2004</marker>
+<rawString>Bill Dolan, Chris Quirk, and Chris Brockett. 2004. Unsupervised construction of large paraphrase corpora: Exploiting massively parallel news sources. In Proceedings of COLING 2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Richard Durbin</author>
+<author>Sean Eddy</author>
+<author>Anders Krogh</author>
+<author>Graeme Mitchison</author>
+</authors>
+<title>Biological Sequence Analysis.</title>
+<date>1998</date>
+<publisher>Cambridge University Press.</publisher>
+<contexts>
+<context position="14676" citStr="Durbin et al., 1998" startWordPosition="2286" endWordPosition="2289">collection per episode. We applied a sentence splitter (Gillick, 2009) to the documents and treat them as sequences of sentences for further processing. Sequence alignment takes as its input two sequences consisting of elements of some alphabet, and an alphabet-specific score function cm over pairs of sequence elements. For insertions and deletions, the algorithm additionally takes gap costs (cgap). Multiple Sequence Alignment generalizes pairwise alignment to arbitrarily many sequences. MSA has its main application area in bioinformatics, where it is used to identify equivalent parts of DNA (Durbin et al., 1998). Our alphabet consists of sentences, and a sequence is an ordered sentence list constituting a recap. A Multiple Sequence Alignment results in a table like Fig. 2. Each column contains the sentences of one recap, possibly intermitted with gaps (“0”), and each row contains at least one non-gap. If two sentences end up in the same row, they are aligned; we take aligned sentence to be paraphrases. Aligning a sentence with a gap can be thought of as an insertion or deletion. Each alignment has a score which is the sum of all scores for substitutions and all costs for insertions and deletions. Inf</context>
+</contexts>
+<marker>Durbin, Eddy, Krogh, Mitchison, 1998</marker>
+<rawString>Richard Durbin, Sean Eddy, Anders Krogh, and Graeme Mitchison. 1998. Biological Sequence Analysis. Cambridge University Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eugene S Edgington</author>
+</authors>
+<title>Randomization tests.</title>
+<date>1986</date>
+<publisher>Marcel Dekker, Inc.,</publisher>
+<location>New York, NY, USA.</location>
+<contexts>
+<context position="26903" citStr="Edgington, 1986" startWordPosition="4277" endWordPosition="4278">ities helps to underline the sentence similarities’ advantage compared to pure word overlap. Note that the CLUSTER+BLEU system resembles popular n-gram overlap measures for paraphrase classification. We also show the results completely random label assignment, which constitutes a lower bound for the baselines and the system. Results Overall, our system extracts 20379 paraphrase pairs. Tab. 1 shows the evaluation results on our gold-standard. The MSA based system variants outperform the two clustering baselines significantly (all levels refer to p = 0.01 and were tested with a resampling test (Edgington, 1986)). The clustering baselines perform significantly better than a random baseline, especially considering recall. The more elaborated vector-space measure even gives 10% more in precision and accuracy, and overall 14% more in f-score. This is al4Gap costs directly influence precision and recall: “cheap” gaps lead to a more restrictive system with higher precision, and more expensive gaps give more recall. We chose f-score as our objective. 922 System Prec. Recall F-score Acc. RANDOM 0.30 0.49 0.37 0.51 CLUSTER+BLEU 0.35 0.63 0.45 0.54 CLUSTER+VEC 0.40 0.68 0.51 0.61 MSA+BLEU 0.73 0.74 0.73 0.84 </context>
+</contexts>
+<marker>Edgington, 1986</marker>
+<rawString>Eugene S Edgington. 1986. Randomization tests. Marcel Dekker, Inc., New York, NY, USA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Samuel Fern</author>
+<author>Mark Stevenson</author>
+</authors>
+<title>A semantic similarity approach to paraphrase detection.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the Computational Linguistics UK (CLUK 2008) 11th Annual Research Colloquium.</booktitle>
+<contexts>
+<context position="15539" citStr="Fern and Stevenson (2009)" startWordPosition="2444" endWordPosition="2447">h gaps (“0”), and each row contains at least one non-gap. If two sentences end up in the same row, they are aligned; we take aligned sentence to be paraphrases. Aligning a sentence with a gap can be thought of as an insertion or deletion. Each alignment has a score which is the sum of all scores for substitutions and all costs for insertions and deletions. Informally, the alignment 919 score is the sum of all scores for each pair of cells (c1, c2), if c1 and c2 are in the same row. If either c1 or c2 is a gap, the pair’s score is cgap. If both cells contain sentences, the score is cm(c1, c2). Fern and Stevenson (2009) showed that sophisticated similarity measures improve paraphrasing, so we apply a state-of-the-art vector space model (Thater et al., 2011) as our score function. The vector space model provides contextualized similarities of words, i.e. the vector of each word is disambiguated by the context the current instance occurs in. cm(c1, c2) returns the model’s similarity score for c1 and c2. We re-implement a standard MSA algorithm (Needleman and Wunsch, 1970) which approximates the best MSA given the input sequences, cm and cgap. This algorithm recursively aligns two sequences at a time, treating </context>
+</contexts>
+<marker>Fern, Stevenson, 2009</marker>
+<rawString>Samuel Fern and Mark Stevenson. 2009. A semantic similarity approach to paraphrase detection. In Proceedings of the Computational Linguistics UK (CLUK 2008) 11th Annual Research Colloquium.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Juri Ganitkevitch</author>
+<author>Chris Callison-Burch</author>
+<author>Courtney Napoles</author>
+<author>Benjamin Van Durme</author>
+</authors>
+<title>Learning sentential paraphrases from bilingual parallel corpora for text-to-text generation.</title>
+<date>2011</date>
+<booktitle>In Proceedings of EMNLP</booktitle>
+<marker>Ganitkevitch, Callison-Burch, Napoles, Van Durme, 2011</marker>
+<rawString>Juri Ganitkevitch, Chris Callison-Burch, Courtney Napoles, and Benjamin Van Durme. 2011. Learning sentential paraphrases from bilingual parallel corpora for text-to-text generation. In Proceedings of EMNLP 2011.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dan Gillick</author>
+</authors>
+<title>Sentence boundary detection and the problem with the u.s.</title>
+<date>2009</date>
+<booktitle>In Proceedings of HLT-NAACL 2009: Companion Volume: Short Papers.</booktitle>
+<contexts>
+<context position="14126" citStr="Gillick, 2009" startWordPosition="2203" endWordPosition="2204">bsequent second step. 4 Sentence Matching with MSA This section explains how we apply MSA to extract sentence-level paraphrases from a comparable corpus. As our input data, we manually collect recaps for House M.D. episodes from different sources on the web1. House episodes have an intermediate length (-45 min), which results in recaps of a con1e.g. http://house.wikia.com – for a detailed list of URLs, please check the supplementary material or contact the authors. venient size (40 to 150 sentences). The result is one comparable document collection per episode. We applied a sentence splitter (Gillick, 2009) to the documents and treat them as sequences of sentences for further processing. Sequence alignment takes as its input two sequences consisting of elements of some alphabet, and an alphabet-specific score function cm over pairs of sequence elements. For insertions and deletions, the algorithm additionally takes gap costs (cgap). Multiple Sequence Alignment generalizes pairwise alignment to arbitrarily many sequences. MSA has its main application area in bioinformatics, where it is used to identify equivalent parts of DNA (Durbin et al., 1998). Our alphabet consists of sentences, and a sequen</context>
+</contexts>
+<marker>Gillick, 2009</marker>
+<rawString>Dan Gillick. 2009. Sentence boundary detection and the problem with the u.s. In Proceedings of HLT-NAACL 2009: Companion Volume: Short Papers.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michael Heilman</author>
+<author>Noah A Smith</author>
+</authors>
+<title>Tree edit models for recognizing textual entailments, paraphrases, and answers to questions.</title>
+<date>2010</date>
+<booktitle>In Proceedings of NAACL-HLT</booktitle>
+<contexts>
+<context position="29778" citStr="Heilman and Smith (2010)" startWordPosition="4735" endWordPosition="4738">us (Dolan and Brockett, 2005, MSR). We cannot apply our system to the MSR corpus, because we take complete texts as input, while the MSR corpus solely delivers sentence pairs. While the MSR corpus is larger than our collection, the wording variations in its paraphrase pairs are usually lower than for our examples. Thus the final numbers of previous approaches might be vaguely comparable with our results: Das and Smith (2009) present two systems reaching f-scores of 0.82 and 0.83, with a precision of 0.75 and 0.80. Both precision and f-scores of our msa-based systems lie within the same range. Heilman and Smith (2010) introduce a recall-oriented system, which reaches an f-score of 0.81 by a precision of 0.76. Compared to this system, our approach results in better precision values. All further computations bases on the system using MSA and the vector space model (MSA+VEC), because it achieves the highest precision and accuracy values. 6.2 Paraphrase Fragment Evaluation We also manually evaluate precision on paraphrase fragments, and additionally describe the productivity of the different setups, providing some intuition about the methods’ recall. Gold-Standard We randomly collect 150 fragment pairs for eac</context>
+</contexts>
+<marker>Heilman, Smith, 2010</marker>
+<rawString>Michael Heilman and Noah A. Smith. 2010. Tree edit models for recognizing textual entailments, paraphrases, and answers to questions. In Proceedings of NAACL-HLT 2010.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dan Klein</author>
+<author>Christopher D Manning</author>
+</authors>
+<title>Accurate unlexicalized parsing.</title>
+<date>2003</date>
+<booktitle>In Proceedings ofACL</booktitle>
+<contexts>
+<context position="17160" citStr="Klein and Manning, 2003" startWordPosition="2698" endWordPosition="2701">h the most similar preceding and trailing contexts end up as paraphrases. 5 Paraphrase Fragment Extraction Taking the output of the sentence alignment as input, we next extract shorter phrase-level paraphrases (paraphrase fragments) from the matched sentence pairs. We try different algorithms for this step, all relying on word-word alignments. 5.1 Preprocessing Before extracting paraphrase fragments, we first preprocess all documents as follows: Stanford CoreNLP 2 provides a set of natural language analysis tools. We use the part-ofspeech (POS) tagger, the named-entity recognizer, the parser (Klein and Manning, 2003), and the coreference resolution system (Lee et al., 2011). In particular, the dependency structures of the parser’s output are used for VP2http://nlp.stanford.edu/software/ corenlp.shtml fragment extraction (Sec. 5.3). The output from the coreference resolution system is used to cluster all mentions referring to the same entity and to select one as the representative mention. If the representative mention is not a pronoun, we modify the original texts by replacing all pronoun mentions in the cluster with the syntactic head of the representative mention. Note that the coreference resolution sy</context>
+</contexts>
+<marker>Klein, Manning, 2003</marker>
+<rawString>Dan Klein and Christopher D. Manning. 2003. Accurate unlexicalized parsing. In Proceedings ofACL 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Heeyoung Lee</author>
+<author>Yves Peirsman</author>
+<author>Angel Chang</author>
+<author>Nathanael Chambers</author>
+<author>Mihai Surdeanu</author>
+<author>Dan Jurafsky</author>
+</authors>
+<title>Stanford’s multi-pass sieve coreference resolution system at the conll-2011 shared task.</title>
+<date>2011</date>
+<booktitle>In Proceedings of the CoNLL-2011 Shared Task.</booktitle>
+<contexts>
+<context position="17218" citStr="Lee et al., 2011" startWordPosition="2707" endWordPosition="2710">phrases. 5 Paraphrase Fragment Extraction Taking the output of the sentence alignment as input, we next extract shorter phrase-level paraphrases (paraphrase fragments) from the matched sentence pairs. We try different algorithms for this step, all relying on word-word alignments. 5.1 Preprocessing Before extracting paraphrase fragments, we first preprocess all documents as follows: Stanford CoreNLP 2 provides a set of natural language analysis tools. We use the part-ofspeech (POS) tagger, the named-entity recognizer, the parser (Klein and Manning, 2003), and the coreference resolution system (Lee et al., 2011). In particular, the dependency structures of the parser’s output are used for VP2http://nlp.stanford.edu/software/ corenlp.shtml fragment extraction (Sec. 5.3). The output from the coreference resolution system is used to cluster all mentions referring to the same entity and to select one as the representative mention. If the representative mention is not a pronoun, we modify the original texts by replacing all pronoun mentions in the cluster with the syntactic head of the representative mention. Note that the coreference resolution system is applied to each recap as a whole. GIZA++ (Och and </context>
+</contexts>
+<marker>Lee, Peirsman, Chang, Chambers, Surdeanu, Jurafsky, 2011</marker>
+<rawString>Heeyoung Lee, Yves Peirsman, Angel Chang, Nathanael Chambers, Mihai Surdeanu, and Dan Jurafsky. 2011. Stanford’s multi-pass sieve coreference resolution system at the conll-2011 shared task. In Proceedings of the CoNLL-2011 Shared Task.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dekang Lin</author>
+<author>Patrick Pantel</author>
+</authors>
+<title>DIRT - Discovery of Inference Rules from Text.</title>
+<date>2001</date>
+<booktitle>In Proceedings of the ACM SIGKDD.</booktitle>
+<contexts>
+<context position="1378" citStr="Lin and Pantel, 2001" startWordPosition="187" endWordPosition="190">us advantage for extracting phraselevel paraphrase fragments from matched sentences. Our system beats an informed baseline by a margin of 50%. 1 Introduction It is widely agreed that identifying paraphrases is a core task for natural language processing, including applications like document summarization (Barzilay et al., 1999), Recognizing Textual Entailment (Dagan et al., 2005), natural language generation (Zhao et al., 2010; Ganitkevitch et al., 2011), and machine translation (Marton et al., 2009). As a consequence, many methods have been proposed for generating large paraphrase resources (Lin and Pantel, 2001; Szpektor et al., 2004; Dolan et al., 2004). One of the intuitively appropriate data sources for such collections are parallel or comparable corpora: if two texts are translations of the same foreign document, or if they describe the same underlying scenario, they should contain a reasonable number of sentence pairs that convey the same meaning. Most approaches that extract paraphrases from parallel texts employ some type of pattern matching: sentences with the same meaning are assumed to share many n-grams (Barzilay and Lee, 2003; Callison-Burch, 2008, among others), many words in their cont</context>
+<context position="7755" citStr="Lin and Pantel, 2001" startWordPosition="1174" endWordPosition="1177">nd-crafted similarity measure that was specifically designed for this text type. In this current work, we target the general task of extracting paraphrases for events rather than the much more specific scriptrelated task. The current approach uses a domainindependent similarity measure instead of a specific hand-crafted similarity score and is thus applicable to standard texts. From an applicational point of view, sentential paraphrases are difficult to use in other NLP tasks. At the phrasal level, interchangeable patterns (Shinyama et al., 2002; Shinyama and Sekine, 2003) or inference rules (Lin and Pantel, 2001) are extracted. In both cases, each pattern or rule contains one or several slots, which are restricted to certain type of words, e.g., named entities (NE) or content words. They are quite successful in NE-centered tasks, like information extraction, but their level of generalization or coverage is insufficient for applications like Recognizing Textual Entailment (Dinu and Wang, 2009). The research on general paraphrase fragment extraction at the sub-sentential level is mainly based 917 on phrase pair extraction techniques from the MT literature. Munteanu and Marcu (2006) extract subsentential</context>
+</contexts>
+<marker>Lin, Pantel, 2001</marker>
+<rawString>Dekang Lin and Patrick Pantel. 2001. DIRT - Discovery of Inference Rules from Text. In Proceedings of the ACM SIGKDD.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yuval Marton</author>
+<author>Chris Callison-Burch</author>
+<author>Philip Resnik</author>
+</authors>
+<title>Improved Statistical Machine Translation Using Monolingually-Derived Paraphrases.</title>
+<date>2009</date>
+<booktitle>In Proceedings of EMNLP</booktitle>
+<contexts>
+<context position="1263" citStr="Marton et al., 2009" startWordPosition="170" endWordPosition="173">se information boosts the performance of sentence-level paraphrase acquisition, which consequently gives a tremendous advantage for extracting phraselevel paraphrase fragments from matched sentences. Our system beats an informed baseline by a margin of 50%. 1 Introduction It is widely agreed that identifying paraphrases is a core task for natural language processing, including applications like document summarization (Barzilay et al., 1999), Recognizing Textual Entailment (Dagan et al., 2005), natural language generation (Zhao et al., 2010; Ganitkevitch et al., 2011), and machine translation (Marton et al., 2009). As a consequence, many methods have been proposed for generating large paraphrase resources (Lin and Pantel, 2001; Szpektor et al., 2004; Dolan et al., 2004). One of the intuitively appropriate data sources for such collections are parallel or comparable corpora: if two texts are translations of the same foreign document, or if they describe the same underlying scenario, they should contain a reasonable number of sentence pairs that convey the same meaning. Most approaches that extract paraphrases from parallel texts employ some type of pattern matching: sentences with the same meaning are a</context>
+</contexts>
+<marker>Marton, Callison-Burch, Resnik, 2009</marker>
+<rawString>Yuval Marton, Chris Callison-Burch, and Philip Resnik. 2009. Improved Statistical Machine Translation Using Monolingually-Derived Paraphrases. In Proceedings of EMNLP 2009.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dragos Stefan Munteanu</author>
+<author>Daniel Marcu</author>
+</authors>
+<title>Extracting Parallel Sub-Sentential Fragments from NonParallel Corpora.</title>
+<date>2006</date>
+<booktitle>In Proceedings of ACL</booktitle>
+<contexts>
+<context position="8333" citStr="Munteanu and Marcu (2006)" startWordPosition="1263" endWordPosition="1266">2003) or inference rules (Lin and Pantel, 2001) are extracted. In both cases, each pattern or rule contains one or several slots, which are restricted to certain type of words, e.g., named entities (NE) or content words. They are quite successful in NE-centered tasks, like information extraction, but their level of generalization or coverage is insufficient for applications like Recognizing Textual Entailment (Dinu and Wang, 2009). The research on general paraphrase fragment extraction at the sub-sentential level is mainly based 917 on phrase pair extraction techniques from the MT literature. Munteanu and Marcu (2006) extract subsentential translation pairs from comparable corpora using the log-likelihood-ratio of word translation probability. Quirk et al. (2007) extract fragments using a generative model of noisy translations. Our own work (Wang and Callison-Burch, 2011) extends the first idea to paraphrase fragment extraction on monolingual parallel and comparable corpora. Our current approach also uses word-word alignment, however, we use syntactic dependency trees to compute grammatical fragments. Our use of dependency trees is inspired by the constituent-tree-based experiments of Callison-Burch (2008)</context>
+<context position="18486" citStr="Munteanu and Marcu (2006)" startWordPosition="2916" endWordPosition="2919">r MT systems. We amend the input data by copying identical word pairs 10 times and adding them as additional ‘sentence’ pairs (Byrne et al., 2003), in order to emphasize the higher alignment probability between identical words. We run GIZA++ for bi-directional word alignment and obtain a lexical translation table. 5.2 Fragment Extraction As mentioned in Sec. 2, we choose to use alignmentbased approaches to this task, which allows us to use many existing MT techniques and tools. We mainly follow our previous approach (Wang and CallisonBurch, 2011), which is a modified version of an approach by Munteanu and Marcu (2006) on translation fragment extraction. We briefly review the three-step procedure here and refer the reader to the original paper for more details: 1. Establish word-word alignment between each sentence pair using GIZA++; 2. Smooth the alignment based on lexical occurrence likelihood; 3. Extract fragment pairs using different heuristics, e.g., non-overlapping n-grams, chunk boundaries, or dependency trees. After obtaining a lexical translation table by running GIZA++, for each word pair, w1 and w2, we use both positive and negative lexical associations for the alignment, which are defined as the</context>
+</contexts>
+<marker>Munteanu, Marcu, 2006</marker>
+<rawString>Dragos Stefan Munteanu and Daniel Marcu. 2006. Extracting Parallel Sub-Sentential Fragments from NonParallel Corpora. In Proceedings of ACL 2006.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Saul B Needleman</author>
+<author>Christian D Wunsch</author>
+</authors>
+<title>A general method applicable to the search for similarities in the amino acid sequence of two proteins.</title>
+<date>1970</date>
+<journal>Journal of molecular biology,</journal>
+<volume>48</volume>
+<issue>3</issue>
+<contexts>
+<context position="15998" citStr="Needleman and Wunsch, 1970" startWordPosition="2516" endWordPosition="2519">1 and c2 are in the same row. If either c1 or c2 is a gap, the pair’s score is cgap. If both cells contain sentences, the score is cm(c1, c2). Fern and Stevenson (2009) showed that sophisticated similarity measures improve paraphrasing, so we apply a state-of-the-art vector space model (Thater et al., 2011) as our score function. The vector space model provides contextualized similarities of words, i.e. the vector of each word is disambiguated by the context the current instance occurs in. cm(c1, c2) returns the model’s similarity score for c1 and c2. We re-implement a standard MSA algorithm (Needleman and Wunsch, 1970) which approximates the best MSA given the input sequences, cm and cgap. This algorithm recursively aligns two sequences at a time, treating the resulting alignment as a new sequence. This does not necessarily result in the globally optimal alignment, because the order in which sequences are aligned can change the final output. Given this constraint, the algorithm finds the best alignment, which - in our case - is the alignment with the maximal score. Intuitively, we are looking for the alignment where the most similar sentences with the most similar preceding and trailing contexts end up as p</context>
+</contexts>
+<marker>Needleman, Wunsch, 1970</marker>
+<rawString>Saul B. Needleman and Christian D. Wunsch. 1970. A general method applicable to the search for similarities in the amino acid sequence of two proteins. Journal of molecular biology, 48(3), March.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andreas Noack</author>
+</authors>
+<title>Energy models for graph clustering.</title>
+<date>2007</date>
+<journal>Journal of Graph Algorithms and Applications,</journal>
+<volume>11</volume>
+<issue>2</issue>
+<contexts>
+<context position="25874" citStr="Noack, 2007" startWordPosition="4120" endWordPosition="4121">ts are optimized for f-score, resulting in cgap = 0.4 To show the contribution of MSA’s structural component and compare it to the vector model’s contribution, we create a second MSA-based system that uses MSA with BLEU scores (Papineni et al., 2002) as scoring function (MSA+BLEU). BLEU establishes the average 1-to-4-gram overlap of two sentences. The gap costs for this baseline were optimized separately, ending up with cgap = 1. In order to quantify the contribution of the alignment, we create a discourse-unaware baseline by dropping the MSA and using a state-of-the-art clustering algorithm (Noack, 2007) fed with the vector space model scores (CLUSTER+VEC). The algorithm partitions the set of sentences into paraphrase clusters such that the most similar sentences end up in one cluster. This does not require any parameter tuning. We also show a baseline that uses the clustering algorithm with BLEU scores (CLUSTER+BLEU). The comparison of this baseline with the other clustering-baseline that uses vector similarities helps to underline the sentence similarities’ advantage compared to pure word overlap. Note that the CLUSTER+BLEU system resembles popular n-gram overlap measures for paraphrase cla</context>
+</contexts>
+<marker>Noack, 2007</marker>
+<rawString>Andreas Noack. 2007. Energy models for graph clustering. Journal of Graph Algorithms and Applications, 11(2):453–480.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Josef Och</author>
+<author>Hermann Ney</author>
+</authors>
+<title>A systematic comparison of various statistical alignment models.</title>
+<date>2003</date>
+<journal>Computational Linguistics,</journal>
+<volume>29</volume>
+<issue>1</issue>
+<contexts>
+<context position="17828" citStr="Och and Ney, 2003" startWordPosition="2805" endWordPosition="2808">., 2011). In particular, the dependency structures of the parser’s output are used for VP2http://nlp.stanford.edu/software/ corenlp.shtml fragment extraction (Sec. 5.3). The output from the coreference resolution system is used to cluster all mentions referring to the same entity and to select one as the representative mention. If the representative mention is not a pronoun, we modify the original texts by replacing all pronoun mentions in the cluster with the syntactic head of the representative mention. Note that the coreference resolution system is applied to each recap as a whole. GIZA++ (Och and Ney, 2003) is a widely used word aligner for MT systems. We amend the input data by copying identical word pairs 10 times and adding them as additional ‘sentence’ pairs (Byrne et al., 2003), in order to emphasize the higher alignment probability between identical words. We run GIZA++ for bi-directional word alignment and obtain a lexical translation table. 5.2 Fragment Extraction As mentioned in Sec. 2, we choose to use alignmentbased approaches to this task, which allows us to use many existing MT techniques and tools. We mainly follow our previous approach (Wang and CallisonBurch, 2011), which is a mo</context>
+</contexts>
+<marker>Och, Ney, 2003</marker>
+<rawString>Franz Josef Och and Hermann Ney. 2003. A systematic comparison of various statistical alignment models. Computational Linguistics, 29(1).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kishore Papineni</author>
+<author>Salim Roukos</author>
+<author>Todd Ward</author>
+<author>WeiJing Zhu</author>
+</authors>
+<title>BLEU: a method for automatic evaluation of machine translation.</title>
+<date>2002</date>
+<booktitle>In Proceedings of ACL</booktitle>
+<contexts>
+<context position="25512" citStr="Papineni et al., 2002" startWordPosition="4061" endWordPosition="4064">spect to the gold standard (paraphrases are members of paraphrase,oll), taking f-score as follows: 2 � precision � recall f-score = precision + recall We also compute accuracy as the overall fraction of correct labels (negative and positive ones). Our main system uses MSA (denoted by MSA afterwards) with vector-based similarities (VEC) as a scoring function. The gap costs are optimized for f-score, resulting in cgap = 0.4 To show the contribution of MSA’s structural component and compare it to the vector model’s contribution, we create a second MSA-based system that uses MSA with BLEU scores (Papineni et al., 2002) as scoring function (MSA+BLEU). BLEU establishes the average 1-to-4-gram overlap of two sentences. The gap costs for this baseline were optimized separately, ending up with cgap = 1. In order to quantify the contribution of the alignment, we create a discourse-unaware baseline by dropping the MSA and using a state-of-the-art clustering algorithm (Noack, 2007) fed with the vector space model scores (CLUSTER+VEC). The algorithm partitions the set of sentences into paraphrase clusters such that the most similar sentences end up in one cluster. This does not require any parameter tuning. We also </context>
+</contexts>
+<marker>Papineni, Roukos, Ward, Zhu, 2002</marker>
+<rawString>Kishore Papineni, Salim Roukos, Todd Ward, and WeiJing Zhu. 2002. BLEU: a method for automatic evaluation of machine translation. In Proceedings of ACL 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chris Quirk</author>
+<author>Chris Brockett</author>
+<author>William B Dolan</author>
+</authors>
+<title>Monolingual machine translation for paraphrase generation.</title>
+<date>2004</date>
+<booktitle>In Proceedings of EMNLP</booktitle>
+<contexts>
+<context position="5357" citStr="Quirk et al., 2004" startWordPosition="802" endWordPosition="805">tep (Sec. 4) and the subsequent paraphrase fragment extraction (Sec. 5). We present both automatic and manual evaluation of the two system components (Sec. 6). Finally, we conclude the paper and give some hints for future work (Sec. 7). 2 Related Work Previous paraphrase extraction approaches can be roughly characterized under two aspects: 1) data source and 2) granularity of the output. Both parallel corpora and comparable corpora have been quite well studied. Barzilay and McKeown (2001) use different English translations of the same novels (i.e., monolingual parallel corpora), while others (Quirk et al., 2004) experiment on multiple sources of the same news/events, i.e., monolingual comparable corpora. Commonly used (candidate) comparable corpora are news articles written by different news agencies within a limited time window (Wang and Callison-Burch, 2011). Other studies focus on extracting paraphrases from large bilingual parallel corpora, which the machine translation (MT) community provides in many varieties. Bannard and Callison-Burch (2005) as well as Zhao et al. (2008) take one language as the pivot and match two possible translations in the other languages as paraphrases if they share a co</context>
+</contexts>
+<marker>Quirk, Brockett, Dolan, 2004</marker>
+<rawString>Chris Quirk, Chris Brockett, and William B. Dolan. 2004. Monolingual machine translation for paraphrase generation. In Proceedings of EMNLP 2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Chris Quirk</author>
+<author>Raghavendra Udupa</author>
+<author>Arul Menezes</author>
+</authors>
+<title>Generative models of noisy translations with applications to parallel fragment extraction.</title>
+<date>2007</date>
+<booktitle>In Proceedings of MT</booktitle>
+<location>Summit XI, Copenhagen, Denmark.</location>
+<contexts>
+<context position="8481" citStr="Quirk et al. (2007)" startWordPosition="1282" endWordPosition="1285">certain type of words, e.g., named entities (NE) or content words. They are quite successful in NE-centered tasks, like information extraction, but their level of generalization or coverage is insufficient for applications like Recognizing Textual Entailment (Dinu and Wang, 2009). The research on general paraphrase fragment extraction at the sub-sentential level is mainly based 917 on phrase pair extraction techniques from the MT literature. Munteanu and Marcu (2006) extract subsentential translation pairs from comparable corpora using the log-likelihood-ratio of word translation probability. Quirk et al. (2007) extract fragments using a generative model of noisy translations. Our own work (Wang and Callison-Burch, 2011) extends the first idea to paraphrase fragment extraction on monolingual parallel and comparable corpora. Our current approach also uses word-word alignment, however, we use syntactic dependency trees to compute grammatical fragments. Our use of dependency trees is inspired by the constituent-tree-based experiments of Callison-Burch (2008). 3 Paraphrases and Discourse Previous approaches have shown that comparable texts provide a good basis for paraphrase extraction. We want to show t</context>
+</contexts>
+<marker>Quirk, Udupa, Menezes, 2007</marker>
+<rawString>Chris Quirk, Raghavendra Udupa, and Arul Menezes. 2007. Generative models of noisy translations with applications to parallel fragment extraction. In Proceedings of MT Summit XI, Copenhagen, Denmark.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Michaela Regneri</author>
+<author>Alexander Koller</author>
+<author>Manfred Pinkal</author>
+</authors>
+<title>Learning Script Knowledge with Web Experiments.</title>
+<date>2010</date>
+<booktitle>In Proceedings of ACL</booktitle>
+<contexts>
+<context position="6877" citStr="Regneri et al., 2010" startWordPosition="1039" endWordPosition="1042">ques used by the available paraphrasing systems (Bagga and Baldwin, 1999; Tomadaki and Salway, 2005). Most work in paraphrase acquisition has dealt with sentence-level paraphrases, e.g., (Barzilay and McKeown, 2001; Barzilay and Lee, 2003; Dolan et al., 2004; Quirk et al., 2004). Our approach for sentential paraphrase extraction is related to the one introduced by Barzilay and Lee (2003), who also employ multiple sequence alignment (MSA). However, they use MSA at the sentence level rather than at the discourse level. We take some core ideas from our previous work on mining script information (Regneri et al., 2010). In this earlier work, we focused on event structures and their possible realizations in natural language. The corpus used in those experiments were short crowd-sourced descriptions of everyday tasks written in bullet point style. We aligned them with a hand-crafted similarity measure that was specifically designed for this text type. In this current work, we target the general task of extracting paraphrases for events rather than the much more specific scriptrelated task. The current approach uses a domainindependent similarity measure instead of a specific hand-crafted similarity score and </context>
+<context position="22049" citStr="Regneri et al., 2010" startWordPosition="3478" endWordPosition="3481">entential paraphrase matching and paraphrase fragment extraction using manually labelled gold standards (provided in the supplementary material). We collect recaps for all 20 episodes of season 6 of House M.D., taking 8 summaries per episode (the supplementary material contains a list of all URLs). This results in 160 documents containing 14735 sentences. For evaluation, we use all episodes except no. 2, which is held out for parameter optimizations and other development purposes. 6.1 Sentential Paraphrase Evaluation To evaluate sentence matching, we adapt the baselines from our earlier work (Regneri et al., 2010) and create a new gold standard. We compute precision, recall and accuracy of our main system and suggest baselines that separately show the influence of both the MSA and the semantic scoring function. Gold-Standard We aim to create an evaluation set that contains a sufficient amount of genuine paraphrases. Finding such sentence pairs with random sampling and manual annotation is infeasible: There are more than 200, 000, 000 possible sentence pairs, and we expect less than 1% of them to be paraphrases. We thus sample pairs that either the system or the baselines recognized as paraphrases and t</context>
+</contexts>
+<marker>Regneri, Koller, Pinkal, 2010</marker>
+<rawString>Michaela Regneri, Alexander Koller, and Manfred Pinkal. 2010. Learning Script Knowledge with Web Experiments. In Proceedings of ACL 2010.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yusuke Shinyama</author>
+<author>Satoshi Sekine</author>
+</authors>
+<title>Paraphrase acquisition for information extraction.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the ACL PARAPHRASE ’03 Workshop.</booktitle>
+<contexts>
+<context position="7713" citStr="Shinyama and Sekine, 2003" startWordPosition="1167" endWordPosition="1170">n bullet point style. We aligned them with a hand-crafted similarity measure that was specifically designed for this text type. In this current work, we target the general task of extracting paraphrases for events rather than the much more specific scriptrelated task. The current approach uses a domainindependent similarity measure instead of a specific hand-crafted similarity score and is thus applicable to standard texts. From an applicational point of view, sentential paraphrases are difficult to use in other NLP tasks. At the phrasal level, interchangeable patterns (Shinyama et al., 2002; Shinyama and Sekine, 2003) or inference rules (Lin and Pantel, 2001) are extracted. In both cases, each pattern or rule contains one or several slots, which are restricted to certain type of words, e.g., named entities (NE) or content words. They are quite successful in NE-centered tasks, like information extraction, but their level of generalization or coverage is insufficient for applications like Recognizing Textual Entailment (Dinu and Wang, 2009). The research on general paraphrase fragment extraction at the sub-sentential level is mainly based 917 on phrase pair extraction techniques from the MT literature. Munte</context>
+</contexts>
+<marker>Shinyama, Sekine, 2003</marker>
+<rawString>Yusuke Shinyama and Satoshi Sekine. 2003. Paraphrase acquisition for information extraction. In Proceedings of the ACL PARAPHRASE ’03 Workshop.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yusuke Shinyama</author>
+<author>Satoshi Sekine</author>
+<author>Kiyoshi Sudo</author>
+</authors>
+<title>Automatic paraphrase acquisition from news articles.</title>
+<date>2002</date>
+<booktitle>In Proceedings of HLT</booktitle>
+<contexts>
+<context position="7685" citStr="Shinyama et al., 2002" startWordPosition="1163" endWordPosition="1166">veryday tasks written in bullet point style. We aligned them with a hand-crafted similarity measure that was specifically designed for this text type. In this current work, we target the general task of extracting paraphrases for events rather than the much more specific scriptrelated task. The current approach uses a domainindependent similarity measure instead of a specific hand-crafted similarity score and is thus applicable to standard texts. From an applicational point of view, sentential paraphrases are difficult to use in other NLP tasks. At the phrasal level, interchangeable patterns (Shinyama et al., 2002; Shinyama and Sekine, 2003) or inference rules (Lin and Pantel, 2001) are extracted. In both cases, each pattern or rule contains one or several slots, which are restricted to certain type of words, e.g., named entities (NE) or content words. They are quite successful in NE-centered tasks, like information extraction, but their level of generalization or coverage is insufficient for applications like Recognizing Textual Entailment (Dinu and Wang, 2009). The research on general paraphrase fragment extraction at the sub-sentential level is mainly based 917 on phrase pair extraction techniques f</context>
+</contexts>
+<marker>Shinyama, Sekine, Sudo, 2002</marker>
+<rawString>Yusuke Shinyama, Satoshi Sekine, and Kiyoshi Sudo. 2002. Automatic paraphrase acquisition from news articles. In Proceedings of HLT 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Idan Szpektor</author>
+<author>Hristo Tanev</author>
+<author>Ido Dagan</author>
+<author>Bonaventura Coppola</author>
+</authors>
+<title>Scaling Web-based Acquisition of Entailment Relations.</title>
+<date>2004</date>
+<booktitle>In Proceedings of EMNLP</booktitle>
+<contexts>
+<context position="1401" citStr="Szpektor et al., 2004" startWordPosition="191" endWordPosition="194">cting phraselevel paraphrase fragments from matched sentences. Our system beats an informed baseline by a margin of 50%. 1 Introduction It is widely agreed that identifying paraphrases is a core task for natural language processing, including applications like document summarization (Barzilay et al., 1999), Recognizing Textual Entailment (Dagan et al., 2005), natural language generation (Zhao et al., 2010; Ganitkevitch et al., 2011), and machine translation (Marton et al., 2009). As a consequence, many methods have been proposed for generating large paraphrase resources (Lin and Pantel, 2001; Szpektor et al., 2004; Dolan et al., 2004). One of the intuitively appropriate data sources for such collections are parallel or comparable corpora: if two texts are translations of the same foreign document, or if they describe the same underlying scenario, they should contain a reasonable number of sentence pairs that convey the same meaning. Most approaches that extract paraphrases from parallel texts employ some type of pattern matching: sentences with the same meaning are assumed to share many n-grams (Barzilay and Lee, 2003; Callison-Burch, 2008, among others), many words in their context (Barzilay and McKeo</context>
+</contexts>
+<marker>Szpektor, Tanev, Dagan, Coppola, 2004</marker>
+<rawString>Idan Szpektor, Hristo Tanev, Ido Dagan, and Bonaventura Coppola. 2004. Scaling Web-based Acquisition of Entailment Relations. In Proceedings of EMNLP 2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stefan Thater</author>
+<author>Hagen Fürstenau</author>
+<author>Manfred Pinkal</author>
+</authors>
+<title>Word Meaning in Context: A Simple and Effective Vector Model.</title>
+<date>2011</date>
+<booktitle>In Proceedings of IJCNLP</booktitle>
+<contexts>
+<context position="15679" citStr="Thater et al., 2011" startWordPosition="2464" endWordPosition="2467">be paraphrases. Aligning a sentence with a gap can be thought of as an insertion or deletion. Each alignment has a score which is the sum of all scores for substitutions and all costs for insertions and deletions. Informally, the alignment 919 score is the sum of all scores for each pair of cells (c1, c2), if c1 and c2 are in the same row. If either c1 or c2 is a gap, the pair’s score is cgap. If both cells contain sentences, the score is cm(c1, c2). Fern and Stevenson (2009) showed that sophisticated similarity measures improve paraphrasing, so we apply a state-of-the-art vector space model (Thater et al., 2011) as our score function. The vector space model provides contextualized similarities of words, i.e. the vector of each word is disambiguated by the context the current instance occurs in. cm(c1, c2) returns the model’s similarity score for c1 and c2. We re-implement a standard MSA algorithm (Needleman and Wunsch, 1970) which approximates the best MSA given the input sequences, cm and cgap. This algorithm recursively aligns two sequences at a time, treating the resulting alignment as a new sequence. This does not necessarily result in the globally optimal alignment, because the order in which se</context>
+</contexts>
+<marker>Thater, Fürstenau, Pinkal, 2011</marker>
+<rawString>Stefan Thater, Hagen Fürstenau, and Manfred Pinkal. 2011. Word Meaning in Context: A Simple and Effective Vector Model. In Proceedings of IJCNLP 2011.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Eleftheria Tomadaki</author>
+<author>Andrew Salway</author>
+</authors>
+<title>Matching verb attributes for cross-document event coreference.</title>
+<date>2005</date>
+<booktitle>In Proc. of the Interdisciplinary Workshop on the Identification and Representation of Verb Features and Verb Classes.</booktitle>
+<contexts>
+<context position="6356" citStr="Tomadaki and Salway, 2005" startWordPosition="954" endWordPosition="957">) community provides in many varieties. Bannard and Callison-Burch (2005) as well as Zhao et al. (2008) take one language as the pivot and match two possible translations in the other languages as paraphrases if they share a common pivot phrase. As parallel corpora have many alternative ways of expressing the same foreign language concept, large quantities of paraphrase pairs can be extracted. The paraphrasing task is also strongly related to cross-document event coreference resolution, which is tackled by similar techniques used by the available paraphrasing systems (Bagga and Baldwin, 1999; Tomadaki and Salway, 2005). Most work in paraphrase acquisition has dealt with sentence-level paraphrases, e.g., (Barzilay and McKeown, 2001; Barzilay and Lee, 2003; Dolan et al., 2004; Quirk et al., 2004). Our approach for sentential paraphrase extraction is related to the one introduced by Barzilay and Lee (2003), who also employ multiple sequence alignment (MSA). However, they use MSA at the sentence level rather than at the discourse level. We take some core ideas from our previous work on mining script information (Regneri et al., 2010). In this earlier work, we focused on event structures and their possible reali</context>
+</contexts>
+<marker>Tomadaki, Salway, 2005</marker>
+<rawString>Eleftheria Tomadaki and Andrew Salway. 2005. Matching verb attributes for cross-document event coreference. In Proc. of the Interdisciplinary Workshop on the Identification and Representation of Verb Features and Verb Classes.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Rui Wang</author>
+<author>Chris Callison-Burch</author>
+</authors>
+<title>Paraphrase fragment extraction from monolingual comparable corpora.</title>
+<date>2011</date>
+<booktitle>In Proc. of the ACL BUCC-2011 Workshop.</booktitle>
+<contexts>
+<context position="5610" citStr="Wang and Callison-Burch, 2011" startWordPosition="840" endWordPosition="843">ated Work Previous paraphrase extraction approaches can be roughly characterized under two aspects: 1) data source and 2) granularity of the output. Both parallel corpora and comparable corpora have been quite well studied. Barzilay and McKeown (2001) use different English translations of the same novels (i.e., monolingual parallel corpora), while others (Quirk et al., 2004) experiment on multiple sources of the same news/events, i.e., monolingual comparable corpora. Commonly used (candidate) comparable corpora are news articles written by different news agencies within a limited time window (Wang and Callison-Burch, 2011). Other studies focus on extracting paraphrases from large bilingual parallel corpora, which the machine translation (MT) community provides in many varieties. Bannard and Callison-Burch (2005) as well as Zhao et al. (2008) take one language as the pivot and match two possible translations in the other languages as paraphrases if they share a common pivot phrase. As parallel corpora have many alternative ways of expressing the same foreign language concept, large quantities of paraphrase pairs can be extracted. The paraphrasing task is also strongly related to cross-document event coreference </context>
+<context position="8592" citStr="Wang and Callison-Burch, 2011" startWordPosition="1298" endWordPosition="1301">entered tasks, like information extraction, but their level of generalization or coverage is insufficient for applications like Recognizing Textual Entailment (Dinu and Wang, 2009). The research on general paraphrase fragment extraction at the sub-sentential level is mainly based 917 on phrase pair extraction techniques from the MT literature. Munteanu and Marcu (2006) extract subsentential translation pairs from comparable corpora using the log-likelihood-ratio of word translation probability. Quirk et al. (2007) extract fragments using a generative model of noisy translations. Our own work (Wang and Callison-Burch, 2011) extends the first idea to paraphrase fragment extraction on monolingual parallel and comparable corpora. Our current approach also uses word-word alignment, however, we use syntactic dependency trees to compute grammatical fragments. Our use of dependency trees is inspired by the constituent-tree-based experiments of Callison-Burch (2008). 3 Paraphrases and Discourse Previous approaches have shown that comparable texts provide a good basis for paraphrase extraction. We want to show that discourse structure is highly useful for precise and high-yield paraphrase collection from such corpora. Co</context>
+<context position="19631" citStr="Wang and Callison-Burch, 2011" startWordPosition="3091" endWordPosition="3094">ositive and negative lexical associations for the alignment, which are defined as the conditional probabilities p(w1jw2) and p(w1j:w2), respectively. The resulting alignment can be further constrained by a modified longest common substring (LCS) algorithm, which takes sequences of 920 words instead of letters as input. Smoothing (step 2) is done for each word by taking the average score of it and its four neighbor words. All the word alignments (excluding stop-words) with positive scores are selected as candidate fragment elements. Provided with the candidate fragment elements, we previously (Wang and Callison-Burch, 2011) used a chunker3 to finalize the output fragments, in order to follow the linguistic definition of a (para-) phrase. We extend this step in the current system by applying a dependency parser to constrain the boundary of the fragments (Sec. 5.3). Finally, we filter out trivial fragment pairs, such as identical or the original sentence pairs. 5.3 VP-fragment Extraction To obtain more grammatical output fragments, we add another layer of linguistic information to our input sentences. Based on the dependency parses produced during preprocessing, we extract phrases containing verbs and their comple</context>
+<context position="33631" citStr="Wang and Callison-Burch, 2011" startWordPosition="5327" endWordPosition="5330">a higher precision compared to the purely alignment-based approaches. Enhancing the system with coreference resolution raises the score even further. We cannot directly compare this performance to other systems, as all other approaches have different data sources. However, precision is usually manually evaluated, so the figures are at least indicative for a comparison with previous work: One state-of-theart system introduced by Zhao et al. (2008) extracts paraphrase fragments from bilingual parallel corpora and reaches a precision of 0.67. We found the same number using our previous approach (Wang and Callison-Burch, 2011), which is roughly equivalent to our core module. Our approach outperforms both by 17% with similar estimated productivity. As a final comparison, we show how the performance of the sentence matching methods directly affects the fragment extraction. We use the VP-based fragment extraction system (VP), and compare the performances by using either the outputs from our main system (MSA+VP) or alternatively the baseline that replaces MSA with a clustering algorithm (CLUSTER+VP). Both variants use the vector-based semantic similarity measure. Sentence matching Precision Productivity CLUSTER+VP 0.31</context>
+</contexts>
+<marker>Wang, Callison-Burch, 2011</marker>
+<rawString>Rui Wang and Chris Callison-Burch. 2011. Paraphrase fragment extraction from monolingual comparable corpora. In Proc. of the ACL BUCC-2011 Workshop.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Shiqi Zhao</author>
+<author>Haifeng Wang</author>
+<author>Ting Liu</author>
+<author>Sheng Li</author>
+</authors>
+<title>Pivot Approach for Extracting Paraphrase Patterns from Bilingual Corpora.</title>
+<date>2008</date>
+<booktitle>In Proceedings of ACL</booktitle>
+<contexts>
+<context position="5833" citStr="Zhao et al. (2008)" startWordPosition="873" endWordPosition="876">d McKeown (2001) use different English translations of the same novels (i.e., monolingual parallel corpora), while others (Quirk et al., 2004) experiment on multiple sources of the same news/events, i.e., monolingual comparable corpora. Commonly used (candidate) comparable corpora are news articles written by different news agencies within a limited time window (Wang and Callison-Burch, 2011). Other studies focus on extracting paraphrases from large bilingual parallel corpora, which the machine translation (MT) community provides in many varieties. Bannard and Callison-Burch (2005) as well as Zhao et al. (2008) take one language as the pivot and match two possible translations in the other languages as paraphrases if they share a common pivot phrase. As parallel corpora have many alternative ways of expressing the same foreign language concept, large quantities of paraphrase pairs can be extracted. The paraphrasing task is also strongly related to cross-document event coreference resolution, which is tackled by similar techniques used by the available paraphrasing systems (Bagga and Baldwin, 1999; Tomadaki and Salway, 2005). Most work in paraphrase acquisition has dealt with sentence-level paraphras</context>
+<context position="33451" citStr="Zhao et al. (2008)" startWordPosition="5300" endWordPosition="5303">valuation results. We reach our best precision by using the VP-fragment heuristics, which is still more productive than the LCS method. The grammatical filter gives us a higher precision compared to the purely alignment-based approaches. Enhancing the system with coreference resolution raises the score even further. We cannot directly compare this performance to other systems, as all other approaches have different data sources. However, precision is usually manually evaluated, so the figures are at least indicative for a comparison with previous work: One state-of-theart system introduced by Zhao et al. (2008) extracts paraphrase fragments from bilingual parallel corpora and reaches a precision of 0.67. We found the same number using our previous approach (Wang and Callison-Burch, 2011), which is roughly equivalent to our core module. Our approach outperforms both by 17% with similar estimated productivity. As a final comparison, we show how the performance of the sentence matching methods directly affects the fragment extraction. We use the VP-based fragment extraction system (VP), and compare the performances by using either the outputs from our main system (MSA+VP) or alternatively the baseline </context>
+</contexts>
+<marker>Zhao, Wang, Liu, Li, 2008</marker>
+<rawString>Shiqi Zhao, Haifeng Wang, Ting Liu, and Sheng Li. 2008. Pivot Approach for Extracting Paraphrase Patterns from Bilingual Corpora. In Proceedings of ACL 2008.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Shiqi Zhao</author>
+<author>Haifeng Wang</author>
+<author>Xiang Lan</author>
+<author>Ting Liu</author>
+</authors>
+<title>Leveraging Multiple MT Engines for Paraphrase Generation.</title>
+<date>2010</date>
+<booktitle>In Proceedings of COLING</booktitle>
+<contexts>
+<context position="1188" citStr="Zhao et al., 2010" startWordPosition="159" endWordPosition="162">lignment with a semantic similarity measure. We show that adding discourse information boosts the performance of sentence-level paraphrase acquisition, which consequently gives a tremendous advantage for extracting phraselevel paraphrase fragments from matched sentences. Our system beats an informed baseline by a margin of 50%. 1 Introduction It is widely agreed that identifying paraphrases is a core task for natural language processing, including applications like document summarization (Barzilay et al., 1999), Recognizing Textual Entailment (Dagan et al., 2005), natural language generation (Zhao et al., 2010; Ganitkevitch et al., 2011), and machine translation (Marton et al., 2009). As a consequence, many methods have been proposed for generating large paraphrase resources (Lin and Pantel, 2001; Szpektor et al., 2004; Dolan et al., 2004). One of the intuitively appropriate data sources for such collections are parallel or comparable corpora: if two texts are translations of the same foreign document, or if they describe the same underlying scenario, they should contain a reasonable number of sentence pairs that convey the same meaning. Most approaches that extract paraphrases from parallel texts </context>
+</contexts>
+<marker>Zhao, Wang, Lan, Liu, 2010</marker>
+<rawString>Shiqi Zhao, Haifeng Wang, Xiang Lan, and Ting Liu. 2010. Leveraging Multiple MT Engines for Paraphrase Generation. In Proceedings of COLING 2010.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>
