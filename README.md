@@ -2,7 +2,7 @@
 
 This repository contains the code and resources for the paper Citation Classification for Behavioral Analysis of a Scientific Field. David Jurgens, Srijan Kumar, Raine Hoover, Dan McFarland, Dan Jurafsky. Transactions of the Association for Computational Linguistics (TACL). 2018
 
-For full details, see the [Project Website](http://jurgens.people.si.umich.edu/citation-function/) which has links to all the data.
+**For full details, see the [Project Website](http://jurgens.people.si.umich.edu/citation-function/) which has links to all the data.**
 
 ## Requirements
 
