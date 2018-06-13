@@ -60,7 +60,7 @@ with open('../resources/arc-id-to-topics.2.tsv') as f:
 
 ARC_ID_TO_CITED_IDs = defaultdict(set)
 def load_network():
-    with open('../working-files/arc-paper-ids.2.tsv') as f:
+    with open('../resources/arc-citation-network.tsv ') as f:
         for line in f:
             cols = line[:-1].split('\t')
             ARC_ID_TO_CITED_IDs[cols[0]].add(cols[1])

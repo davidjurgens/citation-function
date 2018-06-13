@@ -18,7 +18,7 @@ def fix_label(citation_type):
     return citation_type
 
 YEAR_TO_PAPER_DATA = {}
-with open("../working-files/arc-citation-network.2.csv","rb") as f:
+with open("../resources/arc-paper-ids.tsv","rb") as f:
     rdr = unicodecsv.reader(f, encoding='ISO-8859-1',delimiter='\t')
     for entry in rdr:
         paper_id = entry[0]

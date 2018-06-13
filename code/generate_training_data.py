@@ -63,7 +63,7 @@ with open('../resources/arc-id-to-topics.2.tsv') as f:
 
 ARC_ID_TO_CITED_IDs = defaultdict(set)
 def load_network():
-    with open('../working-files/arc-paper-ids.2.tsv') as f:
+    with open('../resources/arc-citation-network.tsv') as f:
         for line in f:
             cols = line[:-1].split('\t')
             ARC_ID_TO_CITED_IDs[cols[0]].add(cols[1])
@@ -72,7 +72,6 @@ def load_network():
 
 data_dir = "../data/annotated-json-data/"
 teufel_data_dir = "../data/teufel-json/"
-mc_data_dir = "../data/meaningful-citation-json-data/"
 
 def main():
 
@@ -86,31 +85,12 @@ def main():
     files_to_process = []
     
     for fname in os.listdir(data_dir):
-        
-        #if not fname.startswith('D11-1138'):
-        #    continue
-
-        #if not fname.startswith('Q13-1020'):
-        #    continue
-
-        #if not fname.startswith('J06-3002-parscit'):
-        #    continue
-
         if fname.endswith(".json"):
             files_to_process.append(fname)
-            #pass
 
     for fname in os.listdir(teufel_data_dir):
         if fname.endswith(".json"):
-            #if '9503017' in fname:
             files_to_process.append(fname)
-            #pass
-
-    for fname in os.listdir(mc_data_dir):
-        if fname.endswith(".json"):
-            #if '9503017' in fname:
-            #files_to_process.append(fname)
-            pass
 
 
     shuffle(files_to_process)

@@ -35,7 +35,7 @@ sys.setdefaultencoding('utf8')
 
 LMTZR = WordNetLemmatizer()    
 
-corenlp = StanfordCoreNLP('http://localhost:9000')
+corenlp = StanfordCoreNLP('http://localhost:8999')
 
 PARSED_DOC_SENTENCE_CACHE = {}
 DOC_SENTENCE_CACHE = {}

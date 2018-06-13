@@ -29,7 +29,7 @@ def fix_label(citation_type):
     return citation_type
 
 CITATION_TO_ID = {}
-with open("../working-files/arc-citation-network.2.csv","rb") as f:
+with open("../resources/arc-paper-ids.tsv","rb") as f:
     rdr = unicodecsv.reader(f, encoding='utf-8', delimiter='\t')
     for entry in rdr:
         paper_id = entry[0]
@@ -116,14 +116,12 @@ PATH = '../data/arc-parsit-dir/'
 def main():
 
 
-    if len(sys.argv) < 2:
-        print 'Usage: convert_ARC_to_features.py out-dir/ [input-dir]'
+    if len(sys.argv) < 3:
+        print 'Usage: convert_ARC_to_features.py input-dir/ out-dir/'
         return
 
-    output_dir = sys.argv[1]
-    input_dir = PATH
-    if len(sys.argv) > 2:
-        input_dir = sys.argv[2]
+    input_dir = sys.argv[1]
+    output_dir = sys.argv[2]
     
     num_processed = 0
 
@@ -136,7 +134,7 @@ def main():
     print 'Saw %d papers to process' % (len(files))
 
     #[reformat_paper(fname, output_dir) for fname in files]
-    Parallel(n_jobs=64)(delayed(reformat_paper)(fname, output_dir) for fname in files)
+    Parallel(n_jobs=-1)(delayed(reformat_paper)(fname, output_dir) for fname in files)
 
 
 

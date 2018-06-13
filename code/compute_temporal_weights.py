@@ -22,7 +22,7 @@ def main():
 
 
     print 'Loading paper author info'
-    with open("../working-files/arc-citation-network.2.csv","rb") as f:
+    with open("../resources/arc-paper-ids.tsv", "rb") as f:
         for line in f:
             cols = line.strip().split('\t')
             # Happens if there were no authors for the paper (as determined by
