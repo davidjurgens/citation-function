@@ -16,6 +16,7 @@ from random import shuffle
 from numpy import mean
 from scipy import spatial
 from nltk.corpus import stopwords
+import os
 
 reload(sys)  
 sys.setdefaultencoding('utf8')
@@ -66,27 +67,29 @@ def load_network():
             ARC_ID_TO_CITED_IDs[cols[0]].add(cols[1])
 
 
-feature_to_index = {}
-with open('../working-files/feature-vectors/feature-indices.tsv') as f:
-    for line in f:
-        cols = line.strip().split('\t');
-        feature = cols[0]
-        index = int(cols[1])
-        feature_to_index[feature] = index
-
 PATH = '../data/arc-json/'
 
 def main(): 
 
     if len(sys.argv) < 2:
-        print 'Usage: convert_ARC_to_features.py out-dir/ [input-dir]'
+        print 'Usage: convert_ARC_to_features.py arc-json-dir/ ftr-dir/ out-dir/'
         return
 
-    output_dir = sys.argv[1] + '/'
-    input_dir = PATH
-    if len(sys.argv) > 2:
-        input_dir = sys.argv[2]
-    
+    input_dir = sys.argv[1]
+    ftr_dir = sys.argv[2]
+    output_dir = sys.argv[3] + '/'
+
+    feature_to_index = {}
+    with open(ftr_dir + '/feature-indices.tsv') as f:
+        for line in f:
+            cols = line.strip().split('\t');
+            feature = cols[0]
+            index = int(cols[1])
+            feature_to_index[feature] = index
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        
     num_processed = 0
 
     #files = [f for f in glob(input_dir + '*.xml')]
@@ -95,7 +98,7 @@ def main():
         for filename in fnmatch.filter(filenames, '*.json'):
             #if 'W06-3319' in filename:
             files.append(os.path.join(root, filename))
-
+ 
     shuffle(files)
 
     # files = files[:10]
@@ -103,17 +106,12 @@ def main():
     print 'Saw %d papers to process' % (len(files))
 
     #[create_feature_file(fname, output_dir) for fname in files]
-    Parallel(n_jobs=-1)(delayed(create_feature_file)(fname, output_dir) for fname in files)
+    Parallel(n_jobs=-1)(delayed(create_feature_file)(fname, feature_to_index, output_dir) for fname in files)
 
 
 
 
-def create_feature_file(f, output_dir):
-
-    global feature_to_index
-
-    #print f
-    
+def create_feature_file(f, feature_to_index, output_dir):
 
     paper_id = basename(f)[0:8]
 

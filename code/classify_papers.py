@@ -29,28 +29,15 @@ if len(sys.argv) < 4:
     quit(1)
 
 
-feature_dir = "../working-files/feature-vectors/"
-
-clf_pickle = sys.argv[1]
-feature_file = sys.argv[2]
-outfile = sys.argv[3]
-
-num_topics = 50
-if len(sys.argv) > 4:
-    num_topics = int(sys.argv[4])
-
-if os.path.isfile(outfile) and not os.path.getsize(outfile) == 0:
-    print 'Already generated %s ; skipping' % (outfile)
-    quit(0)
-    
-#clf = joblib.load(clf_pickle) 
-with open(clf_pickle, 'rb') as f:
-    clf = pickle.load(f)
-print 'loaded pickle'
+# Need this to get the feature vector mapping so we can figure out which section
+# each citation occurs in
+feature_dir = "../working-dir/feature-vecs/"
 
 feature_to_index = {}
 with open(feature_dir + 'feature-indices.tsv') as f:
     for line in f:
+        if True:
+            break
         cols = line.strip().split('\t');
         feature = cols[0]
         index = int(cols[1])
@@ -84,6 +71,22 @@ def get_section(vec):
         return 'Other_Section'
 
 
+clf_pickle = sys.argv[1]
+feature_file = sys.argv[2]
+outfile = sys.argv[3]
+
+
+if os.path.isfile(outfile) and not os.path.getsize(outfile) == 0:
+    print 'Already generated %s ; skipping' % (outfile)
+    quit(0)
+    
+#clf = joblib.load(clf_pickle) 
+with open(clf_pickle, 'rb') as f:
+    clf = pickle.load(f)
+    clf.n_jobs = 1
+print 'loaded pickle'
+
+
 fname = basename(feature_file)
 arr = fname.split('-')
 paper_id = (arr[0] + '-' + arr[1]).replace('.ftr', '')
@@ -93,14 +96,14 @@ print paper_id
 #if not os.path.isfile(topic_dir):
 #    topic_dir = '/lfs/local/0/jurgens/citation/'
 #if not os.path.isfile(topic_dir):
-topic_dir = '../working-files/'
+topic_dir = '../working-dir/topics/'
 
 
 
 citation_id_to_topic_vecs = {}
-with open(topic_dir + '/topics2/%d-topics/citance.doc-topics.txt' % num_topics) as citance_topic_f:
-    with open(topic_dir + '/topics2/%d-topics/extended-citance.doc-topics.txt' % num_topics) as extended_topic_f:
-        with open('../working-files/context-ids.tsv') as f:
+with open(topic_dir + '/citance.doc-topics.txt') as citance_topic_f:
+    with open(topic_dir + '/extended-citance.doc-topics.txt') as extended_topic_f:
+        with open(topic_dir + '/context-ids.tsv') as f:
             for line in f:
                 cols = line[:-1].split('\t')
                 citation_id = cols[2]
@@ -139,7 +142,7 @@ with open(outfile, 'w') as ofw:
             # TODO: Append the topic vector here
             topic_vecs = citation_id_to_topic_vecs[citation_id]
             
-            feature_vec = np.concatenate([feature_vec, topic_vecs[0], topic_vecs[1]])           
+            feature_vec = np.concatenate([feature_vec, topic_vecs[0], topic_vecs[1]])
 
             feature_vec = feature_vec.reshape(1, -1)
 
@@ -152,3 +155,5 @@ with open(outfile, 'w') as ofw:
 
         print 'finished ', fname
 
+
+        

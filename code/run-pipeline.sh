@@ -1,10 +1,15 @@
-
-
 ARC_DIR=/shared/0/datasets/ACL-ARC/data/
 AAN_DIR=/shared/0/datasets/ACL-AAN/aan/
 ARC_JSON_DIR=/shared/0/datasets/ACL-ARC/json/
 
-# Download the ARC
+# This is the directory that will contain the feature vectors for each citation
+# in the ARC JSON data
+ARC_FTR_DIR=../working-dir/arc-ftrs/
+FEATURE_VEC_DIR=../working-dir/feature-vecs/
+CLASSIFIER_FILE=../working-dir/function-classifier.pkl
+
+# If you want to go from the *very* beginning, you need to download the ARC and
+# then convert it to JSON.  Or you can just download the version we made
 if [ ! -d "$ARC_DIR" ] ; then
     #TODO: Prompt the user to check the user wants to execute this command
     
@@ -34,19 +39,17 @@ fi
 # but regenerating this part from scratch would require backing out the JSON
 # integration or some kind of two-phase JSON creation :(
 if [ ! -e "../resources/arc-paper-ids.tsv" ] ; then
-   python canonicalize_citations.py \
-          ../resources/arc-paper-ids.tsv \
-          ../resources/arc-citation-network.tsv
+    #python canonicalize_citations.py \
+    #       ../resources/arc-paper-ids.tsv \
+    #       ../resources/arc-citation-network.tsv
+    echo -n ''
 fi
 
 # Convert the XML formatted text to JSON, with resolved citation contexts
 if [ ! -d "$ARC_JSON_DIR" ] ; then
     echo 'Converting XML to JSON; Make sure you have a core NLP server running'
-    echo python convert_ARC_xml_to_json.py $ARC_DIR $ARC_JSON_DIR
+    #python convert_ARC_xml_to_json.py $ARC_DIR $ARC_JSON_DIR
 fi
-
-exit
-
 
 # Convert Teufel's data to the JSON format
 #python convert_teufel_data.py ../data/teufel-json
@@ -54,22 +57,33 @@ exit
 # Integrate the BRAT annotations into the json data
 #python integrate_annotations.py ../data/annotated-json-data
 
-# Generates a corpus of citances and citance IDs to feed into Mallet for topic
-# modeling
-python generate_mallet_corpus.py ../working-files/
+# Generates a text corpus of citances and citance IDs to feed into Mallet for
+# topic modeling
+#python generate_mallet_corpus.py ../working-files/
 
-./train-mallet-models.sh
+# Generate the actual .mallet files
+#./gen-mallet.sh
+
+# Train the LDA Model
+#./train-mallet-models.sh
 
 # Weight each cited paper based on its centrality, PageRank, etc. in the
 # citation network
 # python compute_temporal_weights.py ../working-files/arc-paper-ids.2.tsv ../working-files/arc-network-weights.tsv
 
 # Generate the training data
-#python generate_training_data.py 
+python generate_training_data.py $FEATURE_VEC_DIR
+
+# Run cross-validation to see how well things did
+python run_topic_cv.py ../working-dir/feature-vecs/
+
+# If everything looks good, train the classifier
+python train_classifier.py $FEATURE_VEC_DIR $CLASSIFIER_FILE
 
 # Use the features found by the training data to covert the ARC into feature vectors
-#python convert_ARC_to_features.py
+python convert_ARC_to_features.py $ARC_JSON_DIR $FEATURE_VEC_DIR $ARC_FTR_DIR 
 
-# Classify everything 
-#python classify_papers.py
+# Classify everything.  The "build graph" refers to building the fully-labeled
+# citation graph with citation functions.
+./build-graph.sh
 
